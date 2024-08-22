@@ -1,0 +1,487 @@
+/***********************************************************************
+ArrayValueCoders - Generic value coder classes for standard C-style
+arrays with fixed or dynamic array sizes or array wrapper classes.
+Copyright (c) 2004-2022 Oliver Kreylos
+
+This file is part of the Miscellaneous Support Library (Misc).
+
+The Miscellaneous Support Library is free software; you can
+redistribute it and/or modify it under the terms of the GNU General
+Public License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+The Miscellaneous Support Library is distributed in the hope that it
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with the Miscellaneous Support Library; if not, write to the Free
+Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA
+***********************************************************************/
+
+#define MISC_ARRAYVALUECODERS_IMPLEMENTATION
+
+#include <Misc/ArrayValueCoders.h>
+
+#include <Misc/FixedArray.h>
+#include <Misc/IntVector.h>
+#include <Misc/Offset.h>
+#include <Misc/Size.h>
+#include <Misc/Rect.h>
+
+namespace Misc {
+
+/*********************************************************************
+Methods of class CFixedArrayValueCoder<ElementParam,numElementsParam>:
+*********************************************************************/
+
+template <class ElementParam,size_t numElementsParam>
+inline
+std::string
+CFixedArrayValueCoder<ElementParam,numElementsParam>::encode(
+	const ElementParam* elements)
+	{
+	std::string result;
+	result.push_back('(');
+	
+	for(size_t i=0;i<numElementsParam;++i)
+		{
+		if(i>0)
+			{
+			/* Add a separator: */
+			result.push_back(',');
+			result.push_back(' ');
+			}
+		
+		/* Encode the next element: */
+		result.append(ValueCoder<ElementParam>::encode(elements[i]));
+		}
+	
+	result.push_back(')');
+	return result;
+	}
+
+template <class ElementParam,size_t numElementsParam>
+inline
+ElementParam*
+CFixedArrayValueCoder<ElementParam,numElementsParam>::decode(
+	const char* start,
+	const char* end,
+	const char** decodeEnd) const
+	{
+	const char* cPtr=start;
+	
+	/* Check for opening parenthesis: */
+	cPtr=checkOpening('(',cPtr,end);
+	
+	/* Decode elements: */
+	for(size_t i=0;i<numElementsParam;++i)
+		{
+		/* Check for comma separator: */
+		if(i>0)
+			cPtr=checkSeparator(',',cPtr,end);
+		
+		/* Decode the next element: */
+		elements[i]=ValueCoder<ElementParam>::decode(cPtr,end,&cPtr);
+		cPtr=skipWhitespace(cPtr,end);
+		}
+	
+	/* Check for closing parenthesis: */
+	cPtr=checkClosing(')',cPtr,end);
+	
+	if(decodeEnd!=0)
+		*decodeEnd=cPtr;
+	
+	return elements;
+	}
+
+/***************************************************
+Methods of class FixedArrayValueCoder<ElementParam>:
+***************************************************/
+
+template <class ElementParam>
+inline
+std::string
+FixedArrayValueCoder<ElementParam>::encode(
+	const ElementParam* elements) const
+	{
+	std::string result;
+	result.push_back('(');
+	
+	for(size_t i=0;i<numElements;++i)
+		{
+		if(i>0)
+			{
+			/* Add a separator: */
+			result.push_back(',');
+			result.push_back(' ');
+			}
+		
+		/* Encode the next element: */
+		result.append(ValueCoder<ElementParam>::encode(elements[i]));
+		}
+	
+	result.push_back(')');
+	return result;
+	}
+
+template <class ElementParam>
+inline
+ElementParam*
+FixedArrayValueCoder<ElementParam>::decode(
+	const char* start,
+	const char* end,
+	const char** decodeEnd) const
+	{
+	const char* cPtr=start;
+	
+	/* Check for opening parenthesis: */
+	cPtr=checkOpening('(',cPtr,end);
+	
+	/* Decode elements: */
+	for(size_t i=0;i<numElements;++i)
+		{
+		/* Check for comma separator: */
+		if(i>0)
+			cPtr=checkSeparator(',',cPtr,end);
+		
+		/* Decode the next element: */
+		elements[i]=ValueCoder<ElementParam>::decode(cPtr,end,&cPtr);
+		cPtr=skipWhitespace(cPtr,end);
+		}
+	
+	/* Check for closing parenthesis: */
+	cPtr=checkClosing(')',cPtr,end);
+	
+	if(decodeEnd!=0)
+		*decodeEnd=cPtr;
+	
+	return elements;
+	}
+
+/*****************************************************
+Methods of class DynamicArrayValueCoder<ElementParam>:
+*****************************************************/
+
+template <class ElementParam>
+inline
+std::string
+DynamicArrayValueCoder<ElementParam>::encode(
+	const ElementParam* elements) const
+	{
+	std::string result;
+	result.push_back('(');
+	
+	for(size_t i=0;i<numElements;++i)
+		{
+		if(i>0)
+			{
+			/* Add a separator: */
+			result.push_back(',');
+			result.push_back(' ');
+			}
+		
+		/* Encode the next element: */
+		result.append(ValueCoder<ElementParam>::encode(elements[i]));
+		}
+	
+	result.push_back(')');
+	return result;
+	}
+
+template <class ElementParam>
+inline
+ElementParam*
+DynamicArrayValueCoder<ElementParam>::decode(
+	const char* start,
+	const char* end,
+	const char** decodeEnd)
+	{
+	/* Reset the element counter: */
+	size_t maxNumElements=numElements;
+	numElements=0;
+	
+	const char* cPtr=start;
+	
+	/* Check for opening parenthesis: */
+	cPtr=checkOpening('(',cPtr,end);
+	
+	/* Decode elements: */
+	while(cPtr!=end&&*cPtr!=')')
+		{
+		/* Check for comma separator: */
+		if(numElements>0)
+			cPtr=checkSeparator(',',cPtr,end);
+		
+		/* Decode the next element: */
+		if(numElements<maxNumElements)
+			elements[numElements]=ValueCoder<ElementParam>::decode(cPtr,end,&cPtr);
+		else
+			ValueCoder<ElementParam>::decode(cPtr,end,&cPtr);
+		cPtr=skipWhitespace(cPtr,end);
+		++numElements;
+		}
+	
+	/* Check for closing parenthesis: */
+	cPtr=checkClosing(')',cPtr,end);
+	
+	if(decodeEnd!=0)
+		*decodeEnd=cPtr;
+	
+	return elements;
+	}
+
+/****************************************************************
+Methods of class ValueCoder<FixedArray<ElementParam,sizeParam> >:
+****************************************************************/
+
+template <class ElementParam,int sizeParam>
+inline
+std::string
+ValueCoder<FixedArray<ElementParam,sizeParam> >::encode(
+	const FixedArray<ElementParam,sizeParam>& value)
+	{
+	return CFixedArrayValueCoder<ElementParam,sizeParam>::encode(value.getElements());
+	}
+
+template <class ElementParam,int sizeParam>
+inline
+FixedArray<ElementParam,sizeParam>
+ValueCoder<FixedArray<ElementParam,sizeParam> >::decode(
+	const char* start,
+	const char* end,
+	const char** decodeEnd)
+	{
+	try
+		{
+		FixedArray<ElementParam,sizeParam> result;
+		CFixedArrayValueCoder<ElementParam,sizeParam>(result.getElements()).decode(start,end,decodeEnd);
+		return result;
+		}
+	catch(const std::runtime_error& err)
+		{
+		throw DecodingError(std::string("Unable to convert ")+std::string(start,end)+std::string(" to Misc::FixedArray due to ")+err.what());
+		}
+	}
+
+/**************************************************************************
+Methods of class ValueCoder<IntVector<ComponentParam,numComponentsParam> >:
+**************************************************************************/
+
+template <class ComponentParam,unsigned int numComponentsParam>
+inline
+std::string
+ValueCoder<IntVector<ComponentParam,numComponentsParam> >::encode(
+	const IntVector<ComponentParam,numComponentsParam>& value)
+	{
+	return CFixedArrayValueCoder<ComponentParam,numComponentsParam>::encode(value.getComponents());
+	}
+
+template <class ComponentParam,unsigned int numComponentsParam>
+inline
+IntVector<ComponentParam,numComponentsParam>
+ValueCoder<IntVector<ComponentParam,numComponentsParam> >::decode(
+	const char* start,
+	const char* end,
+	const char** decodeEnd)
+	{
+	try
+		{
+		IntVector<ComponentParam,numComponentsParam> result;
+		CFixedArrayValueCoder<ComponentParam,numComponentsParam>(result.getComponents()).decode(start,end,decodeEnd);
+		return result;
+		}
+	catch(const std::runtime_error& err)
+		{
+		throw DecodingError(std::string("Unable to convert ")+std::string(start,end)+std::string(" to Misc::IntVector due to ")+err.what());
+		}
+	}
+
+/********************************************************
+Methods of class ValueCoder<Offset<numComponentsParam> >:
+********************************************************/
+
+template <unsigned int numComponentsParam>
+inline
+std::string
+ValueCoder<Offset<numComponentsParam> >::encode(
+	const Offset<numComponentsParam>& value)
+	{
+	return CFixedArrayValueCoder<int,numComponentsParam>::encode(value.getComponents());
+	}
+
+template <unsigned int numComponentsParam>
+inline
+Offset<numComponentsParam>
+ValueCoder<Offset<numComponentsParam> >::decode(
+	const char* start,
+	const char* end,
+	const char** decodeEnd)
+	{
+	try
+		{
+		Offset<numComponentsParam> result;
+		CFixedArrayValueCoder<int,numComponentsParam>(result.getComponents()).decode(start,end,decodeEnd);
+		return result;
+		}
+	catch(const std::runtime_error& err)
+		{
+		throw DecodingError(std::string("Unable to convert ")+std::string(start,end)+std::string(" to Misc::Offset due to ")+err.what());
+		}
+	}
+
+/******************************************************
+Methods of class ValueCoder<Size<numComponentsParam> >:
+******************************************************/
+
+template <unsigned int numComponentsParam>
+inline
+std::string
+ValueCoder<Size<numComponentsParam> >::encode(
+	const Size<numComponentsParam>& value)
+	{
+	return CFixedArrayValueCoder<unsigned int,numComponentsParam>::encode(value.getComponents());
+	}
+
+template <unsigned int numComponentsParam>
+inline
+Size<numComponentsParam>
+ValueCoder<Size<numComponentsParam> >::decode(
+	const char* start,
+	const char* end,
+	const char** decodeEnd)
+	{
+	try
+		{
+		Size<numComponentsParam> result;
+		CFixedArrayValueCoder<unsigned int,numComponentsParam>(result.getComponents()).decode(start,end,decodeEnd);
+		return result;
+		}
+	catch(const std::runtime_error& err)
+		{
+		throw DecodingError(std::string("Unable to convert ")+std::string(start,end)+std::string(" to Misc::Size due to ")+err.what());
+		}
+	}
+
+/******************************************************
+Methods of class ValueCoder<Rect<numComponentsParam> >:
+******************************************************/
+
+template <unsigned int numComponentsParam>
+inline
+std::string
+ValueCoder<Rect<numComponentsParam> >::encode(
+	const Rect<numComponentsParam>& value)
+	{
+	std::string result;
+	
+	#if 1
+	
+	/* Encode a rectangle as its offset followed by its size, separated by a comma (legacy from VRWindow::WindowPos): */
+	
+	result.append(ValueCoder<Offset<numComponentsParam> >::encode(value.offset));
+	result.append(", ");
+	result.append(ValueCoder<Size<numComponentsParam> >::encode(value.size));
+	
+	#else
+	
+	/* Encode a rectangle as a straight set of four integers instead of two compounds to reduce number of parentheses: */
+	result.push_back('(');
+	
+	/* Encode the offset components: */
+	result.append(ValueCoder<int>::encode(value.offset[0]));
+	for(unsigned int i=1;i<numComponentsParam;++i)
+		{
+		result.append(", ");
+		result.append(ValueCoder<int>::encode(value.offset[0]));
+		}
+	
+	result.append(", ");
+	
+	/* Encode the size components: */
+	result.append(ValueCoder<unsigned int>::encode(value.size[0]));
+	for(unsigned int i=1;i<numComponentsParam;++i)
+		{
+		result.append(", ");
+		result.append(ValueCoder<unsigned int>::encode(value.size[0]));
+		}
+	result.push_back(')');
+	
+	#endif
+	
+	return result;
+	}
+
+template <unsigned int numComponentsParam>
+inline
+Rect<numComponentsParam>
+ValueCoder<Rect<numComponentsParam> >::decode(
+	const char* start,
+	const char* end,
+	const char** decodeEnd)
+	{
+	Rect<numComponentsParam> result;
+	const char* cPtr=start;
+	
+	#if 1
+	
+	/* Decode a rectangle as an offset followed by a size, separated by a comma (legacy from VRWindow::WindowPos): */
+	
+	/* Decode the offset component: */
+	result.offset=ValueCoder<Offset<numComponentsParam> >::decode(cPtr,end,&cPtr);
+	
+	/* Check for the comma separator: */
+	cPtr=skipWhitespace(cPtr,end);
+	cPtr=checkSeparator(',',cPtr,end);
+	
+	/* Decode the size component: */
+	result.size=ValueCoder<Size<numComponentsParam> >::decode(cPtr,end,&cPtr);
+	
+	#else
+	
+	/* Decode a rectangle as a set of four integers insted of two compounds to reduce number of parentheses: */
+	
+	/* Check for opening parenthesis: */
+	cPtr=checkOpening('(',cPtr,end);
+	
+	/* Decode the offset: */
+	result.offset[0]=ValueCoder<int>::decode(cPtr,end,&cPtr);
+	cPtr=skipWhitespace(cPtr,end);
+	for(unsigned int i=1;i<numComponentsParam;++i)
+		{
+		/* Check for the comma separator: */
+		cPtr=checkSeparator(',',cPtr,end);
+		
+		result.offset[i]=ValueCoder<int>::decode(cPtr,end,&cPtr);
+		cPtr=skipWhitespace(cPtr,end);
+		}
+	
+	/* Check for the comma separator: */
+	cPtr=checkSeparator(',',cPtr,end);
+	
+	/* Decode the size: */
+	result.size[0]=ValueCoder<unsigned int>::decode(cPtr,end,&cPtr);
+	cPtr=skipWhitespace(cPtr,end);
+	for(unsigned int i=1;i<numComponentsParam;++i)
+		{
+		/* Check for the comma separator: */
+		cPtr=checkSeparator(',',cPtr,end);
+		
+		result.offset[i]=ValueCoder<int>::decode(cPtr,end,&cPtr);
+		cPtr=skipWhitespace(cPtr,end);
+		}
+	
+	/* Check for closing parenthesis: */
+	cPtr=checkClosing(')',cPtr,end);
+	
+	#endif
+	
+	if(decodeEnd!=0)
+		*decodeEnd=cPtr;
+	
+	return result;
+	}
+
+}

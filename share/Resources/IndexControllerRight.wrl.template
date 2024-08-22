@@ -1,0 +1,66 @@
+#VRML V2.0 utf8
+
+Transform
+	{
+	translation 0.00967373307725 0.0108426442049 0.0220194449293
+	rotation -0.99448286913 0.104898986196 0.000160319978902 -2.00712863979
+	children
+		[
+		MeshFile
+			{
+			url "STEAMVRINDEXCONTROLLERRENDERMODELSDIR/valve_controller_knu_1_0_right/body.obj"
+			materialLibrary DEF IndexML MaterialLibrary
+				{
+				urls "STEAMVRINDEXCONTROLLERRENDERMODELSDIR/valve_controller_knu_1_0_right/body.mtl"
+				}
+			}
+		
+		MeshFile
+			{
+			url "STEAMVRINDEXCONTROLLERRENDERMODELSDIR/valve_controller_knu_1_0_right/trigger.obj"
+			materialLibrary USE IndexML
+			}
+		
+		MeshFile
+			{
+			url "STEAMVRINDEXCONTROLLERRENDERMODELSDIR/valve_controller_knu_1_0_right/button_a.obj"
+			materialLibrary USE IndexML
+			}
+		
+		MeshFile
+			{
+			url "STEAMVRINDEXCONTROLLERRENDERMODELSDIR/valve_controller_knu_1_0_right/button_b.obj"
+			materialLibrary USE IndexML
+			}
+		
+		MeshFile
+			{
+			url "STEAMVRINDEXCONTROLLERRENDERMODELSDIR/valve_controller_knu_1_0_right/button_system.obj"
+			materialLibrary USE IndexML
+			}
+		
+		MeshFile
+			{
+			url "STEAMVRINDEXCONTROLLERRENDERMODELSDIR/valve_controller_knu_1_0_right/thumbstick.obj"
+			materialLibrary USE IndexML
+			}
+		
+		MeshFile
+			{
+			url "STEAMVRINDEXCONTROLLERRENDERMODELSDIR/valve_controller_knu_1_0_right/trackpad.obj"
+			materialLibrary USE IndexML
+			}
+		
+		MeshFile
+			{
+			url "STEAMVRINDEXCONTROLLERRENDERMODELSDIR/valve_controller_knu_1_0_right/led_right.obj"
+			materialLibrary USE IndexML
+			}
+		
+		MeshFile
+			{
+			url "STEAMVRINDEXCONTROLLERRENDERMODELSDIR/valve_controller_knu_1_0_right/gripsqueeze.obj"
+			materialLibrary USE IndexML
+			}
+		]
+	}

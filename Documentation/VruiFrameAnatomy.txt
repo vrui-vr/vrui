@@ -1,0 +1,82 @@
+Anatomy of a Vrui frame
+=======================
+
+Vrui::vsyncWindow:
+- Tags one window to drive Vrui kernel's frame prediction state
+  - Frame interval
+  - Next vsync time
+  - Next exposure time
+- Tells that window to track vsync state (and enable vsync)
+  - Parameter to setVruiState method?
+- Enables motion prediction / simulation time prediction in Vrui kernel
+
+- Add mechanism so that an event can wake up the inner loop, but then
+  tell it to go back to sleep without triggering a frame?
+
+Vrui frame loop modes:
+- vsyncWindow enabled, updateContinuously disabled:
+  - Frame loop:
+    - Wait for an event (includes Vrui::requestUpdate, Vrui::scheduleFrame, etc.)
+    - Ask vsync window to update vsync prediction state based on how
+      much time has passed
+      - Or keep updating even while idle?
+    - Poll and motion-predict input devices
+    - Simulate application state to exposure time
+    - Render all windows
+    - Expose all windows, which will wait for vsync on any windows set
+      up such, including the vsync window
+      - vsync window will update Vrui kernel's vsync state
+
+- vsyncWindow enabled, updateContinuously enabled:
+  - Frame loop:
+    - Poll and handle events
+    - Ask vsync window to update vsync prediction state based on how
+      much time has passed
+    - Poll and motion-predict input devices
+    - Simulate application state to exposure time
+    - Render all windows
+    - Expose all windows, which will wait for vsync on any windows set
+      up such, including the vsync window
+      - vsync window will update Vrui kernel's vsync state
+
+Times and deadlines:
+- Time by which the next frame must be done rendering and submitted to ensure continuity = start of new raster read-out
+  - For "normal" windows, submission time is vsync
+    - Vrui needs to keep track of which window is responsible for vsync
+      - Clusters complicate things
+    - Responsible window needs to track and predict vsync times
+  - For HMD windows, submission time is vsync minus warping time
+    - Either window itself or VR compositor tracks and predicts submission times
+    - Client reads submission time from VR compositor's shared memory
+  - Total length of a frame is time from submission to submission = frame rate
+- Time by which the next frame will be presented to the user
+  - Should be used for motion prediction and simulation
+  - Comes either from vsync-responsible window or from VR compositor
+
+
+
+          +------------- frame time interval ---------------+
+          |                                                 |
+  read-out for frame n-1                            read-out for frame n                              read-out for frame n+1
+          |                                                 |                                                 |          
+          v                                                 v                                                 v          
+----------|---------------------------------------|---------|---------------------------------------|---------|----------
+                                                  ^                                                 ^                    
+                                                  |                                                 |                    
+                                           present for frame n-1                             present for frame n
+
+
+
+
+
+                  vblank event         vblank event         vblank event         vblank event         vblank event         vblank event   
+                  |                    |                    |                    |                    |                    |              
+  | frame contents|    | frame contents|    | frame contents|    | frame contents|    | frame contents|    | frame contents|    |         
+  |***************|    |***************|    |***************|    |***************|    |***************|    |***************|    |******...
+--+---------------+----+---------------+----+---------------+----+---------------+----+---------------+----+---------------+----+------...
+  |               |    |               |    |               |    |               |    |               |    |               |    |         
+--+               +----+               +----+               +----+               +----+               +----+               +----+         
+ank               vblank               vblank               vblank               vblank               vblank               vblank         
+                  |                       ^
+                  +-----------------------+
+                       exposure delay

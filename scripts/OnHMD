@@ -1,0 +1,67 @@
+#!/bin/bash
+########################################################################
+# Script to run a Vrui application on a head-mounted display supported
+# by VRDeviceDaemon tracking.
+# Copyright (c) 2018-2024 Oliver Kreylos
+# 
+# This file is part of the Virtual Reality User Interface Library
+# (Vrui).
+# 
+# The Virtual Reality User Interface Library is free software; you can
+# redistribute it and/or modify it under the terms of the GNU General
+# Public License as published by the Free Software Foundation; either
+# version 2 of the License, or (at your option) any later version.
+# 
+# The Virtual Reality User Interface Library is distributed in the hope
+# that it will be useful, but WITHOUT ANY WARRANTY; without even the
+# implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+# PURPOSE.  See the GNU General Public License for more details.
+# 
+# You should have received a copy of the GNU General Public License
+# along with the Virtual Reality User Interface Library; if not, write
+# to the Free Software Foundation, Inc., 59 Temple Place, Suite 330,
+# Boston, MA 02111-1307 USA
+########################################################################
+
+# Configure library environment:
+VRUIBINDIR=/usr/local/bin
+VRUIETCDIR=/usr/local/etc
+
+USERETCDIR=${HOME}/.config/Vrui-8.2
+
+# Extract the application name:
+VRUIAPPNAME=$1
+shift
+
+# Include the VR devices configuration file:
+source "${VRUIETCDIR}/OpenVRDevices.conf"
+
+# Set up VR application options:
+USE_CONTROLWINDOW=0 # Open a secondary window showing a 3rd-person perspective
+SHOW_CONTROLLERS=1 # Show fancy 3D controller models
+USE_TURNSIGNAL=1 # Use turn signal vislet to avoid headset cable tangle
+USE_CAMERAVIEWER=0 # Use pass-through camera viewer
+
+# Include the user configuration file if it exists:
+[ -f "${USERETCDIR}/OnHMD.conf" ] && source "${USERETCDIR}/OnHMD.conf"
+
+# Create Vrui options for the command line to run the application:
+VRUI_OPTIONS=(-rootSection OpenVR)
+VRUI_OPTIONS+=(-mergeConfigEarly "Vrui-${HMD_TYPE}")
+VRUI_OPTIONS+=(-mergeConfigEarly "Vrui-${CONTROLLER_TYPE}")
+
+if [ ${USE_CONTROLWINDOW} -ne 0 ]; then
+	VRUI_OPTIONS+=(-mergeConfig ControlWindow)
+fi
+if [ ${SHOW_CONTROLLERS} -ne 0 ]; then
+	VRUI_OPTIONS+=(-vislet DeviceRenderer ";")
+fi
+if [ ${USE_TURNSIGNAL} -ne 0 ]; then
+	VRUI_OPTIONS+=(-vislet TurnSignal ";")
+fi
+if [ ${USE_CAMERAVIEWER} -ne 0 ]; then
+	VRUI_OPTIONS+=(-mergeConfig HMDCameraViewer -vislet HMDCameraViewer ";")
+fi
+
+# Run the VR application with optional configuration in VR mode:
+"${VRUIAPPNAME}" "${VRUI_OPTIONS[@]}" "$@"

@@ -1,0 +1,688 @@
+#VRML V2.0 utf8
+
+Transform
+	{
+	translation -0.0254373290348 -0.159070959089 -0.0102976949634
+	rotation -0.927122272568 -0.365875694007 0.0811126885521 0.469427901883
+	scale 0.0254 0.0254 0.0254
+	children
+		[
+		# Palm
+		Shape
+			{
+			appearance DEF Skin Appearance
+				{
+				material Material
+					{
+					diffuseColor 0.6 0.6 0.6
+					specularColor 0.1 0.1 0.1
+					shininess 0.25
+					}
+				}
+			geometry IndexedFaceSet
+				{
+				coord Coordinate
+					{
+					point
+						[
+						-0.75  0.0 -1.25
+						 0.75  0.0 -1.25
+						 0.75  0.0  1.25
+						-0.75  0.0  1.25
+						-0.38  3.5 -1.75
+						 0.37  3.5 -1.75
+						 0.37  4.0  1.75
+						-0.38  4.0  1.75
+						]
+					}
+				coordIndex
+					[
+					0 1 2 3 -1
+					0 4 5 1 -1
+					1 5 6 2 -1
+					2 6 7 3 -1
+					3 7 4 0 -1
+					4 7 6 5 -1
+					]
+				ccw TRUE
+				convex TRUE
+				solid TRUE
+				}
+			}
+		
+		# Thumb
+		DEF Thumb0 Transform
+			{
+			translation 0.3125 0.25 0.875
+			rotation 0.81219242681 0.45943103292 -0.35953662932 0.642977332827
+			children
+				[
+				Shape
+					{
+					appearance USE Skin
+					geometry IndexedFaceSet
+						{
+						coord Coordinate
+							{
+							point
+								[
+								-0.4375  0.0 -2.0
+								 0.4375  0.0 -2.0
+								 0.4375  0.0  0.375
+								-0.4375  0.0  0.375
+								-0.4375  2.5 -0.375
+								 0.4375  2.5 -0.375
+								 0.4375  2.5  0.375
+								-0.4375  2.5  0.375
+								]
+							}
+						coordIndex
+							[
+							0 1 2 3 -1
+							0 4 5 1 -1
+							1 5 6 2 -1
+							2 6 7 3 -1
+							3 7 4 0 -1
+							4 7 6 5 -1
+							]
+						ccw TRUE
+						convex TRUE
+						solid TRUE
+						}
+					}
+				
+				DEF Thumb1 Transform
+					{
+					translation 0.0 2.5 0.0
+					rotation -1.0 0.0 0.0 0.2
+					children
+						[
+						Shape
+							{
+							appearance USE Skin
+							geometry IndexedFaceSet
+								{
+								coord Coordinate
+									{
+									point
+										[
+										-0.4375  0.0 -0.375
+										 0.4375  0.0 -0.375
+										 0.4375  0.0  0.375
+										-0.4375  0.0  0.375
+										-0.4375  1.5 -0.375
+										 0.4375  1.5 -0.375
+										 0.4375  1.5  0.375
+										-0.4375  1.5  0.375
+										]
+									}
+								coordIndex
+									[
+									0 1 2 3 -1
+									0 4 5 1 -1
+									1 5 6 2 -1
+									2 6 7 3 -1
+									3 7 4 0 -1
+									4 7 6 5 -1
+									]
+								ccw TRUE
+								convex TRUE
+								solid TRUE
+								}
+							}
+						
+						DEF Thumb2 Transform
+							{
+							translation 0.0 1.5 0.0
+							rotation -1.0 0.0 0.0 -0.1
+							children
+								[
+								Shape
+									{
+									appearance USE Skin
+									geometry IndexedFaceSet
+										{
+										coord Coordinate
+											{
+											point
+												[
+												-0.4375  0.0  -0.375
+												 0.4375  0.0  -0.375
+												 0.4375  0.0   0.375
+												-0.4375  0.0   0.375
+												-0.4     1.25 -0.3
+												 0.4     1.25 -0.3
+												 0.4     1.25  0.3
+												-0.4     1.25  0.3
+												]
+											}
+										coordIndex
+											[
+											0 1 2 3 -1
+											0 4 5 1 -1
+											1 5 6 2 -1
+											2 6 7 3 -1
+											3 7 4 0 -1
+											4 7 6 5 -1
+											]
+										ccw TRUE
+										convex TRUE
+										solid TRUE
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		
+		# Index finger
+		DEF Index0 Transform
+			{
+			translation -0.005 3.9375 1.3125
+			rotation 0.397492469038 0.0400253869824 -0.91673207943 0.218804713783
+			children
+				[
+				Shape
+					{
+					appearance USE Skin
+					geometry IndexedFaceSet
+						{
+						coord Coordinate
+							{
+							point
+								[
+								-0.375 -0.0625 -0.4375
+								 0.375 -0.0625 -0.4375
+								 0.375  0.0625  0.4375
+								-0.375  0.0625  0.4375
+								-0.375  1.9    -0.4375
+								 0.375  1.9    -0.4375
+								 0.375  1.9     0.4375
+								-0.375  1.9     0.4375
+								]
+							}
+						coordIndex
+							[
+							0 1 2 3 -1
+							0 4 5 1 -1
+							1 5 6 2 -1
+							2 6 7 3 -1
+							3 7 4 0 -1
+							4 7 6 5 -1
+							]
+						ccw TRUE
+						convex TRUE
+						solid TRUE
+						}
+					}
+				
+				DEF Index1 Transform
+					{
+					translation 0.0 1.9 0.0
+					rotation 0.0 0.0 1.0 -1.4
+					children
+						[
+						Shape
+							{
+							appearance USE Skin
+							geometry IndexedFaceSet
+								{
+								coord Coordinate
+									{
+									point
+										[
+										-0.375  0.0 -0.4375
+										 0.375  0.0 -0.4375
+										 0.375  0.0  0.4375
+										-0.375  0.0  0.4375
+										-0.375  1.1 -0.4375
+										 0.375  1.1 -0.4375
+										 0.375  1.1  0.4375
+										-0.375  1.1  0.4375
+										]
+									}
+								coordIndex
+									[
+									0 1 2 3 -1
+									0 4 5 1 -1
+									1 5 6 2 -1
+									2 6 7 3 -1
+									3 7 4 0 -1
+									4 7 6 5 -1
+									]
+								ccw TRUE
+								convex TRUE
+								solid TRUE
+								}
+							}
+						
+						DEF Index2 Transform
+							{
+							translation 0.0 1.1 0.0
+							rotation 0.0 0.0 1.0 -0.7
+							children
+								[
+								Shape
+									{
+									appearance USE Skin
+									geometry IndexedFaceSet
+										{
+										coord Coordinate
+											{
+											point
+												[
+												-0.375  0.0 -0.4375
+												 0.375  0.0 -0.4375
+												 0.375  0.0  0.4375
+												-0.375  0.0  0.4375
+												-0.3    1.0 -0.4
+												 0.3    1.0 -0.4
+												 0.3    1.0  0.4
+												-0.3    1.0  0.4
+												]
+											}
+										coordIndex
+											[
+											0 1 2 3 -1
+											0 4 5 1 -1
+											1 5 6 2 -1
+											2 6 7 3 -1
+											3 7 4 0 -1
+											4 7 6 5 -1
+											]
+										ccw TRUE
+										convex TRUE
+										solid TRUE
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		
+		# Middle finger
+		DEF Middle0 Transform
+			{
+			translation -0.005 3.8125 0.4375
+			rotation 0.0 0.0 1.0 -1.0
+			children
+				[
+				Shape
+					{
+					appearance USE Skin
+					geometry IndexedFaceSet
+						{
+						coord Coordinate
+							{
+							point
+								[
+								-0.375 -0.0625 -0.4375
+								 0.375 -0.0625 -0.4375
+								 0.375  0.0625  0.4375
+								-0.375  0.0625  0.4375
+								-0.375  2.1    -0.4375
+								 0.375  2.1    -0.4375
+								 0.375  2.1     0.4375
+								-0.375  2.1     0.4375
+								]
+							}
+						coordIndex
+							[
+							0 1 2 3 -1
+							0 4 5 1 -1
+							1 5 6 2 -1
+							2 6 7 3 -1
+							3 7 4 0 -1
+							4 7 6 5 -1
+							]
+						ccw TRUE
+						convex TRUE
+						solid TRUE
+						}
+					}
+				
+				DEF Middle1 Transform
+					{
+					translation 0.0 2.1 0.0
+					rotation 0.0 0.0 1.0 -1.7
+					children
+						[
+						Shape
+							{
+							appearance USE Skin
+							geometry IndexedFaceSet
+								{
+								coord Coordinate
+									{
+									point
+										[
+										-0.375  0.0 -0.4375
+										 0.375  0.0 -0.4375
+										 0.375  0.0  0.4375
+										-0.375  0.0  0.4375
+										-0.375  1.2 -0.4375
+										 0.375  1.2 -0.4375
+										 0.375  1.2  0.4375
+										-0.375  1.2  0.4375
+										]
+									}
+								coordIndex
+									[
+									0 1 2 3 -1
+									0 4 5 1 -1
+									1 5 6 2 -1
+									2 6 7 3 -1
+									3 7 4 0 -1
+									4 7 6 5 -1
+									]
+								ccw TRUE
+								convex TRUE
+								solid TRUE
+								}
+							}
+						
+						DEF Middle2 Transform
+							{
+							translation 0.0 1.2 0.0
+							rotation 0.0 0.0 1.0 -0.7
+							children
+								[
+								Shape
+									{
+									appearance USE Skin
+									geometry IndexedFaceSet
+										{
+										coord Coordinate
+											{
+											point
+												[
+												-0.375  0.0 -0.4375
+												 0.375  0.0 -0.4375
+												 0.375  0.0  0.4375
+												-0.375  0.0  0.4375
+												-0.3    1.0 -0.4
+												 0.3    1.0 -0.4
+												 0.3    1.0  0.4
+												-0.3    1.0  0.4
+												]
+											}
+										coordIndex
+											[
+											0 1 2 3 -1
+											0 4 5 1 -1
+											1 5 6 2 -1
+											2 6 7 3 -1
+											3 7 4 0 -1
+											4 7 6 5 -1
+											]
+										ccw TRUE
+										convex TRUE
+										solid TRUE
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		
+		# Ring finger
+		DEF Ring0 Transform
+			{
+			translation -0.005 3.6875 -0.4375
+			rotation 0.0 0.0 1.0 -1.3
+			children
+				[
+				Shape
+					{
+					appearance USE Skin
+					geometry IndexedFaceSet
+						{
+						coord Coordinate
+							{
+							point
+								[
+								-0.375 -0.0625 -0.4375
+								 0.375 -0.0625 -0.4375
+								 0.375  0.0625  0.4375
+								-0.375  0.0625  0.4375
+								-0.375  1.9    -0.4375
+								 0.375  1.9    -0.4375
+								 0.375  1.9     0.4375
+								-0.375  1.9     0.4375
+								]
+							}
+						coordIndex
+							[
+							0 1 2 3 -1
+							0 4 5 1 -1
+							1 5 6 2 -1
+							2 6 7 3 -1
+							3 7 4 0 -1
+							4 7 6 5 -1
+							]
+						ccw TRUE
+						convex TRUE
+						solid TRUE
+						}
+					}
+				
+				DEF Ring1 Transform
+					{
+					translation 0.0 1.9 0.0
+					rotation 0.0 0.0 1.0 -1.7
+					children
+						[
+						Shape
+							{
+							appearance USE Skin
+							geometry IndexedFaceSet
+								{
+								coord Coordinate
+									{
+									point
+										[
+										-0.375  0.0 -0.4375
+										 0.375  0.0 -0.4375
+										 0.375  0.0  0.4375
+										-0.375  0.0  0.4375
+										-0.375  1.1 -0.4375
+										 0.375  1.1 -0.4375
+										 0.375  1.1  0.4375
+										-0.375  1.1  0.4375
+										]
+									}
+								coordIndex
+									[
+									0 1 2 3 -1
+									0 4 5 1 -1
+									1 5 6 2 -1
+									2 6 7 3 -1
+									3 7 4 0 -1
+									4 7 6 5 -1
+									]
+								ccw TRUE
+								convex TRUE
+								solid TRUE
+								}
+							}
+						
+						DEF Ring2 Transform
+							{
+							translation 0.0 1.1 0.0
+							rotation 0.0 0.0 1.0 -0.3
+							children
+								[
+								Shape
+									{
+									appearance USE Skin
+									geometry IndexedFaceSet
+										{
+										coord Coordinate
+											{
+											point
+												[
+												-0.375  0.0 -0.4375
+												 0.375  0.0 -0.4375
+												 0.375  0.0  0.4375
+												-0.375  0.0  0.4375
+												-0.3    1.0 -0.4
+												 0.3    1.0 -0.4
+												 0.3    1.0  0.4
+												-0.3    1.0  0.4
+												]
+											}
+										coordIndex
+											[
+											0 1 2 3 -1
+											0 4 5 1 -1
+											1 5 6 2 -1
+											2 6 7 3 -1
+											3 7 4 0 -1
+											4 7 6 5 -1
+											]
+										ccw TRUE
+										convex TRUE
+										solid TRUE
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		
+		# Pinky finger
+		DEF Pinky0 Transform
+			{
+			translation -0.005 3.5625 -1.3125
+			rotation 0.0 0.0 1.0 -1.7
+			children
+				[
+				Shape
+					{
+					appearance USE Skin
+					geometry IndexedFaceSet
+						{
+						coord Coordinate
+							{
+							point
+								[
+								-0.375 -0.0625 -0.4375
+								 0.375 -0.0625 -0.4375
+								 0.375  0.0625  0.4375
+								-0.375  0.0625  0.4375
+								-0.375  1.5    -0.4375
+								 0.375  1.5    -0.4375
+								 0.375  1.5     0.4375
+								-0.375  1.5     0.4375
+								]
+							}
+						coordIndex
+							[
+							0 1 2 3 -1
+							0 4 5 1 -1
+							1 5 6 2 -1
+							2 6 7 3 -1
+							3 7 4 0 -1
+							4 7 6 5 -1
+							]
+						ccw TRUE
+						convex TRUE
+						solid TRUE
+						}
+					}
+				
+				DEF Pinky1 Transform
+					{
+					translation 0.0 1.5 0.0
+					rotation 0.0 0.0 1.0 -1.1
+					children
+						[
+						Shape
+							{
+							appearance USE Skin
+							geometry IndexedFaceSet
+								{
+								coord Coordinate
+									{
+									point
+										[
+										-0.375  0.0 -0.4375
+										 0.375  0.0 -0.4375
+										 0.375  0.0  0.4375
+										-0.375  0.0  0.4375
+										-0.375  0.9 -0.4375
+										 0.375  0.9 -0.4375
+										 0.375  0.9  0.4375
+										-0.375  0.9  0.4375
+										]
+									}
+								coordIndex
+									[
+									0 1 2 3 -1
+									0 4 5 1 -1
+									1 5 6 2 -1
+									2 6 7 3 -1
+									3 7 4 0 -1
+									4 7 6 5 -1
+									]
+								ccw TRUE
+								convex TRUE
+								solid TRUE
+								}
+							}
+						
+						DEF Pinky2 Transform
+							{
+							translation 0.0 0.9 0.0
+							rotation 0.0 0.0 1.0 -0.5
+							children
+								[
+								Shape
+									{
+									appearance USE Skin
+									geometry IndexedFaceSet
+										{
+										coord Coordinate
+											{
+											point
+												[
+												-0.375  0.0 -0.4375
+												 0.375  0.0 -0.4375
+												 0.375  0.0  0.4375
+												-0.375  0.0  0.4375
+												-0.3    1.0 -0.4
+												 0.3    1.0 -0.4
+												 0.3    1.0  0.4
+												-0.3    1.0  0.4
+												]
+											}
+										coordIndex
+											[
+											0 1 2 3 -1
+											0 4 5 1 -1
+											1 5 6 2 -1
+											2 6 7 3 -1
+											3 7 4 0 -1
+											4 7 6 5 -1
+											]
+										ccw TRUE
+										convex TRUE
+										solid TRUE
+										}
+									}
+								]
+							}
+						]
+					}
+				]
+			}
+		]
+	}

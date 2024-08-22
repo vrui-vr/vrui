@@ -1,0 +1,68 @@
+/***********************************************************************
+WidgetManager - Class to manage top-level GLMotif UI components and user
+events.
+Copyright (c) 2001-2024 Oliver Kreylos
+
+This file is part of the GLMotif Widget Library (GLMotif).
+
+The GLMotif Widget Library is free software; you can redistribute it
+and/or modify it under the terms of the GNU General Public License as
+published by the Free Software Foundation; either version 2 of the
+License, or (at your option) any later version.
+
+The GLMotif Widget Library is distributed in the hope that it will be
+useful, but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with the GLMotif Widget Library; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+***********************************************************************/
+
+#ifndef GLMOTIF_WIDGETMANAGER_IMPLEMENTATION
+#define GLMOTIF_WIDGETMANAGER_IMPLEMENTATION
+
+#include <GLMotif/WidgetManager.h>
+
+#include <Misc/StdError.h>
+
+namespace GLMotif {
+
+/******************************
+Methods of class WidgetManager:
+******************************/
+
+template <class AttributeParam>
+inline
+const AttributeParam&
+WidgetManager::getWidgetAttribute(
+	const Widget* widget) const
+	{
+	WidgetAttributeMap::ConstIterator waIt=widgetAttributeMap.findEntry(widget);
+	if(waIt.isFinished())
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No attribute for widget %p",widget);
+	const WidgetAttribute<AttributeParam>* wa=dynamic_cast<const WidgetAttribute<AttributeParam>*>(waIt->getDest());
+	if(wa==0)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Attribute for widget %p is of wrong type",widget);
+	return wa->getValue();
+	}
+
+template <class AttributeParam>
+inline
+AttributeParam&
+WidgetManager::getWidgetAttribute(
+	const Widget* widget)
+	{
+	WidgetAttributeMap::Iterator waIt=widgetAttributeMap.findEntry(widget);
+	if(waIt.isFinished())
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No attribute for widget %p",widget);
+	WidgetAttribute<AttributeParam>* wa=dynamic_cast<WidgetAttribute<AttributeParam>*>(waIt->getDest());
+	if(wa==0)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Attribute for widget %p is of wrong type",widget);
+	return wa->getValue();
+	}
+
+}
+
+#endif

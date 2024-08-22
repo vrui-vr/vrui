@@ -1,0 +1,177 @@
+/***********************************************************************
+ColorMap - Templatized class to map scalar values within a defined range
+to colors.
+Copyright (c) 2023 Oliver Kreylos
+
+This file is part of the Miscellaneous Support Library (Misc).
+
+The Miscellaneous Support Library is free software; you can
+redistribute it and/or modify it under the terms of the GNU General
+Public License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+The Miscellaneous Support Library is distributed in the hope that it
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with the Miscellaneous Support Library; if not, write to the Free
+Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA
+***********************************************************************/
+
+#ifndef MISC_COLORMAP_IMPLEMENTATION
+#define MISC_COLORMAP_IMPLEMENTATION
+
+#include <Misc/ColorMap.h>
+
+namespace Misc {
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>::ColorMap(
+	unsigned int sNumKeys,
+	const double* sKeys,
+	const typename ColorMap<ColorParam>::Color* sKeyColors)
+	:numKeys(sNumKeys),
+	 keys(new double[numKeys]),keyColors(new Color[numKeys])
+	{
+	/* Copy the key array if given: */
+	if(sKeys!=0)
+		{
+		for(unsigned int i=0;i<numKeys;++i)
+			keys[i]=sKeys[i];
+		}
+	
+	/* Copy the key color array if given: */
+	if(sKeyColors!=0)
+		{
+		for(unsigned int i=0;i<numKeys;++i)
+			keyColors[i]=sKeyColors[i];
+		}
+	}
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>::ColorMap(
+	const ColorMap<ColorParam>& source)
+	:numKeys(source.numKeys),
+	 keys(new double[numKeys]),keyColors(new Color[numKeys])
+	{
+	/* Copy the source object's color map: */
+	for(unsigned int i=0;i<numKeys;++i)
+		keys[i]=source.keys[i];
+	for(unsigned int i=0;i<numKeys;++i)
+		keyColors[i]=source.keyColors[i];
+	}
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>::ColorMap(
+	ColorMap<ColorParam>&& source)
+	:numKeys(source.numKeys),
+	 keys(source.keys),keyColors(source.keyColors)
+	{
+	/* Invalidate the source object: */
+	source.numKeys=0;
+	source.keys=0;
+	source.keyColors=0;
+	}
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>::~ColorMap(
+	void)
+	{
+	delete[] keys;
+	delete[] keyColors;
+	}
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>&
+ColorMap<ColorParam>::operator=(
+	const ColorMap<ColorParam>& source)
+	{
+	if(this!=&source)
+		{
+		if(numKeys!=source.numKeys)
+			{
+			/* Re-allocate the color map arrays: */
+			delete[] keys;
+			delete[] keyColors;
+			numKeys=source.numKeys;
+			keys=new double[numKeys];
+			keyColors=new Color[numKeys];
+			}
+		
+		/* Copy the source color map: */
+		for(unsigned int i=0;i<numKeys;++i)
+			keys[i]=source.keys[i];
+		for(unsigned int i=0;i<numKeys;++i)
+			keyColors[i]=source.keyColors[i];
+		}
+	
+	return *this;
+	}
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>&
+ColorMap<ColorParam>::operator=(
+	ColorMap<ColorParam>&& source)
+	{
+	if(this!=&source)
+		{
+		/* Grab the source object's assets: */
+		numKeys=source.numKeys;
+		source.numKeys=0;
+		delete[] keys;
+		keys=source.keys;
+		source.keys=0;
+		delete[] keyColors;
+		keyColors=source.keyColors;
+		source.keyColors=0;
+		}
+	
+	return *this;
+	}
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>&
+ColorMap<ColorParam>::setNumKeys(
+	unsigned int newNumKeys)
+	{
+	if(numKeys!=newNumKeys)
+		{
+		/* Re-allocate the color map arrays: */
+		delete[] keys;
+		delete[] keyColors;
+		numKeys=newNumKeys;
+		keys=new double[numKeys];
+		keyColors=new Color[numKeys];
+		}
+	
+	return *this;
+	}
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>&
+ColorMap<ColorParam>::setKey(
+	unsigned int index,
+	double key,
+	const typename ColorMap<ColorParam>::Color& keyColor)
+	{
+	/* Override the current color map entry: */
+	keys[index]=key;
+	keyColors[index]=keyColor;
+	
+	return *this;
+	}
+
+}
+
+#endif
