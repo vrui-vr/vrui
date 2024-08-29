@@ -1,7 +1,7 @@
 /***********************************************************************
 SceneGraphViewerWalkNavigationTool - Navigation tool to walk and
 teleport through a scene graph.
-Copyright (c) 2020-2021 Oliver Kreylos
+Copyright (c) 2020-2024 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -317,13 +317,14 @@ void SceneGraphViewer::WalkNavigationTool::frame(void)
 		if(teleport)
 			{
 			/* Get the teleportation orb's initial position and velocity vector in navigational space: */
-			Scalar scale=Vrui::getInverseNavigationTransformation().getScaling();
-			SceneGraph::Point orbPos(Vrui::getInverseNavigationTransformation().transform(getButtonDevicePosition(0)));
-			SceneGraph::Vector orbVel(Vrui::getInverseNavigationTransformation().transform(getButtonDeviceRayDirection(0)));
+			const Vrui::NavTransform& invNav=Vrui::getInverseNavigationTransformation();
+			Scalar scale=invNav.getScaling();
+			SceneGraph::Point orbPos(invNav.transform(getButtonDevicePosition(0)));
+			SceneGraph::Vector orbVel(invNav.transform(getButtonDeviceRayDirection(0)));
 			orbVel*=SceneGraph::Scalar(scale*configuration.orbVelocity/orbVel.mag());
 			
 			/* Get the up direction in navigational space: */
-			SceneGraph::Vector up(Vrui::getInverseNavigationTransformation().transform(Vrui::getUpDirection()));
+			SceneGraph::Vector up(invNav.transform(Vrui::getUpDirection()));
 			up.normalize();
 			
 			/* Re-initialize the orb path: */

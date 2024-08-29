@@ -1,7 +1,7 @@
 /***********************************************************************
 Tool - Abstract base class for user interaction tools (navigation, menu
 selection, selection, etc.).
-Copyright (c) 2004-2021 Oliver Kreylos
+Copyright (c) 2004-2024 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -110,6 +110,10 @@ class Tool
 		{
 		return input.getButtonSlot(buttonSlotIndex).device->getRay();
 		}
+	OGTransform getButtonDeviceNavTransformation(int buttonSlotIndex) const; // Returns the position, orientation, and scale of the input device associated with the given button slot in navigational coordinates
+	Point getButtonDeviceNavPosition(int buttonSlotIndex) const; // Returns the position of the input device associated with the given button slot in navigational coordinates
+	Vector getButtonDeviceNavRayDirection(int buttonSlotIndex) const; // Returns the default ray direction of the input device associated with the given button slot in navigational coordinates
+	Ray getButtonDeviceNavRay(int buttonSlotIndex) const; // Returns the default ray of the input device associated with the given button slot in navigational coordinates
 	bool getButtonState(int buttonSlotIndex) const // Returns the state of the input device button associated with the given button slot
 		{
 		const ToolInputAssignment::Slot& slot=input.getButtonSlot(buttonSlotIndex);
@@ -143,6 +147,10 @@ class Tool
 		{
 		return input.getValuatorSlot(valuatorSlotIndex).device->getRay();
 		}
+	OGTransform getValuatorDeviceNavTransformation(int valuatorSlotIndex) const; // Returns the position and orientation of the input device associated with the given valuator slot in navigational coordinates
+	Point getValuatorDeviceNavPosition(int valuatorSlotIndex) const; // Returns the position of the input device associated with the given valuator slot in navigational coordinates
+	Vector getValuatorDeviceNavRayDirection(int valuatorSlotIndex) const; // Returns the default ray direction of the input device associated with the given valuator slot in navigational coordinates
+	Ray getValuatorDeviceNavRay(int valuatorSlotIndex) const; // Returns the default ray of the input device associated with the given valuator slot in navigational coordinates
 	double getValuatorState(int valuatorSlotIndex) const // Returns the value of the input device valuator associated with the given valuator slot
 		{
 		const ToolInputAssignment::Slot& slot=input.getValuatorSlot(valuatorSlotIndex);

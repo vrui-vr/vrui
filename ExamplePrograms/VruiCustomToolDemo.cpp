@@ -2,7 +2,7 @@
 VruiCustomToolDemo - VR application showing how to create application-
 specific tools and register them with the Vrui tool manager, and how
 custom tools can interact with the VR application.
-Copyright (c) 2006-2015 Oliver Kreylos
+Copyright (c) 2006-2024 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 ***********************************************************************/
 
 #include <iostream>
+#include <Geometry/OutputOperators.h>
 #include <Vrui/Tool.h>
 #include <Vrui/GenericToolFactory.h>
 #include <Vrui/ToolManager.h>
@@ -99,6 +100,10 @@ void VruiCustomToolDemo::MyTool::buttonCallback(int buttonSlotIndex,Vrui::InputD
 	if(cbData->newButtonState) // Button has just been pressed
 		{
 		std::cout<<"MyTool: Button "<<buttonSlotIndex<<" has just been pressed"<<std::endl;
+		
+		/* Print the tool's position in physical and navigational space: */
+		std::cout<<"Tool physical position    : "<<getButtonDevicePosition(buttonSlotIndex)<<std::endl;
+		std::cout<<"Tool navigational position: "<<getButtonDeviceNavPosition(buttonSlotIndex)<<std::endl;
 		
 		/* Call an application method if the second button was pressed: */
 		if(buttonSlotIndex==1)

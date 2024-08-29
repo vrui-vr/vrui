@@ -255,8 +255,7 @@ void GridEditor::EditTool::buttonCallback(int buttonSlotIndex,Vrui::InputDevice:
 		if(active)
 			{
 			/* Initialize the tool's position and orientation in model coordinates: */
-			lastTrackerState=getButtonDeviceTransformation(0);
-			lastTrackerState.leftMultiply(Vrui::getInverseNavigationTransformation());
+			lastTrackerState=getButtonDeviceNavTransformation(0);
 			}
 		}
 	else if(cbData->newButtonState)
@@ -293,8 +292,7 @@ void GridEditor::EditTool::frame(void)
 		return;
 	
 	/* Update the tool's position and radius in model coordinates: */
-	Vrui::NavTrackerState newTrackerState=getButtonDeviceTransformation(0);
-	newTrackerState.leftMultiply(Vrui::getInverseNavigationTransformation());
+	Vrui::NavTrackerState newTrackerState=getButtonDeviceNavTransformation(0);
 	
 	/* Update the brush position and size in model coordinates: */
 	modelCenter=Point(newTrackerState.getOrigin());

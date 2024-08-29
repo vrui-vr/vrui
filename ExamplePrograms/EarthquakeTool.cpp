@@ -1,7 +1,7 @@
 /***********************************************************************
 EarthquakeTool - Vrui tool class to snap a virtual input device to
 events in an earthquake data set.
-Copyright (c) 2009-2014 Oliver Kreylos
+Copyright (c) 2009-2024 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -121,7 +121,7 @@ void EarthquakeTool::frame(void)
 	if(sourceDevice->is6DOFDevice())
 		{
 		/* Snap the device's position to the closest earthquake event: */
-		EarthquakeSet::Point position=EarthquakeSet::Point(Vrui::getNavigationTransformation().inverseTransform(sourceDevice->getPosition()));
+		EarthquakeSet::Point position=EarthquakeSet::Point(Vrui::getInverseNavigationTransformation().transform(sourceDevice->getPosition()));
 		float maxDistance=float(Vrui::getPointPickDistance());
 		for(std::vector<EarthquakeSet*>::const_iterator eqsIt=factory->earthquakeSets.begin();eqsIt!=factory->earthquakeSets.end();++eqsIt)
 			{

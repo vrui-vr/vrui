@@ -1,7 +1,7 @@
 /***********************************************************************
 EarthquakeQueryTool - Vrui tool class to query and display meta data
 about earthquake events.
-Copyright (c) 2013-2018 Oliver Kreylos
+Copyright (c) 2013-2024 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -159,7 +159,7 @@ void EarthquakeQueryTool::frame(void)
 		if(getButtonDevice(0)->is6DOFDevice())
 			{
 			/* Select the closest earthquake event to the device's position: */
-			EarthquakeSet::Point position=EarthquakeSet::Point(Vrui::getNavigationTransformation().inverseTransform(getButtonDevicePosition(0)));
+			EarthquakeSet::Point position=EarthquakeSet::Point(getButtonDeviceNavPosition(0));
 			float maxDistance=float(Vrui::getPointPickDistance());
 			for(std::vector<EarthquakeSet*>::const_iterator eqsIt=factory->earthquakeSets.begin();eqsIt!=factory->earthquakeSets.end();++eqsIt)
 				{
@@ -174,8 +174,7 @@ void EarthquakeQueryTool::frame(void)
 		else
 			{
 			/* Select the closest earthquake event along the device's ray: */
-			Vrui::Ray ray=getButtonDeviceRay(0);
-			ray.transform(Vrui::getInverseNavigationTransformation());
+			Vrui::Ray ray=getButtonDeviceNavRay(0);
 			Vrui::Scalar rayLength=Geometry::mag(ray.getDirection());
 			ray.normalizeDirection();
 			EarthquakeSet::Ray eqRay(ray);

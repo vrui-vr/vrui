@@ -30,7 +30,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Math/Constants.h>
 #include <Math/Matrix.h>
 #include <Math/SimplexMinimizer.h>
-#include <Geometry/OrthogonalTransformation.h>
 #include <Geometry/ProjectiveTransformation.h>
 #include <GL/gl.h>
 #include <GL/GLColorTemplates.h>
@@ -64,11 +63,8 @@ Methods of class ImageViewer::PipetteTool:
 
 void ImageViewer::PipetteTool::setPixelPos(void)
 	{
-	/* Get the first button slot's device ray: */
-	Vrui::Ray ray=getButtonDeviceRay(0);
-	
-	/* Transform the ray to navigational space: */
-	ray.transform(Vrui::getInverseNavigationTransformation());
+	/* Get the first button slot's device ray in navigational coordinates: */
+	Vrui::Ray ray=getButtonDeviceNavRay(0);
 	
 	/* Intersect the ray with the z=0 plane: */
 	if(ray.getOrigin()[2]*ray.getDirection()[2]<Vrui::Scalar(0))
@@ -283,11 +279,8 @@ Methods of class ImageViewer::HomographySamplerTool:
 
 ImageViewer::Point ImageViewer::HomographySamplerTool::calcPixelPos(void) const
 	{
-	/* Get the first button slot's device ray: */
-	Vrui::Ray ray=getButtonDeviceRay(0);
-	
-	/* Transform the ray to navigational space: */
-	ray.transform(Vrui::getInverseNavigationTransformation());
+	/* Get the first button slot's device ray in navigational coordinates: */
+	Vrui::Ray ray=getButtonDeviceNavRay(0);
 	
 	/* Intersect the ray with the z=0 plane: */
 	if(ray.getOrigin()[2]*ray.getDirection()[2]<Vrui::Scalar(0))

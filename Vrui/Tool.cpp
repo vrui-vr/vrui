@@ -24,6 +24,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Tool.h>
 
 #include <Misc/StdError.h>
+#include <Geometry/OrthogonalTransformation.h>
 #include <Vrui/Vrui.h>
 
 namespace Vrui {
@@ -130,6 +131,56 @@ void Tool::valuatorCallbackWrapper(Misc::CallbackData* cbData,void* userData)
 		/* Call the tool's callback method: */
 		tool->valuatorCallback(valuatorSlotIndex,vcbData);
 		}
+	}
+
+OGTransform Tool::getButtonDeviceNavTransformation(int buttonSlotIndex) const
+	{
+	OGTransform result(input.getButtonSlot(buttonSlotIndex).device->getTransformation());
+	result.leftMultiply(getInverseNavigationTransformation());
+	result.renormalize();
+	return result;
+	}
+
+Point Tool::getButtonDeviceNavPosition(int buttonSlotIndex) const
+	{
+	return getInverseNavigationTransformation().transform(input.getButtonSlot(buttonSlotIndex).device->getPosition());
+	}
+
+Vector Tool::getButtonDeviceNavRayDirection(int buttonSlotIndex) const
+	{
+	return getInverseNavigationTransformation().transform(input.getButtonSlot(buttonSlotIndex).device->getRayDirection());
+	}
+
+Ray Tool::getButtonDeviceNavRay(int buttonSlotIndex) const
+	{
+	Ray result=input.getButtonSlot(buttonSlotIndex).device->getRay();
+	result.transform(getInverseNavigationTransformation());
+	return result;
+	}
+
+OGTransform Tool::getValuatorDeviceNavTransformation(int valuatorSlotIndex) const
+	{
+	OGTransform result(input.getValuatorSlot(valuatorSlotIndex).device->getTransformation());
+	result.leftMultiply(getInverseNavigationTransformation());
+	result.renormalize();
+	return result;
+	}
+
+Point Tool::getValuatorDeviceNavPosition(int valuatorSlotIndex) const
+	{
+	return getInverseNavigationTransformation().transform(input.getValuatorSlot(valuatorSlotIndex).device->getPosition());
+	}
+
+Vector Tool::getValuatorDeviceNavRayDirection(int valuatorSlotIndex) const
+	{
+	return getInverseNavigationTransformation().transform(input.getValuatorSlot(valuatorSlotIndex).device->getRayDirection());
+	}
+
+Ray Tool::getValuatorDeviceNavRay(int valuatorSlotIndex) const
+	{
+	Ray result=input.getValuatorSlot(valuatorSlotIndex).device->getRay();
+	result.transform(getInverseNavigationTransformation());
+	return result;
 	}
 
 Tool::Tool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
