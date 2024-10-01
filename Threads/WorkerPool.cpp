@@ -1,7 +1,7 @@
 /***********************************************************************
 WorkerPool - Class to represent a set of worker pools that
 asynchronously execute submitted one-off jobs.
-Copyright (c) 2022-2023 Oliver Kreylos
+Copyright (c) 2022-2024 Oliver Kreylos
 
 This file is part of the Portable Threading Library (Threads).
 
@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Threads/WorkerPool.h>
 
 #include <stdexcept>
+#include <Misc/Autopointer.h>
 #include <Threads/FunctionCalls.h>
 #include <Misc/MessageLogger.h>
 #include <Threads/Thread.h>

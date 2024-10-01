@@ -23,8 +23,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef THREADS_FUNCTIONCALLS_INCLUDED
 #define THREADS_FUNCTIONCALLS_INCLUDED
 
-#include <stdexcept>
-#include <Misc/Autopointer.h>
 #include <Misc/StdError.h>
 #include <Threads/RefCounted.h>
 
@@ -45,8 +43,14 @@ class FunctionCall:public RefCounted
 		}
 	
 	/* Methods: */
-	virtual void operator()(Parameter parameter) const =0; // Function call operator when function object is non-modifiable
-	virtual void operator()(Parameter parameter) =0; // Function call operator when function object is modifiable
+	virtual void operator()(Parameter parameter) const // Function call operator when function object is non-modifiable
+		{
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot call const base function call object");
+		}
+	virtual void operator()(Parameter parameter) // Function call operator when function object is modifiable
+		{
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot call base function call object");
+		}
 	};
 
 /* Class to call C-style functions: */
