@@ -85,9 +85,6 @@ class VruiSoundConfig:public Vrui::Application
 			}
 		
 		/* Methods from class Threads::FunctionCall<int>: */
-		void operator()(int parameter) const
-			{
-			}
 		void operator()(int parameter)
 			{
 			/* Play the loaded sound on the selected PCM: */
