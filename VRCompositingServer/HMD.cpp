@@ -28,8 +28,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Vulkan/PhysicalDeviceDescriptor.h>
 #include <Vulkan/ImageView.h>
 
-#define HMD_USE_VBLANK_EVENTS 1
-#define HMD_USE_VBLANK_COUNTER 0
+#define HMD_USE_VBLANK_EVENTS 0
+#define HMD_USE_VBLANK_COUNTER 1
 #define HMD_PRINT_VBLANK_ESTIMATES 0
 #define HMD_WRITE_TIMINGFILE 0
 
