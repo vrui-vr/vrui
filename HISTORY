@@ -8316,3 +8316,11 @@ Vrui-12.1-002:
 Vrui-12.2-001:
 - Add validation layer list to Vulkan::Instance constructor.
   - Add Khronos validation layer in debug mode in VRServer.
+
+Vrui-12.2-002:
+- Switch from vblank events to busy-waiting on vblank counters in
+  HMD::vsync method in VR compositor to work around issue in new Nvidia
+  drivers.
+- Make display name matching in VR compositor more lenient to work with
+  existing HMD naming scheme.
+- Fix command line arguments in RunVRCompositor.sh script.
