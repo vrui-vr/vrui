@@ -120,7 +120,7 @@ endif
 # If the above fails, enter the correct path here, or pass
 # STEAMVRDIR=... on make's command line during both "make" and "make
 # install":
-# STEAMVRDIR = 
+# STEAMVRDIR =
 
 ifneq ($(strip $(STEAMVRDIR)),)
   # Build OpenVRHost VRDeviceDaemon driver module:
@@ -1848,12 +1848,12 @@ VRVislets: $(VRVISLETS)
 #
 
 $(VRUI_SHAREDIR)/Resources/ViveController.wrl: | $(DEPDIR)/config
-$(VRUI_SHAREDIR)/Resources/ViveController.wrl: $(VRUI_SHAREDIR)/Resources/ViveController.wrl.template
+$(VRUI_SHAREDIR)/Resources/ViveController.wrl: $(VRUI_SHAREDIR)/Resources/ViveController.wrl.template $(DEPDIR)/Configure-Vrui
 	@echo Configuring Vive controller model...
 	@sed -e "s:STEAMVRRENDERMODELSDIR:$(STEAMVRRENDERMODELSDIR):" $(VRUI_SHAREDIR)/Resources/ViveController.wrl.template > $(VRUI_SHAREDIR)/Resources/ViveController.wrl
 
 $(VRUI_SHAREDIR)/Resources/IndexControllerLeft.wrl: | $(DEPDIR)/config
-$(VRUI_SHAREDIR)/Resources/IndexControllerLeft.wrl: $(VRUI_SHAREDIR)/Resources/IndexControllerLeft.wrl.template
+$(VRUI_SHAREDIR)/Resources/IndexControllerLeft.wrl: $(VRUI_SHAREDIR)/Resources/IndexControllerLeft.wrl.template $(DEPDIR)/Configure-Vrui
 	@echo Configuring left Valve Index controller model...
 	@sed -e "s:STEAMVRINDEXCONTROLLERRENDERMODELSDIR:$(STEAMVRINDEXCONTROLLERRENDERMODELSDIR):" $(VRUI_SHAREDIR)/Resources/IndexControllerLeft.wrl.template > $(VRUI_SHAREDIR)/Resources/IndexControllerLeft.wrl
 
@@ -2210,6 +2210,7 @@ VruiSoundConfigTest: $(EXEDIR)/VruiSoundConfigTest
 #
 
 $(EXEDIR)/OnHMD: | $(DEPDIR)/config
+$(EXEDIR)/OnHMD: $(VRUI_SCRIPTDIR)/OnHMD $(DEPDIR)/Configure-Vrui
 	@echo Creating helper script to run Vrui applications on OpenVR-supported head mounted displays...
 	@cp $(VRUI_SCRIPTDIR)/OnHMD $(EXEDIR)/OnHMD
 	@sed -i -e 's@VRUIBINDIR=.*@VRUIBINDIR=$(EXECUTABLEINSTALLDIR)@' $(EXEDIR)/OnHMD
