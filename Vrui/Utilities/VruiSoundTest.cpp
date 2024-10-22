@@ -47,6 +47,9 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Application.h>
 #include <Vrui/SoundContext.h>
 
+// DEBUGGING
+#include <iostream>
+
 class VruiSoundTest:public Vrui::Application,public ALObject
 	{
 	#if ALSUPPORT_CONFIG_HAVE_OPENAL&&SOUND_CONFIG_HAVE_PULSEAUDIO
@@ -75,6 +78,7 @@ class VruiSoundTest:public Vrui::Application,public ALObject
 		{
 		/* Elements: */
 		public:
+		unsigned int latencyMs; // Audio looping latency in ms
 		Sound::PulseAudio::Context paContext; // A PulseAudio context
 		Sound::PulseAudio::Source* recordingDevice; // The PulseAudio source connected to the Vrui environment's sound recording device
 		Sound::SoundDataFormat recordingFormat; // Recording audio data format
@@ -97,6 +101,7 @@ class VruiSoundTest:public Vrui::Application,public ALObject
 	
 	/* Elements: */
 	private:
+	unsigned int latencyMs; // Sound looping latency in ms
 	
 	/* Constructors and destructors: */
 	public:
@@ -157,16 +162,22 @@ void* VruiSoundTest::DataItem::playbackThreadMethod(void)
 		soundBuffers.pop_front();
 		}
 		
-		/* Check if this is the first recording buffer: */
-		if(firstBuffer)
+		/* Check if the source is not currently playing: */
+		ALint sourceState;
+		alGetSourcei(playbackSource,AL_SOURCE_STATE,&sourceState);
+		if(sourceState!=AL_PLAYING)
 			{
-			/* Preload the playback source with 0.25s of silence: */
+			// DEBUGGING
+			std::cout<<"Starting OpenAL playback source with silence"<<std::endl;
+			
+			/* Preload the playback source with half a latency of silence: */
+			unsigned int numSilenceSamples=(recordingFormat.framesPerSecond*latencyMs+1000U)/2000U;
 			ALuint silenceBuffer;
 			alGenBuffers(1,&silenceBuffer);
-			Misc::SInt16* silence=new Misc::SInt16[recordingFormat.framesPerSecond/4];
-			for(int i=0;i<recordingFormat.framesPerSecond/4;++i)
+			Misc::SInt16* silence=new Misc::SInt16[numSilenceSamples];
+			for(unsigned int i=0;i<numSilenceSamples;++i)
 				silence[i]=0;
-			alBufferData(silenceBuffer,AL_FORMAT_MONO16,silence,(recordingFormat.framesPerSecond/4)*sizeof(Misc::SInt16),recordingFormat.framesPerSecond);
+			alBufferData(silenceBuffer,AL_FORMAT_MONO16,silence,numSilenceSamples*sizeof(Misc::SInt16),recordingFormat.framesPerSecond);
 			delete[] silence;
 			alSourceQueueBuffers(playbackSource,1,&silenceBuffer);
 			
@@ -214,6 +225,7 @@ void* VruiSoundTest::DataItem::playbackThreadMethod(void)
 
 VruiSoundTest::DataItem::DataItem(const VruiSoundTest* application)
 	:paContext("VruiSoundTest"),
+	 latencyMs(application->latencyMs),
 	 recordingDevice(0),
 	 state(Created),playbackSource(0)
 	{
@@ -235,7 +247,6 @@ VruiSoundTest::DataItem::DataItem(const VruiSoundTest* application)
 	recordingFormat.framesPerSecond=psIt->format.framesPerSecond;
 	
 	/* Start the recording device: */
-	unsigned int latencyMs=500;
 	recordingDevice=new Sound::PulseAudio::Source(paContext,psIt->name.c_str(),recordingFormat,latencyMs);
 	recordingDevice->start(recordingDataCallback,this);
 	
@@ -294,8 +305,13 @@ Methods of class VruiSoundTest:
 ******************************/
 
 VruiSoundTest::VruiSoundTest(int& argc,char**& argv)
-	:Vrui::Application(argc,argv)
+	:Vrui::Application(argc,argv),
+	 latencyMs(500)
 	{
+	/* Parse the command line: */
+	if(argc>=2)
+		latencyMs=atoi(argv[1]);
+	
 	#if ALSUPPORT_CONFIG_HAVE_OPENAL&&SOUND_CONFIG_HAVE_PULSEAUDIO
 
 	/* Request OpenAL sound processing from Vrui: */
