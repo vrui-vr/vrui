@@ -1,7 +1,7 @@
 /***********************************************************************
 HMDCameraViewer - Vislet class to show a live pass-through video feed
 from a mono or stereo camera attached to a head-mounted display.
-Copyright (c) 2020-2023 Oliver Kreylos
+Copyright (c) 2020-2024 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -25,7 +25,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #define VRUI_VISLETS_HMDCAMERAVIEWER_INCLUDED
 
 #include <string>
-#include <Misc/RingBuffer.h>
 #include <Realtime/TimeStamp.h>
 #include <Threads/Spinlock.h>
 #include <Threads/MutexCond.h>
@@ -154,8 +153,8 @@ class HMDCameraViewer:public Vislet,public GLObject
 		{
 		/* Elements: */
 		public:
-		Rotation orientation; // Sampled head orientation
 		Realtime::TimeStamp timeStamp; // Time at which the orientation was sampled
+		Rotation orientation; // Sampled head orientation
 		};
 	
 	struct DataItem:public GLObject::DataItem // Structure to store per-context OpenGL state
@@ -187,7 +186,9 @@ class HMDCameraViewer:public Vislet,public GLObject
 	/* Video display state: */
 	Video::IntrinsicParameters intrinsics[2]; // Set of intrinsic camera parameters to apply to the left and right video streams
 	Threads::Spinlock orientationsMutex; // Mutex protecting the head orientation ring buffer
-	Misc::RingBuffer<OrientationSample> orientationSamples; // Ring buffer of recent head orientations
+	OrientationSample* orientations; // Fixed-size ring buffer of recent head orientation samples
+	OrientationSample* orientationsEnd; // Pointer to end of ring buffer
+	OrientationSample* orientationsHead; // Pointer to oldest entry in orientation sample ring buffer
 	
 	/* Private methods: */
 	void* streamingThreadMethod(void); // Method running the video capture thread

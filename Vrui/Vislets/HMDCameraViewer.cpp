@@ -341,12 +341,25 @@ void* HMDCameraViewer::streamingThreadMethod(void)
 				/* Find the closest head orientation in the orientation buffer: */
 				{
 				Threads::Spinlock::Lock orientationsLock(orientationsMutex);
-				while(!orientationSamples.empty()&&orientationSamples.front().timeStamp.before(timeStamp))
-					orientationSamples.pop_front();
-				if(!orientationSamples.empty())
-					frame.headOrientation=orientationSamples.front().orientation;
-				else
-					frame.valid=false;
+				int l=0;
+				int r=orientationsEnd-orientations;
+				while(r-l>1)
+					{
+					int m=(l+r)/2;
+					OrientationSample* mPtr=orientationsHead+m;
+					if(mPtr>=orientationsEnd)
+						mPtr-=(orientationsEnd-orientations);
+					
+					if(mPtr->timeStamp.notAfter(timeStamp))
+						l=m;
+					else
+						r=m;
+					}
+				OrientationSample* lPtr=orientationsHead+l;
+				if(lPtr>=orientationsEnd)
+					lPtr-=(orientationsEnd-orientations);
+				frame.headOrientation=lPtr->orientation;
+				frame.valid=true;
 				}
 				
 				/* Finish the new image in the input triple buffer: */
@@ -381,7 +394,7 @@ HMDCameraViewer::HMDCameraViewer(int numArguments,const char* const arguments[])
 	:runStreamingThread(false),
 	 videoDevice(0),videoExtractor(0),
 	 videoFrameVersion(0),
-	 orientationSamples(90)
+	 orientations(new OrientationSample[90]),orientationsEnd(orientations+90),orientationsHead(orientations)
 	{
 	/* Set the factory's vislet: */
 	factory->vislet=this;
@@ -399,6 +412,9 @@ HMDCameraViewer::HMDCameraViewer(int numArguments,const char* const arguments[])
 
 HMDCameraViewer::~HMDCameraViewer(void)
 	{
+	/* Release allocated resources: */
+	delete[] orientations;
+	
 	/* Reset the factory's vislet: */
 	if(factory->vislet==this)
 		factory->vislet=0;
@@ -424,8 +440,13 @@ void HMDCameraViewer::enable(bool startup)
 		for(int i=0;i<3;++i)
 			videoFrames.getBuffer(i).valid=false;
 		
-		/* Clear the head orientation buffer: */
-		orientationSamples.clear(90);
+		/* Initialize the head orientation buffer: */
+		OrientationSample o;
+		o.timeStamp=Realtime::TimeStamp::now();
+		o.orientation=factory->viewer->getHeadTransformation().getRotation();
+		for(OrientationSample* oPtr=orientations;oPtr!=orientationsEnd;++oPtr)
+			*oPtr=o;
+		orientationsHead=orientations;
 		
 		/* Enable the vislet as far as the vislet manager is concerned: */
 		Vislet::enable(false);
@@ -453,11 +474,13 @@ void HMDCameraViewer::frame(void)
 	{
 	/* Sample the head orientation: */
 	OrientationSample o;
-	o.orientation=factory->viewer->getHeadTransformation().getRotation();
 	o.timeStamp=Realtime::TimeStamp::now();
+	o.orientation=factory->viewer->getHeadTransformation().getRotation();
 	{
 	Threads::Spinlock::Lock orientationsLock(orientationsMutex);
-	orientationSamples.push_back(o);
+	*orientationsHead=o;
+	if(++orientationsHead==orientationsEnd)
+		orientationsHead=orientations;
 	}
 	
 	/* Lock the most recent video frame in the input triple buffer: */
