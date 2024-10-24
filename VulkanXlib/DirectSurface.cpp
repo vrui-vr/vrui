@@ -68,7 +68,7 @@ DirectSurface::DirectSurface(const Vulkan::Instance& sInstance,const XlibDisplay
 				while(sdnIt!=displayName.end()&&*pdnPtr!='\0')
 					{
 					/* Advance the search iterator if there is a match: */
-					if(*sdnIt==*pdnPtr)
+					if(tolower(*sdnIt)==tolower(*pdnPtr))
 						++sdnIt;
 					
 					++pdnPtr;

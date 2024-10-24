@@ -23,12 +23,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <stdlib.h>
 #include <Misc/StdError.h>
+#include <Misc/MessageLogger.h>
 #include <Vulkan/Instance.h>
 #include <Vulkan/PhysicalDeviceDescriptor.h>
 #include <Vulkan/ImageView.h>
 
-#define HMD_USE_VBLANK_EVENTS 1
-#define HMD_USE_VBLANK_COUNTER 0
+#define HMD_USE_VBLANK_EVENTS 0
+#define HMD_USE_VBLANK_COUNTER 1
 #define HMD_PRINT_VBLANK_ESTIMATES 0
 #define HMD_WRITE_TIMINGFILE 0
 
@@ -241,7 +242,7 @@ void HMD::startVblankEstimator(void)
 
 uint64_t HMD::vsync(void)
 	{
-	uint64_t missed;
+	uint64_t missed=0;
 	
 	#if HMD_USE_VBLANK_EVENTS
 	
@@ -255,9 +256,14 @@ uint64_t HMD::vsync(void)
 	uint64_t newVblankCounter=swapchain.getVblankCounter();
 	
 	/* Update the vblank estimator through missed vblank events: */
-	missed=newVblankCounter-(vblankCounter+1);
-	for(uint64_t i=0;i<missed;++i)
-		vblankEstimator.update();
+	if(newVblankCounter!=vblankCounter)
+		{
+		missed=newVblankCounter-(vblankCounter+1);
+		for(uint64_t i=0;i<missed;++i)
+			vblankEstimator.update();
+		}
+	else
+		Misc::formattedConsoleWarning("HMD::vsync: Duplicate vsync counter %lu",vblankCounter);
 	
 	/* Update the vblank estimator: */
 	vblankEstimator.update(vblankSample);
