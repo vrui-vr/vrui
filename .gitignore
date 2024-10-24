@@ -1,0 +1,16 @@
+BuildRoot/Configuration.Vrui
+BuildRoot/StripPackages
+ExamplePrograms/bin/
+ExamplePrograms/d/
+ExamplePrograms/o/
+bin/
+d/
+lib/
+lib64/
+o/
+scripts/Vrui.makeinclude
+scripts/Vrui.pc
+share/Resources/IndexControllerLeft.wrl
+share/Resources/IndexControllerRight.wrl
+share/Resources/ViveController.wrl
+share/spirv/
