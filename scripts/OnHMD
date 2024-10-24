@@ -23,6 +23,10 @@
 # Boston, MA 02111-1307 USA
 ########################################################################
 
+# Extract the application name:
+VRUIAPPNAME=$1
+shift
+
 # Check if a VR compositor is running:
 if /usr/sbin/ss -O -n -f unix -l | grep -qF VRCompositingServer.socket ; then
 	# Configure library environment:
@@ -30,10 +34,6 @@ if /usr/sbin/ss -O -n -f unix -l | grep -qF VRCompositingServer.socket ; then
 	VRUIETCDIR=/usr/local/etc
 	
 	USERETCDIR=${HOME}/.config/Vrui-8.2
-	
-	# Extract the application name:
-	VRUIAPPNAME=$1
-	shift
 	
 	# Include the VR devices configuration file:
 	source "${VRUIETCDIR}/OpenVRDevices.conf"
