@@ -120,7 +120,7 @@ endif
 # If the above fails, enter the correct path here, or pass
 # STEAMVRDIR=... on make's command line during both "make" and "make
 # install":
-# STEAMVRDIR =
+# STEAMVRDIR = 
 
 ifneq ($(strip $(STEAMVRDIR)),)
   # Build OpenVRHost VRDeviceDaemon driver module:
@@ -2122,6 +2122,7 @@ $(VRCOMPOSITINGSERVER_SHADERS:%=$(SPIRVFRAGMENTDIR)/%.spv): | $(DEPDIR)/config
 #
 
 $(EXEDIR)/RunVRCompositor.sh: | $(DEPDIR)/config
+$(EXEDIR)/RunVRCompositor.sh: $(VRUI_SCRIPTDIR)/RunVRCompositor.sh $(DEPDIR)/Configure-Vrui
 	@echo Creating helper script to run VR compositing server...
 	@cp $(VRUI_SCRIPTDIR)/RunVRCompositor.sh $(EXEDIR)/RunVRCompositor.sh
 	@sed -i -e 's@VRUIBINDIR=.*@VRUIBINDIR=$(EXECUTABLEINSTALLDIR)@' $(EXEDIR)/RunVRCompositor.sh

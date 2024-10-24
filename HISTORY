@@ -8332,3 +8332,4 @@ Vrui-12.2-003:
 - Catch HUP, INT, and TERM signals in VR compositing server to cleanly
   shut down when server's terminal window is closed; otherwise, shared
   memory is not released.
+- Fixed dependency for RunVRCompositor.sh script in makefile.
