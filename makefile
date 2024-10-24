@@ -106,21 +106,20 @@ ifneq ($(SYSTEM_HAVE_FREETYPE),0)
 endif
 
 ########################################################################
-# Select support for HTC Vive via the OpenVR API
+# Select support for commodity VR headsets via the OpenVR API
 ########################################################################
 
-# Root directory of the SteamVR run-time. The following checks if one of
-# the default locations exists, and, if not, uses locate to search the
-# entire file system:
-STEAMVRDIR = $(realpath $(firstword $(wildcard $(HOME)/.[Ss]team/[Ss]team/[Ss]team[Aa]pps/[Cc]ommon/[Ss]team[Vv][Rr] $(HOME)/.local/share/[Ss]team/[Ss]team[Aa]pps/[Cc]ommon/[Ss]team[Vv][Rr])))
-ifeq ($(strip $(STEAMVRDIR)),)
-  STEAMVRDIR = $(firstword $(shell locate -l 1 -i "*/common/SteamVR"))
-endif
+# Root directory of the SteamVR run-time.
+STEAMVRDIR = 
 
-# If the above fails, enter the correct path here, or pass
-# STEAMVRDIR=... on make's command line during both "make" and "make
-# install":
-# STEAMVRDIR = 
+# If no SteamVR directory is defined above, or given on make's command
+# line, search the file system for an installation:
+ifeq ($(strip $(STEAMVRDIR)),)
+  STEAMVRDIR = $(realpath $(firstword $(wildcard $(HOME)/.[Ss]team/[Ss]team/[Ss]team[Aa]pps/[Cc]ommon/[Ss]team[Vv][Rr] $(HOME)/.local/share/[Ss]team/[Ss]team[Aa]pps/[Cc]ommon/[Ss]team[Vv][Rr])))
+  ifeq ($(strip $(STEAMVRDIR)),)
+    STEAMVRDIR = $(firstword $(shell locate -l 1 -i "*/common/SteamVR"))
+  endif
+endif
 
 ifneq ($(strip $(STEAMVRDIR)),)
   # Build OpenVRHost VRDeviceDaemon driver module:
