@@ -8333,3 +8333,6 @@ Vrui-12.2-003:
   shut down when server's terminal window is closed; otherwise, shared
   memory is not released.
 - Fixed dependency for RunVRCompositor.sh script in makefile.
+- Changed build system to use *.template files as sources for files
+  generated or changed by "make config" to keep source code repositories
+  unaffected by building.
