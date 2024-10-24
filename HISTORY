@@ -8329,3 +8329,6 @@ Vrui-12.2-003:
 - Fixed camera frame stabilization scheme in HMDCameraViewer vislet.
 - Entered real (estimated) camera latency on HTC Vive Pro into
   HMDCameraViewer.cfg configuration file.
+- Catch HUP, INT, and TERM signals in VR compositing server to cleanly
+  shut down when server's terminal window is closed; otherwise, shared
+  memory is not released.

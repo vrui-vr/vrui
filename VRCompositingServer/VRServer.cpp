@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <string.h>
 #include <unistd.h>
 #include <termios.h>
+#include <signal.h>
 #include <string>
 #include <iostream>
 #include <Misc/SizedTypes.h>
@@ -77,6 +78,7 @@ class VRServer
 	
 	/* Methods: */
 	void run(void); // Runs the server until interrupted
+	void stop(void); // Stops the server
 	};
 
 /*************************
@@ -259,9 +261,34 @@ void VRServer::run(void)
 	dispatcher.dispatchEvents();
 	}
 
+void VRServer::stop(void)
+	{
+	/* Stop the dispatcher to shut down the server: */
+	dispatcher.stop();
+	}
+
 /****************
 Main entry point:
 ****************/
+
+VRServer* serverPtr=0; // Pointer to the VR compositing server
+
+void signalHandler(int signalId)
+	{
+	switch(signalId)
+		{
+		case SIGHUP:
+		case SIGINT:
+		case SIGTERM:
+			/* Shut down the VR compositing server: */
+			if(serverPtr!=0)
+				serverPtr->stop();
+			
+			break;
+		}
+	
+	return;
+	}
 
 int main(int argc,char* argv[])
 	{
@@ -301,6 +328,23 @@ int main(int argc,char* argv[])
 				}
 			}
 		}
+	
+	/* Install signal handlers for SIGHUP, SIGINT, and SIGTERM to exit cleanly: */
+	struct sigaction sigHupAction;
+	sigHupAction.sa_handler=signalHandler;
+	sigemptyset(&sigHupAction.sa_mask);
+	sigHupAction.sa_flags=0x0;
+	sigaction(SIGHUP,&sigHupAction,0);
+	struct sigaction sigIntAction;
+	sigIntAction.sa_handler=signalHandler;
+	sigemptyset(&sigIntAction.sa_mask);
+	sigIntAction.sa_flags=0x0;
+	sigaction(SIGINT,&sigIntAction,0);
+	struct sigaction sigTermAction;
+	sigTermAction.sa_handler=signalHandler;
+	sigemptyset(&sigTermAction.sa_mask);
+	sigTermAction.sa_flags=0x0;
+	sigaction(SIGTERM,&sigTermAction,0);
 	
 	/* Ignore SIGPIPE and leave handling of pipe errors to TCP sockets: */
 	Comm::ignorePipeSignals();
@@ -364,10 +408,14 @@ int main(int argc,char* argv[])
 			{
 			/* Create a VR server object: */
 			VRServer server(deviceDaemonSocketName,deviceDaemonSocketAbstract,instance,hmdName,hmdFrameRate);
+			serverPtr=&server;
 			
 			/* Run the server's main loop until interrupted: */
 			std::cout<<"Running server main loop"<<std::endl;
 			server.run();
+			std::cout<<"Server main loop exited"<<std::endl;
+			
+			serverPtr=0;
 			}
 		}
 	catch(const std::runtime_error& err)
