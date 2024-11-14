@@ -148,6 +148,7 @@ class RoomSetup:public Vrui::Application,public Vrui::TransparentObject,public G
 	/* Setup state: */
 	Vrui::Scalar snapDistance; // Maximum distance to snap controller positions against existing points in physical coordinate units
 	Modes mode; // Current set-up mode
+	Vrui::Scalar wallHeight; // Height for boundary walls
 	PointList floorPoints; // List of floor set-up points; first point is tentative environment center
 	Polygon boundary; // Current boundary polygon
 	Polygon currentSurface; // Current surface polygon
@@ -194,7 +195,7 @@ class RoomSetup:public Vrui::Application,public Vrui::TransparentObject,public G
 	void surfacesResetButtonCallback(Misc::CallbackData* cbData);
 	void skipCalibrationPointCallback(Misc::CallbackData* cbData);
 	void resetScreenCalibrationCallback(Misc::CallbackData* cbData);
-	std::string encodeBoundary(Vrui::Scalar wallHeight);
+	PolygonList createBoundary(void);
 	void saveButtonCallback(Misc::CallbackData* cbData);
 	GLMotif::PopupWindow* createSetupDialog(bool haveCustomProbeTip); // Creates a dialog window to control the setup process
 	void trackingCallback(Vrui::VRDeviceClient* client); // Called when new tracking data arrives
@@ -372,6 +373,7 @@ void RoomSetup::floorResetButtonCallback(Misc::CallbackData* cbData)
 	/* Reset floor calibration: */
 	current.center=initial.center;
 	current.up=initial.up;
+	current.floor=initial.floor;
 	floorPoints.clear();
 	for(int i=0;i<3;++i)
 		{
@@ -427,50 +429,34 @@ void RoomSetup::surfacesResetButtonCallback(Misc::CallbackData* cbData)
 	surfaces.clear();
 	}
 
-std::string RoomSetup::encodeBoundary(Vrui::Scalar wallHeight)
+RoomSetup::PolygonList RoomSetup::createBoundary(void)
 	{
-	std::string result;
-	result.push_back('(');
+	PolygonList result;
 	
 	if(boundary.size()>=3)
 		{
-		/* Create one wall rectangle for each boundary line segment: */
+		/* Create one wall segment for each boundary line segment: */
 		unsigned int i0=boundary.size()-1;
 		for(unsigned int i1=0;i1<boundary.size();i0=i1,++i1)
 			{
 			/* Turn the two boundary vertices into a wall rectangle: */
-			Polygon polygon;
-			polygon.push_back(project(boundary[i0]));
-			polygon.push_back(project(boundary[i1]));
-			polygon.push_back(project(boundary[i1])+current.up*wallHeight);
-			polygon.push_back(project(boundary[i0])+current.up*wallHeight);
-			if(i1>0)
-				result.push_back(' ');
-			result.append(Misc::ValueCoder<Polygon>::encode(polygon));
-			result.append(", \\\n");
+			Polygon wall;
+			wall.push_back(project(boundary[i0]));
+			wall.push_back(project(boundary[i1]));
+			wall.push_back(project(boundary[i1])+current.up*wallHeight);
+			wall.push_back(project(boundary[i0])+current.up*wallHeight);
+			result.push_back(wall);
 			}
-		
+	
 		/* Create the floor polygon: */
-		Polygon::iterator bIt=boundary.begin();
-		result.append(" (");
-		result.append(Misc::ValueCoder<Vrui::Point>::encode(project(*bIt)));
-		unsigned int pointsInLine=1;
-		for(++bIt;bIt!=boundary.end();++bIt)
-			{
-			if(pointsInLine==4)
-				{
-				result.append(", \\\n  ");
-				pointsInLine=0;
-				}
-			else
-				result.append(", ");
-			result.append(Misc::ValueCoder<Vrui::Point>::encode(project(*bIt)));
-			++pointsInLine;
-			}
-		result.push_back(')');
+		Polygon floor;
+		for(Polygon::iterator bIt=boundary.begin();bIt!=boundary.end();++bIt)
+			floor.push_back(project(*bIt));
+		result.push_back(floor);
 		}
 	
 	/* Create a screen protector area for each horizontal surface: */
+	Vrui::Scalar upSqr=current.up.sqr();
 	for(PolygonList::iterator sIt=surfaces.begin();sIt!=surfaces.end();++sIt)
 		{
 		/* Calculate the average height of this surface: */
@@ -480,26 +466,25 @@ std::string RoomSetup::encodeBoundary(Vrui::Scalar wallHeight)
 		averageHeight/=Vrui::Scalar(sIt->size());
 		
 		/* Project this surface to its average height: */
-		Vrui::Scalar upSqr=current.up.sqr();
-		Polygon polygon;
+		Polygon surface;
 		for(Polygon::iterator svIt=sIt->begin();svIt!=sIt->end();++svIt)
 			{
 			Vrui::Scalar lambda=(averageHeight-(*svIt-Vrui::Point::origin)*current.up)/upSqr;
-			polygon.push_back(*svIt+current.up*lambda);
+			surface.push_back(*svIt+current.up*lambda);
 			}
-		
-		result.append(", \\\n ");
-		result.append(Misc::ValueCoder<Polygon>::encode(polygon));
+		result.push_back(surface);
 		}
 	
-	result.push_back(')');
 	return result;
 	}
 
 void RoomSetup::saveButtonCallback(Misc::CallbackData* cbData)
 	{
-	/* Upload the edited environment definition to the VR device daemon: */
-	deviceClient->updateEnvironmentDefinition(current);
+	/* Create a temporary environment definition and upload it to the VR device daemon: */
+	Vrui::EnvironmentDefinition upload=current;
+	upload.center+=upload.up*centerHeight;
+	upload.boundary=createBoundary();
+	deviceClient->updateEnvironmentDefinition(upload);
 	
 	/* Create a per-user or system-wide environment definition configuration file: */
 	#if VRUI_INTERNAL_CONFIG_HAVE_USERCONFIGFILE
@@ -536,15 +521,32 @@ void RoomSetup::saveButtonCallback(Misc::CallbackData* cbData)
 		std::ofstream environmentDefinitionFile(environmentDefinitionFileName.c_str());
 		
 		/* Write basic layout parameters: */
-		environmentDefinitionFile<<"unit "<<Misc::ValueCoder<Geometry::LinearUnit>::encode(current.unit)<<std::endl;
-		environmentDefinitionFile<<"up "<<Misc::ValueCoder<Vrui::Vector>::encode(current.up)<<std::endl;
-		environmentDefinitionFile<<"forward "<<Misc::ValueCoder<Vrui::Vector>::encode(current.forward)<<std::endl;
-		environmentDefinitionFile<<"center "<<Misc::ValueCoder<Vrui::Point>::encode(current.center+current.up*centerHeight)<<std::endl;
-		environmentDefinitionFile<<"radius "<<Misc::ValueCoder<Vrui::Scalar>::encode(current.radius)<<std::endl;
-		environmentDefinitionFile<<"floorPlane "<<Misc::ValueCoder<Vrui::Plane>::encode(current.floor)<<std::endl;
+		environmentDefinitionFile<<"unit "<<Misc::ValueCoder<Geometry::LinearUnit>::encode(upload.unit)<<std::endl;
+		environmentDefinitionFile<<"up "<<Misc::ValueCoder<Vrui::Vector>::encode(upload.up)<<std::endl;
+		environmentDefinitionFile<<"forward "<<Misc::ValueCoder<Vrui::Vector>::encode(upload.forward)<<std::endl;
+		environmentDefinitionFile<<"center "<<Misc::ValueCoder<Vrui::Point>::encode(upload.center)<<std::endl;
+		environmentDefinitionFile<<"radius "<<Misc::ValueCoder<Vrui::Scalar>::encode(upload.radius)<<std::endl;
+		environmentDefinitionFile<<"floorPlane "<<Misc::ValueCoder<Vrui::Plane>::encode(upload.floor)<<std::endl;
 		
-		/* Write list of boundary polygons: */
-		environmentDefinitionFile<<"boundary "<<encodeBoundary(Vrui::Scalar(2.5))<<std::endl;
+		/* Write the list of boundary polygons: */
+		environmentDefinitionFile<<"boundary (";
+		for(PolygonList::iterator bIt=upload.boundary.begin();bIt!=upload.boundary.end();++bIt)
+			{
+			if(bIt!=upload.boundary.begin())
+				environmentDefinitionFile<<", \\"<<std::endl<<"          ";
+			Polygon::iterator pIt=bIt->begin();
+			environmentDefinitionFile<<'('<<Misc::ValueCoder<Vrui::Point>::encode(*pIt);
+			unsigned int numVertices=1;
+			for(++pIt;pIt!=bIt->end();++pIt,++numVertices)
+				{
+				environmentDefinitionFile<<", ";
+				if(numVertices%4==0)
+					environmentDefinitionFile<<'\\'<<std::endl<<"           ";
+				environmentDefinitionFile<<Misc::ValueCoder<Vrui::Point>::encode(*pIt);
+				}
+			environmentDefinitionFile<<')';
+			}
+		environmentDefinitionFile<<')'<<std::endl;
 		
 		#if VRUI_INTERNAL_CONFIG_HAVE_USERCONFIGFILE
 		Misc::formattedUserNote("Save Layout: Room layout saved to per-user configuration file %s",environmentDefinitionFileName.c_str());
@@ -563,8 +565,8 @@ void RoomSetup::saveButtonCallback(Misc::CallbackData* cbData)
 		if(haveScreenCalibration)
 			{
 			/* Calculate a control viewer transformation that faces the calibrated screen: */
-			Vrui::Vector viewX=current.up^screenTransform.getDirection(2);
-			Vrui::Vector viewY=current.up^viewX;
+			Vrui::Vector viewX=upload.up^screenTransform.getDirection(2);
+			Vrui::Vector viewY=upload.up^viewX;
 			Vrui::Scalar viewerDist=Math::sqrt(Math::sqr(screenSize[0])+Math::sqr(screenSize[1]))*3.0;
 			Vrui::Point viewPos=screenTransform.transform(Vrui::Point(screenSize[0]*0.5,screenSize[1]*0.5,viewerDist));
 			Vrui::ONTransform viewTransform(viewPos-Vrui::Point::origin,Vrui::Rotation::fromBaseVectors(viewX,viewY));
@@ -651,11 +653,11 @@ void RoomSetup::saveButtonCallback(Misc::CallbackData* cbData)
 		else
 			{
 			/* Calculate a transformation to center the control window with the environment's center point and look along the forward direction: */
-			Vrui::ONTransform transform=Vrui::ONTransform::translateFromOriginTo(current.center+current.up*centerHeight);
-			Vrui::Vector horizontalForward=current.forward;
-			horizontalForward.orthogonalize(current.up);
+			Vrui::ONTransform transform=Vrui::ONTransform::translateFromOriginTo(upload.center);
+			Vrui::Vector horizontalForward=upload.forward;
+			horizontalForward.orthogonalize(upload.up);
 			Vrui::Vector horizontalControlView=controlScreenCenter-controlViewerEyePos;
-			horizontalControlView.orthogonalize(current.up);
+			horizontalControlView.orthogonalize(upload.up);
 			transform*=Vrui::ONTransform::rotate(Vrui::Rotation::rotateFromTo(horizontalControlView,horizontalForward));
 			transform.renormalize();
 			
@@ -1250,6 +1252,7 @@ RoomSetup::RoomSetup(int& argc,char**& argv)
 	 customProbeTip(Point::origin),
 	 haveControlWindow(false),
 	 mode(Floor),
+	 wallHeight(2.5),
 	 haveScreenCalibration(false),
 	 render3D(false),showBaseStations(false),
 	 mainMenu(0),setupDialogPopup(0),
