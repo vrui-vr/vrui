@@ -85,6 +85,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Internal/VRWindowQuadbuffer.h>
 #include <Vrui/Internal/VRWindowSplitSingleViewport.h>
 #include <Vrui/Internal/VRWindowCompositorClient.h>
+#include <Vrui/Internal/VRWindowCubeMap.h>
 
 namespace Vrui {
 
@@ -679,7 +680,7 @@ void VRWindow::updateContextProperties(GLContext::Properties& contextProperties,
 	std::string windowType=configFileSection.retrieveString("./windowType");
 	
 	/* Determine whether this window renders directly to its implicit framebuffer, or uses an intermediate frame buffer: */
-	bool renderToBuffer=windowType=="Anaglyph2"||windowType=="ExtendedModeHMD"||windowType=="CompositorClient"; // Some of these aren't implemented yet...
+	bool renderToBuffer=windowType=="Anaglyph2"||windowType=="ExtendedModeHMD"||windowType=="CompositorClient"||windowType=="CubeMap"; // Some of these aren't implemented yet...
 	
 	/* Query visual flags from the given configuration file section: */
 	bool vsync=configFileSection.retrieveValue("./vsync",false);
@@ -758,6 +759,8 @@ VRWindow* VRWindow::createWindow(GLContext& context,const char* windowName,const
 		return new VRWindowSplitSingleViewport(context,outputConfiguration,windowName,initialRect,decorate,configFileSection);
 	else if(windowType=="CompositorClient")
 		return new VRWindowCompositorClient(context,outputConfiguration,windowName,initialRect,decorate,configFileSection);
+	else if(windowType=="CubeMap")
+		return new VRWindowCubeMap(context,outputConfiguration,windowName,initialRect,decorate,configFileSection);
 	else
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unrecognized window type %s",windowType.c_str());
 	}
