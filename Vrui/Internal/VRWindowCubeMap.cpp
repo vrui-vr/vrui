@@ -181,13 +181,9 @@ void VRWindowCubeMap::setDisplayState(DisplayState* newDisplayState,const Misc::
 		}
 	else
 		{
-		#if 0
 		/* Directly attach the cube map face textures to the framebuffer: */
 		for(GLenum i=0;i<6;++i)
 			glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT,GL_COLOR_ATTACHMENT0_EXT+i,GL_TEXTURE_CUBE_MAP_POSITIVE_X+i,colorBufferId,0);
-		#elke
-		glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT,GL_COLOR_ATTACHMENT0_EXT,GL_TEXTURE_CUBE_MAP_POSITIVE_X,colorBufferId,0);
-		#endif
 		}
 	
 	/* Create the cube map rendering depth buffer: */
@@ -233,6 +229,8 @@ void VRWindowCubeMap::setDisplayState(DisplayState* newDisplayState,const Misc::
 		/* Create the multisample "fixing" framebuffer: */
 		glGenFramebuffersEXT(1,&multisamplingFrameBufferId);
 		glBindFramebufferEXT(GL_FRAMEBUFFER_EXT,multisamplingFrameBufferId);
+		if(getContext().isNonlinear())
+			glEnable(GL_FRAMEBUFFER_SRGB_EXT);
 		
 		/* Attach the cube map rendering color image textures to the "fixing" framebuffer: */
 		for(GLenum i=0;i<6;++i)
@@ -408,6 +406,12 @@ void VRWindowCubeMap::draw(void)
 		
 		/* Bind the cube mape rendering framebuffer: */
 		glBindFramebufferEXT(GL_FRAMEBUFFER_EXT,frameBufferId);
+		if(multisamplingLevel>1)
+			{
+			/* Draw into the multisampling image buffer: */
+			glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
+			glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
+			}
 		
 		/* Draw the six cube map faces in sequence: */
 		for(int screenIndex=0;screenIndex<6;++screenIndex)
@@ -415,27 +419,12 @@ void VRWindowCubeMap::draw(void)
 			/* Set up the display state: */
 			displayState->screen=screens[screenIndex];
 			
-			if(multisamplingLevel>1)
+			if(multisamplingLevel==1)
 				{
-				/* Draw into the multisampling image buffer: */
-				glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
-				glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
-				}
-			else
-				{
-				#if 0
 				/* Draw directly into the cube face's color image buffer: */
 				glReadBuffer(GL_COLOR_ATTACHMENT0_EXT+screenIndex);
 				glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT+screenIndex);
-				#else
-				glFramebufferTexture2DEXT(GL_FRAMEBUFFER_EXT,GL_COLOR_ATTACHMENT0_EXT,GL_TEXTURE_CUBE_MAP_POSITIVE_X+screenIndex,colorBufferId,0);
-				glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
-				glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
-				#endif
 				}
-			
-			/* Check the status of the cube map rendering framebuffer: */
-			glThrowFramebufferStatusExceptionEXT(__PRETTY_FUNCTION__,"Cube map rendering framebuffer");
 			
 			/* Project the virtual environment into the window: */
 			render();
@@ -444,12 +433,10 @@ void VRWindowCubeMap::draw(void)
 				{
 				/* Blit the multisampling color buffer containing the cube face image into the "fixing" framebuffer: */
 				glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT,multisamplingFrameBufferId);
-				if(getContext().isNonlinear())
-					glEnable(GL_FRAMEBUFFER_SRGB_EXT);
-				glReadBuffer(GL_COLOR_ATTACHMENT0_EXT);
 				glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT+screenIndex);
 				glBlitFramebufferEXT(cubeMapSize,cubeMapSize,GL_COLOR_BUFFER_BIT,GL_NEAREST);
-				glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT,0);
+				glDrawBuffer(GL_COLOR_ATTACHMENT0_EXT);
+				glBindFramebufferEXT(GL_DRAW_FRAMEBUFFER_EXT,frameBufferId);
 				}
 			}
 		
@@ -458,7 +445,6 @@ void VRWindowCubeMap::draw(void)
 		
 		/* Reproject the rendered cube map into the on-screen window: */
 		displayState->context.setViewport(getWindowSize());
-		// glDrawBuffer(GL_BACK);
 		
 		/* Enable the reprojection shader: */
 		glUseProgramObjectARB(reprojectionShader);
