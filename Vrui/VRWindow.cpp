@@ -82,6 +82,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/Internal/VRWindowMono.h>
 #include <Vrui/Internal/VRWindowAnaglyph.h>
+#include <Vrui/Internal/VRWindowAnaglyph2.h>
 #include <Vrui/Internal/VRWindowQuadbuffer.h>
 #include <Vrui/Internal/VRWindowSplitSingleViewport.h>
 #include <Vrui/Internal/VRWindowCompositorClient.h>
@@ -753,6 +754,8 @@ VRWindow* VRWindow::createWindow(GLContext& context,const char* windowName,const
 		return new VRWindowMono(context,outputConfiguration,windowName,initialRect,decorate,configFileSection);
 	else if(windowType=="Anaglyph"||windowType=="Anaglyphic")
 		return new VRWindowAnaglyph(context,outputConfiguration,windowName,initialRect,decorate,configFileSection);
+	else if(windowType=="Anaglyph2"||windowType=="Anaglyphic2")
+		return new VRWindowAnaglyph2(context,outputConfiguration,windowName,initialRect,decorate,configFileSection);
 	else if(windowType=="Quadbuffer"||windowType=="QuadbufferStereo")
 		return new VRWindowQuadbuffer(context,outputConfiguration,windowName,initialRect,decorate,configFileSection);
 	else if(windowType=="SplitViewport"||windowType=="SplitViewportStereo")
