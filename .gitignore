@@ -23,6 +23,7 @@ lib/
 lib64/
 o/
 scripts/Vrui.makeinclude
+scripts/Vrui.debug.makeinclude
 scripts/Vrui.pc
 share/Resources/IndexControllerLeft.wrl
 share/Resources/IndexControllerRight.wrl
