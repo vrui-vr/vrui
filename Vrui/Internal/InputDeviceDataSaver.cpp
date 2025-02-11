@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceDataSaver - Class to save input device data to a file for
 later playback.
-Copyright (c) 2004-2023 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -39,6 +39,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Sound/SoundRecorder.h>
 #include <Vrui/Types.h>
 #include <Vrui/Vrui.h>
+#include <Vrui/EnvironmentDefinition.h>
 #include <Vrui/InputDevice.h>
 #include <Vrui/InputDeviceFeature.h>
 #include <Vrui/InputDeviceManager.h>
@@ -81,11 +82,14 @@ InputDeviceDataSaver::InputDeviceDataSaver(const Misc::ConfigurationFileSection&
 	
 	/* Write a file identification header: */
 	inputDeviceDataFile->setEndianness(Misc::LittleEndian);
-	static const char* fileHeader="Vrui Input Device Data File v6.0\n";
+	static const char* fileHeader="Vrui Input Device Data File v7.0\n";
 	inputDeviceDataFile->write(fileHeader,34);
 	
 	/* Save the random number seed: */
 	inputDeviceDataFile->write<unsigned int>(randomSeed);
+	
+	/* Save the environment definition: */
+	getEnvironmentDefinition().write(*inputDeviceDataFile);
 	
 	/* Save number of input devices: */
 	inputDeviceDataFile->write<int>(numInputDevices);

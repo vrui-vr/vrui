@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterPlayback - Class to read input device states from a
 pre-recorded file for playback and/or movie generation.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -44,6 +44,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Geometry/GeometryValueCoders.h>
 #include <Sound/SoundPlayer.h>
 #include <Vrui/Vrui.h>
+#include <Vrui/EnvironmentDefinition.h>
 #include <Vrui/InputDevice.h>
 #include <Vrui/InputDeviceFeature.h>
 #include <Vrui/InputDeviceManager.h>
@@ -197,7 +198,7 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 	
 	/* Read file header: */
 	inputDeviceDataFile->setEndianness(Misc::LittleEndian);
-	static const char* fileHeader="Vrui Input Device Data File v6.0\n";
+	static const char* fileHeader="Vrui Input Device Data File v7.0\n";
 	char header[34];
 	inputDeviceDataFile->read(header,34);
 	header[33]='\0';
@@ -235,6 +236,11 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 		/* File version with handle transformations: */
 		fileVersion=6;
 		}
+	else if(strcmp(header+29,"7.0\n")==0)
+		{
+		/* File version with environment definition: */
+		fileVersion=7;
+		}
 	else
 		{
 		header[32]='\0';
@@ -244,6 +250,12 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 	/* Read random seed value: */
 	unsigned int randomSeed=inputDeviceDataFile->read<unsigned int>();
 	setRandomSeed(randomSeed);
+	
+	if(fileVersion>=7)
+		{
+		/* Read the environment definition: */
+		modifyEnvironmentDefinition().read(*inputDeviceDataFile);
+		}
 	
 	/* Read number of saved input devices: */
 	numInputDevices=inputDeviceDataFile->read<int>();
