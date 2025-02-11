@@ -1,6 +1,6 @@
 /***********************************************************************
 GLLabel - Class to render 3D text strings using texture-based fonts.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2025 Oliver Kreylos
 
 This file is part of the OpenGL Support Library (GLSupport).
 
@@ -124,17 +124,15 @@ void GLLabel::DeferredRenderer::draw(void)
 	glUseProgramObjectARB(sns.getShader(shaderIndex));
 	
 	/* Prepare the first texture unit: */
-	glActiveTexture(GL_TEXTURE0_ARB);
+	glActiveTextureARB(GL_TEXTURE0_ARB);
 	sns.uniform(shaderIndex,0,0);
 	
 	/* Upload the array of enabled clipping planes: */
 	contextData.getClipPlaneTracker()->uploadClipPlaneEnableds(sns.getUniformLocation(shaderIndex,2));
 	
+	/* Upload the array of enabled light sources if lighting is enabled: */
 	if(shaderIndex==1U)
-		{
-		/* Upload the array of enabled light sources: */
 		contextData.getLightTracker()->uploadLightEnableds(sns.getUniformLocation(shaderIndex,3));
-		}
 	
 	/* Draw each gathered label: */
 	for(;lIt!=gatheredLabels.end();++lIt)
@@ -542,39 +540,16 @@ void GLLabel::draw(GLContextData& contextData) const
 	/* Retrieve the shader manager: */
 	const GLShaderManager::Namespace& sns=dataItem->shaderNamespace;
 	
-	/* Check if lighting is currently enabled: */
-	GLint foregroundColorLocation,stringTextureLocation;
-	if(contextData.getLightTracker()->isLightingEnabled())
-		{
-		/* Bind the shader program: */
-		glUseProgramObjectARB(sns.getShader(1));
-		
-		/* Upload the arrays of enabled clipping planes and light sources: */
-		contextData.getClipPlaneTracker()->uploadClipPlaneEnableds(sns.getUniformLocation(1,0));
-		contextData.getLightTracker()->uploadLightEnableds(sns.getUniformLocation(1,1));
-		
-		foregroundColorLocation=sns.getUniformLocation(1,2);
-		stringTextureLocation=sns.getUniformLocation(1,3);
-		}
-	else
-		{
-		/* Bind the shader program: */
-		glUseProgramObjectARB(sns.getShader(0));
-		
-		/* Upload the array of enabled clipping planes: */
-		contextData.getClipPlaneTracker()->uploadClipPlaneEnableds(sns.getUniformLocation(0,0));
-		
-		foregroundColorLocation=sns.getUniformLocation(0,1);
-		stringTextureLocation=sns.getUniformLocation(0,2);
-		}
+	/* Determine which shader to use based on whether lighting is enabled: */
+	unsigned int shaderIndex=contextData.getLightTracker()->isLightingEnabled()?1:0;
 	
-	/* Upload the foreground color: */
-	glUniform4fvARB(foregroundColorLocation,1,foreground.getRgba());
+	/* Bind the shader program: */
+	glUseProgramObjectARB(sns.getShader(shaderIndex));
 	
 	/* Bind the string texture: */
-	glActiveTexture(GL_TEXTURE0_ARB);
+	glActiveTextureARB(GL_TEXTURE0_ARB);
 	glBindTexture(GL_TEXTURE_2D,dataItem->textureObjectId);
-	glUniform1iARB(stringTextureLocation,0);
+	sns.uniform(shaderIndex,0,0);
 	
 	/* Check if the texture object needs to be updated: */
 	if(dataItem->version!=version)
@@ -585,6 +560,16 @@ void GLLabel::draw(GLContextData& contextData) const
 		/* Update the texture version number: */
 		dataItem->version=version;
 		}
+	
+	/* Upload the label's foreground color: */
+	glUniform4fvARB(sns.getUniformLocation(shaderIndex,1),1,foreground.getRgba());
+	
+	/* Upload the array of enabled clipping planes: */
+	contextData.getClipPlaneTracker()->uploadClipPlaneEnableds(sns.getUniformLocation(shaderIndex,2));
+	
+	/* Upload the array of enabled light sources if lighting is enabled: */
+	if(shaderIndex==1U)
+		contextData.getLightTracker()->uploadLightEnableds(sns.getUniformLocation(shaderIndex,3));
 	
 	/* Draw a textured quad: */
 	glColor(background);
@@ -620,7 +605,7 @@ void GLLabel::draw(GLsizei selectionStart,GLsizei selectionEnd,const GLLabel::Co
 	glUseProgramObjectARB(sns.getShader(shaderIndex));
 	
 	/* Bind the string texture: */
-	glActiveTexture(GL_TEXTURE0_ARB);
+	glActiveTextureARB(GL_TEXTURE0_ARB);
 	glBindTexture(GL_TEXTURE_2D,dataItem->textureObjectId);
 	sns.uniform(shaderIndex,0,0);
 	
@@ -640,11 +625,9 @@ void GLLabel::draw(GLsizei selectionStart,GLsizei selectionEnd,const GLLabel::Co
 	/* Upload the array of enabled clipping planes: */
 	contextData.getClipPlaneTracker()->uploadClipPlaneEnableds(sns.getUniformLocation(shaderIndex,2));
 	
+	/* Upload the array of enabled light sources if lighting is enabled: */
 	if(shaderIndex==1U)
-		{
-		/* Upload the array of enabled light sources: */
 		contextData.getLightTracker()->uploadLightEnableds(sns.getUniformLocation(shaderIndex,3));
-		}
 	
 	/* Draw a textured quad: */
 	glColor(background);
