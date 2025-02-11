@@ -1,7 +1,7 @@
 /***********************************************************************
 WalkSurfaceNavigationTool - Version of the WalkNavigationTool that lets
 a user navigate along an application-defined surface.
-Copyright (c) 2009-2023 Oliver Kreylos
+Copyright (c) 2009-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -26,12 +26,11 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Geometry/Point.h>
 #include <Geometry/Vector.h>
+#include <Geometry/Rotation.h>
 #include <Geometry/OrthogonalTransformation.h>
-#include <Geometry/Plane.h>
 #include <GL/gl.h>
 #include <GL/GLColor.h>
-#include <GL/GLObject.h>
-#include <GL/GLNumberRenderer.h>
+#include <SceneGraph/ONTransformNode.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/SurfaceNavigationTool.h>
 
@@ -69,7 +68,8 @@ class WalkSurfaceNavigationToolFactory:public ToolFactory
 		bool drawMovementCircles; // Flag whether to draw the movement circles
 		Color movementCircleColor; // Color for drawing movement circles
 		bool drawHud; // Flag whether to draw a heads-up display
-		float hudFontSize; // Font size for heads-up display
+		Scalar hudRadius; // Radius of heads-up display
+		Scalar hudFontSize; // Font size for heads-up display
 		
 		/* Constructors and destructors: */
 		Configuration(void); // Creates default configuration
@@ -95,32 +95,22 @@ class WalkSurfaceNavigationToolFactory:public ToolFactory
 	virtual void destroyTool(Tool* tool) const;
 	};
 
-class WalkSurfaceNavigationTool:public SurfaceNavigationTool,public GLObject
+class WalkSurfaceNavigationTool:public SurfaceNavigationTool
 	{
 	friend class WalkSurfaceNavigationToolFactory;
-	
-	/* Embedded classes: */
-	private:
-	struct DataItem:public GLObject::DataItem
-		{
-		/* Elements: */
-		public:
-		GLuint movementCircleListId; // Display list ID to render movement circles
-		GLuint hudListId; // Display list ID to render the hud
-		
-		/* Constructors and destructors: */
-		DataItem(void);
-		virtual ~DataItem(void);
-		};
 	
 	/* Elements: */
 	private:
 	static WalkSurfaceNavigationToolFactory* factory; // Pointer to the factory object for this class
 	WalkSurfaceNavigationToolFactory::Configuration configuration; // Private configuration of this tool
-	GLNumberRenderer numberRenderer; // Helper class to render numbers using a HUD-style font
+	
+	Rotation hudFrame; // Coordinate frame for the tool's movement circles and heads-up display
+	SceneGraph::ONTransformNodePointer circleRoot; // Pointer to the root transform node for the tool's movement circles
+	SceneGraph::ONTransformNodePointer hudRoot; // Pointer to the root transform node for the tool's heads-up display
 	
 	/* Transient navigation state: */
 	Point centerPoint; // Center point of movement circle while the navigation tool is active
+	Vector centerViewDirection; // Central view direction while the navigation tool is active
 	Point footPos; // Position of the main viewer's foot on the last frame
 	Scalar headHeight; // Height of viewer's head above the foot point
 	NavTransform surfaceFrame; // Current local coordinate frame aligned to the surface in navigation coordinates
@@ -130,6 +120,7 @@ class WalkSurfaceNavigationTool:public SurfaceNavigationTool,public GLObject
 	Scalar fallVelocity; // Current falling velocity while airborne in units per second^2
 	
 	/* Private methods: */
+	void showMovementCircles(void);
 	void applyNavState(void) const; // Sets the navigation transformation based on the tool's current navigation state
 	void initNavState(void); // Initializes the tool's navigation state when it is activated
 	
@@ -137,17 +128,15 @@ class WalkSurfaceNavigationTool:public SurfaceNavigationTool,public GLObject
 	public:
 	WalkSurfaceNavigationTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment);
 	
-	/* Methods from Tool: */
+	/* Methods from class Tool: */
 	virtual void configure(const Misc::ConfigurationFileSection& configFileSection);
 	virtual void storeState(Misc::ConfigurationFileSection& configFileSection) const;
+	virtual void initialize(void);
+	virtual void deinitialize(void);
 	virtual const ToolFactory* getFactory(void) const;
 	virtual void buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData);
 	virtual void valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData);
 	virtual void frame(void);
-	virtual void display(GLContextData& contextData) const;
-	
-	/* Methods from GLObject: */
-	virtual void initContext(GLContextData& contextData) const;
 	};
 
 }

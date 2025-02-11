@@ -1807,6 +1807,8 @@ endif
 $(call PLUGINOBJNAMES,$(VRTOOLS_SOURCES)): | $(DEPDIR)/config
 
 # Dependencies between Vrui tools and other libraries:
+$(call VRTOOLNAMES,WalkNavigationTool): PACKAGES += MYSCENEGRAPH
+$(call VRTOOLNAMES,WalkSurfaceNavigationTool): PACKAGES += MYSCENEGRAPH
 $(call VRTOOLNAMES,IndexHandTool): PACKAGES += MYSCENEGRAPH MYIO
 $(call VRTOOLNAMES,MouseDialogNavigationTool): PACKAGES += MYGLMOTIF
 $(call VRTOOLNAMES,ViewpointFileNavigationTool): PACKAGES += MYGLMOTIF MYIO

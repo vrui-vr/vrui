@@ -1,7 +1,7 @@
 /***********************************************************************
 WalkNavigationTool - Class to navigate in a VR environment by walking
 around a fixed center position.
-Copyright (c) 2007-2021 Oliver Kreylos
+Copyright (c) 2007-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -30,11 +30,13 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Geometry/Rotation.h>
 #include <Geometry/OrthonormalTransformation.h>
 #include <Geometry/GeometryValueCoders.h>
-#include <GL/GLColorTemplates.h>
-#include <GL/GLContextData.h>
 #include <GL/GLValueCoders.h>
-#include <GL/GLGeometryWrappers.h>
+#include <SceneGraph/ShapeNode.h>
+#include <SceneGraph/LineSetNode.h>
+#include <Vrui/Vrui.h>
+#include <Vrui/EnvironmentDefinition.h>
 #include <Vrui/Viewer.h>
+#include <Vrui/SceneGraphManager.h>
 #include <Vrui/ToolManager.h>
 
 namespace Vrui {
@@ -64,16 +66,16 @@ WalkNavigationToolFactory::WalkNavigationToolFactory(ToolManager& toolManager)
 	addParentClass(navigationToolFactory);
 	
 	/* Load class settings: */
+	const EnvironmentDefinition& ed=getEnvironmentDefinition();
 	Misc::ConfigurationFileSection cfs=toolManager.getToolClassSection(getClassName());
 	cfs.updateValue("./centerOnActivation",centerOnActivation);
 	cfs.updateValue("./centerPoint",centerPoint);
-	centerPoint=getFloorPlane().project(centerPoint);
+	centerPoint=ed.calcFloorPoint(centerPoint);
 	cfs.updateValue("./moveSpeed",moveSpeed);
 	cfs.updateValue("./innerRadius",innerRadius);
 	cfs.updateValue("./outerRadius",outerRadius);
 	cfs.updateValue("./centerViewDirection",centerViewDirection);
-	centerViewDirection-=getUpDirection()*((centerViewDirection*getUpDirection())/Geometry::sqr(getUpDirection()));
-	centerViewDirection.normalize();
+	centerViewDirection.orthogonalize(ed.up).normalize();
 	rotateSpeed=Math::rad(cfs.retrieveValue("./rotateSpeed",Math::deg(rotateSpeed)));
 	innerAngle=Math::rad(cfs.retrieveValue("./innerAngle",Math::deg(innerAngle)));
 	outerAngle=Math::rad(cfs.retrieveValue("./outerAngle",Math::deg(outerAngle)));
@@ -133,22 +135,6 @@ extern "C" void destroyWalkNavigationToolFactory(ToolFactory* factory)
 	delete factory;
 	}
 
-/*********************************************
-Methods of class WalkNavigationTool::DataItem:
-*********************************************/
-
-WalkNavigationTool::DataItem::DataItem(void)
-	{
-	/* Create tools' model display list: */
-	movementCircleListId=glGenLists(1);
-	}
-
-WalkNavigationTool::DataItem::~DataItem(void)
-	{
-	/* Destroy tools' model display list: */
-	glDeleteLists(movementCircleListId,1);
-	}
-
 /*******************************************
 Static elements of class WalkNavigationTool:
 *******************************************/
@@ -159,18 +145,84 @@ WalkNavigationToolFactory* WalkNavigationTool::factory=0;
 Methods of class WalkNavigationTool:
 ***********************************/
 
-Point WalkNavigationTool::projectToFloor(const Point& p)
+void WalkNavigationTool::showMovementCircles(void)
 	{
-	/* Project the given point onto the floor plane along the up direction: */
-	const Vector& normal=getFloorPlane().getNormal();
-	Scalar lambda=(getFloorPlane().getOffset()-p*normal)/(getUpDirection()*normal);
-	return p+getUpDirection()*lambda;
+	/* Calculate a rotation to align the movement circles with the horizontal plane: */
+	const EnvironmentDefinition& ed=getEnvironmentDefinition();
+	Rotation frame=ed.calcStandardRotation();
+	
+	/* Rotate the movement circles around the vertical axis to align the angle wedge to the center viewing direction: */
+	Vector frameCvd=frame.inverseTransform(centerViewDirection);
+	frame*=Rotation::rotateZ(Math::atan2(-frameCvd[0],frameCvd[1]));
+	
+	/* Add the movement circles to Vrui's physical-space scene graph: */
+	circleRoot->setTransform(ONTransform(centerPoint-Point::origin,frame));
+	getSceneGraphManager()->addPhysicalNode(*circleRoot);
 	}
 
 WalkNavigationTool::WalkNavigationTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
-	:NavigationTool(factory,inputAssignment),
-	 centerPoint(static_cast<const WalkNavigationToolFactory*>(factory)->centerPoint)
+	:NavigationTool(factory,inputAssignment)
 	{
+	}
+
+void WalkNavigationTool::initialize(void)
+	{
+	if(!factory->centerOnActivation)
+		{
+		/* Set the fixed center point and center view direction: */
+		centerPoint=factory->centerPoint;
+		centerViewDirection=factory->centerViewDirection;
+		}
+	
+	if(factory->drawMovementCircles)
+		{
+		/* Create the scene graph to draw the movement circles: */
+		circleRoot=new SceneGraph::ONTransformNode;
+		
+		SceneGraph::ShapeNodePointer shape=new SceneGraph::ShapeNode;
+		circleRoot->addChild(*shape);
+		
+		SceneGraph::LineSetNodePointer movementCircles=new SceneGraph::LineSetNode;
+		shape->geometry.setValue(movementCircles);
+		movementCircles->lineWidth.setValue(1.0f);
+		movementCircles->setColor(SceneGraph::LineSetNode::VertexColor(factory->movementCircleColor));
+		
+		/* Draw the inner and outer circles: */
+		SceneGraph::Scalar tolerance(getMeterFactor()*Scalar(0.0005));
+		movementCircles->addCircle(SceneGraph::Point::origin,SceneGraph::Rotation::identity,factory->innerRadius,tolerance);
+		movementCircles->addCircle(SceneGraph::Point::origin,SceneGraph::Rotation::identity,factory->outerRadius,tolerance);
+		
+		/* Check if view direction rotation is enabled: */
+		if(factory->rotateSpeed>Scalar(0))
+			{
+			/* Draw the inner angle: */
+			SceneGraph::LineSetNode::VertexIndex base=movementCircles->getNextVertexIndex();
+			movementCircles->addVertex(Point::origin);
+			movementCircles->addVertex(Point(-Math::sin(factory->innerAngle)*factory->innerRadius,Math::cos(factory->innerAngle)*factory->innerRadius,0));
+			movementCircles->addVertex(Point(Math::sin(factory->innerAngle)*factory->innerRadius,Math::cos(factory->innerAngle)*factory->innerRadius,0));
+			movementCircles->addLine(base+1,base);
+			movementCircles->addLine(base,base+2);
+			
+			/* Draw the outer angle: */
+			movementCircles->addVertex(Point(-Math::sin(factory->outerAngle)*factory->outerRadius,Math::cos(factory->outerAngle)*factory->outerRadius,0));
+			movementCircles->addVertex(Point(Math::sin(factory->outerAngle)*factory->outerRadius,Math::cos(factory->outerAngle)*factory->outerRadius,0));
+			movementCircles->addLine(base+3,base);
+			movementCircles->addLine(base,base+4);
+			}
+		
+		movementCircles->update();
+		
+		/* Add fixed movement circles to Vrui's physical-space scene graph: */
+		if(!factory->centerOnActivation)
+			showMovementCircles();
+		}
+	}
+
+void WalkNavigationTool::deinitialize(void)
+	{
+	/* Remove fixed movement circles from Vrui's physical-space scene graph: */
+	if(factory->drawMovementCircles&&!factory->centerOnActivation)
+		getSceneGraphManager()->removePhysicalNode(*circleRoot);
 	}
 
 const ToolFactory* WalkNavigationTool::getFactory(void) const
@@ -187,15 +239,28 @@ void WalkNavigationTool::buttonCallback(int,InputDevice::ButtonCallbackData* cbD
 			{
 			/* Deactivate this tool: */
 			deactivate();
+			
+			/* Remove dynamic movement circles from Vrui's physical-space scene graph: */
+			if(factory->centerOnActivation&&factory->drawMovementCircles)
+				getSceneGraphManager()->removePhysicalNode(*circleRoot);
 			}
 		else
 			{
 			/* Try activating this tool: */
 			if(activate())
 				{
-				/* Store the center point for this navigation sequence: */
 				if(factory->centerOnActivation)
-					centerPoint=projectToFloor(getMainViewer()->getHeadPosition());
+					{
+					/* Store the center point and center viewing direction for this navigation sequence: */
+					const EnvironmentDefinition& ed=getEnvironmentDefinition();
+					centerPoint=ed.calcFloorPoint(getMainViewer()->getHeadPosition());
+					centerViewDirection=getMainViewer()->getViewDirection();
+					centerViewDirection.orthogonalize(ed.up).normalize();
+					
+					/* Add dynamic movement circles to Vrui's physical-space scene graph: */
+					if(factory->drawMovementCircles)
+						showMovementCircles();
+					}
 				
 				/* Initialize the navigation transformation: */
 				preScale=Vrui::getNavigationTransformation();
@@ -211,51 +276,52 @@ void WalkNavigationTool::frame(void)
 	/* Act depending on this tool's current state: */
 	if(isActive())
 		{
-		/* Calculate azimuth angle change based on the current viewing direction: */
-		Vector viewDir=getMainViewer()->getViewDirection();
-		viewDir-=getUpDirection()*((viewDir*getUpDirection())/Geometry::sqr(getUpDirection()));
-		Scalar viewDir2=Geometry::sqr(viewDir);
-		if(viewDir2!=Scalar(0))
+		bool animating=false;
+		const EnvironmentDefinition& ed=getEnvironmentDefinition();
+		
+		/* Calculate azimuth angle change based on the current viewing direction if rotation is enabled: */
+		if(factory->rotateSpeed>Scalar(0))
 			{
-			/* Calculate the rotation speed: */
-			Scalar viewAngleCos=(viewDir*factory->centerViewDirection)/Math::sqrt(viewDir2);
-			Scalar viewAngle;
-			if(viewAngleCos>Scalar(1)-Math::Constants<Scalar>::epsilon)
-				viewAngle=Scalar(0);
-			else if(viewAngleCos<Scalar(-1)+Math::Constants<Scalar>::epsilon)
-				viewAngle=Math::Constants<Scalar>::pi;
-			else
-				viewAngle=Math::acos(viewAngleCos);
-			Scalar rotateSpeed=Scalar(0);
-			if(viewAngle>=factory->outerAngle)
-				rotateSpeed=factory->rotateSpeed;
-			else if(viewAngle>factory->innerAngle)
-				rotateSpeed=factory->rotateSpeed*(viewAngle-factory->innerAngle)/(factory->outerAngle-factory->innerAngle);
-			Vector x=factory->centerViewDirection^getUpDirection();
-			if(viewDir*x<Scalar(0))
-				rotateSpeed=-rotateSpeed;
-			
-			/* Update the accumulated rotation angle: */
-			azimuth+=rotateSpeed*getFrameTime();
-			if(azimuth<-Math::Constants<Scalar>::pi)
-				azimuth+=Scalar(2)*Math::Constants<Scalar>::pi;
-			else if(azimuth>=Math::Constants<Scalar>::pi)
-				azimuth-=Scalar(2)*Math::Constants<Scalar>::pi;
+			Vector viewDir=getMainViewer()->getViewDirection();
+			viewDir.orthogonalize(ed.up);
+			Scalar viewDir2=Geometry::sqr(viewDir);
+			if(viewDir2!=Scalar(0))
+				{
+				/* Calculate the rotation speed: */
+				Scalar viewAngle=Math::acos(Math::clamp((viewDir*centerViewDirection)/Math::sqrt(viewDir2),Scalar(-1),Scalar(1)));
+				Scalar rotateSpeed=factory->rotateSpeed*Math::clamp((viewAngle-factory->innerAngle)/(factory->outerAngle-factory->innerAngle),Scalar(0),Scalar(1));
+				Vector x=centerViewDirection^ed.up;
+				if(viewDir*x<Scalar(0))
+					rotateSpeed=-rotateSpeed;
+				
+				if(rotateSpeed!=Scalar(0))
+					{
+					/* Update the accumulated rotation angle: */
+					azimuth+=rotateSpeed*getFrameTime();
+					if(azimuth<-Math::Constants<Scalar>::pi)
+						azimuth+=Scalar(2)*Math::Constants<Scalar>::pi;
+					else if(azimuth>=Math::Constants<Scalar>::pi)
+						azimuth-=Scalar(2)*Math::Constants<Scalar>::pi;
+					
+					animating=true;
+					}
+				}
 			}
 		
 		/* Calculate the movement direction and speed: */
-		Point footPos=projectToFloor(getMainViewer()->getHeadPosition());
+		Point footPos=ed.calcFloorPoint(getMainViewer()->getHeadPosition());
 		Vector moveDir=centerPoint-footPos;
 		Scalar moveDirLen=moveDir.mag();
-		Scalar speed=Scalar(0);
-		if(moveDirLen>=factory->outerRadius)
-			speed=factory->moveSpeed;
-		else if(moveDirLen>factory->innerRadius)
-			speed=factory->moveSpeed*(moveDirLen-factory->innerRadius)/(factory->outerRadius-factory->innerRadius);
-		moveDir*=speed/moveDirLen;
+		if(moveDirLen>Scalar(0))
+			{
+			Scalar speed=factory->moveSpeed*Math::clamp((moveDirLen-factory->innerRadius)/(factory->outerRadius-factory->innerRadius),Scalar(0),Scalar(1));
+			moveDir*=speed/moveDirLen;
+			if(speed!=Scalar(0))
+				animating=true;
+			}
 		
 		/* Accumulate the transformation: */
-		NavTransform::Rotation rot=NavTransform::Rotation::rotateAxis(getUpDirection(),azimuth);
+		NavTransform::Rotation rot=NavTransform::Rotation::rotateAxis(ed.up,azimuth);
 		translation+=rot.inverseTransform(moveDir*getFrameTime());
 		
 		/* Set the navigation transformation: */
@@ -267,90 +333,9 @@ void WalkNavigationTool::frame(void)
 		nav*=preScale;
 		setNavigationTransformation(nav);
 		
-		if(speed!=Scalar(0))
-			{
-			/* Request another frame: */
+		/* Request another frame if animating: */
+		if(animating)
 			scheduleUpdate(getNextAnimationTime());
-			}
-		}
-	}
-
-void WalkNavigationTool::display(GLContextData& contextData) const
-	{
-	if(factory->drawMovementCircles)
-		{
-		/* Get a pointer to the context entry: */
-		WalkNavigationTool::DataItem* dataItem=contextData.retrieveDataItem<WalkNavigationTool::DataItem>(this);
-		
-		/* Translate to the center point: */
-		glPushMatrix();
-		glTranslate(centerPoint-Point::origin);
-		
-		/* Execute the tool model display list: */
-		glCallList(dataItem->movementCircleListId);
-		
-		glPopMatrix();
-		}
-	}
-
-void WalkNavigationTool::initContext(GLContextData& contextData) const
-	{
-	if(factory->drawMovementCircles)
-		{
-		/* Create a new data item: */
-		DataItem* dataItem=new DataItem;
-		contextData.addDataItem(this,dataItem);
-		
-		/* Create the movement circle display list: */
-		glNewList(dataItem->movementCircleListId,GL_COMPILE);
-		
-		/* Set up OpenGL state: */
-		glPushAttrib(GL_ENABLE_BIT|GL_LINE_BIT);
-		glDisable(GL_LIGHTING);
-		glLineWidth(1.0f);
-		glColor(factory->movementCircleColor);
-		
-		/* Create a coordinate system for the floor plane: */
-		Vector y=factory->centerViewDirection;
-		Vector x=y^getFloorPlane().getNormal();
-		x.normalize();
-		
-		/* Draw the inner circle: */
-		glBegin(GL_LINE_LOOP);
-		for(int i=0;i<64;++i)
-			{
-			Scalar angle=Scalar(2)*Math::Constants<Scalar>::pi*Scalar(i)/Scalar(64);
-			glVertex(Point::origin-x*(Math::sin(angle)*factory->innerRadius)+y*(Math::cos(angle)*factory->innerRadius));
-			}
-		glEnd();
-		
-		/* Draw the outer circle: */
-		glBegin(GL_LINE_LOOP);
-		for(int i=0;i<64;++i)
-			{
-			Scalar angle=Scalar(2)*Math::Constants<Scalar>::pi*Scalar(i)/Scalar(64);
-			glVertex(Point::origin-x*(Math::sin(angle)*factory->outerRadius)+y*(Math::cos(angle)*factory->outerRadius));
-			}
-		glEnd();
-		
-		/* Draw the inner angle: */
-		glBegin(GL_LINE_STRIP);
-		glVertex(Point::origin-x*(Math::sin(factory->innerAngle)*factory->innerRadius)+y*(Math::cos(factory->innerAngle)*factory->innerRadius));
-		glVertex(Point::origin);
-		glVertex(Point::origin-x*(Math::sin(-factory->innerAngle)*factory->innerRadius)+y*(Math::cos(-factory->innerAngle)*factory->innerRadius));
-		glEnd();
-		
-		/* Draw the outer angle: */
-		glBegin(GL_LINE_STRIP);
-		glVertex(Point::origin-x*(Math::sin(factory->outerAngle)*factory->outerRadius)+y*(Math::cos(factory->outerAngle)*factory->outerRadius));
-		glVertex(Point::origin);
-		glVertex(Point::origin-x*(Math::sin(-factory->outerAngle)*factory->outerRadius)+y*(Math::cos(-factory->outerAngle)*factory->outerRadius));
-		glEnd();
-		
-		/* Reset OpenGL state: */
-		glPopAttrib();
-		
-		glEndList();
 		}
 	}
 

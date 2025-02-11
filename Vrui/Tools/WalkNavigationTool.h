@@ -1,7 +1,7 @@
 /***********************************************************************
 WalkNavigationTool - Class to navigate in a VR environment by walking
 around a fixed center position.
-Copyright (c) 2007-2023 Oliver Kreylos
+Copyright (c) 2007-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -27,9 +27,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Geometry/Point.h>
 #include <Geometry/Vector.h>
 #include <Geometry/OrthogonalTransformation.h>
-#include <Geometry/Plane.h>
-#include <GL/GLColor.h>
-#include <GL/GLObject.h>
+#include <SceneGraph/ONTransformNode.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/NavigationTool.h>
 
@@ -46,7 +44,7 @@ class WalkNavigationToolFactory:public ToolFactory
 	
 	/* Elements: */
 	private:
-	bool centerOnActivation; // Flag if to center navigation on the head position when the tool is activated
+	bool centerOnActivation; // Flag whether to center navigation on the head position when the tool is activated
 	Point centerPoint; // Center point of movement circles on floor
 	Scalar moveSpeed; // Maximum movement speed
 	Scalar innerRadius; // Radius of circle of no motion around center point
@@ -63,55 +61,43 @@ class WalkNavigationToolFactory:public ToolFactory
 	WalkNavigationToolFactory(ToolManager& toolManager);
 	virtual ~WalkNavigationToolFactory(void);
 	
-	/* Methods from ToolFactory: */
+	/* Methods from class ToolFactory: */
 	virtual const char* getName(void) const;
 	virtual const char* getButtonFunction(int buttonSlotIndex) const;
 	virtual Tool* createTool(const ToolInputAssignment& inputAssignment) const;
 	virtual void destroyTool(Tool* tool) const;
 	};
 
-class WalkNavigationTool:public NavigationTool,public GLObject
+class WalkNavigationTool:public NavigationTool
 	{
 	friend class WalkNavigationToolFactory;
-	
-	/* Embedded classes: */
-	private:
-	struct DataItem:public GLObject::DataItem
-		{
-		/* Elements: */
-		public:
-		GLuint movementCircleListId; // Display list ID to render movement circles
-		
-		/* Constructors and destructors: */
-		DataItem(void);
-		virtual ~DataItem(void);
-		};
 	
 	/* Elements: */
 	private:
 	static WalkNavigationToolFactory* factory; // Pointer to the factory object for this class
 	
+	SceneGraph::ONTransformNodePointer circleRoot; // Pointer to the root transform node for the tool's movement circles
+	
 	/* Transient navigation state: */
 	Point centerPoint; // Center point of movement circle while the navigation tool is active
+	Vector centerViewDirection; // Central view direction while the navigation tool is active
 	NavTransform preScale; // Previous navigation transformation
 	Vector translation; // Total accumulated translation
 	Scalar azimuth; // Total accumulated rotation around up axis
 	
 	/* Private methods: */
-	static Point projectToFloor(const Point& p);
+	void showMovementCircles(void);
 	
 	/* Constructors and destructors: */
 	public:
 	WalkNavigationTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment);
 	
-	/* Methods from Tool: */
+	/* Methods from class Tool: */
+	virtual void initialize(void);
+	virtual void deinitialize(void);
 	virtual const ToolFactory* getFactory(void) const;
 	virtual void buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData);
 	virtual void frame(void);
-	virtual void display(GLContextData& contextData) const;
-	
-	/* Methods from GLObject: */
-	virtual void initContext(GLContextData& contextData) const;
 	};
 
 }

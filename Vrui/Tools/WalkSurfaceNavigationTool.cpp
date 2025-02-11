@@ -1,7 +1,7 @@
 /***********************************************************************
 WalkSurfaceNavigationTool - Version of the WalkNavigationTool that lets
 a user navigate along an application-defined surface.
-Copyright (c) 2009-2021 Oliver Kreylos
+Copyright (c) 2009-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -23,6 +23,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/Tools/WalkSurfaceNavigationTool.h>
 
+#include <Misc/PrintInteger.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Math/Math.h>
@@ -31,11 +32,13 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Geometry/OrthonormalTransformation.h>
 #include <Geometry/GeometryValueCoders.h>
 #include <GL/GLColorTemplates.h>
-#include <GL/GLContextData.h>
+#include <GL/GLFont.h>
 #include <GL/GLValueCoders.h>
-#include <GL/GLGeometryWrappers.h>
-#include <GL/GLTransformationWrappers.h>
+#include <SceneGraph/ShapeNode.h>
+#include <SceneGraph/LineSetNode.h>
+#include <Vrui/EnvironmentDefinition.h>
 #include <Vrui/Viewer.h>
+#include <Vrui/SceneGraphManager.h>
 #include <Vrui/ToolManager.h>
 
 namespace Vrui {
@@ -60,7 +63,8 @@ WalkSurfaceNavigationToolFactory::Configuration::Configuration(void)
 	 drawMovementCircles(true),
 	 movementCircleColor(0.0f,1.0f,0.0f),
 	 drawHud(true),
-	 hudFontSize(getUiSize()*2.0f)
+	 hudRadius(getDisplaySize()*Scalar(2)),
+	 hudFontSize(Scalar(getUiFont()->getTextHeight()))
 	{
 	}
 
@@ -85,6 +89,7 @@ void WalkSurfaceNavigationToolFactory::Configuration::read(const Misc::Configura
 	cfs.updateValue("./drawMovementCircles",drawMovementCircles);
 	cfs.updateValue("./movementCircleColor",movementCircleColor);
 	cfs.updateValue("./drawHud",drawHud);
+	cfs.updateValue("./hudRadius",hudRadius);
 	cfs.updateValue("./hudFontSize",hudFontSize);
 	}
 
@@ -107,6 +112,7 @@ void WalkSurfaceNavigationToolFactory::Configuration::write(Misc::ConfigurationF
 	cfs.storeValue("./drawMovementCircles",drawMovementCircles);
 	cfs.storeValue("./movementCircleColor",movementCircleColor);
 	cfs.storeValue("./drawHud",drawHud);
+	cfs.storeValue("./hudRadius",hudRadius);
 	cfs.storeValue("./hudFontSize",hudFontSize);
 	}
 
@@ -194,23 +200,6 @@ extern "C" void destroyWalkSurfaceNavigationToolFactory(ToolFactory* factory)
 	delete factory;
 	}
 
-/****************************************************
-Methods of class WalkSurfaceNavigationTool::DataItem:
-****************************************************/
-
-WalkSurfaceNavigationTool::DataItem::DataItem(void)
-	{
-	/* Create tools' model display list: */
-	movementCircleListId=glGenLists(2);
-	hudListId=movementCircleListId+1;
-	}
-
-WalkSurfaceNavigationTool::DataItem::~DataItem(void)
-	{
-	/* Destroy tools' model display list: */
-	glDeleteLists(movementCircleListId,2);
-	}
-
 /**************************************************
 Static elements of class WalkSurfaceNavigationTool:
 **************************************************/
@@ -220,6 +209,21 @@ WalkSurfaceNavigationToolFactory* WalkSurfaceNavigationTool::factory=0;
 /******************************************
 Methods of class WalkSurfaceNavigationTool:
 ******************************************/
+
+void WalkSurfaceNavigationTool::showMovementCircles(void)
+	{
+	/* Calculate a rotation to align the movement circles with the horizontal plane: */
+	const EnvironmentDefinition& ed=getEnvironmentDefinition();
+	
+	/* Rotate the movement circles around the vertical axis to align the angle wedge to the center viewing direction: */
+	Rotation frame=hudFrame;
+	Vector frameCvd=frame.inverseTransform(centerViewDirection);
+	frame*=Rotation::rotateZ(Math::atan2(-frameCvd[0],frameCvd[1]));
+	
+	/* Add the movement circles to Vrui's physical-space scene graph: */
+	circleRoot->setTransform(ONTransform(centerPoint-Point::origin,frame));
+	getSceneGraphManager()->addPhysicalNode(*circleRoot);
+	}
 
 void WalkSurfaceNavigationTool::applyNavState(void) const
 	{
@@ -276,26 +280,118 @@ void WalkSurfaceNavigationTool::initNavState(void)
 WalkSurfaceNavigationTool::WalkSurfaceNavigationTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
 	:SurfaceNavigationTool(factory,inputAssignment),
 	 configuration(WalkSurfaceNavigationTool::factory->configuration),
-	 numberRenderer(configuration.hudFontSize,true),
-	 centerPoint(configuration.centerPoint),
+	 hudFrame(getEnvironmentDefinition().calcStandardRotation()),
 	 jetpack(0)
 	{
-	/* This object's GL state depends on the number renderer's GL state: */
-	dependsOn(&numberRenderer);
 	}
 
 void WalkSurfaceNavigationTool::configure(const Misc::ConfigurationFileSection& configFileSection)
 	{
 	/* Override private configuration data from given configuration file section: */
 	configuration.read(configFileSection);
-	centerPoint=configuration.centerPoint;
-	numberRenderer.setFont(configuration.hudFontSize,true);
 	}
 
 void WalkSurfaceNavigationTool::storeState(Misc::ConfigurationFileSection& configFileSection) const
 	{
 	/* Write private configuration data to given configuration file section: */
 	configuration.write(configFileSection);
+	}
+
+void WalkSurfaceNavigationTool::initialize(void)
+	{
+	if(!configuration.centerOnActivation)
+		{
+		/* Set the fixed center point and center view direction: */
+		centerPoint=configuration.centerPoint;
+		centerViewDirection=configuration.centerViewDirection;
+		}
+	
+	if(configuration.drawMovementCircles)
+		{
+		/* Create the scene graph to draw the movement circles: */
+		circleRoot=new SceneGraph::ONTransformNode;
+		
+		SceneGraph::ShapeNodePointer shape=new SceneGraph::ShapeNode;
+		circleRoot->addChild(*shape);
+		
+		SceneGraph::LineSetNodePointer movementCircles=new SceneGraph::LineSetNode;
+		shape->geometry.setValue(movementCircles);
+		movementCircles->lineWidth.setValue(1.0f);
+		movementCircles->setColor(SceneGraph::LineSetNode::VertexColor(configuration.movementCircleColor));
+		
+		/* Draw the inner and outer circles: */
+		SceneGraph::Scalar tolerance(getMeterFactor()*Scalar(0.0005));
+		movementCircles->addCircle(SceneGraph::Point::origin,SceneGraph::Rotation::identity,configuration.innerRadius,tolerance);
+		movementCircles->addCircle(SceneGraph::Point::origin,SceneGraph::Rotation::identity,configuration.outerRadius,tolerance);
+		
+		/* Check if view direction rotation is enabled: */
+		if(configuration.rotateSpeed>Scalar(0))
+			{
+			/* Draw the inner angle: */
+			SceneGraph::LineSetNode::VertexIndex base=movementCircles->getNextVertexIndex();
+			movementCircles->addVertex(Point::origin);
+			movementCircles->addVertex(Point(-Math::sin(configuration.innerAngle)*configuration.innerRadius,Math::cos(configuration.innerAngle)*configuration.innerRadius,0));
+			movementCircles->addVertex(Point(Math::sin(configuration.innerAngle)*configuration.innerRadius,Math::cos(configuration.innerAngle)*configuration.innerRadius,0));
+			movementCircles->addLine(base+1,base);
+			movementCircles->addLine(base,base+2);
+			
+			/* Draw the outer angle: */
+			movementCircles->addVertex(Point(-Math::sin(configuration.outerAngle)*configuration.outerRadius,Math::cos(configuration.outerAngle)*configuration.outerRadius,0));
+			movementCircles->addVertex(Point(Math::sin(configuration.outerAngle)*configuration.outerRadius,Math::cos(configuration.outerAngle)*configuration.outerRadius,0));
+			movementCircles->addLine(base+3,base);
+			movementCircles->addLine(base,base+4);
+			}
+		
+		movementCircles->update();
+		
+		/* Add fixed movement circles to Vrui's physical-space scene graph: */
+		if(!configuration.centerOnActivation)
+			showMovementCircles();
+		}
+	
+	if(configuration.drawHud)
+		{
+		/* Create the scene graph to draw the compass HUD: */
+		hudRoot=new SceneGraph::ONTransformNode;
+		
+		SceneGraph::ShapeNodePointer shape=new SceneGraph::ShapeNode;
+		hudRoot->addChild(*shape);
+		
+		SceneGraph::LineSetNodePointer hud=new SceneGraph::LineSetNode;
+		shape->geometry.setValue(hud);
+		hud->lineWidth.setValue(1.0f);
+		hud->setColor(SceneGraph::LineSetNode::VertexColor(configuration.movementCircleColor));
+		
+		/* Draw the azimuth tick marks: */
+		for(int az=0;az<360;az+=10)
+			{
+			Scalar angle=Scalar(2)*Math::Constants<Scalar>::pi*Scalar(az)/Scalar(360);
+			Scalar c=Math::cos(angle)*configuration.hudRadius;
+			Scalar s=Math::sin(angle)*configuration.hudRadius;
+			hud->addLine(SceneGraph::Point(s,c,0),SceneGraph::Point(s,c,az%30==0?configuration.hudFontSize*Scalar(2):configuration.hudFontSize));
+			}
+		
+		/* Draw the azimuth labels: */
+		for(int az=0;az<360;az+=30)
+			{
+			Scalar angle=Scalar(2)*Math::Constants<Scalar>::pi*Scalar(az)/Scalar(360);
+			Scalar c=Math::cos(angle)*configuration.hudRadius;
+			Scalar s=Math::sin(angle)*configuration.hudRadius;
+			char azString[4];
+			Rotation rot=Rotation::rotateZ(-angle);
+			rot*=Rotation::rotateX(Math::div2(Math::Constants<Scalar>::pi));
+			hud->addNumber(SceneGraph::Point(s,c,configuration.hudFontSize*Scalar(2.5)),rot,configuration.hudFontSize,0,-1,Misc::print(az,azString+3));
+			}
+		
+		hud->update();
+		}
+	}
+
+void WalkSurfaceNavigationTool::deinitialize(void)
+	{
+	/* Remove fixed movement circles from Vrui's physical-space scene graph: */
+	if(configuration.drawMovementCircles&&!configuration.centerOnActivation)
+		getSceneGraphManager()->removePhysicalNode(*circleRoot);
 	}
 
 const ToolFactory* WalkSurfaceNavigationTool::getFactory(void) const
@@ -312,15 +408,36 @@ void WalkSurfaceNavigationTool::buttonCallback(int,InputDevice::ButtonCallbackDa
 			{
 			/* Deactivate this tool: */
 			deactivate();
+			
+			/* Remove dynamic movement circles from Vrui's physical-space scene graph: */
+			if(configuration.centerOnActivation&&configuration.drawMovementCircles)
+				getSceneGraphManager()->removePhysicalNode(*circleRoot);
+			
+			/* Remove the heads-up display from Vrui's physical-space scene graph: */
+			if(configuration.drawHud)
+				getSceneGraphManager()->removePhysicalNode(*hudRoot);
 			}
 		else
 			{
 			/* Try activating this tool: */
 			if(activate())
 				{
-				/* Store the center point for this navigation sequence: */
+				/* Add the heads-up display to Vrui's physical-space scene graph: */
+				if(configuration.drawHud)
+					getSceneGraphManager()->addPhysicalNode(*hudRoot);
+				
 				if(configuration.centerOnActivation)
-					centerPoint=calcFloorPoint(getMainViewer()->getHeadPosition());
+					{
+					/* Store the center point and center viewing direction for this navigation sequence: */
+					const EnvironmentDefinition& ed=getEnvironmentDefinition();
+					centerPoint=ed.calcFloorPoint(getMainViewer()->getHeadPosition());
+					centerViewDirection=getMainViewer()->getViewDirection();
+					centerViewDirection.orthogonalize(ed.up).normalize();
+					
+					/* Add dynamic movement circles to Vrui's physical-space scene graph: */
+					if(configuration.drawMovementCircles)
+						showMovementCircles();
+					}
 				
 				/* Initialize the navigation state: */
 				initNavState();
@@ -340,40 +457,37 @@ void WalkSurfaceNavigationTool::frame(void)
 	/* Act depending on this tool's current state: */
 	if(isActive())
 		{
+		bool animating=false;
+		const EnvironmentDefinition& ed=getEnvironmentDefinition();
+		
 		/* Calculate azimuth angle change based on the current viewing direction if rotation is enabled: */
 		if(configuration.rotateSpeed>Scalar(0))
 			{
 			Vector viewDir=getMainViewer()->getViewDirection();
-			viewDir-=getUpDirection()*((viewDir*getUpDirection())/Geometry::sqr(getUpDirection()));
+			viewDir.orthogonalize(ed.up);
 			Scalar viewDir2=Geometry::sqr(viewDir);
 			if(viewDir2!=Scalar(0))
 				{
 				/* Calculate the rotation speed: */
-				Scalar viewAngleCos=(viewDir*configuration.centerViewDirection)/Math::sqrt(viewDir2);
-				Scalar viewAngle;
-				if(viewAngleCos>Scalar(1)-Math::Constants<Scalar>::epsilon)
-					viewAngle=Scalar(0);
-				else if(viewAngleCos<Scalar(-1)+Math::Constants<Scalar>::epsilon)
-					viewAngle=Math::Constants<Scalar>::pi;
-				else
-					viewAngle=Math::acos(viewAngleCos);
-				Scalar rotateSpeed=Scalar(0);
-				if(viewAngle>=configuration.outerAngle)
-					rotateSpeed=configuration.rotateSpeed;
-				else if(viewAngle>configuration.innerAngle)
-					rotateSpeed=configuration.rotateSpeed*(viewAngle-configuration.innerAngle)/(configuration.outerAngle-configuration.innerAngle);
-				Vector x=configuration.centerViewDirection^getUpDirection();
+				Scalar viewAngle=Math::acos(Math::clamp((viewDir*centerViewDirection)/Math::sqrt(viewDir2),Scalar(-1),Scalar(1)));
+				Scalar rotateSpeed=configuration.rotateSpeed*Math::clamp((viewAngle-configuration.innerAngle)/(configuration.outerAngle-configuration.innerAngle),Scalar(0),Scalar(1));
+				Vector x=centerViewDirection^ed.up;
 				if(viewDir*x<Scalar(0))
 					rotateSpeed=-rotateSpeed;
 				
 				/* Update the azimuth angle: */
-				azimuth=wrapAngle(azimuth+rotateSpeed*getFrameTime());
+				if(rotateSpeed!=Scalar(0))
+					{
+					azimuth=wrapAngle(azimuth+rotateSpeed*getFrameTime());
+					animating=true;
+					}
 				}
 			}
 		
 		/* Calculate the new head and foot positions: */
-		Point newFootPos=calcFloorPoint(getMainViewer()->getHeadPosition());
-		headHeight=Geometry::dist(getMainViewer()->getHeadPosition(),newFootPos);
+		Point headPos=getMainViewer()->getHeadPosition();
+		Point newFootPos=ed.calcFloorPoint(headPos);
+		headHeight=Geometry::dist(headPos,newFootPos);
 		
 		/* Create a physical navigation frame around the new foot position: */
 		calcPhysicalFrame(newFootPos);
@@ -385,17 +499,21 @@ void WalkSurfaceNavigationTool::frame(void)
 		/* Calculate movement from virtual joystick: */
 		Vector moveDir=footPos-centerPoint;
 		Scalar moveDirLen=moveDir.mag();
-		Scalar speed=Scalar(0);
-		if(moveDirLen>=configuration.outerRadius)
-			speed=configuration.moveSpeed;
-		else if(moveDirLen>configuration.innerRadius)
-			speed=configuration.moveSpeed*(moveDirLen-configuration.innerRadius)/(configuration.outerRadius-configuration.innerRadius);
-		moveDir*=speed/moveDirLen;
+		if(moveDirLen>Scalar(0))
+			{
+			Scalar speed=configuration.moveSpeed*Math::clamp((moveDirLen-configuration.innerRadius)/(configuration.outerRadius-configuration.innerRadius),Scalar(0),Scalar(1));
+			moveDir*=speed/moveDirLen;
+			if(speed!=Scalar(0))
+				animating=true;
+			}
 		
 		/* Add the current flying and falling velocities: */
 		if(jetpack!=Scalar(0))
+			{
 			moveDir+=getValuatorDeviceRayDirection(0)*jetpack;
-		moveDir+=getUpDirection()*fallVelocity;
+			animating=true;
+			}
+		moveDir+=ed.up*fallVelocity;
 		
 		/* Calculate the complete movement vector: */
 		move+=moveDir*getFrameTime();
@@ -432,6 +550,7 @@ void WalkSurfaceNavigationTool::frame(void)
 			/* Lift the aligned frame back up to the original altitude and continue flying: */
 			newSurfaceFrame*=NavTransform::translate(Vector(Scalar(0),Scalar(0),z));
 			fallVelocity-=configuration.fallAcceleration*getFrameTime();
+			animating=true;
 			}
 		else
 			{
@@ -443,164 +562,18 @@ void WalkSurfaceNavigationTool::frame(void)
 		surfaceFrame=newSurfaceFrame;
 		applyNavState();
 		
-		if(speed!=Scalar(0)||z>Scalar(0)||jetpack!=Scalar(0))
+		/* Update the heads-up display: */
+		if(configuration.drawHud)
 			{
-			/* Request another frame: */
+			/* Update the heads-up display's transformation: */
+			Rotation frame=hudFrame;
+			frame*=Rotation::rotateZ(azimuth);
+			hudRoot->setTransform(ONTransform(headPos-Point::origin,frame));
+			}
+		
+		/* Request another frame if animating: */
+		if(animating)
 			scheduleUpdate(getNextAnimationTime());
-			}
-		}
-	}
-
-void WalkSurfaceNavigationTool::display(GLContextData& contextData) const
-	{
-	/* Get a pointer to the context data item and set up OpenGL state: */
-	DataItem* dataItem=0;
-	if(configuration.drawMovementCircles||(configuration.drawHud&&isActive()))
-		{
-		dataItem=contextData.retrieveDataItem<DataItem>(this);
-		
-		glPushAttrib(GL_ENABLE_BIT|GL_LINE_BIT);
-		glDisable(GL_LIGHTING);
-		glLineWidth(1.0f);
-		}
-	
-	if(configuration.drawMovementCircles)
-		{
-		/* Translate to the center point: */
-		glPushMatrix();
-		glTranslate(centerPoint-Point::origin);
-		
-		/* Execute the movement circle display list: */
-		glCallList(dataItem->movementCircleListId);
-		
-		glPopMatrix();
-		}
-	
-	if(configuration.drawHud&&isActive())
-		{
-		/* Translate to the HUD's center point: */
-		glPushMatrix();
-		glMultMatrix(physicalFrame);
-		glTranslate(0,0,headHeight);
-		
-		/* Rotate by the azimuth angle: */
-		glRotate(Math::deg(azimuth),0,0,1);
-		
-		/* Execute the HUD display list: */
-		glCallList(dataItem->hudListId);
-		
-		glPopMatrix();
-		}
-	
-	/* Reset OpenGL state: */
-	if(configuration.drawMovementCircles||(configuration.drawHud&&isActive()))
-		glPopAttrib();
-	}
-
-void WalkSurfaceNavigationTool::initContext(GLContextData& contextData) const
-	{
-	DataItem* dataItem=0;
-	if(configuration.drawMovementCircles||configuration.drawHud)
-		{
-		/* Create a new data item: */
-		dataItem=new DataItem;
-		contextData.addDataItem(this,dataItem);
-		}
-		
-	if(configuration.drawMovementCircles)
-		{
-		/* Create the movement circle display list: */
-		glNewList(dataItem->movementCircleListId,GL_COMPILE);
-		
-		/* Create a coordinate system for the floor plane: */
-		Vector y=configuration.centerViewDirection;
-		Vector x=y^getFloorPlane().getNormal();
-		x.normalize();
-		
-		/* Draw the inner circle: */
-		glColor(configuration.movementCircleColor);
-		glBegin(GL_LINE_LOOP);
-		for(int i=0;i<64;++i)
-			{
-			Scalar angle=Scalar(2)*Math::Constants<Scalar>::pi*Scalar(i)/Scalar(64);
-			glVertex(Point::origin-x*(Math::sin(angle)*configuration.innerRadius)+y*(Math::cos(angle)*configuration.innerRadius));
-			}
-		glEnd();
-		
-		/* Draw the outer circle: */
-		glBegin(GL_LINE_LOOP);
-		for(int i=0;i<64;++i)
-			{
-			Scalar angle=Scalar(2)*Math::Constants<Scalar>::pi*Scalar(i)/Scalar(64);
-			glVertex(Point::origin-x*(Math::sin(angle)*configuration.outerRadius)+y*(Math::cos(angle)*configuration.outerRadius));
-			}
-		glEnd();
-		
-		/* Check if view direction rotation is enabled: */
-		if(configuration.rotateSpeed>Scalar(0))
-			{
-			/* Draw the inner angle: */
-			glBegin(GL_LINE_STRIP);
-			glVertex(Point::origin-x*(Math::sin(configuration.innerAngle)*configuration.innerRadius)+y*(Math::cos(configuration.innerAngle)*configuration.innerRadius));
-			glVertex(Point::origin);
-			glVertex(Point::origin-x*(Math::sin(-configuration.innerAngle)*configuration.innerRadius)+y*(Math::cos(-configuration.innerAngle)*configuration.innerRadius));
-			glEnd();
-			
-			/* Draw the outer angle: */
-			glBegin(GL_LINE_STRIP);
-			glVertex(Point::origin-x*(Math::sin(configuration.outerAngle)*configuration.outerRadius)+y*(Math::cos(configuration.outerAngle)*configuration.outerRadius));
-			glVertex(Point::origin);
-			glVertex(Point::origin-x*(Math::sin(-configuration.outerAngle)*configuration.outerRadius)+y*(Math::cos(-configuration.outerAngle)*configuration.outerRadius));
-			glEnd();
-			}
-		
-		glEndList();
-		}
-	
-	if(configuration.drawHud)
-		{
-		/* Create the HUD display list: */
-		glNewList(dataItem->hudListId,GL_COMPILE);
-		
-		/* Calculate the HUD layout: */
-		Scalar hudRadius=getDisplaySize()*Scalar(2);
-		Scalar hudTickSize=configuration.hudFontSize;
-		
-		/* Draw the azimuth tick marks: */
-		glColor(getForegroundColor());
-		glBegin(GL_LINES);
-		for(int az=0;az<360;az+=10)
-			{
-			Scalar angle=Math::rad(Scalar(az));
-			Scalar c=Math::cos(angle)*hudRadius;
-			Scalar s=Math::sin(angle)*hudRadius;
-			glVertex(s,c,Scalar(0));
-			glVertex(s,c,Scalar(0)+(az%30==0?hudTickSize*Scalar(2):hudTickSize));
-			}
-		glEnd();
-		
-		/* Draw the azimuth labels: */
-		for(int az=0;az<360;az+=30)
-			{
-			/* Move to the label's coordinate system: */
-			glPushMatrix();
-			Scalar angle=Math::rad(Scalar(az));
-			Scalar c=Math::cos(angle)*hudRadius;
-			Scalar s=Math::sin(angle)*hudRadius;
-			glTranslate(s,c,hudTickSize*Scalar(2.5));
-			glRotate(-double(az),0.0,0.0,1.0);
-			glRotate(90.0,1.0,0.0,0.0);
-			double width=Scalar(numberRenderer.calcNumberWidth(az));
-			glTranslate(-width*0.5,0.0,0.0);
-			
-			/* Draw the azimuth label: */
-			numberRenderer.drawNumber(az,contextData);
-			
-			/* Go back to original coordinate system: */
-			glPopMatrix();
-			}
-		
-		glEndList();
 		}
 	}
 
