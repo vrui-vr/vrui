@@ -1,7 +1,7 @@
 /***********************************************************************
 GLRenderState - Class encapsulating the traversal state of a scene graph
 during OpenGL rendering.
-Copyright (c) 2009-2023 Oliver Kreylos
+Copyright (c) 2009-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -158,6 +158,10 @@ GLRenderState::GLRenderState(GLContextData& sContextData,const Point& sBaseEyePo
 		{
 		/* It's the opaque rendering pass: */
 		initialRenderPass=GraphNode::GLRenderPass;
+		
+		/* Set the initial blending function parameters: */
+		initialState.blendSrcFactor=GL_ONE;
+		initialState.blendDstFactor=GL_ZERO;
 		}
 	currentRenderPass=initialRenderPass;
 	
