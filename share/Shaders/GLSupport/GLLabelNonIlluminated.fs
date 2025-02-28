@@ -1,7 +1,7 @@
 /***********************************************************************
 GLLabelNonIlluminated.fs - Fragment shader to render GLLabel objects
 without illumination.
-Copyright (c) 2023 Oliver Kreylos
+Copyright (c) 2023-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -24,9 +24,10 @@ uniform vec4 foregroundColor;
 uniform sampler2D stringTexture;
 
 varying vec2 texCoord;
+varying vec4 backgroundColor;
 
 void main()
 	{
 	/* Assign the final fragment color: */
-	gl_FragColor=mix(foregroundColor,gl_Color,texture2D(stringTexture,texCoord).r);
+	gl_FragColor=mix(foregroundColor,backgroundColor,texture2D(stringTexture,texCoord).r);
 	}

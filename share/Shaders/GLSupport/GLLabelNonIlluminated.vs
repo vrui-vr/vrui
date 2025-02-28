@@ -1,7 +1,7 @@
 /***********************************************************************
 GLLabelNonIlluminated.vs - Vertex shader to render GLLabel objects
 without illumination.
-Copyright (c) 2023 Oliver Kreylos
+Copyright (c) 2023-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -26,11 +26,15 @@ uniform bool clipPlaneEnableds[gl_MaxClipPlanes];
 
 varying float gl_ClipDistance[gl_MaxClipDistances];
 varying vec2 texCoord;
+varying vec4 backgroundColor;
 
 void main()
 	{
 	/* Pass through vertex texture coordinates: */
 	texCoord=gl_MultiTexCoord0.xy;
+	
+	/* Pass through the vertex color: */
+	backgroundColor=gl_Color;
 	
 	/* Transform vertex position to eye space: */
 	vec4 eyeVertex=gl_ModelViewMatrix*gl_Vertex;
