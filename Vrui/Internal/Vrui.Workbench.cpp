@@ -1,6 +1,6 @@
 /***********************************************************************
 Environment-dependent part of Vrui virtual reality development toolkit.
-Copyright (c) 2000-2024 Oliver Kreylos
+Copyright (c) 2000-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -164,7 +164,7 @@ bool vruiMaster=true;
 std::ostream& operator<<(std::ostream& os,const VruiErrorHeader& veh)
 	{
 	/* Check if this is a cluster environment: */
-	if(vruiState->multiplexer!=0)
+	if(vruiState!=0&&vruiState->multiplexer!=0)
 		os<<"Vrui: (node "<<vruiState->multiplexer->getNodeIndex()<<"): ";
 	else
 		os<<"Vrui: ";
