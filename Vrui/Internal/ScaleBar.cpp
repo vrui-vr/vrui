@@ -1,7 +1,7 @@
 /***********************************************************************
 ScaleBar - Class to draw a scale bar in Vrui applications. Scale bar is
 implemented as a special top-level GLMotif widget for simplicity.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -259,6 +259,35 @@ void ScaleBar::unitChangedCallback(CoordinateManager::UnitChangedCallbackData* c
 	resize(GLMotif::Box(newOrigin,newSize));
 	}
 
+void ScaleBar::updateColors(void)
+	{
+	/* Retrieve the environment's background color: */
+	Color bgColor=Vrui::getBackgroundColor();
+	bgColor[3]=0.0f;
+	
+	/* Calculate a constrasting foreground color: */
+	GLfloat luminance=bgColor[0]*0.299f+bgColor[1]*0.587f+bgColor[2]*0.114f;
+	Color fgColor=luminance<=0.5f?Color(1.0f,1.0f,1.0f):Color(0.0f,0.0f,0.0f);
+	
+	/* Set the base widget colors: */
+	setBorderColor(bgColor);
+	setBackgroundColor(bgColor);
+	setForegroundColor(fgColor);
+	
+	/* Set the label colors: */
+	lengthLabel->setBackground(bgColor);
+	lengthLabel->setForeground(fgColor);
+	scaleLabel->setBackground(bgColor);
+	scaleLabel->setForeground(fgColor);
+	}
+
+void ScaleBar::renderingParametersChangedCallback(RenderingParametersChangedCallbackData* cbData)
+	{
+	/* Update the widget colors if the background or foreground colors changed: */
+	if(cbData->changeReasons&(RenderingParametersChangedCallbackData::BackgroundColor|RenderingParametersChangedCallbackData::ForegroundColor))
+		updateColors();
+	}
+
 ScaleBar::ScaleBar(const char* sName,GLMotif::WidgetManager* sManager)
 	:GLMotif::Widget(sName,0,false),manager(sManager),
 	 targetLength(getDisplaySize()*Scalar(0.2)),
@@ -270,13 +299,6 @@ ScaleBar::ScaleBar(const char* sName,GLMotif::WidgetManager* sManager)
 	setBorderWidth(0.0f);
 	setBorderType(GLMotif::Widget::PLAIN);
 	
-	/* Set default background and foreground colors: */
-	Color bgColor=Vrui::getBackgroundColor();
-	bgColor[3]=0.0f;
-	setBorderColor(bgColor);
-	setBackgroundColor(bgColor);
-	setForegroundColor(Vrui::getForegroundColor());
-	
 	/* Create the initial scale bar length label: */
 	if(getCoordinateManager()->getUnit().unit!=Geometry::LinearUnit::UNKNOWN)
 		{
@@ -286,11 +308,10 @@ ScaleBar::ScaleBar(const char* sName,GLMotif::WidgetManager* sManager)
 		}
 	else
 		lengthLabel=new GLLabel("1",*getUiFont());
-	lengthLabel->setBackground(bgColor);
-	lengthLabel->setForeground(Vrui::getForegroundColor());
 	scaleLabel=new GLLabel("1:1",*getUiFont());
-	scaleLabel->setBackground(bgColor);
-	scaleLabel->setForeground(Vrui::getForegroundColor());
+	
+	/* Initialize the scale bar colors: */
+	updateColors();
 	
 	/* Calculate the initial navigation-space scale bar length: */
 	calcSize(getNavigationTransformation(),getCoordinateManager()->getUnit(),true);
@@ -306,6 +327,9 @@ ScaleBar::ScaleBar(const char* sName,GLMotif::WidgetManager* sManager)
 	
 	/* Register a unit change callback with the coordinate manager: */
 	Vrui::getCoordinateManager()->getUnitChangedCallbacks().add(this,&ScaleBar::unitChangedCallback);
+	
+	/* Register a rendering parameters change callback with the Vrui kernel: */
+	getRenderingParametersChangedCallbacks().add(this,&ScaleBar::renderingParametersChangedCallback);
 	}
 
 ScaleBar::~ScaleBar(void)
@@ -318,6 +342,9 @@ ScaleBar::~ScaleBar(void)
 	
 	/* Unregister the unit change callback with the coordinate manager: */
 	Vrui::getCoordinateManager()->getUnitChangedCallbacks().remove(this,&ScaleBar::unitChangedCallback);
+	
+	/* Unregister the rendering parameters change callback with the Vrui kernel: */
+	getRenderingParametersChangedCallbacks().remove(this,&ScaleBar::renderingParametersChangedCallback);
 	
 	/* Delete the length and scale labels: */
 	delete lengthLabel;
@@ -403,7 +430,7 @@ void ScaleBar::draw(GLContextData& contextData) const
 	/* Draw the scale bar: */
 	glLineWidth(5.0f);
 	glBegin(GL_LINES);
-	glColor(getBackgroundColor());
+	glColor(backgroundColor);
 	glVertex2f(x0,y1);
 	glVertex2f(x1,y1);
 	glEnd();
@@ -415,7 +442,7 @@ void ScaleBar::draw(GLContextData& contextData) const
 	glVertex2f(x1,y0);
 	glVertex2f(x1,y2);
 	
-	glColor(getForegroundColor());
+	glColor(foregroundColor);
 	glVertex2f(x0,y1);
 	glVertex2f(x1,y1);
 	glEnd();

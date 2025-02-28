@@ -1,7 +1,7 @@
 /***********************************************************************
 ScaleBar - Class to draw a scale bar in Vrui applications. Scale bar is
 implemented as a special top-level GLMotif widget for simplicity.
-Copyright (c) 2010-2023 Oliver Kreylos
+Copyright (c) 2010-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -59,6 +59,8 @@ class ScaleBar:public GLMotif::Widget,public GLMotif::Draggable
 	void calcSize(const NavTransform& newNavigationTransformation,const Geometry::LinearUnit& newUnit,bool updateLengthLabel =false); // Recalculates the scale bar's layout after a change in navigation scale
 	void navigationChangedCallback(NavigationTransformationChangedCallbackData* cbData); // Callback called when the navigation transformation changes
 	void unitChangedCallback(CoordinateManager::UnitChangedCallbackData* cbData); // Callback called when the unit of length measurement changes
+	void updateColors(void); // Updates the scale bar's colors after a color change in Vrui
+	void renderingParametersChangedCallback(RenderingParametersChangedCallbackData* cbData); // Callback called when Vrui's rendering parameters change
 	
 	/* Constructors and destructors: */
 	public:
