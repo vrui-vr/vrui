@@ -1,7 +1,7 @@
 /***********************************************************************
 Vrui - Public kernel interface of the Vrui virtual reality development
 toolkit.
-Copyright (c) 2000-2023 Oliver Kreylos
+Copyright (c) 2000-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -110,6 +110,29 @@ struct EnvironmentDefinitionChangedCallbackData:public Misc::CallbackData // Cal
 	
 	/* Constructors and destructors: */
 	EnvironmentDefinitionChangedCallbackData(int sChangeReasons)
+		:changeReasons(sChangeReasons)
+		{
+		}
+	};
+
+struct RenderingParametersChangedCallbackData:public Misc::CallbackData // Callback data passed to callbacks when any of Vrui's rendering parameters change
+	{
+	/* Embedded classes: */
+	public:
+	enum ChangeReasons // Enumerated type for bit flags of reasons for the change
+		{
+		FrontplaneDistance=0x1,
+		BackplaneDistance=0x2,
+		ForegroundColor=0x4,
+		BackgroundColor=0x8,
+		AmbientLightColor=0x10
+		};
+	
+	/* Elements: */
+	int changeReasons; // Bit mask of reasons for the change
+	
+	/* Constructors and destructors: */
+	RenderingParametersChangedCallbackData(int sChangeReasons)
 		:changeReasons(sChangeReasons)
 		{
 		}
@@ -281,6 +304,7 @@ void setBackgroundColor(const Color& newBackgroundColor); // Sets the OpenGL bac
 void setForegroundColor(const Color& newBackgroundColor); // Sets a foreground color contrasting with the OpenGL background color
 const Color& getBackgroundColor(void); // Returns the OpenGL background color
 const Color& getForegroundColor(void); // Returns a color that contrasts well with the OpenGL background color, for HUD line drawings and such
+Misc::CallbackList& getRenderingParametersChangedCallbacks(void); // Returns the lists of callbacks called when any rendering parameters change
 GLFont* loadFont(const char* fontName); // Load and return a pointer to the font of the given name
 GLFont* getPixelFont(void); // Returns a texture-based font that can be used to display text in window pixel space
 

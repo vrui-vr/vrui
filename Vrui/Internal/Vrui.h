@@ -1,7 +1,7 @@
 /***********************************************************************
 Internal kernel interface of the Vrui virtual reality development
 toolkit.
-Copyright (c) 2000-2024 Oliver Kreylos
+Copyright (c) 2000-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -277,6 +277,7 @@ struct VruiState
 	Color backgroundColor;
 	Color foregroundColor;
 	Color ambientLightColor;
+	Misc::CallbackList renderingParametersChangedCallbacks;
 	GLFont* pixelFont; // Font to be used when writing in pixel space
 	
 	/* Sound rendering parameters: */

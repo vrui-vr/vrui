@@ -1,7 +1,7 @@
 /***********************************************************************
 Environment-independent part of Vrui virtual reality development
 toolkit.
-Copyright (c) 2000-2024 Oliver Kreylos
+Copyright (c) 2000-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -2599,6 +2599,12 @@ void VruiState::ambientIntensityValueChangedCallback(GLMotif::TextFieldSlider::V
 	/* Set the ambient light color: */
 	for(int i=0;i<3;++i)
 		ambientLightColor[i]=float(cbData->value);
+	
+	/* Call the rendering parameter changed callbacks: */
+	{
+	RenderingParametersChangedCallbackData cbData(RenderingParametersChangedCallbackData::AmbientLightColor);
+	vruiState->renderingParametersChangedCallbacks.call(&cbData);
+	}
 	}
 
 void VruiState::viewerHeadlightValueChangedCallback(GLMotif::ToggleButton::ValueChangedCallbackData* cbData,const int& viewerIndex)
@@ -3107,6 +3113,11 @@ const EnvironmentDefinition& getEnvironmentDefinition(void)
 	return vruiState->environmentDefinition;
 	}
 
+Misc::CallbackList& getEnvironmentDefinitionChangedCallbacks(void)
+	{
+	return vruiState->environmentDefinitionChangedCallbacks;
+	}
+
 Scalar getInchFactor(void)
 	{
 	return vruiState->inchFactor;
@@ -3147,14 +3158,15 @@ Point calcFloorPoint(const Point& position)
 	return vruiState->environmentDefinition.calcFloorPoint(position);
 	}
 
-Misc::CallbackList& getEnvironmentDefinitionChangedCallbacks(void)
-	{
-	return vruiState->environmentDefinitionChangedCallbacks;
-	}
-
 void setFrontplaneDist(Scalar newFrontplaneDist)
 	{
 	vruiState->frontplaneDist=newFrontplaneDist;
+	
+	/* Call the rendering parameter changed callbacks: */
+	{
+	RenderingParametersChangedCallbackData cbData(RenderingParametersChangedCallbackData::FrontplaneDistance);
+	vruiState->renderingParametersChangedCallbacks.call(&cbData);
+	}
 	}
 
 Scalar getFrontplaneDist(void)
@@ -3165,6 +3177,12 @@ Scalar getFrontplaneDist(void)
 void setBackplaneDist(Scalar newBackplaneDist)
 	{
 	vruiState->backplaneDist=newBackplaneDist;
+	
+	/* Call the rendering parameter changed callbacks: */
+	{
+	RenderingParametersChangedCallbackData cbData(RenderingParametersChangedCallbackData::BackplaneDistance);
+	vruiState->renderingParametersChangedCallbacks.call(&cbData);
+	}
 	}
 
 Scalar getBackplaneDist(void)
@@ -3184,6 +3202,12 @@ void setBackgroundColor(const Color& newBackgroundColor)
 	/* Update the colors of the pixel font: */
 	vruiState->pixelFont->setBackgroundColor(vruiState->backgroundColor);
 	vruiState->pixelFont->setForegroundColor(vruiState->foregroundColor);
+	
+	/* Call the rendering parameter changed callbacks: */
+	{
+	RenderingParametersChangedCallbackData cbData(RenderingParametersChangedCallbackData::BackgroundColor|RenderingParametersChangedCallbackData::ForegroundColor);
+	vruiState->renderingParametersChangedCallbacks.call(&cbData);
+	}
 	}
 
 void setForegroundColor(const Color& newForegroundColor)
@@ -3192,6 +3216,12 @@ void setForegroundColor(const Color& newForegroundColor)
 	
 	/* Update the colors of the pixel font: */
 	vruiState->pixelFont->setForegroundColor(vruiState->foregroundColor);
+	
+	/* Call the rendering parameter changed callbacks: */
+	{
+	RenderingParametersChangedCallbackData cbData(RenderingParametersChangedCallbackData::ForegroundColor);
+	vruiState->renderingParametersChangedCallbacks.call(&cbData);
+	}
 	}
 
 const Color& getBackgroundColor(void)
@@ -3202,6 +3232,11 @@ const Color& getBackgroundColor(void)
 const Color& getForegroundColor(void)
 	{
 	return vruiState->foregroundColor;
+	}
+
+Misc::CallbackList& getRenderingParametersChangedCallbacks(void)
+	{
+	return vruiState->renderingParametersChangedCallbacks;
 	}
 
 GLFont* loadFont(const char* fontName)
