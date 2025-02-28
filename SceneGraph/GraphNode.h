@@ -69,7 +69,7 @@ class GraphNode:public Node
 	
 	/* Elements: */
 	private:
-	ParentLink parents; // Head of the node's linked list of parent pointers; if the node has no parents, the structures parent pointer is null
+	ParentLink parents; // Head of the node's linked list of parent pointers; if the node has no parents, the structure's parent pointer is null
 	protected:
 	PassMask passMask; // Bit mask of processing or rendering passes in which this node participates
 	
