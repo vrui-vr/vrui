@@ -1,7 +1,7 @@
 /***********************************************************************
 SwitchNode - Class for group nodes that traverse zero or one of their
 children based on a selection field.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -155,6 +155,12 @@ void SwitchNode::alRenderAction(ALRenderState& renderState) const
 	{
 	/* Call the render action of the current choice (this wouldn't be called if the choice weren't valid or the chosen node were null): */
 	choice.getValue(whichChoice.getValue())->alRenderAction(renderState);
+	}
+
+void SwitchNode::act(ActState& actState)
+	{
+	/* Call the action method of the current choice (this wouldn't be called if the choice weren't valid or the chosen node were null): */
+	choice.getValue(whichChoice.getValue())->act(actState);
 	}
 
 void SwitchNode::passMaskUpdate(GraphNode& child,GraphNode::PassMask newPassMask)

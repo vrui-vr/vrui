@@ -1,7 +1,7 @@
 /***********************************************************************
 SceneGraphManager - Class to manage a scene graph used to represent
 renderable objects in physical and navigational space.
-Copyright (c) 2021-2023 Oliver Kreylos
+Copyright (c) 2021-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -33,6 +33,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <SceneGraph/GroupNode.h>
 #include <SceneGraph/ONTransformNode.h>
 #include <SceneGraph/DOGTransformNode.h>
+#include <SceneGraph/ActState.h>
 #include <SceneGraph/GLRenderState.h>
 #include <Vrui/Types.h>
 
@@ -84,6 +85,7 @@ class SceneGraphManager
 	SceneGraph::DOGTransformNodePointer navigationalRoot; // The root of the navigational-space scene graph
 	SceneGraph::GroupNodePointer clippedRoot; // The root of the clipped navigational-space scene graph
 	DeviceSceneGraphMap deviceSceneGraphMap; // Map of scene graphs representing Vrui input devices
+	SceneGraph::ActState actState; // Action traversal structure
 	
 	/* Private methods called by friends: */
 	
@@ -100,6 +102,7 @@ class SceneGraphManager
 		if(physicalRoot->participatesInPass(SceneGraph::GraphNode::ALRenderPass))
 			physicalRoot->alRenderAction(renderState);
 		}
+	bool act(const Point& physViewerPos,const Vector& physUpVector,double time); // Calls the scene graph's action methods for the given time point; returns true if the scene graph requires another action call
 	
 	/* Methods called by InputGraphManager: */
 	void setInputDeviceState(InputDevice* device,bool newEnabled); // Notifies the scene graph manager that the given device changed state

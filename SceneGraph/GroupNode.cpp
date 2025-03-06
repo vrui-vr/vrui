@@ -1,6 +1,6 @@
 /***********************************************************************
 GroupNode - Base class for nodes that contain child nodes.
-Copyright (c) 2009-2023 Oliver Kreylos
+Copyright (c) 2009-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -309,6 +309,14 @@ void GroupNode::alRenderAction(ALRenderState& renderState) const
 	for(ChildList::const_iterator chIt=children.getValues().begin();chIt!=children.getValues().end();++chIt)
 		if((*chIt)->participatesInPass(ALRenderPass))
 			(*chIt)->alRenderAction(renderState);
+	}
+
+void GroupNode::act(ActState& actState)
+	{
+	/* Call the act methods of all child nodes that participate in the action pass in order: */
+	for(ChildList::iterator chIt=children.getValues().begin();chIt!=children.getValues().end();++chIt)
+		if((*chIt)->participatesInPass(ActionPass))
+			(*chIt)->act(actState);
 	}
 
 void GroupNode::passMaskUpdate(GraphNode& child,GraphNode::PassMask newPassMask)

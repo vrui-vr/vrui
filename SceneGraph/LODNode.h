@@ -1,7 +1,7 @@
 /***********************************************************************
 LODNode - Class for group nodes that select between their children based
 on distance from the viewpoint.
-Copyright (c) 2011-2023 Oliver Kreylos
+Copyright (c) 2011-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -66,6 +66,7 @@ class LODNode:public GraphNodeParent
 	virtual void testCollision(SphereCollisionQuery& collisionQuery) const;
 	virtual void glRenderAction(GLRenderState& renderState) const;
 	virtual void alRenderAction(ALRenderState& renderState) const;
+	virtual void act(ActState& actState);
 	
 	/* Methods from class GraphNodeParent: */
 	virtual void passMaskUpdate(GraphNode& child,PassMask newPassMask);

@@ -1,6 +1,6 @@
 /***********************************************************************
 GraphNode - Base class for nodes that can be parts of a scene graph.
-Copyright (c) 2009-2023 Oliver Kreylos
+Copyright (c) 2009-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -33,6 +33,7 @@ namespace SceneGraph {
 class SphereCollisionQuery;
 class GLRenderState;
 class ALRenderState;
+class ActState;
 class GraphNodeParent;
 }
 
@@ -64,7 +65,8 @@ class GraphNode:public Node
 		CollisionPass=0x1, // Node participates in collision detection
 		GLRenderPass=0x2, // Node participates in opaque OpenGL rendering
 		GLTransparentRenderPass=0x4, // Node participates in transparent OpenGL rendering
-		ALRenderPass=0x8 // Node participates in OpenAL audio rendering
+		ALRenderPass=0x8, // Node participates in OpenAL audio rendering
+		ActionPass=0x10 // Node wants to execute actions at regular intervals
 		};
 	
 	/* Elements: */
@@ -97,6 +99,7 @@ class GraphNode:public Node
 	virtual void testCollision(SphereCollisionQuery& collisionQuery) const; // Tests the node for collision with a moving sphere
 	virtual void glRenderAction(GLRenderState& renderState) const; // Renders the node into the given OpenGL context
 	virtual void alRenderAction(ALRenderState& renderState) const; // Renders the node into the given OpenAL context
+	virtual void act(ActState& actState); // Lets the node act in the given action traversal state
 	};
 
 typedef Misc::Autopointer<GraphNode> GraphNodePointer;

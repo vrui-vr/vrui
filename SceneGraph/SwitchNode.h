@@ -1,7 +1,7 @@
 /***********************************************************************
 SwitchNode - Class for group nodes that traverse zero or one of their
 children based on a selection field.
-Copyright (c) 2018-2023 Oliver Kreylos
+Copyright (c) 2018-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -64,6 +64,7 @@ class SwitchNode:public GraphNodeParent
 	virtual void testCollision(SphereCollisionQuery& collisionQuery) const;
 	virtual void glRenderAction(GLRenderState& renderState) const;
 	virtual void alRenderAction(ALRenderState& renderState) const;
+	virtual void act(ActState& actState);
 	
 	/* Methods from class GraphNodeParent: */
 	virtual void passMaskUpdate(GraphNode& child,PassMask newPassMask);

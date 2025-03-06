@@ -1,6 +1,6 @@
 /***********************************************************************
 GraphNode - Base class for nodes that can be parts of a scene graph.
-Copyright (c) 2021-2024 Oliver Kreylos
+Copyright (c) 2021-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -135,6 +135,12 @@ void GraphNode::glRenderAction(GLRenderState& renderState) const
 	}
 
 void GraphNode::alRenderAction(ALRenderState& renderState) const
+	{
+	/* A node that sets a pass mask and doesn't implement the corresponding method is a bug: */
+	throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Missing implementation");
+	}
+
+void GraphNode::act(ActState& actState)
 	{
 	/* A node that sets a pass mask and doesn't implement the corresponding method is a bug: */
 	throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Missing implementation");

@@ -1919,6 +1919,13 @@ void VruiState::update(void)
 	for(int i=0;i<numListeners;++i)
 		listeners[i].update();
 	
+	/* Call the scene graph root's action method: */
+	if(sceneGraphManager->act(mainViewer->getHeadPosition(),getUpDirection(),lastFrame))
+		{
+		/* Schedule another frame: */
+		scheduleUpdate(lastFrame+animationFrameInterval);
+		}
+	
 	/* Call frame functions of all loaded vislets: */
 	if(visletManager!=0)
 		visletManager->frame();

@@ -1,7 +1,7 @@
 /***********************************************************************
 SceneGraphManager - Class to manage a scene graph used to represent
 renderable objects in physical and navigational space.
-Copyright (c) 2021-2024 Oliver Kreylos
+Copyright (c) 2021-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -110,6 +110,20 @@ void SceneGraphManager::updateInputDevices(void)
 		}
 	}
 
+bool SceneGraphManager::act(const Point& physViewerPos,const Vector& physUpVector,double time)
+	{
+	/* Update the action traversal state: */
+	actState.startTraversal(SceneGraph::DOGTransform::identity,SceneGraph::Point(physViewerPos),SceneGraph::Vector(physUpVector));
+	actState.updateTime(time);
+	
+	/* Call the scene graph root's action method if any nodes participate in the action pass: */
+	if(physicalRoot->participatesInPass(SceneGraph::GraphNode::ActionPass))
+		physicalRoot->act(actState);
+	
+	/* Return true if the scene graph root requires another action traversal in the near future: */
+	return physicalRoot->participatesInPass(SceneGraph::GraphNode::ActionPass);
+	}
+
 void SceneGraphManager::setInputDeviceState(InputDevice* device,bool newEnabled)
 	{
 	/* Check if the given device is represented in the scene graph: */
@@ -156,6 +170,9 @@ SceneGraphManager::SceneGraphManager(void)
 	
 	/* Add the clipped navigational-space scene graph to the navigational-space scene graph: */
 	addUnclippedNavigationalNode(*clippedRoot);
+	
+	/* Initialize the action pass state: */
+	actState.setTimePoints(0,0,0);
 	}
 
 void SceneGraphManager::addPhysicalNode(SceneGraph::GraphNode& node)

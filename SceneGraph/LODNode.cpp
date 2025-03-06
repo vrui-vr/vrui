@@ -1,7 +1,7 @@
 /***********************************************************************
 LODNode - Class for group nodes that select between their children based
 on distance from the viewpoint.
-Copyright (c) 2011-2024 Oliver Kreylos
+Copyright (c) 2011-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -32,6 +32,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <SceneGraph/SceneGraphWriter.h>
 #include <SceneGraph/GLRenderState.h>
 #include <SceneGraph/ALRenderState.h>
+#include <SceneGraph/ActState.h>
 
 namespace SceneGraph {
 
@@ -240,6 +241,34 @@ void LODNode::alRenderAction(ALRenderState& renderState) const
 		l=level.getNumValues()-1;
 	if(level.getValue(l)!=0)
 		level.getValue(l)->alRenderAction(renderState);
+	}
+
+void LODNode::act(ActState& actState)
+	{
+	/* Bail out if the level list is empty: */
+	if(level.getValues().empty())
+		return;
+	
+	/* Calculate the distance to the viewer's position: */
+	Scalar viewDist2=Geometry::sqrDist(actState.getViewerPos(),center.getValue());
+	
+	/* Find the appropriate level to display: */
+	unsigned int l=0;
+	unsigned int r=range.getNumValues()+1;
+	while(r-l>1)
+		{
+		unsigned int m=(l+r)>>1;
+		if(Math::sqr(range.getValue(m-1))<=viewDist2)
+			l=m;
+		else
+			r=m;
+		}
+	
+	/* Call the render action of the selected level: */
+	if(l>level.getNumValues()-1)
+		l=level.getNumValues()-1;
+	if(level.getValue(l)!=0)
+		level.getValue(l)->act(actState);
 	}
 
 void LODNode::passMaskUpdate(GraphNode& child,GraphNode::PassMask newPassMask)
