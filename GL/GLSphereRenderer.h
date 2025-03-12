@@ -1,6 +1,6 @@
 /***********************************************************************
 GLSphereRenderer - Class to render spheres as ray-cast impostors.
-Copyright (c) 2019 Oliver Kreylos
+Copyright (c) 2019-2025 Oliver Kreylos
 
 This file is part of the OpenGL Support Library (GLSupport).
 
@@ -37,6 +37,7 @@ class GLSphereRenderer:public GLObject
 		{
 		/* Elements: */
 		public:
+		bool haveGeometryShaders; // Flag if local OpenGL support GL_ARB_geometry_shader4 extension
 		GLhandleARB vertexShader; // Vertex shader to render impostor spheres
 		GLhandleARB geometryShader; // Geometry shader to render impostor spheres
 		GLhandleARB fragmentShader; // Fragment shader to render impostor spheres
