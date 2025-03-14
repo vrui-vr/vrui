@@ -83,6 +83,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <AL/ALContextData.h>
 #include <SceneGraph/GLRenderState.h>
 #include <SceneGraph/ALRenderState.h>
+#include <SceneGraph/ActState.h>
 #include <Vrui/Internal/Config.h>
 #include <Vrui/Internal/ScreenSaverInhibitor.h>
 #if VRUI_INTERNAL_CONFIG_HAVE_LIBDBUS
@@ -1920,11 +1921,11 @@ void VruiState::update(void)
 		listeners[i].update();
 	
 	/* Call the scene graph root's action method: */
-	if(sceneGraphManager->act(mainViewer->getHeadPosition(),getUpDirection(),lastFrame))
-		{
-		/* Schedule another frame: */
-		scheduleUpdate(lastFrame+animationFrameInterval);
-		}
+	const SceneGraph::ActState& sceneGraphActState=sceneGraphManager->act(mainViewer->getHeadPosition(),getUpDirection(),lastFrame,lastFrame+animationFrameInterval);
+	
+	/* Schedule another frame if any scene graph node requested one: */
+	if(sceneGraphActState.requireFrame())
+		scheduleUpdate(sceneGraphActState.getNextTime());
 	
 	/* Call frame functions of all loaded vislets: */
 	if(visletManager!=0)

@@ -102,7 +102,7 @@ class SceneGraphManager
 		if(physicalRoot->participatesInPass(SceneGraph::GraphNode::ALRenderPass))
 			physicalRoot->alRenderAction(renderState);
 		}
-	bool act(const Point& physViewerPos,const Vector& physUpVector,double time); // Calls the scene graph's action methods for the given time point; returns true if the scene graph requires another action call
+	const SceneGraph::ActState& act(const Point& physViewerPos,const Vector& physUpVector,double time,double nextTime); // Calls the scene graph's action methods for the given time point and next expected frame; returns the persistent action traversal state
 	
 	/* Methods called by InputGraphManager: */
 	void setInputDeviceState(InputDevice* device,bool newEnabled); // Notifies the scene graph manager that the given device changed state
