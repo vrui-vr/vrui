@@ -1,6 +1,6 @@
 /***********************************************************************
 GLSphereRenderer - Class to render spheres as ray-cast impostors.
-Copyright (c) 2019 Oliver Kreylos
+Copyright (c) 2019-2025 Oliver Kreylos
 
 This file is part of the OpenGL Support Library (GLSupport).
 
@@ -34,34 +34,41 @@ Methods of class GLSphereRenderer::DataItem:
 *******************************************/
 
 GLSphereRenderer::DataItem::DataItem(void)
-	:vertexShader(0),geometryShader(0),fragmentShader(0),shaderProgram(0),
+	:haveGeometryShaders(GLARBGeometryShader4::isSupported()),
+	 vertexShader(0),geometryShader(0),fragmentShader(0),shaderProgram(0),
 	 settingsVersion(0),lightStateVersion(0)
 	{
-	/* Initialize required OpenGL extensions: */
-	GLARBShaderObjects::initExtension();
-	GLARBVertexShader::initExtension();
-	GLARBGeometryShader4::initExtension();
-	GLARBFragmentShader::initExtension();
-	
-	/* Create the shader objects: */
-	vertexShader=glCreateShaderObjectARB(GL_VERTEX_SHADER_ARB);
-	geometryShader=glCreateShaderObjectARB(GL_GEOMETRY_SHADER_ARB);
-	fragmentShader=glCreateShaderObjectARB(GL_FRAGMENT_SHADER_ARB);
-	shaderProgram=glCreateProgramObjectARB();
-	
-	/* Attach the shader objects to the shader program: */
-	glAttachObjectARB(shaderProgram,vertexShader);
-	glAttachObjectARB(shaderProgram,geometryShader);
-	glAttachObjectARB(shaderProgram,fragmentShader);
+	if(haveGeometryShaders)
+		{
+		/* Initialize required OpenGL extensions: */
+		GLARBShaderObjects::initExtension();
+		GLARBVertexShader::initExtension();
+		GLARBGeometryShader4::initExtension();
+		GLARBFragmentShader::initExtension();
+		
+		/* Create the shader objects: */
+		vertexShader=glCreateShaderObjectARB(GL_VERTEX_SHADER_ARB);
+		geometryShader=glCreateShaderObjectARB(GL_GEOMETRY_SHADER_ARB);
+		fragmentShader=glCreateShaderObjectARB(GL_FRAGMENT_SHADER_ARB);
+		shaderProgram=glCreateProgramObjectARB();
+		
+		/* Attach the shader objects to the shader program: */
+		glAttachObjectARB(shaderProgram,vertexShader);
+		glAttachObjectARB(shaderProgram,geometryShader);
+		glAttachObjectARB(shaderProgram,fragmentShader);
+		}
 	}
 
 GLSphereRenderer::DataItem::~DataItem(void)
 	{
-	/* Destroy the shader objects: */
-	glDeleteObjectARB(vertexShader);
-	glDeleteObjectARB(geometryShader);
-	glDeleteObjectARB(fragmentShader);
-	glDeleteObjectARB(shaderProgram);
+	if(haveGeometryShaders)
+		{
+		/* Destroy the shader objects: */
+		glDeleteObjectARB(vertexShader);
+		glDeleteObjectARB(geometryShader);
+		glDeleteObjectARB(fragmentShader);
+		glDeleteObjectARB(shaderProgram);
+		}
 	}
 
 /*********************************
@@ -314,7 +321,8 @@ void GLSphereRenderer::initContext(GLContextData& contextData) const
 	contextData.addDataItem(this,dataItem);
 	
 	/* Create the initial sphere shader program: */
-	compileShader(dataItem,*contextData.getLightTracker());
+	if(dataItem->haveGeometryShaders)
+		compileShader(dataItem,*contextData.getLightTracker());
 	}
 
 void GLSphereRenderer::setFixedRadius(GLfloat newFixedRadius)
@@ -349,32 +357,42 @@ void GLSphereRenderer::enable(GLfloat modelViewScale,GLContextData& contextData)
 	/* Retrieve the context data item: */
 	DataItem* dataItem=contextData.retrieveDataItem<DataItem>(this);
 	
-	/* Check if the shader program is up-to-date: */
-	const GLLightTracker& lightTracker=*contextData.getLightTracker();
-	if(dataItem->settingsVersion!=settingsVersion||dataItem->lightStateVersion!=lightTracker.getVersion())
+	/* Check if geometry shaders are supported: */
+	if(dataItem->haveGeometryShaders)
 		{
-		/* Recompile the shader program: */
-		compileShader(dataItem,lightTracker);
-		}
-	
-	/* Activate the shader program: */
-	glUseProgramObjectARB(dataItem->shaderProgram);
-	
-	/* Check if all spheres use the same model-space radius: */
-	if(fixedRadius)
-		{
-		/* Upload the current model-sphere radius: */
-		glUniform1fARB(dataItem->shaderProgramUniforms[0],radius*modelViewScale);
-		}
-	else
-		{
-		/* Upload the current modelview scale: */
-		glUniform1fARB(dataItem->shaderProgramUniforms[0],modelViewScale);
+		/* Check if the shader program is up-to-date: */
+		const GLLightTracker& lightTracker=*contextData.getLightTracker();
+		if(dataItem->settingsVersion!=settingsVersion||dataItem->lightStateVersion!=lightTracker.getVersion())
+			{
+			/* Recompile the shader program: */
+			compileShader(dataItem,lightTracker);
+			}
+		
+		/* Activate the shader program: */
+		glUseProgramObjectARB(dataItem->shaderProgram);
+		
+		/* Check if all spheres use the same model-space radius: */
+		if(fixedRadius)
+			{
+			/* Upload the current model-sphere radius: */
+			glUniform1fARB(dataItem->shaderProgramUniforms[0],radius*modelViewScale);
+			}
+		else
+			{
+			/* Upload the current modelview scale: */
+			glUniform1fARB(dataItem->shaderProgramUniforms[0],modelViewScale);
+			}
 		}
 	}
 
 void GLSphereRenderer::disable(GLContextData& contextData) const
 	{
-	/* Deactivate the shader program: */
-	glUseProgramObjectARB(0);
+	/* Retrieve the context data item: */
+	DataItem* dataItem=contextData.retrieveDataItem<DataItem>(this);
+	
+	if(dataItem->haveGeometryShaders)
+		{
+		/* Deactivate the shader program: */
+		glUseProgramObjectARB(0);
+		}
 	}

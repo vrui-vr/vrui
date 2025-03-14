@@ -1,7 +1,7 @@
 /***********************************************************************
 PhongAppearanceShaderColor.vs - Vertex shader for Phong shading with
 vertex colors and without texture mapping.
-Copyright (c) 2022-2024 Oliver Kreylos
+Copyright (c) 2022-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -20,10 +20,13 @@ with the Simple Scene Graph Renderer; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ***********************************************************************/
 
+#version 130
+
 uniform bool clipPlaneEnableds[gl_MaxClipPlanes];
 
 varying vec4 position,color;
 varying vec3 normal;
+varying float gl_ClipDistance[gl_MaxClipDistances];
 
 void main()
 	{
