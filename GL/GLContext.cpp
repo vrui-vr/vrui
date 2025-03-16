@@ -1,7 +1,7 @@
 /***********************************************************************
 GLContext - Class to encapsulate state relating to a single OpenGL
 context, to facilitate context sharing between windows.
-Copyright (c) 2013-2024 Oliver Kreylos
+Copyright (c) 2013-2025 Oliver Kreylos
 
 This file is part of the OpenGL/GLX Support Library (GLXSupport).
 
@@ -101,6 +101,9 @@ GLContext::GLContext(const char* sDisplayName)
 	int errorBase,eventBase;
 	if(!glXQueryExtension(display,&errorBase,&eventBase))
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"GLX extension not supported on display %s",displayName.c_str());
+	
+	/* Initialize the version number: */
+	version[1]=version[0]=0;
 	}
 
 GLContext::~GLContext(void)
@@ -272,6 +275,24 @@ void GLContext::init(GLXDrawable drawable)
 		/* Associate the GLX context with the current thread and the given drawable: */
 		if(!glXMakeCurrent(display,drawable,context))
 			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot bind GLX context");
+		
+		/* Query the OpenGL version: */
+		const GLubyte* versionString=glGetString(GL_VERSION);
+		const GLubyte* vsPtr=versionString;
+		
+		/* Extract the major version number: */
+		version[0]=0U;
+		while(*vsPtr>='0'&&*vsPtr<='9')
+			version[0]=version[0]*10U+(unsigned int)(*(vsPtr++)-'0');
+		
+		/* Check for the separating period: */
+		if(*(vsPtr++)!='.')
+			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid OpenGL version string");
+		
+		/* Extract the minor version number: */
+		version[1]=0U;
+		while(*vsPtr>='0'&&*vsPtr<='9')
+			version[1]=version[1]*10U+(unsigned int)(*(vsPtr++)-'0');
 		
 		/* Create and initialize the extension manager: */
 		extensionManager=new GLExtensionManager;

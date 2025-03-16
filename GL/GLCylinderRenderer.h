@@ -1,7 +1,7 @@
 /***********************************************************************
 GLCylinderRenderer - Class to render uncapped cylinders as ray-cast
 impostors.
-Copyright (c) 2019 Oliver Kreylos
+Copyright (c) 2019-2025 Oliver Kreylos
 
 This file is part of the OpenGL Support Library (GLSupport).
 
@@ -38,6 +38,7 @@ class GLCylinderRenderer:public GLObject
 		{
 		/* Elements: */
 		public:
+		unsigned int geometryShaderLevel; // Support level for GLSL geometry shaders: 0 - not supported, 1 - GL_ARB_geometry_shader4, 2 - core OpenGL >= 3.2
 		GLhandleARB vertexShader; // Vertex shader to render impostor cylinders
 		GLhandleARB geometryShader; // Geometry shader to render impostor cylinders
 		GLhandleARB fragmentShader; // Fragment shader to render impostor cylinders
@@ -47,7 +48,7 @@ class GLCylinderRenderer:public GLObject
 		unsigned int lightStateVersion; // Version number for current lighting state reflected in the shader program
 		
 		/* Constructors and destructors: */
-		DataItem(void);
+		DataItem(bool haveCoreGeometryShaders); // Creates data item, flag indicates whether OpenGL version is >= 3.2
 		virtual ~DataItem(void);
 		};
 	
