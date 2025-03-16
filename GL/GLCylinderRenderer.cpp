@@ -1,7 +1,7 @@
 /***********************************************************************
 GLCylinderRenderer - Class to render uncapped cylinders as ray-cast
 impostors.
-Copyright (c) 2019 Oliver Kreylos
+Copyright (c) 2019-2025 Oliver Kreylos
 
 This file is part of the OpenGL Support Library (GLSupport).
 
@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <string>
 #include <Misc/PrintInteger.h>
 #include <GL/GLLightTracker.h>
+#include <GL/GLContext.h>
 #include <GL/GLContextData.h>
 #include <GL/Extensions/GLARBFragmentShader.h>
 #include <GL/Extensions/GLARBGeometryShader4.h>
@@ -34,35 +35,49 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 Methods of class GLCylinderRenderer::DataItem:
 *********************************************/
 
-GLCylinderRenderer::DataItem::DataItem(void)
-	:vertexShader(0),geometryShader(0),fragmentShader(0),shaderProgram(0),
+GLCylinderRenderer::DataItem::DataItem(bool haveCoreGeometryShaders)
+	:geometryShaderLevel(0),
+	 vertexShader(0),geometryShader(0),fragmentShader(0),shaderProgram(0),
 	 settingsVersion(0),lightStateVersion(0)
 	{
-	/* Initialize required OpenGL extensions: */
-	GLARBShaderObjects::initExtension();
-	GLARBVertexShader::initExtension();
-	GLARBGeometryShader4::initExtension();
-	GLARBFragmentShader::initExtension();
+	/* Determine support for GLSL geometry shaders: */
+	if(haveCoreGeometryShaders)
+		geometryShaderLevel=2U;
+	else if(GLARBGeometryShader4::isSupported())
+		geometryShaderLevel=1U;
 	
-	/* Create the shader objects: */
-	vertexShader=glCreateShaderObjectARB(GL_VERTEX_SHADER_ARB);
-	geometryShader=glCreateShaderObjectARB(GL_GEOMETRY_SHADER_ARB);
-	fragmentShader=glCreateShaderObjectARB(GL_FRAGMENT_SHADER_ARB);
-	shaderProgram=glCreateProgramObjectARB();
-	
-	/* Attach the shader objects to the shader program: */
-	glAttachObjectARB(shaderProgram,vertexShader);
-	glAttachObjectARB(shaderProgram,geometryShader);
-	glAttachObjectARB(shaderProgram,fragmentShader);
+	if(geometryShaderLevel!=0U)
+		{
+		/* Initialize required OpenGL extensions: */
+		GLARBShaderObjects::initExtension();
+		GLARBVertexShader::initExtension();
+		if(geometryShaderLevel==1U)
+			GLARBGeometryShader4::initExtension();
+		GLARBFragmentShader::initExtension();
+		
+		/* Create the shader objects: */
+		vertexShader=glCreateShaderObjectARB(GL_VERTEX_SHADER_ARB);
+		geometryShader=glCreateShaderObjectARB(GL_GEOMETRY_SHADER_ARB);
+		fragmentShader=glCreateShaderObjectARB(GL_FRAGMENT_SHADER_ARB);
+		shaderProgram=glCreateProgramObjectARB();
+		
+		/* Attach the shader objects to the shader program: */
+		glAttachObjectARB(shaderProgram,vertexShader);
+		glAttachObjectARB(shaderProgram,geometryShader);
+		glAttachObjectARB(shaderProgram,fragmentShader);
+		}
 	}
 
 GLCylinderRenderer::DataItem::~DataItem(void)
 	{
-	/* Destroy the shader objects: */
-	glDeleteObjectARB(vertexShader);
-	glDeleteObjectARB(geometryShader);
-	glDeleteObjectARB(fragmentShader);
-	glDeleteObjectARB(shaderProgram);
+	if(geometryShaderLevel!=0U)
+		{
+		/* Destroy the shader objects: */
+		glDeleteObjectARB(vertexShader);
+		glDeleteObjectARB(geometryShader);
+		glDeleteObjectARB(fragmentShader);
+		glDeleteObjectARB(shaderProgram);
+		}
 	}
 
 /***********************************
@@ -109,158 +124,296 @@ void GLCylinderRenderer::compileShader(GLCylinderRenderer::DataItem* dataItem,co
 		glCompileShaderFromString(dataItem->vertexShader,vertexShaderMain.c_str());
 	
 	/* Create the impostor cylinder geometry shader source code: */
-	std::string geometryShaderDeclarations="\
-	#version 120\n\
-	#extension GL_ARB_geometry_shader4: enable\n\
-	\n";
+	std::string geometryShaderDeclarations;
 	std::string geometryShaderUniforms;
-	if(fixedRadius)
-		{
-		geometryShaderUniforms+="\
-		uniform float fixedRadius;\n\
-		\n";
-		}
-	else
-		{
-		geometryShaderUniforms+="\
-		uniform float modelViewScale;\n\
-		\n";
-		}
 	std::string geometryShaderVaryings;
-	if(colorMaterial)
+	std::string geometryShaderMain;
+	if(dataItem->geometryShaderLevel==2U)
 		{
+		/* Generate a core OpenGL 3.2 geometry shader: */
+		geometryShaderDeclarations="\
+		#version 150 compatibility\n\
+		\n\
+		layout(lines) in;\n\
+		layout(triangle_strip,max_vertices=4) out;\n\
+		\n";
+		if(fixedRadius)
+			{
+			geometryShaderUniforms+="\
+			uniform float fixedRadius;\n\
+			\n";
+			}
+		else
+			{
+			geometryShaderUniforms+="\
+			uniform float modelViewScale;\n\
+			\n";
+			}
+		if(colorMaterial)
+			{
+			geometryShaderVaryings+="\
+			in vec4 inColor[];\n\
+			\n";
+			}
 		geometryShaderVaryings+="\
-		varying in vec4 inColor[2];\n\
-		\n";
-		}
-	geometryShaderVaryings+="\
-	varying out vec3 center;\n\
-	varying out vec3 axis;\n\
-	varying out float axis2;\n\
-	varying out float radius2;\n\
-	varying out vec3 dir;\n";
-	if(colorMaterial)
-		{
-		geometryShaderVaryings+="\
-		varying out vec4 color0;\n\
-		varying out vec4 color1;\n\
-		\n";
-		}
-	std::string geometryShaderMain="\
-	void main()\n\
-		{\n\
-		/* Retrieve the cylinder's axis end points and radius in eye coordinates: */\n";
-	if(fixedRadius)
-		{
-		geometryShaderMain+="\
-		vec3 c0=gl_PositionIn[0].xyz/gl_PositionIn[0].w;\n\
-		vec3 c1=gl_PositionIn[1].xyz/gl_PositionIn[1].w;\n\
-		float r=fixedRadius;\n\
-		\n";
-		}
-	else
-		{
-		geometryShaderMain+="\
-		vec3 c0=gl_PositionIn[0].xyz;\n\
-		vec3 c1=gl_PositionIn[1].xyz;\n\
-		float r=mix(gl_PositionIn[0].w,gl_PositionIn[1].w,0.5)*modelViewScale;\n\
-		\n";
-		}
-	#if 0
-	geometryShaderMain+="\
-		/* Sort the axis end points in lexicographic order to ensure that two cylinders with different orders are rendered exactly the same: */\n\
-		if(c0.x>c1.x||(c0.x==c1.x&&(c0.y>c1.y||(c0.y==c1.y&&c0.z>c1.z))))\n\
+		out vec3 center;\n\
+		out vec3 axis;\n\
+		out float axis2;\n\
+		out float radius2;\n\
+		out vec3 dir;\n";
+		if(colorMaterial)
+			{
+			geometryShaderVaryings+="\
+			out vec4 color0;\n\
+			out vec4 color1;\n\
+			\n";
+			}
+		geometryShaderMain="\
+		void main()\n\
 			{\n\
-			vec3 t=c0;\n\
-			c0=c1;\n\
-			c1=t;\n\
-			}\n";
-	#endif
-	geometryShaderMain+="\
-		vec3 c=mix(c0,c1,0.5);\n\
-		vec3 a=c1-c;\n\
-		float a2=dot(a,a);\n\
-		float r2=r*r;\n\
-		\n";
-	if(colorMaterial)
-		{
+			/* Retrieve the cylinder's axis end points and radius in eye coordinates: */\n";
+		if(fixedRadius)
+			{
+			geometryShaderMain+="\
+			vec3 c0=gl_in[0].gl_Position.xyz/gl_in[0].gl_Position.w;\n\
+			vec3 c1=gl_in[1].gl_Position.xyz/gl_in[1].gl_Position.w;\n\
+			float r=fixedRadius;\n\
+			\n";
+			}
+		else
+			{
+			geometryShaderMain+="\
+			vec3 c0=gl_in[0].gl_Position.xyz;\n\
+			vec3 c1=gl_in[1].gl_Position.xyz;\n\
+			float r=mix(gl_in[0].gl_Position.w,gl_in[1].gl_Position.w,0.5)*modelViewScale;\n\
+			\n";
+			}
 		geometryShaderMain+="\
-		/* Retrieve the material color: */\n\
-		vec4 col0=inColor[0];\n\
-		vec4 col1=inColor[1];\n\
-		\n";
-		}
-	
-	geometryShaderMain+="\
-		/* Calculate the impostor quad's primary axes: */\n\
-		vec3 x=normalize(a);\n\
-		vec3 y=normalize(cross(a,c));\n\
-		\n\
-		/* Calculate the impostor quad's width: */\n\
-		vec3 d=cross(c,x);\n\
-		float d2=dot(d,d);\n\
-		float width=r*sqrt(d2/(d2-r2));\n\
-		y*=width;\n\
-		\n\
-		/* Extend the impostor quad to the left and right: */\n\
-		float aLen=sqrt(a2);\n\
-		float dLen=sqrt(d2);\n\
-		float eyex=-dot(c,x);\n";
-	if(capped)
-		{
-		geometryShaderMain+="\
-		if(eyex>-aLen)\n\
-			c0-=x*((aLen+eyex)*r/(dLen-r));\n\
-		else\n\
-			c0-=x*((eyex+aLen)*r/(dLen+r));\n\
-		if(eyex<aLen)\n\
-			c1+=x*((aLen-eyex)*r/(dLen-r));\n\
-		else\n\
-			c1+=x*((eyex-aLen)*r/(dLen+r));\n";
-		}
-	else
-		{
-		geometryShaderMain+="\
-		if(eyex>-aLen)\n\
-			c0-=x*((aLen+eyex)*r/(dLen-r));\n\
-		if(eyex<aLen)\n\
-			c1+=x*((aLen-eyex)*r/(dLen-r));\n";
-		}
-	
-	geometryShaderMain+="\
-		\n\
-		/* Emit the impostor quad's four vertices: */\n";
-	for(int vertex=0;vertex<4;++vertex)
-		{
-		geometryShaderMain+="\
-		center=c;\n\
-		axis=a;\n\
-		axis2=a2;\n\
-		radius2=r2;\n\
-		dir=c";
-		geometryShaderMain.push_back(vertex/2+'0');
-		geometryShaderMain.push_back(vertex%2==0?'+':'-');
-		geometryShaderMain.append("y;\n");
+			vec3 c=mix(c0,c1,0.5);\n\
+			vec3 a=c1-c;\n\
+			float a2=dot(a,a);\n\
+			float r2=r*r;\n\
+			\n";
 		if(colorMaterial)
 			{
 			geometryShaderMain+="\
-			color0=col0;\n\
-			color1=col1;\n";
+			/* Retrieve the material color: */\n\
+			vec4 col0=inColor[0];\n\
+			vec4 col1=inColor[1];\n\
+			\n";
+			}
+		
+		geometryShaderMain+="\
+			/* Calculate the impostor quad's primary axes: */\n\
+			vec3 x=normalize(a);\n\
+			vec3 y=normalize(cross(a,c));\n\
+			\n\
+			/* Calculate the impostor quad's width: */\n\
+			vec3 d=cross(c,x);\n\
+			float d2=dot(d,d);\n\
+			float width=r*sqrt(d2/(d2-r2));\n\
+			y*=width;\n\
+			\n\
+			/* Extend the impostor quad to the left and right: */\n\
+			float aLen=sqrt(a2);\n\
+			float dLen=sqrt(d2);\n\
+			float eyex=-dot(c,x);\n";
+		if(capped)
+			{
+			geometryShaderMain+="\
+			if(eyex>-aLen)\n\
+				c0-=x*((aLen+eyex)*r/(dLen-r));\n\
+			else\n\
+				c0-=x*((eyex+aLen)*r/(dLen+r));\n\
+			if(eyex<aLen)\n\
+				c1+=x*((aLen-eyex)*r/(dLen-r));\n\
+			else\n\
+				c1+=x*((eyex-aLen)*r/(dLen+r));\n";
+			}
+		else
+			{
+			geometryShaderMain+="\
+			if(eyex>-aLen)\n\
+				c0-=x*((aLen+eyex)*r/(dLen-r));\n\
+			if(eyex<aLen)\n\
+				c1+=x*((aLen-eyex)*r/(dLen-r));\n";
+			}
+		
+		geometryShaderMain+="\
+			\n\
+			/* Emit the impostor quad's four vertices: */\n";
+		for(int vertex=0;vertex<4;++vertex)
+			{
+			geometryShaderMain+="\
+			center=c;\n\
+			axis=a;\n\
+			axis2=a2;\n\
+			radius2=r2;\n\
+			dir=c";
+			geometryShaderMain.push_back(vertex/2+'0');
+			geometryShaderMain.push_back(vertex%2==0?'+':'-');
+			geometryShaderMain.append("y;\n");
+			if(colorMaterial)
+				{
+				geometryShaderMain+="\
+				color0=col0;\n\
+				color1=col1;\n";
+				}
+			geometryShaderMain+="\
+			gl_Position=gl_ProjectionMatrix*vec4(dir,1.0);\n\
+			EmitVertex();\n";
 			}
 		geometryShaderMain+="\
-		gl_Position=gl_ProjectionMatrix*vec4(dir,1.0);\n\
-		EmitVertex();\n";
+			EndPrimitive();\n\
+			}\n";
 		}
-	geometryShaderMain+="\
-		}\n";
+	else
+		{
+		/* Generate a GL_ARB_geometry_shader4 geometry shader: */
+		geometryShaderDeclarations="\
+		#version 120\n\
+		#extension GL_ARB_geometry_shader4: enable\n\
+		\n";
+		if(fixedRadius)
+			{
+			geometryShaderUniforms+="\
+			uniform float fixedRadius;\n\
+			\n";
+			}
+		else
+			{
+			geometryShaderUniforms+="\
+			uniform float modelViewScale;\n\
+			\n";
+			}
+		if(colorMaterial)
+			{
+			geometryShaderVaryings+="\
+			varying in vec4 inColor[2];\n\
+			\n";
+			}
+		geometryShaderVaryings+="\
+		varying out vec3 center;\n\
+		varying out vec3 axis;\n\
+		varying out float axis2;\n\
+		varying out float radius2;\n\
+		varying out vec3 dir;\n";
+		if(colorMaterial)
+			{
+			geometryShaderVaryings+="\
+			varying out vec4 color0;\n\
+			varying out vec4 color1;\n\
+			\n";
+			}
+		geometryShaderMain="\
+		void main()\n\
+			{\n\
+			/* Retrieve the cylinder's axis end points and radius in eye coordinates: */\n";
+		if(fixedRadius)
+			{
+			geometryShaderMain+="\
+			vec3 c0=gl_PositionIn[0].xyz/gl_PositionIn[0].w;\n\
+			vec3 c1=gl_PositionIn[1].xyz/gl_PositionIn[1].w;\n\
+			float r=fixedRadius;\n\
+			\n";
+			}
+		else
+			{
+			geometryShaderMain+="\
+			vec3 c0=gl_PositionIn[0].xyz;\n\
+			vec3 c1=gl_PositionIn[1].xyz;\n\
+			float r=mix(gl_PositionIn[0].w,gl_PositionIn[1].w,0.5)*modelViewScale;\n\
+			\n";
+			}
+		geometryShaderMain+="\
+			vec3 c=mix(c0,c1,0.5);\n\
+			vec3 a=c1-c;\n\
+			float a2=dot(a,a);\n\
+			float r2=r*r;\n\
+			\n";
+		if(colorMaterial)
+			{
+			geometryShaderMain+="\
+			/* Retrieve the material color: */\n\
+			vec4 col0=inColor[0];\n\
+			vec4 col1=inColor[1];\n\
+			\n";
+			}
+		
+		geometryShaderMain+="\
+			/* Calculate the impostor quad's primary axes: */\n\
+			vec3 x=normalize(a);\n\
+			vec3 y=normalize(cross(a,c));\n\
+			\n\
+			/* Calculate the impostor quad's width: */\n\
+			vec3 d=cross(c,x);\n\
+			float d2=dot(d,d);\n\
+			float width=r*sqrt(d2/(d2-r2));\n\
+			y*=width;\n\
+			\n\
+			/* Extend the impostor quad to the left and right: */\n\
+			float aLen=sqrt(a2);\n\
+			float dLen=sqrt(d2);\n\
+			float eyex=-dot(c,x);\n";
+		if(capped)
+			{
+			geometryShaderMain+="\
+			if(eyex>-aLen)\n\
+				c0-=x*((aLen+eyex)*r/(dLen-r));\n\
+			else\n\
+				c0-=x*((eyex+aLen)*r/(dLen+r));\n\
+			if(eyex<aLen)\n\
+				c1+=x*((aLen-eyex)*r/(dLen-r));\n\
+			else\n\
+				c1+=x*((eyex-aLen)*r/(dLen+r));\n";
+			}
+		else
+			{
+			geometryShaderMain+="\
+			if(eyex>-aLen)\n\
+				c0-=x*((aLen+eyex)*r/(dLen-r));\n\
+			if(eyex<aLen)\n\
+				c1+=x*((aLen-eyex)*r/(dLen-r));\n";
+			}
+		
+		geometryShaderMain+="\
+			\n\
+			/* Emit the impostor quad's four vertices: */\n";
+		for(int vertex=0;vertex<4;++vertex)
+			{
+			geometryShaderMain+="\
+			center=c;\n\
+			axis=a;\n\
+			axis2=a2;\n\
+			radius2=r2;\n\
+			dir=c";
+			geometryShaderMain.push_back(vertex/2+'0');
+			geometryShaderMain.push_back(vertex%2==0?'+':'-');
+			geometryShaderMain.append("y;\n");
+			if(colorMaterial)
+				{
+				geometryShaderMain+="\
+				color0=col0;\n\
+				color1=col1;\n";
+				}
+			geometryShaderMain+="\
+			gl_Position=gl_ProjectionMatrix*vec4(dir,1.0);\n\
+			EmitVertex();\n";
+			}
+		geometryShaderMain+="\
+			}\n";
+		}
 	
 	/* Compile the geometry shader and attach it to the cylinder shader program: */
 	glCompileShaderFromStrings(dataItem->geometryShader,4,geometryShaderDeclarations.c_str(),geometryShaderUniforms.c_str(),geometryShaderVaryings.c_str(),geometryShaderMain.c_str());
 	
-	/* Set the geometry shader's parameters: */
-	glProgramParameteriARB(dataItem->shaderProgram,GL_GEOMETRY_VERTICES_OUT_ARB,4);
-	glProgramParameteriARB(dataItem->shaderProgram,GL_GEOMETRY_INPUT_TYPE_ARB,GL_LINES);
-	glProgramParameteriARB(dataItem->shaderProgram,GL_GEOMETRY_OUTPUT_TYPE_ARB,GL_TRIANGLE_STRIP);
+	if(dataItem->geometryShaderLevel==1U)
+		{
+		/* Set the geometry shader's parameters: */
+		glProgramParameteriARB(dataItem->shaderProgram,GL_GEOMETRY_VERTICES_OUT_ARB,4);
+		glProgramParameteriARB(dataItem->shaderProgram,GL_GEOMETRY_INPUT_TYPE_ARB,GL_LINES);
+		glProgramParameteriARB(dataItem->shaderProgram,GL_GEOMETRY_OUTPUT_TYPE_ARB,GL_TRIANGLE_STRIP);
+		}
 	
 	/* Create the impostor cylinder fragment shader source code: */
 	std::string fragmentShaderVaryings="\
@@ -428,11 +581,12 @@ GLCylinderRenderer::~GLCylinderRenderer(void)
 void GLCylinderRenderer::initContext(GLContextData& contextData) const
 	{
 	/* Create context data item and store it in the GLContextData object: */
-	DataItem* dataItem=new DataItem;
+	DataItem* dataItem=new DataItem(contextData.getContext().isVersionLargerEqual(3,2));
 	contextData.addDataItem(this,dataItem);
 	
 	/* Create the initial cylinder shader program: */
-	compileShader(dataItem,*contextData.getLightTracker());
+	if(dataItem->geometryShaderLevel!=0U)
+		compileShader(dataItem,*contextData.getLightTracker());
 	}
 
 void GLCylinderRenderer::setFixedRadius(GLfloat newFixedRadius)
@@ -483,32 +637,42 @@ void GLCylinderRenderer::enable(GLfloat modelViewScale,GLContextData& contextDat
 	/* Retrieve the context data item: */
 	DataItem* dataItem=contextData.retrieveDataItem<DataItem>(this);
 	
-	/* Check if the shader program is up-to-date: */
-	const GLLightTracker& lightTracker=*contextData.getLightTracker();
-	if(dataItem->settingsVersion!=settingsVersion||dataItem->lightStateVersion!=lightTracker.getVersion())
+	/* Check if geometry shaders are supported: */
+	if(dataItem->geometryShaderLevel!=0U)
 		{
-		/* Recompile the shader program: */
-		compileShader(dataItem,lightTracker);
-		}
-	
-	/* Activate the shader program: */
-	glUseProgramObjectARB(dataItem->shaderProgram);
-	
-	/* Check if all cylinders use the same model-space radius: */
-	if(fixedRadius)
-		{
-		/* Upload the current model-space radius: */
-		glUniform1fARB(dataItem->shaderProgramUniforms[0],radius*modelViewScale);
-		}
-	else
-		{
-		/* Upload the current modelview scale: */
-		glUniform1fARB(dataItem->shaderProgramUniforms[0],modelViewScale);
+		/* Check if the shader program is up-to-date: */
+		const GLLightTracker& lightTracker=*contextData.getLightTracker();
+		if(dataItem->settingsVersion!=settingsVersion||dataItem->lightStateVersion!=lightTracker.getVersion())
+			{
+			/* Recompile the shader program: */
+			compileShader(dataItem,lightTracker);
+			}
+		
+		/* Activate the shader program: */
+		glUseProgramObjectARB(dataItem->shaderProgram);
+		
+		/* Check if all cylinders use the same model-space radius: */
+		if(fixedRadius)
+			{
+			/* Upload the current model-space radius: */
+			glUniform1fARB(dataItem->shaderProgramUniforms[0],radius*modelViewScale);
+			}
+		else
+			{
+			/* Upload the current modelview scale: */
+			glUniform1fARB(dataItem->shaderProgramUniforms[0],modelViewScale);
+			}
 		}
 	}
 
 void GLCylinderRenderer::disable(GLContextData& contextData) const
 	{
-	/* Deactivate the shader program: */
-	glUseProgramObjectARB(0);
+	/* Retrieve the context data item: */
+	DataItem* dataItem=contextData.retrieveDataItem<DataItem>(this);
+	
+	if(dataItem->geometryShaderLevel!=0U)
+		{
+		/* Deactivate the shader program: */
+		glUseProgramObjectARB(0);
+		}
 	}
