@@ -1,7 +1,7 @@
 /***********************************************************************
 GLContext - Class to encapsulate state relating to a single OpenGL
 context, to facilitate context sharing between windows.
-Copyright (c) 2013-2023 Oliver Kreylos
+Copyright (c) 2013-2025 Oliver Kreylos
 
 This file is part of the OpenGL/GLX Support Library (GLXSupport).
 
@@ -71,6 +71,7 @@ class GLContext:public Threads::RefCounted
 	int screen; // Screen for which the GLX context was created
 	Visual* visual; // Pointer to the visual for which the GLX context was created
 	GLXContext context; // GLX context handle
+	unsigned int version[2]; // Major and minor version number of local OpenGL
 	int depth; // Bit depth of the visual associated with the GLX context
 	bool nonlinear; // Flag if the context is set up for non-linear compressed color components in the main color buffer
 	GLExtensionManager* extensionManager; // Pointer to an extension manager for this GLX context
@@ -109,6 +110,18 @@ class GLContext:public Threads::RefCounted
 	GLXContext getContext(void) const // Returns the context's GLX handle
 		{
 		return context;
+		}
+	unsigned int getMajorVersion(void) const // Returns the local OpenGL's major version number
+		{
+		return version[0];
+		}
+	unsigned int getMinorVersion(void) const // Returns the local OpenGL's minor version number
+		{
+		return version[1];
+		}
+	bool isVersionLargerEqual(unsigned int major,unsigned int minor) const // Returns true if the local OpenGL is at least the given major.minor version
+		{
+		return version[0]>major||(version[0]==major&&version[1]>=minor);
 		}
 	int getScreen(void) const // Returns the screen for which the context was created
 		{
