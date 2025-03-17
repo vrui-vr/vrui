@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <string>
 #include <Misc/PrintInteger.h>
 #include <GL/GLLightTracker.h>
+#include <GL/GLContext.h>
 #include <GL/GLContextData.h>
 #include <GL/Extensions/GLARBFragmentShader.h>
 #include <GL/Extensions/GLARBGeometryShader4.h>
@@ -33,17 +34,24 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 Methods of class GLSphereRenderer::DataItem:
 *******************************************/
 
-GLSphereRenderer::DataItem::DataItem(void)
-	:haveGeometryShaders(GLARBGeometryShader4::isSupported()),
+GLSphereRenderer::DataItem::DataItem(bool haveCoreGeometryShaders)
+	:geometryShaderLevel(0),
 	 vertexShader(0),geometryShader(0),fragmentShader(0),shaderProgram(0),
 	 settingsVersion(0),lightStateVersion(0)
 	{
-	if(haveGeometryShaders)
+	/* Determine support for GLSL geometry shaders: */
+	if(haveCoreGeometryShaders)
+		geometryShaderLevel=2U;
+	else if(GLARBGeometryShader4::isSupported())
+		geometryShaderLevel=1U;
+	
+	if(geometryShaderLevel!=0U)
 		{
 		/* Initialize required OpenGL extensions: */
 		GLARBShaderObjects::initExtension();
 		GLARBVertexShader::initExtension();
-		GLARBGeometryShader4::initExtension();
+		if(geometryShaderLevel==1U)
+			GLARBGeometryShader4::initExtension();
 		GLARBFragmentShader::initExtension();
 		
 		/* Create the shader objects: */
@@ -61,7 +69,7 @@ GLSphereRenderer::DataItem::DataItem(void)
 
 GLSphereRenderer::DataItem::~DataItem(void)
 	{
-	if(haveGeometryShaders)
+	if(geometryShaderLevel!=0U)
 		{
 		/* Destroy the shader objects: */
 		glDeleteObjectARB(vertexShader);
@@ -115,101 +123,202 @@ void GLSphereRenderer::compileShader(GLSphereRenderer::DataItem* dataItem,const 
 		glCompileShaderFromString(dataItem->vertexShader,vertexShaderMain.c_str());
 	
 	/* Create the impostor sphere geometry shader source code: */
-	std::string geometryShaderDeclarations="\
-	#version 120\n\
-	#extension GL_ARB_geometry_shader4: enable\n\
-	\n";
+	std::string geometryShaderDeclarations;
 	std::string geometryShaderUniforms;
-	if(fixedRadius)
-		{
-		geometryShaderUniforms+="\
-		uniform float fixedRadius;\n\
-		\n";
-		}
-	else
-		{
-		geometryShaderUniforms+="\
-		uniform float modelViewScale;\n\
-		\n";
-		}
 	std::string geometryShaderVaryings;
-	std::string geometryShaderMain="\
-	void main()\n\
-		{\n";
-	if(colorMaterial)
+	std::string geometryShaderMain;
+	if(dataItem->geometryShaderLevel==2U)
 		{
-		geometryShaderVaryings+="\
-		varying in vec4 inColor[1];\n\
-		\n";
-		}
-	geometryShaderVaryings+="\
-	varying out vec3 center;\n\
-	varying out float radius;\n\
-	varying out vec3 dir;\n";
-	if(colorMaterial)
-		{
-		geometryShaderVaryings+="\
-		varying out vec4 color;\n\
-		\n";
-		}
-	if(fixedRadius)
-		{
-		geometryShaderMain+="\
-		/* Retrieve the sphere's center position and radius in eye coordinates: */\n\
-		vec3 c=gl_PositionIn[0].xyz/gl_PositionIn[0].w;\n\
-		float r=fixedRadius;\n\
-		\n";
-		}
-	else
-		{
-		geometryShaderMain+="\
-		/* Retrieve the sphere's center position and radius in eye coordinates: */\n\
-		vec3 c=gl_PositionIn[0].xyz;\n\
-		float r=gl_PositionIn[0].w*modelViewScale;\n\
-		\n";
-		}
-	geometryShaderMain+="\
-		/* Calculate the impostor quad's size: */\n\
-		float d2=dot(c,c);\n\
-		float impostorSize=r*sqrt(2.0*d2/(d2-r*r));\n\
+		/* Generate a core OpenGL 3.2 geometry shader: */
+		geometryShaderDeclarations="\
+		#version 150 compatibility\n\
 		\n\
-		/* Calculate the impostor quad's base vectors: */\n\
-		vec3 x;\n\
-		if(abs(c.x)>abs(c.y))\n\
-			x=normalize(vec3(c.z,0.0,-c.x));\n\
-		else\n\
-			x=normalize(vec3(0.0,c.z,-c.y));\n\
-		vec3 y=normalize(cross(x,c));\n\
-		\n\
-		/* Emit the quad's four vertices: */\n";
-	for(int vertex=0;vertex<4;++vertex)
-		{
-		geometryShaderMain+="\
-		center=c;\n\
-		radius=r;\n\
-		dir=c";
-		geometryShaderMain.push_back(vertex%2!=0?'-':'+');
-		geometryShaderMain.push_back(vertex==0||vertex==3?'y':'x');
-		geometryShaderMain.append("*impostorSize;\n");
+		layout(points) in;\n\
+		layout(triangle_strip,max_vertices=4) out;\n\
+		\n";
+		if(fixedRadius)
+			{
+			geometryShaderUniforms+="\
+			uniform float fixedRadius;\n\
+			\n";
+			}
+		else
+			{
+			geometryShaderUniforms+="\
+			uniform float modelViewScale;\n\
+			\n";
+			}
+		geometryShaderMain="\
+		void main()\n\
+			{\n";
 		if(colorMaterial)
 			{
+			geometryShaderVaryings+="\
+			in vec4 inColor[];\n\
+			\n";
+			}
+		geometryShaderVaryings+="\
+		out vec3 center;\n\
+		out float radius;\n\
+		out vec3 dir;\n";
+		if(colorMaterial)
+			{
+			geometryShaderVaryings+="\
+			out vec4 color;\n\
+			\n";
+			}
+		if(fixedRadius)
+			{
 			geometryShaderMain+="\
-			color=inColor[0];\n";
+			/* Retrieve the sphere's center position and radius in eye coordinates: */\n\
+			vec3 c=gl_in[0].gl_Position.xyz/gl_in[0].gl_Position.w;\n\
+			float r=fixedRadius;\n\
+			\n";
+			}
+		else
+			{
+			geometryShaderMain+="\
+			/* Retrieve the sphere's center position and radius in eye coordinates: */\n\
+			vec3 c=gl_in[0].gl_Position.xyz;\n\
+			float r=gl_in[0].gl_Position.w*modelViewScale;\n\
+			\n";
 			}
 		geometryShaderMain+="\
-		gl_Position=gl_ProjectionMatrix*vec4(dir,1.0);\n\
-		EmitVertex();\n";
+			/* Calculate the impostor quad's size: */\n\
+			float d2=dot(c,c);\n\
+			float impostorSize=r*sqrt(2.0*d2/(d2-r*r));\n\
+			\n\
+			/* Calculate the impostor quad's base vectors: */\n\
+			vec3 x;\n\
+			if(abs(c.x)>abs(c.y))\n\
+				x=normalize(vec3(c.z,0.0,-c.x));\n\
+			else\n\
+				x=normalize(vec3(0.0,c.z,-c.y));\n\
+			vec3 y=normalize(cross(x,c));\n\
+			\n\
+			/* Emit the quad's four vertices: */\n";
+		for(int vertex=0;vertex<4;++vertex)
+			{
+			geometryShaderMain+="\
+			center=c;\n\
+			radius=r;\n\
+			dir=c";
+			geometryShaderMain.push_back(vertex%2!=0?'-':'+');
+			geometryShaderMain.push_back(vertex==0||vertex==3?'y':'x');
+			geometryShaderMain.append("*impostorSize;\n");
+			if(colorMaterial)
+				{
+				geometryShaderMain+="\
+				color=inColor[0];\n";
+				}
+			geometryShaderMain+="\
+			gl_Position=gl_ProjectionMatrix*vec4(dir,1.0);\n\
+			EmitVertex();\n";
+			}
+		geometryShaderMain+="\
+			EndPrimitive();\n\
+			}\n";
 		}
-	geometryShaderMain+="\
-		}\n";
+	else
+		{
+		/* Generate a GL_ARB_geometry_shader4 geometry shader: */
+		geometryShaderDeclarations="\
+		#version 120\n\
+		#extension GL_ARB_geometry_shader4: enable\n\
+		\n";
+		if(fixedRadius)
+			{
+			geometryShaderUniforms+="\
+			uniform float fixedRadius;\n\
+			\n";
+			}
+		else
+			{
+			geometryShaderUniforms+="\
+			uniform float modelViewScale;\n\
+			\n";
+			}
+		geometryShaderMain="\
+		void main()\n\
+			{\n";
+		if(colorMaterial)
+			{
+			geometryShaderVaryings+="\
+			varying in vec4 inColor[1];\n\
+			\n";
+			}
+		geometryShaderVaryings+="\
+		varying out vec3 center;\n\
+		varying out float radius;\n\
+		varying out vec3 dir;\n";
+		if(colorMaterial)
+			{
+			geometryShaderVaryings+="\
+			varying out vec4 color;\n\
+			\n";
+			}
+		if(fixedRadius)
+			{
+			geometryShaderMain+="\
+			/* Retrieve the sphere's center position and radius in eye coordinates: */\n\
+			vec3 c=gl_PositionIn[0].xyz/gl_PositionIn[0].w;\n\
+			float r=fixedRadius;\n\
+			\n";
+			}
+		else
+			{
+			geometryShaderMain+="\
+			/* Retrieve the sphere's center position and radius in eye coordinates: */\n\
+			vec3 c=gl_PositionIn[0].xyz;\n\
+			float r=gl_PositionIn[0].w*modelViewScale;\n\
+			\n";
+			}
+		geometryShaderMain+="\
+			/* Calculate the impostor quad's size: */\n\
+			float d2=dot(c,c);\n\
+			float impostorSize=r*sqrt(2.0*d2/(d2-r*r));\n\
+			\n\
+			/* Calculate the impostor quad's base vectors: */\n\
+			vec3 x;\n\
+			if(abs(c.x)>abs(c.y))\n\
+				x=normalize(vec3(c.z,0.0,-c.x));\n\
+			else\n\
+				x=normalize(vec3(0.0,c.z,-c.y));\n\
+			vec3 y=normalize(cross(x,c));\n\
+			\n\
+			/* Emit the quad's four vertices: */\n";
+		for(int vertex=0;vertex<4;++vertex)
+			{
+			geometryShaderMain+="\
+			center=c;\n\
+			radius=r;\n\
+			dir=c";
+			geometryShaderMain.push_back(vertex%2!=0?'-':'+');
+			geometryShaderMain.push_back(vertex==0||vertex==3?'y':'x');
+			geometryShaderMain.append("*impostorSize;\n");
+			if(colorMaterial)
+				{
+				geometryShaderMain+="\
+				color=inColor[0];\n";
+				}
+			geometryShaderMain+="\
+			gl_Position=gl_ProjectionMatrix*vec4(dir,1.0);\n\
+			EmitVertex();\n";
+			}
+		geometryShaderMain+="\
+			}\n";
+		}
 	
 	/* Compile the geometry shader and attach it to the sphere shader program: */
 	glCompileShaderFromStrings(dataItem->geometryShader,4,geometryShaderDeclarations.c_str(),geometryShaderUniforms.c_str(),geometryShaderVaryings.c_str(),geometryShaderMain.c_str());
 	
-	/* Set the geometry shader's parameters: */
-	glProgramParameteriARB(dataItem->shaderProgram,GL_GEOMETRY_VERTICES_OUT_ARB,4);
-	glProgramParameteriARB(dataItem->shaderProgram,GL_GEOMETRY_INPUT_TYPE_ARB,GL_POINTS);
-	glProgramParameteriARB(dataItem->shaderProgram,GL_GEOMETRY_OUTPUT_TYPE_ARB,GL_TRIANGLE_STRIP);
+	if(dataItem->geometryShaderLevel==1U)
+		{
+		/* Set the geometry shader's parameters: */
+		glProgramParameteriARB(dataItem->shaderProgram,GL_GEOMETRY_VERTICES_OUT_ARB,4);
+		glProgramParameteriARB(dataItem->shaderProgram,GL_GEOMETRY_INPUT_TYPE_ARB,GL_POINTS);
+		glProgramParameteriARB(dataItem->shaderProgram,GL_GEOMETRY_OUTPUT_TYPE_ARB,GL_TRIANGLE_STRIP);
+		}
 	
 	/* Create the impostor sphere fragment shader source code: */
 	std::string fragmentShaderVaryings="\
@@ -317,11 +426,11 @@ GLSphereRenderer::~GLSphereRenderer(void)
 void GLSphereRenderer::initContext(GLContextData& contextData) const
 	{
 	/* Create context data item and store it in the GLContextData object: */
-	DataItem* dataItem=new DataItem;
+	DataItem* dataItem=new DataItem(contextData.getContext().isVersionLargerEqual(3,2));
 	contextData.addDataItem(this,dataItem);
 	
 	/* Create the initial sphere shader program: */
-	if(dataItem->haveGeometryShaders)
+	if(dataItem->geometryShaderLevel!=0U)
 		compileShader(dataItem,*contextData.getLightTracker());
 	}
 
@@ -358,7 +467,7 @@ void GLSphereRenderer::enable(GLfloat modelViewScale,GLContextData& contextData)
 	DataItem* dataItem=contextData.retrieveDataItem<DataItem>(this);
 	
 	/* Check if geometry shaders are supported: */
-	if(dataItem->haveGeometryShaders)
+	if(dataItem->geometryShaderLevel!=0U)
 		{
 		/* Check if the shader program is up-to-date: */
 		const GLLightTracker& lightTracker=*contextData.getLightTracker();
@@ -390,7 +499,7 @@ void GLSphereRenderer::disable(GLContextData& contextData) const
 	/* Retrieve the context data item: */
 	DataItem* dataItem=contextData.retrieveDataItem<DataItem>(this);
 	
-	if(dataItem->haveGeometryShaders)
+	if(dataItem->geometryShaderLevel!=0U)
 		{
 		/* Deactivate the shader program: */
 		glUseProgramObjectARB(0);

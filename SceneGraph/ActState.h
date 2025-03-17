@@ -34,6 +34,8 @@ class ActState:public TraversalState
 	double lastTime; // Time point at which the previous action traversal took place in seconds
 	double time; // Time point at which the current action traversal is taking place in seconds
 	double deltaT; // Time difference between current and previous action traversal in seconds
+	double defaultNextTime; // Time at which the next frame will be scheduled by default
+	double nextTime; // Soonest time at which any traversed node requested another frame
 	
 	/* Constructors and destructors: */
 	public:
@@ -42,8 +44,8 @@ class ActState:public TraversalState
 	/* New methods: */
 	
 	/* Traversal preparation: */
-	void setTimePoints(double newLastTime,double newTime,double newDeltaT); // Sets the action time points for the current traversal
-	void updateTime(double newTime); // Updates the current traversal times; calculates time delta from previous traversal time
+	void setTimePoints(double newLastTime,double newTime,double newDeltaT,double newDefaultNextTime); // Sets the action time points for the current traversal
+	void updateTime(double newTime,double newDefaultNextTime); // Updates the current traversal times; calculates time delta from previous traversal time
 	
 	/* Traversal methods: */
 	double getLastTime(void) const // Returns the time point of the previous traversal
@@ -57,6 +59,23 @@ class ActState:public TraversalState
 	double getDeltaT(void) const // Returns the time difference between the current and previous traversals
 		{
 		return deltaT;
+		}
+	void scheduleFrame(void) // Schedules another frame at the default time
+		{
+		if(nextTime>defaultNextTime)
+			nextTime=defaultNextTime;
+		}
+	void scheduleFrame(double requestedNextTime) // Schedules another frame at the given time
+		{
+		if(nextTime>requestedNextTime)
+			nextTime=requestedNextTime;
+		}
+	
+	/* Traversal result collection: */
+	bool requireFrame(void) const; // Returns true if any traversed nodes requested another frame
+	double getNextTime(void) const // Returns the earliest time at which any traversed node requested another frame
+		{
+		return nextTime;
 		}
 	};
 

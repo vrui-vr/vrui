@@ -110,18 +110,17 @@ void SceneGraphManager::updateInputDevices(void)
 		}
 	}
 
-bool SceneGraphManager::act(const Point& physViewerPos,const Vector& physUpVector,double time)
+const SceneGraph::ActState& SceneGraphManager::act(const Point& physViewerPos,const Vector& physUpVector,double time,double nextTime)
 	{
 	/* Update the action traversal state: */
 	actState.startTraversal(SceneGraph::DOGTransform::identity,SceneGraph::Point(physViewerPos),SceneGraph::Vector(physUpVector));
-	actState.updateTime(time);
+	actState.updateTime(time,nextTime);
 	
 	/* Call the scene graph root's action method if any nodes participate in the action pass: */
 	if(physicalRoot->participatesInPass(SceneGraph::GraphNode::ActionPass))
 		physicalRoot->act(actState);
 	
-	/* Return true if the scene graph root requires another action traversal in the near future: */
-	return physicalRoot->participatesInPass(SceneGraph::GraphNode::ActionPass);
+	return actState;
 	}
 
 void SceneGraphManager::setInputDeviceState(InputDevice* device,bool newEnabled)
@@ -170,9 +169,6 @@ SceneGraphManager::SceneGraphManager(void)
 	
 	/* Add the clipped navigational-space scene graph to the navigational-space scene graph: */
 	addUnclippedNavigationalNode(*clippedRoot);
-	
-	/* Initialize the action pass state: */
-	actState.setTimePoints(0,0,0);
 	}
 
 void SceneGraphManager::addPhysicalNode(SceneGraph::GraphNode& node)
