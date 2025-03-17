@@ -1,6 +1,6 @@
 ########################################################################
 # Makefile for the Vrui example programs.
-# Copyright (c) 2003-2023 Oliver Kreylos
+# Copyright (c) 2003-2025 Oliver Kreylos
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -33,20 +33,21 @@ VRUI_MAKEDIR :=
 # directory here; use $(HOME) instead.
 INSTALLDIR := $(shell pwd)
 
-# Set subdirectories:
-CONFIGDIR = etc/VruiExamplePrograms
-RESOURCEDIR = share/VruiExamplePrograms
-
 ########################################################################
 # Everything below here should not have to be changed
 ########################################################################
 
-# Check if Vrui's collaboration infrastructure is installed
-ifneq ($(wildcard $(VRUI_MAKEDIR)/Packages.Collaboration),)
-  HAVE_COLLABORATION = 1
-else
-  HAVE_COLLABORATION = 0
-endif
+# Version number for installation subdirectories. This is used to keep
+# subsequent release versions of LiDAR Viewer from clobbering each
+# other. The value should be identical to the major.minor version
+# number found in VERSION in the root package directory.
+PACKAGE_VERSION = 12.3
+PACKAGE_NAME = VruiExamplePrograms-$(PACKAGE_VERSION)
+
+# Set up the source directory structure
+PACKAGEROOT := $(shell pwd)
+CONFIGDIR = etc
+RESOURCEDIR = share
 
 # Include definitions for the system environment and system-provided
 # packages
@@ -54,15 +55,28 @@ include $(VRUI_MAKEDIR)/SystemDefinitions
 include $(VRUI_MAKEDIR)/Packages.System
 include $(VRUI_MAKEDIR)/Configuration.Vrui
 include $(VRUI_MAKEDIR)/Packages.Vrui
-ifneq ($(HAVE_COLLABORATION),0)
-  include $(VRUI_MAKEDIR)/Configuration.Collaboration
-  include $(VRUI_MAKEDIR)/Packages.Collaboration
+
+# Check if Vrui's collaboration infrastructure is installed
+-include $(VRUI_MAKEDIR)/Configuration.Collaboration
+-include $(VRUI_MAKEDIR)/Packages.Collaboration
+ifdef COLLABORATION_VERSION
+  HAVE_COLLABORATION = 1
+else
+  HAVE_COLLABORATION = 0
 endif
 
-# Set installation directory structure:
-BININSTALLDIR = $(INSTALLDIR)/$(EXEDIR)
-CONFIGINSTALLDIR = $(INSTALLDIR)/$(CONFIGDIR)
-RESOURCEINSTALLDIR = $(INSTALLDIR)/$(RESOURCEDIR)
+# Set up installation directory structure:
+EXECUTABLEINSTALLDIR = $(INSTALLDIR)/$(EXEDIR)
+ifeq ($(INSTALLDIR),$(PACKAGEROOT))
+  ETCINSTALLDIR = $(INSTALLDIR)/$(CONFIGDIR)
+  SHAREINSTALLDIR = $(INSTALLDIR)/$(RESOURCEDIR)
+else ifneq ($(findstring $(PACKAGE_NAME),$(INSTALLDIR)),)
+  ETCINSTALLDIR = $(INSTALLDIR)/$(CONFIGDIR)
+  SHAREINSTALLDIR = $(INSTALLDIR)/$(RESOURCEDIR)
+else
+	ETCINSTALLDIR = $(INSTALLDIR)/$(CONFIGDIR)/$(PACKAGE_NAME)
+  SHAREINSTALLDIR = $(INSTALLDIR)/$(RESOURCEDIR)/$(PACKAGE_NAME)
+endif
 
 ########################################################################
 # List common packages used by all components of this project
@@ -93,38 +107,40 @@ PACKAGES = MYVRUI MYGLGEOMETRY MYGLSUPPORT MYGLWRAPPERS MYGEOMETRY MYMATH MYMISC
 # instead of just "make <target name>."
 ########################################################################
 
-ALL = $(EXEDIR)/HelloVrui \
-      $(EXEDIR)/VruiDemo \
-      $(EXEDIR)/VruiDemoSmall \
-      $(EXEDIR)/VruiGLTest \
-      $(EXEDIR)/VruiAppTemplate \
-      $(EXEDIR)/VruiLocatorDemo \
-      $(EXEDIR)/VruiEventToolDemo \
-      $(EXEDIR)/VruiCustomToolDemo \
-      $(EXEDIR)/FileSelection \
-      $(EXEDIR)/VruiCalibrator \
-      $(EXEDIR)/DrawEnvironment \
-      $(EXEDIR)/PrecisionTest \
-      $(EXEDIR)/VisionTest \
-      $(EXEDIR)/VruiSceneGraphDemo \
-      $(EXEDIR)/ImageViewer \
-      $(EXEDIR)/ImageSequenceViewer \
-      $(EXEDIR)/VideoViewer \
-      $(EXEDIR)/SceneGraphViewer \
-      $(EXEDIR)/Animation \
-      $(EXEDIR)/Instancing \
-      $(EXEDIR)/ShowEarthModel \
-      $(EXEDIR)/Jello \
-      $(EXEDIR)/ClusterJello \
-      $(EXEDIR)/SharedJelloServer \
-      $(EXEDIR)/SharedJello \
-      $(EXEDIR)/VirtualClay
+EXECUTABLES = $(EXEDIR)/HelloVrui \
+              $(EXEDIR)/VruiDemo \
+              $(EXEDIR)/VruiDemoSmall \
+              $(EXEDIR)/VruiGLTest \
+              $(EXEDIR)/VruiAppTemplate \
+              $(EXEDIR)/VruiLocatorDemo \
+              $(EXEDIR)/VruiEventToolDemo \
+              $(EXEDIR)/VruiCustomToolDemo \
+              $(EXEDIR)/FileSelection \
+              $(EXEDIR)/VruiCalibrator \
+              $(EXEDIR)/DrawEnvironment \
+              $(EXEDIR)/PrecisionTest \
+              $(EXEDIR)/VisionTest \
+              $(EXEDIR)/VruiSceneGraphDemo \
+              $(EXEDIR)/ImageViewer \
+              $(EXEDIR)/ImageSequenceViewer \
+              $(EXEDIR)/VideoViewer \
+              $(EXEDIR)/SceneGraphViewer \
+              $(EXEDIR)/Animation \
+              $(EXEDIR)/Instancing \
+              $(EXEDIR)/ShowEarthModel \
+              $(EXEDIR)/Jello \
+              $(EXEDIR)/ClusterJello \
+              $(EXEDIR)/SharedJelloServer \
+              $(EXEDIR)/SharedJello \
+              $(EXEDIR)/VirtualClay
 ifneq ($(SYSTEM_HAVE_OPENAL),0)
-  ALL += $(EXEDIR)/VruiSoundTest
+  EXECUTABLES += $(EXEDIR)/VruiSoundTest
 endif
 ifneq ($(SYSTEM_HAVE_XINE),0)
-  ALL += $(EXEDIR)/VruiXine
+  EXECUTABLES += $(EXEDIR)/VruiXine
 endif
+
+ALL = $(EXECUTABLES)
 
 .PHONY: all
 all: $(ALL)
@@ -225,7 +241,7 @@ SHOWEARTHMODEL_SOURCES = EarthFunctions.cpp \
                          EarthquakeQueryTool.cpp \
                          ShowEarthModel.cpp
 
-$(OBJDIR)/ShowEarthModel.o: CFLAGS += -DSHOWEARTHMODEL_CONFIGDIR='"$(CONFIGINSTALLDIR)"' -DSHOWEARTHMODEL_APPNAME='"ShowEarthModel"' -DSHOWEARTHMODEL_IMAGEDIR='"$(RESOURCEINSTALLDIR)"'
+$(OBJDIR)/ShowEarthModel.o: CFLAGS += -DSHOWEARTHMODEL_CONFIGDIR='"$(ETCINSTALLDIR)"' -DSHOWEARTHMODEL_APPNAME='"ShowEarthModel"' -DSHOWEARTHMODEL_IMAGEDIR='"$(SHAREINSTALLDIR)"'
 ifneq ($(HAVE_COLLABORATION),0)
   $(OBJDIR)/ShowEarthModel.o:  CFLAGS += -DUSE_COLLABORATION=1
   $(EXEDIR)/ShowEarthModel: PACKAGES += MYCOLLABORATION2CLIENT
@@ -283,12 +299,41 @@ $(EXEDIR)/VirtualClay: $(OBJDIR)/EditableGrid.o \
 $(EXEDIR)/VruiXine: PACKAGES += MYVIDEO MYGLMOTIF MYIMAGES MYIO MYTHREADS XINE
 $(EXEDIR)/VruiXine: $(OBJDIR)/VruiXine.o
 
+#
+# Installation rules
+#
+
+RESOURCES = $(RESOURCEDIR)/EarthTopography.ppm \
+            $(RESOURCEDIR)/EarthTopography.png
+
+#
 # Rule to install the example programs in a destination directory
+#
+
 install: $(ALL)
 	@echo Installing Vrui example programs in $(INSTALLDIR)...
-	@install -d $(BININSTALLDIR)
-	@install $(ALL) $(BININSTALLDIR)
-	@install -d $(RESOURCEINSTALLDIR)
-	@install $(RESOURCEDIR)/EarthTopography.png $(RESOURCEDIR)/EarthTopography.ppm $(RESOURCEINSTALLDIR)
-	@install -d $(RESOURCEINSTALLDIR)/Shaders
-	@install $(RESOURCEDIR)/Shaders/* $(RESOURCEINSTALLDIR)/Shaders
+	@install -d $(EXECUTABLEINSTALLDIR)
+	@install $(EXECUTABLES) $(EXECUTABLEINSTALLDIR)
+	@install -d $(SHAREINSTALLDIR)
+	@install $(RESOURCES) $(SHAREINSTALLDIR)
+	@install -d $(SHAREINSTALLDIR)/Shaders
+	@install $(RESOURCEDIR)/Shaders/* $(SHAREINSTALLDIR)/Shaders
+
+#
+# Rule to install a "live" version of the Vrui Example Programs in the
+# chosen installation directory that automatically reflects changes made
+# to the Vrui Example Programs sources
+#
+
+devinstall:
+# Install all binaries in EXECUTABLEINSTALLDIR:
+	@echo Installing live version of Vrui example programs in $(INSTALLDIR)...
+	@echo Installing executables...
+	@mkdir -p $(EXECUTABLEINSTALLDIR)
+	@ln -sf $(EXECUTABLES:%=$(PACKAGEROOT)/%) $(EXECUTABLEINSTALLDIR)
+# Install all resource files in SHAREINSTALLDIR:
+	@echo Installing resource files...
+	@mkdir -p $(SHAREINSTALLDIR)
+	@ln -sf $(RESOURCES:%=$(PACKAGEROOT)/%) $(SHAREINSTALLDIR)
+	@mkdir -p $(SHAREINSTALLDIR)/Shaders
+	@ln -sf $(PACKAGEROOT)/$(RESOURCEDIR)/Shaders/* $(SHAREINSTALLDIR)/Shaders
