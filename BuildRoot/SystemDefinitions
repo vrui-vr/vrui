@@ -1,7 +1,7 @@
 ########################################################################
 # SystemDefinitions - System-dependent settings for the WhyTools build
 # environment.
-# Copyright (c) 1999-2023 Oliver Kreylos
+# Copyright (c) 1999-2025 Oliver Kreylos
 # Mac OS X adaptation copyright (c) 2006 Braden Pellett
 #
 # This file is part of the WhyTools Build Environment.
@@ -43,8 +43,8 @@ EXEDIRBASE := bin
 # How to name shared libraries and plugins?
 DSOFILEEXT = so
 LINKDSONAME = $(1)$(LDEXT).$(DSOFILEEXT)
-DSONAME = $(1)$(LDEXT).$(DSOFILEEXT).$(MAJORLIBVERSION)
-FULLDSONAME = $(1)$(LDEXT).$(DSOFILEEXT).$(MAJORLIBVERSION).$(MINORLIBVERSION)
+DSONAME = $(1)$(LDEXT).$(DSOFILEEXT).$(PROJECT_MAJOR)
+FULLDSONAME = $(1)$(LDEXT).$(DSOFILEEXT).$(PROJECT_MAJOR).$(PROJECT_MINOR)
 PLUGINFILEEXT = so
 
 # Compiler and linker settings to build shared libraries and plugins:
@@ -115,12 +115,12 @@ ifeq ($(HOST_OS),Darwin)
   SYSTEM = DARWIN
   OSSPECFILEINSERT = MacOSX
   DSOFILEEXT = dylib
-  FULLDSONAME = $(1)$(LDEXT).$(MAJORLIBVERSION).$(MINORLIBVERSION).$(DSOFILEEXT)
-  DSONAME = $(1)$(LDEXT).$(MAJORLIBVERSION).$(DSOFILEEXT)
+  FULLDSONAME = $(1)$(LDEXT).$(PROJECT_MAJOR).$(PROJECT_MINOR).$(DSOFILEEXT)
+  DSONAME = $(1)$(LDEXT).$(PROJECT_MAJOR).$(DSOFILEEXT)
   LINKDSONAME = $(1)$(LDEXT).$(DSOFILEEXT)
   PLUGINFILEEXT = bundle
   CDSOFLAGS = 
-  DSOLINKFLAGS = -dynamiclib -compatibility_version $(MAJORLIBVERSION) -current_version $(MAJORLIBVERSION).$(MINORLIBVERSION)
+  DSOLINKFLAGS = -dynamiclib -compatibility_version $(PROJECT_MAJOR) -current_version $(PROJECT_MAJOR).$(PROJECT_MINOR)
   ifneq ($(USE_RPATH),0)
     DSOLINKFLAGS += -install_name $(LIBINSTALLDIR)/$(call DSONAME,$(1))
   else
@@ -229,17 +229,6 @@ else
   MYLIBEXT = $(MYLIBEXT_RELEASE)
   PLUGINDIR = $(PLUGINDIR_RELEASE)
 endif
-LIBDESTDIR := $(MYLIBEXT)
-
-# Function to generate the full names of libraries:
-ifdef STATIC_LINK
-  LIBRARYNAME = $(LIBDESTDIR)/$(1)$(LDEXT).a
-else
-  LIBRARYNAME = $(LIBDESTDIR)/$(call FULLDSONAME,$(1))
-endif
-
-# Function to generate all names of a dynamic library:
-LIBRARYNAMES = $(LIBDESTDIR)/$(call LINKDSONAME,$(1)) $(LIBDESTDIR)/$(call LINKDSONAME,$(1)).$(2) $(LIBDESTDIR)/$(call LINKDSONAME,$(1)).$(2).$(3)
 
 # Determine the executable file directory:
 EXEDIR_DEBUG = $(EXEDIRBASE)/debug
@@ -269,4 +258,53 @@ else
 	# Select aggressive levels:
   DEFAULTDEBUGLEVEL = 0
   DEFAULTOPTLEVEL = 3
+endif
+
+# Set up default build/installation settings for project makefiles
+PROJECT_DISPLAYNAME ?= $(PROJECT_NAME)
+PROJECT_MAJOR ?= 0
+PROJECT_MINOR ?= 0
+PROJECT_BUILD ?= 1
+PROJECT_VERSION ?= $(PROJECT_MAJOR).$(PROJECT_MINOR)
+PROJECT_FULLNAME ?= $(PROJECT_NAME)-$(PROJECT_VERSION)
+PROJECT_FULLDISPLAYNAME ?= "$(PROJECT_DISPLAYNAME) version $(PROJECT_VERSION)"
+
+# The project's source code directory
+PROJECT_ROOT ?= $(shell pwd)
+
+# The project's source code directory setup
+PROJECT_ETCDIR ?= etc
+PROJECT_SHAREDIR ?= share
+PROJECT_LIBDIR ?= $(PROJECT_ROOT)/$(MYLIBEXT)
+
+# Function to generate the full names of libraries:
+ifdef STATIC_LINK
+  LIBRARYNAME = $(PROJECT_LIBDIR)/$(1)$(LDEXT).a
+else
+  LIBRARYNAME = $(PROJECT_LIBDIR)/$(call FULLDSONAME,$(1))
+endif
+
+# Function to generate all names of a dynamic library:
+LIBRARYNAMES = $(PROJECT_LIBDIR)/$(call LINKDSONAME,$(1)) $(PROJECT_LIBDIR)/$(call LINKDSONAME,$(1)).$(2) $(PROJECT_LIBDIR)/$(call LINKDSONAME,$(1)).$(2).$(3)
+
+# Install to the project's source code directory by default
+INSTALLDIR ?= $(PROJECT_ROOT)
+
+# Default installation directories, based on INSTALLDIR
+EXECUTABLEINSTALLDIR = $(INSTALLDIR)/$(EXEDIR)
+ifeq ($(INSTALLDIR),$(PROJECT_ROOT))
+  HEADERINSTALLDIR = $(INSTALLDIR)/$(INCLUDEEXT)
+  LIBINSTALLDIR = $(INSTALLDIR)/$(MYLIBEXT)
+  ETCINSTALLDIR = $(INSTALLDIR)/$(PROJECT_ETCDIR)
+  SHAREINSTALLDIR = $(INSTALLDIR)/$(PROJECT_SHAREDIR)
+else ifneq ($(findstring $(PROJECT_FULLNAME),$(INSTALLDIR)),)
+  HEADERINSTALLDIR = $(INSTALLDIR)/$(INCLUDEEXT)
+  LIBINSTALLDIR = $(INSTALLDIR)/$(MYLIBEXT)
+  ETCINSTALLDIR = $(INSTALLDIR)/etc
+  SHAREINSTALLDIR = $(INSTALLDIR)/share
+else
+  HEADERINSTALLDIR = $(INSTALLDIR)/$(INCLUDEEXT)/$(PROJECT_FULLNAME)
+  LIBINSTALLDIR = $(INSTALLDIR)/$(MYLIBEXT)/$(PROJECT_FULLNAME)
+	ETCINSTALLDIR = $(INSTALLDIR)/etc/$(PROJECT_FULLNAME)
+	SHAREINSTALLDIR = $(INSTALLDIR)/share/$(PROJECT_FULLNAME)
 endif

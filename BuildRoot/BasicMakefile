@@ -1,7 +1,7 @@
 ########################################################################
 # BasicMakefile - Definitions and rules to build object files, shared
 # and static libraries, and executables.
-# Copyright (c) 1999-2022 Oliver Kreylos
+# Copyright (c) 1999-2025 Oliver Kreylos
 # Mac OS X adaptation copyright (c) 2006 Braden Pellett
 #
 # This file is part of the WhyTools Build Environment.
@@ -249,28 +249,25 @@ LIBLFLAGS = $(call _LLFS,$(PACKAGES))
 # Function to get the build dependencies of a package to sort library targets in parallel builds (depends on function LIBRARYNAME):
 DEPENDENCIES = $(patsubst -l%$(LDEXT),$(call LIBRARYNAME,lib%),$(foreach PN,$(filter MY%,$(1)),$($(PN)_LIBS)))
 
-MAJORLIBVERSION ?= 1
-MINORLIBVERSION ?= 0
-
 #
 # Set default link command to create a dynamic library:
 #
-$(LIBDESTDIR)/$(call FULLDSONAME,%):
-	@mkdir -p $(abspath $(LIBDESTDIR)/$(*D))
+$(PROJECT_LIBDIR)/$(call FULLDSONAME,%):
+	@mkdir -p $(abspath $(PROJECT_LIBDIR)/$(*D))
 ifdef SHOWCOMMAND
 	$(CCOMP) $(call DSOLINKFLAGS,$(*F)) -o $@ $(filter %.o,$^) $(LIBLFLAGS)
 else
 	@echo Linking $@...
 	@$(CCOMP) $(call DSOLINKFLAGS,$(*F)) -o $@ $(filter %.o,$^) $(LIBLFLAGS)
 endif
-	@ln -sf $@ $(LIBDESTDIR)/$(call DSONAME,$*)
-	@ln -sf $@ $(LIBDESTDIR)/$(call LINKDSONAME,$*)
+	@ln -sf $@ $(PROJECT_LIBDIR)/$(call DSONAME,$*)
+	@ln -sf $@ $(PROJECT_LIBDIR)/$(call LINKDSONAME,$*)
 
 #
 # Set default link command to create a static library:
 #
-$(LIBDESTDIR)/%$(LDEXT).a:
-	@mkdir -p $(abspath $(LIBDESTDIR)/$(*D))
+$(PROJECT_LIBDIR)/%$(LDEXT).a:
+	@mkdir -p $(abspath $(PROJECT_LIBDIR)/$(*D))
 	@-rm -f $@
 ifdef SHOWCOMMAND
 	ar crs $@ $^
@@ -368,6 +365,7 @@ clean: extraclean
 squeakyclean: extrasqueakyclean
 	-rm -rf $(DEPDIR)
 	-rm -rf $(OBJDIRBASE)
+	-rm -rf $(LIBEXT)
 	-rm -rf $(EXEDIRBASE)
 
 # Use an empty default rule to ignore missing prerequisites and just remake their targets:

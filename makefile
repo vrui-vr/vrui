@@ -35,18 +35,19 @@ INSTALLDIR := /usr/local
 # Please do not change the following lines
 ########################################################################
 
+# Include definitions for the system environment and provided software
+# packages
+include $(VRUI_MAKEDIR)/SystemDefinitions
+
 # Define the root of the toolkit source tree and the build system
 # directory
-VRUI_PACKAGEROOT := $(shell pwd)
+VRUI_PACKAGEROOT := $(PROJECT_ROOT)
 VRUI_MAKEDIR := $(VRUI_PACKAGEROOT)/BuildRoot
 VRUI_ETCDIR := $(VRUI_PACKAGEROOT)/etc
 VRUI_SHAREDIR := $(VRUI_PACKAGEROOT)/share
 VRUI_SCRIPTDIR := $(VRUI_PACKAGEROOT)/scripts
 VRUI_DOCDIR := $(VRUI_PACKAGEROOT)/Documentation
 
-# Include definitions for the system environment and provided software
-# packages
-include $(VRUI_MAKEDIR)/SystemDefinitions
 include $(VRUI_MAKEDIR)/Packages.System
 
 ########################################################################
@@ -227,18 +228,17 @@ VRDEVICES_USE_BLUETOOTH = $(SYSTEM_HAVE_BLUETOOTH)
 # Please do not change anything below this line
 ########################################################################
 
-# Specify version of created dynamic shared libraries
-VRUI_VERSION = 12003001
-MAJORLIBVERSION = 12
-MINORLIBVERSION = 3
-VRUI_NAME := Vrui-$(MAJORLIBVERSION).$(MINORLIBVERSION)
+PROJECT_NAME = Vrui
 
-# Set destination directory for libraries and executables
-LIBDESTDIR := $(VRUI_PACKAGEROOT)/$(MYLIBEXT)
+# Specify version of created dynamic shared libraries
+PROJECT_MAJOR = 13
+PROJECT_MINOR = 0
+PROJECT_BUILD = 1
+PROJECT_NUMERICVERSION = 13000001
 
 # Override the include file and library search directories:
-VRUI_INCLUDEDIR = $(VRUI_PACKAGEROOT)
-VRUI_LIBDIR = $(VRUI_PACKAGEROOT)/$(MYLIBEXT)
+VRUI_INCLUDEDIR = $(PROJECT_ROOT)
+VRUI_LIBDIR = $(PROJECT_ROOT)/$(MYLIBEXT)
 VRUI_RPATH = $(LIBINSTALLDIR)
 
 ########################################################################
@@ -247,22 +247,22 @@ VRUI_RPATH = $(LIBINSTALLDIR)
 ########################################################################
 
 ifdef SYSTEMINSTALL # Configuration to install Vrui in a non-local system directory
-  HEADERINSTALLDIR = $(INSTALLDIR)/usr/$(INCLUDEEXT)/$(VRUI_NAME)
-  LIBINSTALLDIR_DEBUG = $(INSTALLDIR)/usr/$(LIBEXT)/$(VRUI_NAME)/debug
-  LIBINSTALLDIR_RELEASE = $(INSTALLDIR)/usr/$(LIBEXT)/$(VRUI_NAME)
+  HEADERINSTALLDIR = $(INSTALLDIR)/usr/$(INCLUDEEXT)/$(PROJECT_FULLNAME)
+  LIBINSTALLDIR_DEBUG = $(INSTALLDIR)/usr/$(LIBEXT)/$(PROJECT_FULLNAME)/debug
+  LIBINSTALLDIR_RELEASE = $(INSTALLDIR)/usr/$(LIBEXT)/$(PROJECT_FULLNAME)
   EXECUTABLEINSTALLDIR_DEBUG = $(INSTALLDIR)/usr/$(BINEXT)/debug
   EXECUTABLEINSTALLDIR_RELEASE = $(INSTALLDIR)/usr/$(BINEXT)
-  ETCINSTALLDIR = $(INSTALLDIR)/etc/$(VRUI_NAME)
-  SHAREINSTALLDIR = $(INSTALLDIR)/usr/share/$(VRUI_NAME)
+  ETCINSTALLDIR = $(INSTALLDIR)/etc/$(PROJECT_FULLNAME)
+  SHAREINSTALLDIR = $(INSTALLDIR)/usr/share/$(PROJECT_FULLNAME)
   PKGCONFIGINSTALLDIR = $(INSTALLDIR)/usr/$(LIBEXT)/pkgconfig
-  DOCINSTALLDIR = $(INSTALLDIR)/usr/share/doc/$(VRUI_NAME)
+  DOCINSTALLDIR = $(INSTALLDIR)/usr/share/doc/$(PROJECT_FULLNAME)
   UDEVRULEDIR = /usr/lib/udev/rules.d
   INSTALLROOT = /usr
 else # Configuration for regular installation
-  ifeq ($(findstring $(VRUI_NAME),$(INSTALLDIR)),$(VRUI_NAME))
+  ifeq ($(findstring $(PROJECT_FULLNAME),$(INSTALLDIR)),$(PROJECT_FULLNAME))
     INSTALLSHIM = 
   else
-    INSTALLSHIM = /$(VRUI_NAME)
+    INSTALLSHIM = /$(PROJECT_FULLNAME)
   endif
   HEADERINSTALLDIR = $(INSTALLDIR)/$(INCLUDEEXT)$(INSTALLSHIM)
   LIBINSTALLDIR_DEBUG = $(INSTALLDIR)/$(LIBEXT)$(INSTALLSHIM)/debug
@@ -300,9 +300,9 @@ else
   VRUI_READUSERCONFIGFILE = 1
 endif
 ifeq ($(HOST_OS),Darwin)
-  VRUI_USERCONFIGDIR = Library/Preferences/$(VRUI_NAME)
+  VRUI_USERCONFIGDIR = Library/Preferences/$(PROJECT_FULLNAME)
 else
-  VRUI_USERCONFIGDIR = .config/$(VRUI_NAME)
+  VRUI_USERCONFIGDIR = .config/$(PROJECT_FULLNAME)
 endif
 
 ########################################################################
@@ -382,7 +382,7 @@ VRTOOLS_IGNORE_SOURCES = Vrui/Tools/PanelButtonTool.cpp \
 VRTOOLS_SOURCES = $(filter-out $(VRTOOLS_IGNORE_SOURCES),$(wildcard Vrui/Tools/*.cpp))
 
 VRTOOLSDIREXT = VRTools
-VRTOOLSDIR= $(LIBDESTDIR)/$(VRTOOLSDIREXT)
+VRTOOLSDIR= $(PROJECT_LIBDIR)/$(VRTOOLSDIREXT)
 VRTOOLNAMES = $(1:%=$(VRTOOLSDIR)/lib%.$(PLUGINFILEEXT))
 VRTOOLS = $(call VRTOOLNAMES,$(VRTOOLS_SOURCES:Vrui/Tools/%.cpp=%))
 PLUGINS += $(VRTOOLS)
@@ -400,7 +400,7 @@ ifneq ($(SYSTEM_HAVE_LIBUDEV),0)
 endif
 
 VRVISLETSDIREXT = VRVislets
-VRVISLETSDIR = $(LIBDESTDIR)/$(VRVISLETSDIREXT)
+VRVISLETSDIR = $(PROJECT_LIBDIR)/$(VRVISLETSDIREXT)
 VRVISLETNAMES = $(1:%=$(VRVISLETSDIR)/lib%.$(PLUGINFILEEXT))
 VRVISLETS = $(call VRVISLETNAMES,$(VRVISLETS_SOURCES:Vrui/Vislets/%.cpp=%))
 PLUGINS += $(VRVISLETS)
@@ -441,7 +441,7 @@ ifneq ($(SYSTEM_HAVE_OPENVR),0)
 endif
 
 VRDEVICESDIREXT = VRDevices
-VRDEVICESDIR = $(LIBDESTDIR)/$(VRDEVICESDIREXT)
+VRDEVICESDIR = $(PROJECT_LIBDIR)/$(VRDEVICESDIREXT)
 VRDEVICENAMES = $(1:%=$(VRDEVICESDIR)/lib%.$(PLUGINFILEEXT))
 VRDEVICES = $(call VRDEVICENAMES,$(VRDEVICES_SOURCES:VRDeviceDaemon/VRDevices/%.cpp=%))
 PLUGINS += $(VRDEVICES)
@@ -453,7 +453,7 @@ PLUGINS += $(VRDEVICES)
 VRCALIBRATORS_SOURCES = $(wildcard VRDeviceDaemon/VRCalibrators/*.cpp)
 
 VRCALIBRATORSDIREXT = VRCalibrators
-VRCALIBRATORSDIR = $(LIBDESTDIR)/$(VRCALIBRATORSDIREXT)
+VRCALIBRATORSDIR = $(PROJECT_LIBDIR)/$(VRCALIBRATORSDIREXT)
 VRCALIBRATORNAMES = $(1:%=$(VRCALIBRATORSDIR)/lib%.$(PLUGINFILEEXT))
 VRCALIBRATORS = $(call VRCALIBRATORNAMES,$(VRCALIBRATORS_SOURCES:VRDeviceDaemon/VRCalibrators/%.cpp=%))
 PLUGINS += $(VRCALIBRATORS)
@@ -683,15 +683,14 @@ $(DEPDIR)/config: $(DEPDIR)/Configure-End
 
 .PHONY: extraclean
 extraclean:
-	-rm -f $(LIBRARY_NAMES:%=$(LIBDESTDIR)/$(call DSONAME,%))
-	-rm -f $(LIBRARY_NAMES:%=$(LIBDESTDIR)/$(call LINKDSONAME,%))
+	-rm -f $(LIBRARY_NAMES:%=$(PROJECT_LIBDIR)/$(call DSONAME,%))
+	-rm -f $(LIBRARY_NAMES:%=$(PROJECT_LIBDIR)/$(call LINKDSONAME,%))
 	-rm -f $(MAKEFILEFRAGMENT) $(MAKECONFIGFILE) $(PKGCONFIGFILE)
 
 .PHONY: extrasqueakyclean
 extrasqueakyclean:
 	-rm -f $(ALL)
 	-rm -f $(MAKEFILEFRAGMENT) $(MAKECONFIGFILE) $(PKGCONFIGFILE)
-	-rm -rf $(VRUI_PACKAGEROOT)/$(LIBEXT)
 	-rm -f $(VRUI_SCRIPTDIR)/Vrui.makeinclude $(VRUI_SCRIPTDIR)/Vrui.debug.makeinclude
 	-rm -f $(VRUI_MAKEDIR)/Configuration.Vrui
 
@@ -704,7 +703,7 @@ include $(VRUI_MAKEDIR)/BasicMakefile
 
 # Set up a link rpath to find package-created libraries while building
 # dependent objects:
-EXTRALINKDIRFLAGS = -Wl,-rpath-link=$(LIBDESTDIR)
+EXTRALINKDIRFLAGS = -Wl,-rpath-link=$(PROJECT_LIBDIR)
 
 #
 # The Miscellaneous Support Library (Misc)
@@ -1735,7 +1734,7 @@ endif
 	@$(call CONFIG_SETSTRINGVAR,Vrui/Internal/Config.h.temp,VRUI_INTERNAL_CONFIG_SYSCONFIGDIR,$(ETCINSTALLDIR))
 	@$(call CONFIG_SETVAR,Vrui/Internal/Config.h.temp,VRUI_INTERNAL_CONFIG_HAVE_USERCONFIGFILE,$(VRUI_READUSERCONFIGFILE))
 	@$(call CONFIG_SETSTRINGVAR,Vrui/Internal/Config.h.temp,VRUI_INTERNAL_CONFIG_USERCONFIGDIR,$(VRUI_USERCONFIGDIR))
-	@$(call CONFIG_SETVAR,Vrui/Internal/Config.h.temp,VRUI_INTERNAL_CONFIG_VERSION,$(VRUI_VERSION))
+	@$(call CONFIG_SETVAR,Vrui/Internal/Config.h.temp,VRUI_INTERNAL_CONFIG_VERSION,$(PROJECT_NUMERICVERSION))
 	@$(call CONFIG_SETSTRINGVAR,Vrui/Internal/Config.h.temp,VRUI_INTERNAL_CONFIG_ETCDIR,$(ETCINSTALLDIR))
 	@$(call CONFIG_SETSTRINGVAR,Vrui/Internal/Config.h.temp,VRUI_INTERNAL_CONFIG_SHAREDIR,$(SHAREINSTALLDIR))
 	@if ! diff -qN Vrui/Internal/Config.h.temp Vrui/Internal/Config.h > /dev/null ; then cp Vrui/Internal/Config.h.temp Vrui/Internal/Config.h ; fi
@@ -2402,7 +2401,7 @@ $(MAKEFILEFRAGMENT): $(DEPDIR)/Configure-Install
 	@echo Creating application makefile fragment...
 	@echo '# Makefile fragment for Vrui applications' > $(MAKEFILEFRAGMENT)
 	@echo '# Autogenerated by Vrui installation on $(shell date)' >> $(MAKEFILEFRAGMENT)
-	@echo 'VRUI_VERSION = $(VRUI_VERSION)' >> $(MAKEFILEFRAGMENT)
+	@echo 'VRUI_VERSION = $(PROJECT_NUMERICVERSION)' >> $(MAKEFILEFRAGMENT)
 	@echo 'VRUI_INCLUDEDIR = $(HEADERINSTALLDIR)' >> $(MAKEFILEFRAGMENT)
 	@echo 'VRUI_CFLAGS = $(VRUIAPP_INCLUDEDIRS) $(VRUIAPP_CFLAGS)' >> $(MAKEFILEFRAGMENT)
 	@echo 'VRUI_LIBDIR = $(LIBINSTALLDIR)' >> $(MAKEFILEFRAGMENT)
@@ -2451,8 +2450,8 @@ $(MAKECONFIGFILE): $(DEPDIR)/Configure-Install
 	@echo 'VRDEVICES_USE_BLUETOOTH = $(VRDEVICES_USE_BLUETOOTH)' >> $(MAKECONFIGFILE)
 	@echo >> $(MAKECONFIGFILE)
 	@echo '# Version information:'>> $(MAKECONFIGFILE)
-	@echo 'VRUI_VERSION = $(VRUI_VERSION)' >> $(MAKECONFIGFILE)
-	@echo 'VRUI_NAME = $(VRUI_NAME)' >> $(MAKECONFIGFILE)
+	@echo 'VRUI_VERSION = $(PROJECT_NUMERICVERSION)' >> $(MAKECONFIGFILE)
+	@echo 'VRUI_NAME = $(PROJECT_FULLNAME)' >> $(MAKECONFIGFILE)
 	@echo >> $(MAKECONFIGFILE)
 	@echo '# Search directories:'>> $(MAKECONFIGFILE)
 	@echo 'VRUI_PACKAGEROOT := $(INSTALLROOT)' >> $(MAKECONFIGFILE)
@@ -2511,7 +2510,7 @@ $(PKGCONFIGFILE): $(DEPDIR)/Configure-Install
 	@echo 'Name: Vrui' >> $(PKGCONFIGFILE)
 	@echo 'Description: Vrui (Virtual Reality User Interface) development toolkit' >> $(PKGCONFIGFILE)
 	@echo 'Requires: $(strip $(foreach PACKAGENAME,$(SYSTEMPACKAGES),$($(PACKAGENAME)_PKGNAME)))' >> $(PKGCONFIGFILE)
-	@echo 'Version: $(VRUI_VERSION)' >> $(PKGCONFIGFILE)
+	@echo 'Version: $(PROJECT_NUMERICVERSION)' >> $(PKGCONFIGFILE)
 ifneq ($(SYSTEM_HAVE_RPATH),0)
   ifneq ($(USE_RPATH),0)
 	@echo 'Libs: -L$${libdir} $(strip $(patsubst lib%,-l%$(LDEXT),$(LIBRARY_NAMES))) $(ROGUE_LIBDIRS) $(ROGUE_LIBS) -Wl,-rpath=$${libdir}' >> $(PKGCONFIGFILE)
@@ -2803,66 +2802,66 @@ devinstall:
 # Install all header files in HEADERINSTALLDIR:
 	@echo Installing header files in $(HEADERINSTALLDIR)...
 	@mkdir -p $(HEADERINSTALLDIR)/Misc
-	@ln -sf $(MISC_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Misc
+	@ln -sf $(MISC_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Misc
 	@mkdir -p $(HEADERINSTALLDIR)/Realtime
-	@ln -sf $(REALTIME_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Realtime
+	@ln -sf $(REALTIME_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Realtime
 	@mkdir -p $(HEADERINSTALLDIR)/Threads
-	@ln -sf $(THREADS_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Threads
+	@ln -sf $(THREADS_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Threads
 ifneq ($(SYSTEM_HAVE_LIBUSB1),0)
 	@mkdir -p $(HEADERINSTALLDIR)/USB
-	@ln -sf $(USB_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/USB
+	@ln -sf $(USB_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/USB
 endif
 	@mkdir -p $(HEADERINSTALLDIR)/RawHID
-	@ln -sf $(RAWHID_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/RawHID
+	@ln -sf $(RAWHID_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/RawHID
 	@mkdir -p $(HEADERINSTALLDIR)/IO
-	@ln -sf $(IO_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/IO
+	@ln -sf $(IO_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/IO
 	@mkdir -p $(HEADERINSTALLDIR)/Plugins
-	@ln -sf $(PLUGINS_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Plugins
+	@ln -sf $(PLUGINS_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Plugins
 	@mkdir -p $(HEADERINSTALLDIR)/Comm
-	@ln -sf $(COMM_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Comm
+	@ln -sf $(COMM_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Comm
 	@mkdir -p $(HEADERINSTALLDIR)/Cluster
-	@ln -sf $(CLUSTER_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Cluster
+	@ln -sf $(CLUSTER_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Cluster
 	@mkdir -p $(HEADERINSTALLDIR)/Math
-	@ln -sf $(MATH_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Math
+	@ln -sf $(MATH_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Math
 	@mkdir -p $(HEADERINSTALLDIR)/Geometry
-	@ln -sf $(GEOMETRY_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Geometry
+	@ln -sf $(GEOMETRY_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Geometry
 ifeq ($(SYSTEM),DARWIN)
 	@mkdir -p $(HEADERINSTALLDIR)/MacOSX
-	@ln -sf $(MACOSX_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/MacOSX
+	@ln -sf $(MACOSX_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/MacOSX
 endif
 	@mkdir -p $(HEADERINSTALLDIR)/GL
-	@ln -sf $(GLWRAPPERS_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/GL
-	@ln -sf $(GLSUPPORT_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/GL
+	@ln -sf $(GLWRAPPERS_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/GL
+	@ln -sf $(GLSUPPORT_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/GL
 	@mkdir -p $(HEADERINSTALLDIR)/GL/Extensions
-	@ln -sf $(GLSUPPORTEXTENSION_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/GL/Extensions
-	@ln -sf $(GLXSUPPORT_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/GL
-	@ln -sf $(GLGEOMETRY_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/GL
+	@ln -sf $(GLSUPPORTEXTENSION_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/GL/Extensions
+	@ln -sf $(GLXSUPPORT_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/GL
+	@ln -sf $(GLGEOMETRY_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/GL
 ifneq ($(SYSTEM_HAVE_VULKAN),0)
 	@mkdir -p $(HEADERINSTALLDIR)/Vulkan
-	@ln -sf $(VULKAN_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Vulkan
+	@ln -sf $(VULKAN_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Vulkan
 	@mkdir -p $(HEADERINSTALLDIR)/VulkanXlib
-	@ln -sf $(VULKANXLIB_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/VulkanXlib
+	@ln -sf $(VULKANXLIB_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/VulkanXlib
 endif
 	@mkdir -p $(HEADERINSTALLDIR)/Images
-	@ln -sf $(IMAGES_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Images
+	@ln -sf $(IMAGES_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Images
 	@mkdir -p $(HEADERINSTALLDIR)/GLMotif
-	@ln -sf $(GLMOTIF_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/GLMotif
+	@ln -sf $(GLMOTIF_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/GLMotif
 	@mkdir -p $(HEADERINSTALLDIR)/Sound
-	@ln -sf $(SOUND_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Sound
+	@ln -sf $(SOUND_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Sound
 ifeq ($(SYSTEM),LINUX)
   ifneq ($(strip $(SOUND_LINUX_HEADERS)),)
 	@mkdir -p $(HEADERINSTALLDIR)/Sound/Linux
-	@ln -sf $(SOUND_LINUX_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Sound/Linux
+	@ln -sf $(SOUND_LINUX_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Sound/Linux
   endif
 endif
 	@mkdir -p $(HEADERINSTALLDIR)/Video
-	@ln -sf $(VIDEO_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Video
+	@ln -sf $(VIDEO_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Video
 	@mkdir -p $(HEADERINSTALLDIR)/AL
-	@ln -sf $(ALSUPPORT_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/AL
+	@ln -sf $(ALSUPPORT_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/AL
 	@mkdir -p $(HEADERINSTALLDIR)/SceneGraph
-	@ln -sf $(SCENEGRAPH_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/SceneGraph
+	@ln -sf $(SCENEGRAPH_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/SceneGraph
 	@mkdir -p $(HEADERINSTALLDIR)/Vrui
-	@ln -sf $(VRUI_HEADERS:%=$(VRUI_PACKAGEROOT)/%) $(HEADERINSTALLDIR)/Vrui
+	@ln -sf $(VRUI_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Vrui
 # Install all library files in LIBINSTALLDIR:
 	@echo Installing libraries in $(LIBINSTALLDIR)...
 	@mkdir -p $(LIBINSTALLDIR)
@@ -2872,7 +2871,7 @@ endif
 # Install all binaries in EXECUTABLEINSTALLDIR:
 	@echo Installing executables in $(EXECUTABLEINSTALLDIR)...
 	@mkdir -p $(EXECUTABLEINSTALLDIR)
-	@ln -sf $(EXECUTABLES:%=$(VRUI_PACKAGEROOT)/%) $(EXECUTABLEINSTALLDIR)
+	@ln -sf $(EXECUTABLES:%=$(PROJECT_ROOT)/%) $(EXECUTABLEINSTALLDIR)
 ifeq ($(SYSTEM),DARWIN)
 # Install a Mac OS X helper script:
 	@cp $(VRUI_SCRIPTDIR)/MacOSX/runwithx $(VRUI_SCRIPTDIR)/MacOSX/runwithx.tmp
