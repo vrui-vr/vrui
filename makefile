@@ -35,19 +35,18 @@ INSTALLDIR := /usr/local
 # Please do not change the following lines
 ########################################################################
 
-# Include definitions for the system environment and provided software
-# packages
-include $(VRUI_MAKEDIR)/SystemDefinitions
-
 # Define the root of the toolkit source tree and the build system
 # directory
-VRUI_PACKAGEROOT := $(PROJECT_ROOT)
+VRUI_PACKAGEROOT := $(shell pwd)
 VRUI_MAKEDIR := $(VRUI_PACKAGEROOT)/BuildRoot
 VRUI_ETCDIR := $(VRUI_PACKAGEROOT)/etc
 VRUI_SHAREDIR := $(VRUI_PACKAGEROOT)/share
 VRUI_SCRIPTDIR := $(VRUI_PACKAGEROOT)/scripts
 VRUI_DOCDIR := $(VRUI_PACKAGEROOT)/Documentation
 
+# Include definitions for the system environment and provided software
+# packages
+include $(VRUI_MAKEDIR)/SystemDefinitions
 include $(VRUI_MAKEDIR)/Packages.System
 
 ########################################################################
