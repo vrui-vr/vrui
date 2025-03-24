@@ -1495,6 +1495,7 @@ VIDEO_HEADERS += Video/ViewerComponent.h
 VIDEO_SOURCES = Video/VideoDataFormat.cpp \
                 Video/VideoDevice.cpp \
                 Video/ImageSequenceVideoDevice.cpp \
+                Video/ImageExtractor.cpp \
                 Video/Internal/ImageExtractorRGB8.cpp \
                 Video/Internal/ImageExtractorY8.cpp \
                 Video/Internal/ImageExtractorY10B.cpp \
