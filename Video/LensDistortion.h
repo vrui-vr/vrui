@@ -1,7 +1,7 @@
 /***********************************************************************
 LensDistortion - Classes representing different correction formulas for
 non-linear lens distortion.
-Copyright (c) 2015-2024 Oliver Kreylos
+Copyright (c) 2015-2025 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -29,6 +29,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Geometry/ComponentArray.h>
 #include <Geometry/Point.h>
 #include <Geometry/Vector.h>
+#include <Geometry/Matrix.h>
 
 /**************************************************************
 Different types of lens distortion formula for experimentation:
@@ -47,6 +48,7 @@ class LensDistortion
 	typedef double Scalar; // Scalar type for points and vectors
 	typedef Geometry::Point<Scalar,2> Point; // Type for points in image space
 	typedef Geometry::Vector<Scalar,2> Vector; // Type for vectors in image space
+	typedef Geometry::Matrix<Scalar,2,2> Derivative; // Type for distortion correction formula derivatives
 	static const int numKappas=VIDEO_LENSDISTORTION_NUMKAPPAS; // Number of radial distortion coefficients
 	#if VIDEO_LENSDISTORTION_RATIONALRADIAL
 	static const int numNumeratorKappas=(numKappas+1)/2; // Number of radial distortion coefficients in the numerator of the formula
@@ -237,6 +239,7 @@ class LensDistortion
 		{
 		return distort(Point(Scalar(x)+Scalar(0.5),Scalar(y)+Scalar(0.5)));
 		}
+	Derivative dDistort(const Point& undistorted) const; // Calculates the derivative of the forward lens distortion correction formula for the given tangent-space point
 	Point undistort(const Point& distorted) const; // Calculates inverse lens distortion correction formula via Newton-Raphson iteration for the given tangent-space point
 	Point undistort(int x,int y) const // Ditto, for center point of pixel with given index
 		{

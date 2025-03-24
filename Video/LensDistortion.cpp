@@ -1,7 +1,7 @@
 /***********************************************************************
 LensDistortion - Classes representing different correction formulas for
 non-linear lens distortion.
-Copyright (c) 2015-2020 Oliver Kreylos
+Copyright (c) 2015-2025 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -63,6 +63,56 @@ LensDistortion::Scalar LensDistortion::calcMaxR2(void) const
 		}
 	
 	return Math::sqr(maxR);
+	}
+
+LensDistortion::Derivative LensDistortion::dDistort(const LensDistortion::Point& undistorted) const
+	{
+	/* Calculate the derivative of the radial correction coefficient: */
+	Vector d=undistorted-center;
+	Scalar r2=d.sqr();
+	#if VIDEO_LENSDISTORTION_RATIONALRADIAL
+	Scalar radialn(0);
+	Scalar dRadialn(0);
+	for(int i=numNumeratorKappas-1;i>=0;--i)
+		{
+		radialn=(radialn+kappas[i])*r2;
+		dRadialn=dRadialn*r2+Scalar(i+1)*kappas[i];
+		}
+	radialn+=Scalar(1);
+	Scalar radiald(0);
+	Scalar dRadiald(0);
+	for(int i=numKappas-1;i>=numNumeratorKappas;--i)
+		{
+		radiald=(radiald+kappas[i])*r2;
+		dRadiald=dRadiald*r2+Scalar(i-numNumeratorKappas+1)*kappas[i];
+		}
+	radiald+=Scalar(1);
+	Scalar radial=radialn/radiald;
+	Scalar dRadial=(dRadialn*radiald-radialn*dRadiald)/Math::sqr(radiald);
+	#else
+	Scalar radial(0);
+	Scalar dRadial(0);
+	for(int i=numKappas-1;i>=0;--i)
+		{
+		radial=(radial+kappas[i])*r2;
+		dRadial=dRadial*r2+Scalar(i+1)*kappas[i];
+		}
+	radial+=Scalar(1);
+	#if VIDEO_LENSDISTORTION_INVERSERADIAL
+	radial=Scalar(1)/radial;
+	dRadial=-dRadial*Math::sqr(radial);
+	#endif
+	#endif
+	
+	/* Calculate the function derivative at p: */
+	dRadial*=Scalar(2);
+	Derivative result;
+	result(0,0)=radial+d[0]*dRadial*d[0]+Scalar(2)*rhos[0]*d[1]+Scalar(6)*rhos[1]*d[0]; // d fp[0] / d p[0]
+	result(0,1)=d[0]*dRadial*d[1]+Scalar(2)*rhos[0]*d[0]+Scalar(2)*rhos[1]*d[1]; // d fp[0] / d p[1]
+	result(1,0)=d[1]*dRadial*d[0]+Scalar(2)*rhos[0]*d[0]+Scalar(2)*rhos[1]*d[1]; // d fp[1] / d p[0]
+	result(1,1)=radial+d[1]*dRadial*d[1]+Scalar(2)*rhos[1]*d[0]+Scalar(6)*rhos[0]*d[1]; // d fp[0] / d p[0]
+	
+	return result;
 	}
 
 LensDistortion::Point LensDistortion::undistort(const LensDistortion::Point& distorted) const
