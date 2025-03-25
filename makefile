@@ -2083,7 +2083,7 @@ ifneq ($(SYSTEM_HAVE_VULKAN),0)
 	@echo "Vulkan shader directory: $(SHAREINSTALLDIR)/spirv"
 	@cp VRCompositingServer/Config.h.template VRCompositingServer/Config.h.temp
 	@$(call CONFIG_SETSTRINGVAR,VRCompositingServer/Config.h.temp,VRCOMPOSITOR_SHADERDIR,$(SHAREINSTALLDIR)/spirv)
-	@if ! -qN diff VRCompositingServer/Config.h.temp VRCompositingServer/Config.h > /dev/null ; then cp VRCompositingServer/Config.h.temp VRCompositingServer/Config.h ; fi
+	@if ! diff -qN VRCompositingServer/Config.h.temp VRCompositingServer/Config.h > /dev/null ; then cp VRCompositingServer/Config.h.temp VRCompositingServer/Config.h ; fi
 	@rm VRCompositingServer/Config.h.temp
 else
 	@echo "Vulkan 3D graphics API does not exist on host system; Vrui VR Compositing Server disabled"
