@@ -76,6 +76,8 @@ Optional:
 Quick Installation Guide for the Impatient
 ==========================================
 
+Also see the BuildForDevelopment.md file.
+
 (Replace <build> by the current Vrui build number.)
 
 0. (Install required packages, if necessary or desired.)
