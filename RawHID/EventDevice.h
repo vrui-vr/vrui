@@ -1,7 +1,7 @@
 /***********************************************************************
 EventDevice - Class representing an input device using the Linux event
 subsystem.
-Copyright (c) 2023 Oliver Kreylos
+Copyright (c) 2023-2025 Oliver Kreylos
 
 This file is part of the Raw HID Support Library (RawHID).
 
@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define RAWHID_EVENTDEVICE_INCLUDED
 
 #include <string>
+#include <vector>
 #include <Misc/CallbackData.h>
 #include <Misc/CallbackList.h>
 #include <Threads/EventDispatcher.h>
@@ -225,6 +226,8 @@ class EventDevice
 	
 	/* Constructors and destructors: */
 	public:
+	static std::vector<std::string> getEventDeviceFileNames(void); // Returns a list containing the device file names of all event devices 
+	EventDevice(const char* deviceFileName); // Opens the event device associated with the given event device file name
 	EventDevice(DeviceMatcher& deviceMatcher); // Opens the first device that matches the given device matcher
 	EventDevice(const char* deviceName,unsigned int index =0); // Opens the index-th device matching the given device name
 	EventDevice(unsigned short vendorId,unsigned short productId,unsigned int index =0); // Opens the index-th device matching the given vendor and product ID pair

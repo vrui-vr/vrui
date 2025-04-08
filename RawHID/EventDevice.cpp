@@ -1,7 +1,7 @@
 /***********************************************************************
 EventDevice - Class representing an input device using the Linux event
 subsystem.
-Copyright (c) 2023-2024 Oliver Kreylos
+Copyright (c) 2023-2025 Oliver Kreylos
 
 This file is part of the Raw HID Support Library (RawHID).
 
@@ -343,6 +343,46 @@ void EventDevice::ioEventCallback(Threads::EventDispatcher::IOEvent& event)
 	{
 	/* Process pending events: */
 	static_cast<EventDevice*>(event.getUserData())->processEvents();
+	}
+
+std::vector<std::string> EventDevice::getEventDeviceFileNames(void)
+	{
+	std::vector<std::string> result;
+	
+	/* Create list of all available /dev/input/eventX event device files, in numerical order: */
+	struct dirent** eventFiles=0;
+	int numEventFiles=scandir(RAWHID_EVENTDEVICEFILEDIR,&eventFiles,isEventFile,versionsort);
+	result.reserve(numEventFiles);
+	for(int eventFileIndex=0;eventFileIndex<numEventFiles;++eventFileIndex)
+		{
+		/* Create the fully-qualified event device file name: */
+		char eventFileName[288];
+		snprintf(eventFileName,sizeof(eventFileName),"%s/%s",RAWHID_EVENTDEVICEFILEDIR,eventFiles[eventFileIndex]->d_name);
+		
+		/* Add the fully-qualified name to the result list: */
+		result.push_back(eventFileName);
+		}
+	
+	/* Destroy list of event device files: */
+	for(int i=0;i<numEventFiles;++i)
+		free(eventFiles[i]);
+	free(eventFiles);
+	
+	return result;
+	}
+
+EventDevice::EventDevice(const char* deviceFileName)
+	:fd(-1),
+	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
+	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
+	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false)
+	{
+	/* Try opening the device file of the given name: */
+	fd=open(deviceFileName,O_RDONLY);
+	if(fd<0)
+		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot open event device file %s",deviceFileName);
+	
+	initFeatureMaps();
 	}
 
 EventDevice::EventDevice(EventDevice::DeviceMatcher& deviceMatcher)
