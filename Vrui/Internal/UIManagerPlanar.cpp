@@ -1,7 +1,7 @@
 /***********************************************************************
 UIManagerPlanar - UI manager class that aligns user interface components
 on a fixed plane.
-Copyright (c) 2015-2024 Oliver Kreylos
+Copyright (c) 2015-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -42,8 +42,36 @@ namespace Vrui {
 Methods of class UIManagerPlanar:
 ********************************/
 
+Point UIManagerPlanar::projectPoint(const Point& point) const
+	{
+	#if 1
+	
+	/* Project the given point into the plane from the main viewer's position: */
+	Vector viewDirection=point-getMainViewer()->getHeadPosition();
+	Scalar divisor=plane.getNormal()*viewDirection;
+	if(divisor!=Scalar(0))
+		{
+		/* Intersect the viewing ray with the UI plane: */
+		Scalar lambda=(plane.getOffset()-plane.getNormal()*point)/divisor;
+		return point+viewDirection*lambda;
+		}
+	else
+		{
+		/* Return the orthogonal projection of the point onto the plane: */
+		return plane.project(point);
+		}
+	
+	#else
+	
+	/* Return the orthogonal projection of the point onto the plane: */
+	return plane.project(point);
+	
+	#endif
+	}
+
 UIManagerPlanar::UIManagerPlanar(const Misc::ConfigurationFileSection& configFileSection)
 	:UIManager(configFileSection),
+	 projectHud(configFileSection.retrieveValue("./projectHud",true)),
 	 constrainMovement(configFileSection.retrieveValue("./constrainMovement",true))
 	{
 	/* Construct the default UI plane: */
@@ -171,11 +199,8 @@ void UIManagerPlanar::projectDevice(InputDevice* device,const TrackerState& prop
 
 ONTransform UIManagerPlanar::calcUITransform(const Point& point) const
 	{
-	/* Project the given point into the plane: */
-	Point planePoint=plane.project(point);
-	
-	/* Calculate and return the UI transformation: */
-	return ONTransform(planePoint-Point::origin,orientation);
+	/* Return the standard orientation at the point's projected position: */
+	return ONTransform(projectPoint(point)-Point::origin,orientation);
 	}
 
 ONTransform UIManagerPlanar::calcUITransform(const Ray& ray) const
@@ -190,33 +215,16 @@ ONTransform UIManagerPlanar::calcUITransform(const InputDevice* device) const
 
 ONTransform UIManagerPlanar::calcHUDTransform(const Point& point) const
 	{
-	#if 0
-	
-	/* Project the given point into the interaction plane from the main viewer's position: */
-	Vector viewDirection=point-getMainViewer()->getHeadPosition();
-	Scalar divisor=plane.getNormal()*viewDirection;
-	Point planePoint;
-	if(divisor!=Scalar(0))
+	if(projectHud)
 		{
-		/* Intersect the viewing ray with the UI plane: */
-		Scalar lambda=(plane.getOffset()-plane.getNormal()*point)/divisor;
-		planePoint=point+viewDirection*lambda;
+		/* Return the standard orientation at the point's projected position: */
+		return ONTransform(projectPoint(point)-Point::origin,orientation);
 		}
 	else
 		{
-		/* Return the projection of the point onto the plane: */
-		planePoint=plane.project(point);
+		/* Return the standard orientation at the point's original position: */
+		return ONTransform(point-Point::origin,orientation);
 		}
-	
-	/* Calculate and return the HUD transformation: */
-	return ONTransform(planePoint-Point::origin,orientation);
-	
-	#else
-	
-	/* Calculate and return the HUD transformation: */
-	return ONTransform(point-Point::origin,orientation);
-	
-	#endif
 	}
 
 }

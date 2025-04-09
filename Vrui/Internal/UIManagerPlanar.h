@@ -1,7 +1,7 @@
 /***********************************************************************
 UIManagerPlanar - UI manager class that aligns user interface components
 on a fixed plane.
-Copyright (c) 2015-2019 Oliver Kreylos
+Copyright (c) 2015-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -36,7 +36,11 @@ class UIManagerPlanar:public UIManager
 	private:
 	Plane plane; // Equation of the interaction plane
 	Rotation orientation; // Orientation for plane-aligned transformations
+	bool projectHud; // Flag whether the calcHUDTransform method projects the given points to the interaction plane
 	bool constrainMovement; // Flag whether to restrict movement of UI components that are already popped up
+	
+	/* Private methods: */
+	Point projectPoint(const Point& point) const; // Projects the given point into the UI plane
 	
 	/* Constructors and destructors: */
 	public:
