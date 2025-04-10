@@ -1,7 +1,7 @@
 /***********************************************************************
 TextFieldSlider - Compound widget containing a slider and a text field
 to display and edit the slider value.
-Copyright (c) 2010-2019 Oliver Kreylos
+Copyright (c) 2010-2025 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -146,6 +146,14 @@ class TextFieldSlider:public Container,public VariableTracker
 		return valueType;
 		}
 	void setValueType(ValueType newValueType); // Sets the slider's value type
+	double getValueMin(void) const // Returns the minimum slider value
+		{
+		return valueMin;
+		}
+	double getValueMax(void) const // Returns the maximum slider value
+		{
+		return valueMax;
+		}
 	void setValueRange(double newValueMin,double newValueMax,double newValueIncrement); // Sets the slider's value range
 	double getValue(void) const // Returns the current slider value
 		{

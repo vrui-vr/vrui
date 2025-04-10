@@ -1,6 +1,6 @@
 /***********************************************************************
 Slider - Class for horizontal or vertical sliders.
-Copyright (c) 2001-2019 Oliver Kreylos
+Copyright (c) 2001-2025 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -130,6 +130,14 @@ class Slider:public Widget,public DragWidget,public VariableTracker
 	void setShaftColor(const Color& newShaftColor) // Changes color of shaft
 		{
 		shaftColor=newShaftColor;
+		}
+	double getValueMin(void) const // Returns the minimum slider value
+		{
+		return valueMin;
+		}
+	double getValueMax(void) const // Returns the maximum slider value
+		{
+		return valueMax;
 		}
 	double getValue(void) const // Returns the current slider value
 		{
