@@ -34,6 +34,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Threads/Mutex.h>
 #include <Threads/EventDispatcherThread.h>
 #include <RawHID/EventDevice.h>
+#include <RawHID/PenDeviceConfig.h>
 #include <Math/Matrix.h>
 #include <Math/GaussNewtonMinimizer.h>
 #include <Geometry/Point.h>
@@ -55,21 +56,6 @@ class CalibrateTouchscreen:public Vrui::Application
 	{
 	/* Embedded classes: */
 	private:
-	struct PenDeviceConfig // Structure describing the absolute axis / key configuration of a pen device
-		{
-		/* Elements: */
-		public:
-		unsigned int posAxisIndices[2]; // Device indices of the device's position axes
-		unsigned int tiltAxisIndices[2]; // Device indices of the device's tilt axes
-		unsigned int touchKeyIndex; // Index of the device's touch key
-		unsigned int pressKeyIndex; // Index of the device's press key
-		bool valid; // Flag if the device has the required axes/buttons for a pen device
-		bool haveTilt; // Flag if the device has tilt axes
-		
-		/* Constructors and destructors: */
-		PenDeviceConfig(void); // Creates an invalid pen device configuration
-		};
-	
 	typedef Geometry::Point<double,2> Point; // Type for points in screen space
 	
 	struct CalibrationPoint
@@ -233,7 +219,6 @@ class CalibrateTouchscreen:public Vrui::Application
 	Point penPos; // Calibration pen position when a calibration has been calculated
 	
 	/* Private methods: */
-	static PenDeviceConfig getPenDeviceConfig(RawHID::EventDevice& device); // Extracts a pen device configuration from the given device
 	void keyCallback(RawHID::EventDevice::KeyFeatureEventCallbackData* cbData);
 	void absAxisCallback(RawHID::EventDevice::AbsAxisFeatureEventCallbackData* cbData);
 	void synReportCallback(Misc::CallbackData* cbData);
@@ -250,21 +235,6 @@ class CalibrateTouchscreen:public Vrui::Application
 	virtual void display(GLContextData& contextData) const;
 	virtual void eventCallback(EventID eventId,Vrui::InputDevice::ButtonCallbackData* cbData);
 	};
-
-/******************************************************
-Methods of class CalibrateTouchscreen::PenDeviceConfig:
-******************************************************/
-
-CalibrateTouchscreen::PenDeviceConfig::PenDeviceConfig(void)
-	:touchKeyIndex(~0x0U),pressKeyIndex(~0x0U),
-	 valid(false),haveTilt(false)
-	{
-	for(int i=0;i<2;++i)
-		{
-		posAxisIndices[i]=~0x0U;
-		tiltAxisIndices[i]=~0x0U;
-		}
-	}
 
 /************************************************************
 Methods of class CalibrateTouchscreen::RectilinearCalibrator:
@@ -553,66 +523,6 @@ CalibrateTouchscreen::Point CalibrateTouchscreen::BsplineCalibrator::calibrate(d
 Methods of class CalibrateTouchscreen:
 *************************************/
 
-CalibrateTouchscreen::PenDeviceConfig CalibrateTouchscreen::getPenDeviceConfig(RawHID::EventDevice& device)
-	{
-	PenDeviceConfig result;
-	
-	/* Find the absolute axes and keys that define a pen device: */
-	unsigned int featureMask=0x0U;
-	
-	/* Check for absolute axis features: */
-	unsigned int numAxes=device.getNumAbsAxisFeatures();
-	for(unsigned int i=0;i<numAxes;++i)
-		{
-		switch(device.getAbsAxisFeatureConfig(i).code)
-			{
-			case ABS_X:
-				result.posAxisIndices[0]=i;
-				featureMask|=0x1U;
-				break;
-			
-			case ABS_Y:
-				result.posAxisIndices[1]=i;
-				featureMask|=0x2U;
-				break;
-			
-			case ABS_TILT_X:
-				result.tiltAxisIndices[0]=i;
-				featureMask|=0x10U;
-				break;
-			
-			case ABS_TILT_Y:
-				result.tiltAxisIndices[1]=i;
-				featureMask|=0x20U;
-				break;
-			}
-		}
-	
-	/* Check for key features: */
-	unsigned int numKeys=device.getNumKeyFeatures();
-	for(unsigned int i=0;i<numKeys;++i)
-		{
-		switch(device.getKeyFeatureCode(i))
-			{
-			case BTN_TOUCH:
-				result.touchKeyIndex=i;
-				featureMask|=0x04U;
-				break;
-			
-			case BTN_TOOL_PEN:
-				result.pressKeyIndex=i;
-				featureMask|=0x08U;
-				break;
-			}
-		}
-	
-	/* Check if all required and optional features are present: */
-	result.valid=(featureMask&0x0fU)==0x0fU;
-	result.haveTilt=(featureMask&0x30U)==0x30U;
-	
-	return result;
-	}
-
 void CalibrateTouchscreen::keyCallback(RawHID::EventDevice::KeyFeatureEventCallbackData* cbData)
 	{
 	Threads::Mutex::Lock penStateLock(penStateMutex);
@@ -788,7 +698,7 @@ void CalibrateTouchscreen::listPenDevices(void)
 			RawHID::EventDevice device(edIt->c_str());
 			
 			/* Query the device's pen device configuration: */
-			PenDeviceConfig config=getPenDeviceConfig(device);
+			RawHID::PenDeviceConfig config(device);
 			
 			/* Print the device's identifier if it is a valid pen device: */
 			if(config.valid)
@@ -948,9 +858,13 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 	else
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No pen device specification provided");
 	
-	/* Try grabbing the pen device: */
-	if(!penDevice->grabDevice())
-		std::cout<<"Unable to grab the pen device!"<<std::endl;
+	/* Retrieve the pen device's configuration: */
+	RawHID::PenDeviceConfig penDeviceConfig(*penDevice);
+	if(!penDeviceConfig.valid)
+		{
+		delete penDevice;
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Requested device is not a pen device");
+		}
 	
 	/* Print information about the pen device: */
 	std::cout<<"Calibrating pen device ";
@@ -959,44 +873,24 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 	std::cout<<", "<<penDevice->getDeviceName()<<" (serial no. "<<penDevice->getSerialNumber()<<')'<<std::endl;
 	std::cout<<"Pen device provides "<<penDevice->getNumKeyFeatures()<<" buttons and "<<penDevice->getNumAbsAxisFeatures()<<" absolute axes"<<std::endl;
 	
-	/* Find the pen device's absolute x and y axes: */
-	axisIndices[1]=axisIndices[0]=(unsigned int)(-1);
-	tiltIndices[1]=tiltIndices[0]=(unsigned int)(-1);
-	unsigned int numAxes=penDevice->getNumAbsAxisFeatures();
-	for(unsigned int i=0;i<numAxes;++i)
-		{
-		if(penDevice->getAbsAxisFeatureConfig(i).code==ABS_X)
-			axisIndices[0]=i;
-		else if(penDevice->getAbsAxisFeatureConfig(i).code==ABS_Y)
-			axisIndices[1]=i;
-		else if(penDevice->getAbsAxisFeatureConfig(i).code==ABS_TILT_X)
-			tiltIndices[0]=i;
-		else if(penDevice->getAbsAxisFeatureConfig(i).code==ABS_TILT_Y)
-			tiltIndices[1]=i;
-		}
+	/* Try grabbing the pen device: */
+	if(!penDevice->grabDevice())
+		std::cout<<"Unable to grab the pen device!"<<std::endl;
 	
-	/* Find the pen device's hover and touch button indices: */
-	hoverButtonIndex=(unsigned int)(-1);
-	buttonIndex=(unsigned int)(-1);
-	unsigned int numKeys=penDevice->getNumKeyFeatures();
-	for(unsigned int i=0;i<numKeys;++i)
+	/* Retrieve the pen device's relevant feature indices: */
+	for(int i=0;i<2;++i)
 		{
-		if(penDevice->getKeyFeatureCode(i)==BTN_TOOL_PEN)
-			hoverButtonIndex=i;
-		else if(penDevice->getKeyFeatureCode(i)==BTN_TOUCH)
-			buttonIndex=i;
+		axisIndices[i]=penDeviceConfig.posAxisIndices[i];
+		tiltIndices[i]=penDeviceConfig.tiltAxisIndices[i];
 		}
+	hoverButtonIndex=penDeviceConfig.touchKeyIndex;
+	buttonIndex=penDeviceConfig.pressKeyIndex;
 	
 	/* Check the device's capabilities: */
-	if(axisIndices[0]>=numAxes||axisIndices[1]>=numAxes||buttonIndex>=numKeys)
-		{
-		delete penDevice;
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Button or absolute axis indices out of range");
-		}
 	const RawHID::EventDevice::AbsAxisConfig& configX=penDevice->getAbsAxisFeatureConfig(axisIndices[0]);
 	const RawHID::EventDevice::AbsAxisConfig& configY=penDevice->getAbsAxisFeatureConfig(axisIndices[1]);
 	std::cout<<"Pen device position axis ranges: ["<<configX.min<<", "<<configX.max<<"], ["<<configY.min<<", "<<configY.max<<"]"<<std::endl;
-	haveTilt=tiltIndices[0]<numAxes&&tiltIndices[1]<numAxes;
+	haveTilt=penDeviceConfig.haveTilt;
 	if(haveTilt)
 		{
 		const RawHID::EventDevice::AbsAxisConfig& configX=penDevice->getAbsAxisFeatureConfig(tiltIndices[0]);
