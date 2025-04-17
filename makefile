@@ -545,7 +545,8 @@ EXECUTABLES += $(EXEDIR)/TransformCalculator \
                $(EXEDIR)/AlignTrackingMarkers \
                $(EXEDIR)/AlignPoints \
                $(EXEDIR)/MeasurePoints \
-               $(EXEDIR)/SampleTrackerField
+               $(EXEDIR)/SampleTrackerField \
+               $(EXEDIR)/CalibrateTouchscreen
 ifneq ($(SYSTEM_HAVE_LIBUSB1),0)
   EXECUTABLES += $(EXEDIR)/OculusCalibrator
 endif
@@ -2353,6 +2354,15 @@ $(EXEDIR)/SampleTrackerField: EXTRACINCLUDEFLAGS += -ICalibration
 $(EXEDIR)/SampleTrackerField: $(OBJDIR)/Calibration/SampleTrackerField.o
 .PHONY: SampleTrackerField
 SampleTrackerField: $(EXEDIR)/SampleTrackerField
+
+#
+# A utility to calibrate touchscreen and pen devices:
+#
+
+$(EXEDIR)/CalibrateTouchscreen: PACKAGES += MYVRUI MYGLMOTIF MYGLGEOMETRY MYGLSUPPORT MYGEOMETRY MYMATH MYRAWHID MYIO MYMISC GL
+$(EXEDIR)/CalibrateTouchscreen: $(OBJDIR)/Calibration/CalibrateTouchscreen.o
+.PHONY: CalibrateTouchscreen
+CalibrateTouchscreen: $(EXEDIR)/CalibrateTouchscreen
 
 #
 # The Oculus Rift tracker calibrator:

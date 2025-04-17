@@ -1,7 +1,7 @@
 /***********************************************************************
 CalibrateTouchscreen - Vrui utility to calibrate a touchscreen or pen
 display or similar device.
-Copyright (c) 2023-2024 Oliver Kreylos
+Copyright (c) 2023-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -55,7 +55,23 @@ class CalibrateTouchscreen:public Vrui::Application
 	{
 	/* Embedded classes: */
 	private:
+	struct PenDeviceConfig // Structure describing the absolute axis / key configuration of a pen device
+		{
+		/* Elements: */
+		public:
+		unsigned int posAxisIndices[2]; // Device indices of the device's position axes
+		unsigned int tiltAxisIndices[2]; // Device indices of the device's tilt axes
+		unsigned int touchKeyIndex; // Index of the device's touch key
+		unsigned int pressKeyIndex; // Index of the device's press key
+		bool valid; // Flag if the device has the required axes/buttons for a pen device
+		bool haveTilt; // Flag if the device has tilt axes
+		
+		/* Constructors and destructors: */
+		PenDeviceConfig(void); // Creates an invalid pen device configuration
+		};
+	
 	typedef Geometry::Point<double,2> Point; // Type for points in screen space
+	
 	struct CalibrationPoint
 		{
 		/* Elements: */
@@ -217,10 +233,12 @@ class CalibrateTouchscreen:public Vrui::Application
 	Point penPos; // Calibration pen position when a calibration has been calculated
 	
 	/* Private methods: */
+	static PenDeviceConfig getPenDeviceConfig(RawHID::EventDevice& device); // Extracts a pen device configuration from the given device
 	void keyCallback(RawHID::EventDevice::KeyFeatureEventCallbackData* cbData);
 	void absAxisCallback(RawHID::EventDevice::AbsAxisFeatureEventCallbackData* cbData);
 	void synReportCallback(Misc::CallbackData* cbData);
 	void calibrate(void);
+	static void listPenDevices(void);
 	
 	/* Constructors and destructors: */
 	public:
@@ -232,6 +250,21 @@ class CalibrateTouchscreen:public Vrui::Application
 	virtual void display(GLContextData& contextData) const;
 	virtual void eventCallback(EventID eventId,Vrui::InputDevice::ButtonCallbackData* cbData);
 	};
+
+/******************************************************
+Methods of class CalibrateTouchscreen::PenDeviceConfig:
+******************************************************/
+
+CalibrateTouchscreen::PenDeviceConfig::PenDeviceConfig(void)
+	:touchKeyIndex(~0x0U),pressKeyIndex(~0x0U),
+	 valid(false),haveTilt(false)
+	{
+	for(int i=0;i<2;++i)
+		{
+		posAxisIndices[i]=~0x0U;
+		tiltAxisIndices[i]=~0x0U;
+		}
+	}
 
 /************************************************************
 Methods of class CalibrateTouchscreen::RectilinearCalibrator:
@@ -520,6 +553,66 @@ CalibrateTouchscreen::Point CalibrateTouchscreen::BsplineCalibrator::calibrate(d
 Methods of class CalibrateTouchscreen:
 *************************************/
 
+CalibrateTouchscreen::PenDeviceConfig CalibrateTouchscreen::getPenDeviceConfig(RawHID::EventDevice& device)
+	{
+	PenDeviceConfig result;
+	
+	/* Find the absolute axes and keys that define a pen device: */
+	unsigned int featureMask=0x0U;
+	
+	/* Check for absolute axis features: */
+	unsigned int numAxes=device.getNumAbsAxisFeatures();
+	for(unsigned int i=0;i<numAxes;++i)
+		{
+		switch(device.getAbsAxisFeatureConfig(i).code)
+			{
+			case ABS_X:
+				result.posAxisIndices[0]=i;
+				featureMask|=0x1U;
+				break;
+			
+			case ABS_Y:
+				result.posAxisIndices[1]=i;
+				featureMask|=0x2U;
+				break;
+			
+			case ABS_TILT_X:
+				result.tiltAxisIndices[0]=i;
+				featureMask|=0x10U;
+				break;
+			
+			case ABS_TILT_Y:
+				result.tiltAxisIndices[1]=i;
+				featureMask|=0x20U;
+				break;
+			}
+		}
+	
+	/* Check for key features: */
+	unsigned int numKeys=device.getNumKeyFeatures();
+	for(unsigned int i=0;i<numKeys;++i)
+		{
+		switch(device.getKeyFeatureCode(i))
+			{
+			case BTN_TOUCH:
+				result.touchKeyIndex=i;
+				featureMask|=0x04U;
+				break;
+			
+			case BTN_TOOL_PEN:
+				result.pressKeyIndex=i;
+				featureMask|=0x08U;
+				break;
+			}
+		}
+	
+	/* Check if all required and optional features are present: */
+	result.valid=(featureMask&0x0fU)==0x0fU;
+	result.haveTilt=(featureMask&0x30U)==0x30U;
+	
+	return result;
+	}
+
 void CalibrateTouchscreen::keyCallback(RawHID::EventDevice::KeyFeatureEventCallbackData* cbData)
 	{
 	Threads::Mutex::Lock penStateLock(penStateMutex);
@@ -683,6 +776,37 @@ void CalibrateTouchscreen::calibrate(void)
 		}
 	}
 
+void CalibrateTouchscreen::listPenDevices(void)
+	{
+	/* Retrieve the list of all event devices: */
+	std::vector<std::string> eventDevices=RawHID::EventDevice::getEventDeviceFileNames();
+	for(std::vector<std::string>::iterator edIt=eventDevices.begin();edIt!=eventDevices.end();++edIt)
+		{
+		try
+			{
+			/* Try opening the event device: */
+			RawHID::EventDevice device(edIt->c_str());
+			
+			/* Query the device's pen device configuration: */
+			PenDeviceConfig config=getPenDeviceConfig(device);
+			
+			/* Print the device's identifier if it is a valid pen device: */
+			if(config.valid)
+				{
+				/* Print information about the pen device: */
+				std::cout<<"Pen device ";
+				std::cout<<std::hex<<std::setfill('0')<<std::setw(4)<<device.getVendorId()<<':'<<std::setw(4)<<device.getProductId()<<std::dec<<std::setfill(' ');
+				std::cout<<", version "<<device.getVersion();
+				std::cout<<", "<<device.getDeviceName()<<" (serial no. "<<device.getSerialNumber()<<')'<<std::endl;
+				}
+			}
+		catch(const std::runtime_error& err)
+			{
+			Misc::formattedUserError("Cannot open event device %s due to exception %s",edIt->c_str(),err.what());
+			}
+		}
+	}
+
 CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 	:Vrui::Application(argc,argv),
 	 penDevice(0),
@@ -694,6 +818,7 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 	 hovering(false)
 	{
 	/* Parse the command line: */
+	bool listDevices=false;
 	int matchMode=0x0;
 	unsigned int penDeviceVendorId=0x0U;
 	unsigned int penDeviceProductId=0x0U;
@@ -712,7 +837,9 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 		{
 		if(argv[argi][0]=='-')
 			{
-			if(strcasecmp(argv[argi]+1,"productVendorId")==0||strcasecmp(argv[argi]+1,"pv")==0)
+			if(strcasecmp(argv[argi]+1,"listDevices")==0||strcasecmp(argv[argi]+1,"ld")==0)
+				listDevices=true;
+			else if(strcasecmp(argv[argi]+1,"productVendorId")==0||strcasecmp(argv[argi]+1,"pv")==0)
 				{
 				if(argi+2<argc)
 					{
@@ -801,6 +928,14 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 				argi+=4;
 				}
 			}
+		}
+	
+	if(listDevices)
+		{
+		/* List all connected pen devices and exit: */
+		listPenDevices();
+		Vrui::shutdown();
+		return;
 		}
 	
 	/* Open the pen device: */

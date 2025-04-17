@@ -8364,3 +8364,6 @@ Vrui-13.0-001:
     - PROJECT_LIBDIR: Full path to location for generated library files
     - INSTALLDIR, HEADERINSTALLDIR, LIBINSTALLDIR, EXECUTABLEINSTALLDIR,
       ETCINSTALLDIR, SHAREINSTALLDIR: set based on INSTALLDIR variable
+- API change: Device indices in constructors of RawHID::EventDevice are
+  no longer optional.
+
