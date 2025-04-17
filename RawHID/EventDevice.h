@@ -229,9 +229,9 @@ class EventDevice
 	static std::vector<std::string> getEventDeviceFileNames(void); // Returns a list containing the device file names of all event devices 
 	EventDevice(const char* deviceFileName); // Opens the event device associated with the given event device file name
 	EventDevice(DeviceMatcher& deviceMatcher); // Opens the first device that matches the given device matcher
-	EventDevice(const char* deviceName,unsigned int index =0); // Opens the index-th device matching the given device name
-	EventDevice(unsigned short vendorId,unsigned short productId,unsigned int index =0); // Opens the index-th device matching the given vendor and product ID pair
-	EventDevice(unsigned short vendorId,unsigned short productId,const char* deviceName,unsigned int index =0); // Opens the index-th device matching the given vendor and product ID pair and device name
+	EventDevice(const char* deviceName,unsigned int index); // Opens the index-th device matching the given device name
+	EventDevice(unsigned short vendorId,unsigned short productId,unsigned int index ); // Opens the index-th device matching the given vendor and product ID pair
+	EventDevice(unsigned short vendorId,unsigned short productId,const char* deviceName,unsigned int index); // Opens the index-th device matching the given vendor and product ID pair and device name
 	private:
 	EventDevice(const EventDevice& source); // Prohibit copy constructor
 	EventDevice& operator=(const EventDevice& source); // Prohibit assignment operator
