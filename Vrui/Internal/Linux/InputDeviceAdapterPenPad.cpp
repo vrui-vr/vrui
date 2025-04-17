@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterPenPad - Input device adapter for pen pads or pen
 displays represented by one or more component HIDs.
-Copyright (c) 2023-2024 Oliver Kreylos
+Copyright (c) 2023-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -67,10 +67,10 @@ InputDeviceAdapterPenPad::InputDeviceAdapterPenPad(InputDeviceManager* sInputDev
 	inputDevices[0]=0;
 	
 	/* Connect to the pen pad's component HIDs: */
-	devices.push_back(RawHID::EventDevice(0x256cU,0x006dU,"Tablet Monitor Pen"));
-	devices.push_back(RawHID::EventDevice(0x256cU,0x006dU,"Tablet Monitor Pad"));
-	// devices.push_back(RawHID::EventDevice(0x256cU,0x006dU,"Tablet Monitor Touch Strip"));
-	// devices.push_back(RawHID::EventDevice(0x256cU,0x006dU,"Tablet Monitor Dial"));
+	devices.push_back(RawHID::EventDevice(0x256cU,0x006dU,"Tablet Monitor Pen",0));
+	devices.push_back(RawHID::EventDevice(0x256cU,0x006dU,"Tablet Monitor Pad",0));
+	// devices.push_back(RawHID::EventDevice(0x256cU,0x006dU,"Tablet Monitor Touch Strip",0));
+	// devices.push_back(RawHID::EventDevice(0x256cU,0x006dU,"Tablet Monitor Dial",0));
 	
 	/* Register callbacks with the component HIDs and start dispatching events on the HIDs' device nodes: */
 	for(std::vector<RawHID::EventDevice>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
