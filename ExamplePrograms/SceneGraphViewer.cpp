@@ -1,7 +1,7 @@
 /***********************************************************************
 SceneGraphViewer - Viewer for one or more scene graphs loaded from VRML
-2.0 files.
-Copyright (c) 2010-2023 Oliver Kreylos
+2.0 or binary scene graph files.
+Copyright (c) 2010-2025 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -35,7 +35,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Geometry/OrthogonalTransformation.h>
 #include <GLMotif/PopupMenu.h>
 #include <GLMotif/Button.h>
-#include <SceneGraph/SceneGraphWriter.h>
 #include <SceneGraph/GraphNode.h>
 #include <SceneGraph/SphereCollisionQuery.h>
 #include <Vrui/Vrui.h>
@@ -60,57 +59,18 @@ void SceneGraphViewer::goToPhysicalSpaceCallback(Misc::CallbackData* cbData)
 	Vrui::setNavigationTransformation(Vrui::NavTransform::identity);
 	}
 
-void SceneGraphViewer::sceneGraphToggleCallback(GLMotif::ToggleButton::ValueChangedCallbackData* cbData,const int& index)
+void SceneGraphViewer::showPhysicalSceneGraphListCallback(Misc::CallbackData* cbData)
 	{
-	/* Enable or disable the selected scene graph: */
-	sceneGraphs[index].enabled=cbData->set;
-	
-	/* Add or remove the scene graph to/from its assigned central scene graph: */
-	if(cbData->set)
-		Vrui::getSceneGraphManager()->addNode(sceneGraphs[index].navigational,*sceneGraphs[index].root);
-	else
-		Vrui::getSceneGraphManager()->removeNode(sceneGraphs[index].navigational,*sceneGraphs[index].root);
+	/* Create and show the list dialog: */
+	GLMotif::PopupWindow* list=physicalSceneGraphs.createSceneGraphDialog(*Vrui::getWidgetManager(),"Physical-Space Scene Graphs");
+	Vrui::popupPrimaryWidget(list);
 	}
 
-void SceneGraphViewer::reloadAllSceneGraphsCallback(Misc::CallbackData* cbData)
+void SceneGraphViewer::showNavigationalSceneGraphListCallback(Misc::CallbackData* cbData)
 	{
-	/* Remove all scene graphs from their assigned central scene graphs: */
-	for(std::vector<SGItem>::iterator sgIt=sceneGraphs.begin();sgIt!=sceneGraphs.end();++sgIt)
-		if(sgIt->enabled)
-			Vrui::getSceneGraphManager()->removeNode(sgIt->navigational,*sgIt->root);
-	
-	int index=0;
-	for(std::vector<SGItem>::iterator sgIt=sceneGraphs.begin();sgIt!=sceneGraphs.end();++sgIt,++index)
-		{
-		/* Delete the current scene graph: */
-		bool enableOnLoad=sgIt->root==0||sgIt->enabled;
-		sgIt->root=0;
-		sgIt->enabled=false;
-		
-		/* Try reloading the scene graph: */
-		try
-			{
-			/* Reload the scene graph file: */
-			sgIt->root=Vrui::getSceneGraphManager()->loadSceneGraph(sgIt->fileName);;
-			sgIt->enabled=enableOnLoad;
-			
-			if(enableOnLoad)
-				{
-				/* Add the new scene graph to the appropriate root node: */
-				Vrui::getSceneGraphManager()->addNode(sgIt->navigational,*sgIt->root);
-				}
-			}
-		catch(const std::runtime_error& err)
-			{
-			/* Print an error message and try the next file: */
-			Misc::formattedUserWarning("Scene Graph Viewer: Ignoring file %s due to exception %s",sgIt->fileName.c_str(),err.what());
-			}
-		
-		/* Update the state of the menu button associated with this scene graph: */
-		GLMotif::ToggleButton* sceneGraphToggle=dynamic_cast<GLMotif::ToggleButton*>(mainMenu->getEntry(index));
-		if(sceneGraphToggle!=0)
-			sceneGraphToggle->setToggle(sgIt->enabled);
-		}
+	/* Create and show the list dialog: */
+	GLMotif::PopupWindow* list=navigationalSceneGraphs.createSceneGraphDialog(*Vrui::getWidgetManager(),"Navigational-Space Scene Graphs");
+	Vrui::popupPrimaryWidget(list);
 	}
 
 void SceneGraphViewer::alignSurfaceFrame(Vrui::SurfaceNavigationTool::AlignmentData& alignmentData)
@@ -282,6 +242,8 @@ void SceneGraphViewer::alignSurfaceFrame(Vrui::SurfaceNavigationTool::AlignmentD
 
 SceneGraphViewer::SceneGraphViewer(int& argc,char**& argv)
 	:Vrui::Application(argc,argv),
+	 physicalSceneGraphs(Vrui::getSceneGraphManager()->getPhysicalRoot(),*IO::Directory::getCurrent()),
+	 navigationalSceneGraphs(Vrui::getSceneGraphManager()->getNavigationalRoot(),*IO::Directory::getCurrent()),
 	 mainMenu(0)
 	{
 	// DEBUGGING
@@ -291,77 +253,35 @@ SceneGraphViewer::SceneGraphViewer(int& argc,char**& argv)
 	bool requireAudio=false;
 	
 	/* Parse the command line: */
-	bool navigational=true;
+	SceneGraph::SceneGraphList* currentList=&navigationalSceneGraphs;
 	bool enable=true;
-	bool saveBinary=false;
 	for(int i=1;i<argc;++i)
 		{
 		if(argv[i][0]=='-')
 			{
 			if(strcasecmp(argv[i]+1,"navigational")==0||strcasecmp(argv[i]+1,"n")==0)
-				navigational=true;
+				currentList=&navigationalSceneGraphs;
 			else if(strcasecmp(argv[i]+1,"physical")==0||strcasecmp(argv[i]+1,"p")==0)
-				navigational=false;
+				currentList=&physicalSceneGraphs;
 			else if(strcasecmp(argv[i]+1,"enable")==0||strcasecmp(argv[i]+1,"e")==0)
 				enable=true;
 			else if(strcasecmp(argv[i]+1,"disable")==0||strcasecmp(argv[i]+1,"d")==0)
 				enable=false;
-			else if(strcasecmp(argv[i]+1,"saveBinary")==0||strcasecmp(argv[i]+1,"sb")==0)
-				saveBinary=true;
 			}
 		else
 			{
-			/* Create a scene graph item for the given file name: */
-			sceneGraphs.push_back(SGItem());
-			SGItem& sg=sceneGraphs.back();
-			sg.fileName=argv[i];
-			sg.navigational=navigational;
-			sg.enabled=false;
-			
 			/* Try loading the scene graph: */
 			try
 				{
-				sg.root=Vrui::getSceneGraphManager()->loadSceneGraph(sg.fileName);
-				sg.enabled=enable;
-				
-				if(enable)
-					{
-					/* Add the new scene graph to the appropriate root node: */
-					Vrui::getSceneGraphManager()->addNode(navigational,*sg.root);
-					}
+				SceneGraph::GraphNodePointer sceneGraph=currentList->addSceneGraph(argv[i],enable);
 				
 				/* Check if the scene graph requires an audio pass: */
-				requireAudio=requireAudio||(sg.root->getPassMask()&SceneGraph::GraphNode::ALRenderPass)!=0x0U;
+				requireAudio=requireAudio||(sceneGraph->getPassMask()&SceneGraph::GraphNode::ALRenderPass)!=0x0U;
 				}
 			catch(const std::runtime_error& err)
 				{
-				/* Print an error message and try the next file: */
-				Misc::formattedUserWarning("Scene Graph Viewer: Ignoring file %s due to exception %s",sg.fileName.c_str(),err.what());
-				
-				/* Remove the tentatively-added scene graph again: */
-				sceneGraphs.pop_back();
-				}
-			
-			/* Check if scene graphs should be converted to binary format: */
-			if(saveBinary)
-				{
-				try
-					{
-					/* Change the extension of the scene graph file name to .bwrl: */
-					std::string binaryFileName(sg.fileName.c_str(),Misc::getExtension(sg.fileName.c_str()));
-					binaryFileName.append(".bwrl");
-					
-					/* Write the new scene graph to a binary scene graph file: */
-					IO::FilePtr sceneGraphFile=IO::openFile(binaryFileName.c_str(),IO::File::WriteOnly);
-					sceneGraphFile->setEndianness(Misc::LittleEndian);
-					SceneGraph::SceneGraphWriter writer(sceneGraphFile,Vrui::getSceneGraphManager()->getNodeCreator());
-					writer.writeNode(sg.root.getPointer());
-					}
-				catch(const std::runtime_error& err)
-					{
-					/* Print an error message and carry on: */
-					Misc::formattedUserWarning("Scene Graph Viewer: Unable to save scene graph %s as binary file due to exception %s",sg.fileName.c_str(),err.what());
-					}
+				/* Print an error message and keep going: */
+				Misc::formattedUserWarning("Scene Graph Viewer: Ignoring file %s due to exception %s",argv[i],err.what());
 				}
 			}
 		}
@@ -382,40 +302,12 @@ SceneGraphViewer::SceneGraphViewer(int& argc,char**& argv)
 	GLMotif::Button* goToPhysicalSpaceButton=new GLMotif::Button("GoToPhysicalSpaceButton",mainMenu,"Go To Physical Space");
 	goToPhysicalSpaceButton->getSelectCallbacks().add(this,&SceneGraphViewer::goToPhysicalSpaceCallback);
 	
-	/* Add a toggle button for each scene graph: */
-	mainMenu->addSeparator();
-	int index=0;
-	for(std::vector<SGItem>::iterator sgIt=sceneGraphs.begin();sgIt!=sceneGraphs.end();++sgIt,++index)
-		{
-		/* Generate a widget name: */
-		char toggleName[40];
-		snprintf(toggleName,sizeof(toggleName),"SceneGraphToggle%d",index);
-		
-		/* Extract a short name from the scene graph file name: */
-		std::string::iterator start=sgIt->fileName.begin();
-		std::string::iterator end=sgIt->fileName.end();
-		for(std::string::iterator fnIt=sgIt->fileName.begin();fnIt!=sgIt->fileName.end();++fnIt)
-			{
-			if(*fnIt=='/')
-				{
-				start=fnIt+1;
-				end=sgIt->fileName.end();
-				}
-			else if(*fnIt=='.')
-				end=fnIt;
-			}
-		std::string name(start,end);
-		
-		/* Create a toggle button: */
-		GLMotif::ToggleButton* sceneGraphToggle=new GLMotif::ToggleButton(toggleName,mainMenu,name.c_str());
-		sceneGraphToggle->setToggle(sgIt->enabled);
-		sceneGraphToggle->getValueChangedCallbacks().add(this,&SceneGraphViewer::sceneGraphToggleCallback,index);
-		}
-	mainMenu->addSeparator();
+	/* Add toggles to show the physical or navigational scene graph list dialogs: */
+	GLMotif::Button* showPhysicalSceneGraphListButton=new GLMotif::Button("ShowPhysicalSceneGraphListButton",mainMenu,"Show Physical-Space Scene Graphs");
+	showPhysicalSceneGraphListButton->getSelectCallbacks().add(this,&SceneGraphViewer::showPhysicalSceneGraphListCallback);
 	
-	/* Add a button to force a reload on all scene graphs: */
-	GLMotif::Button* reloadAllSceneGraphsButton=new GLMotif::Button("ReloadAllSceneGraphsButton",mainMenu,"Reload All");
-	reloadAllSceneGraphsButton->getSelectCallbacks().add(this,&SceneGraphViewer::reloadAllSceneGraphsCallback);
+	GLMotif::Button* showNavigationalSceneGraphListButton=new GLMotif::Button("ShowNavigationalSceneGraphListButton",mainMenu,"Show Navigational-Space Scene Graphs");
+	showNavigationalSceneGraphListButton->getSelectCallbacks().add(this,&SceneGraphViewer::showNavigationalSceneGraphListCallback);
 	
 	/* Finish and install the main menu: */
 	mainMenu->manageMenu();

@@ -1,7 +1,7 @@
 /***********************************************************************
 SceneGraphViewer - Viewer for one or more scene graphs loaded from VRML
-2.0 files.
-Copyright (c) 2010-2023 Oliver Kreylos
+2.0 or binary scene graph files.
+Copyright (c) 2010-2025 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -24,7 +24,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <string>
 #include <GLMotif/ToggleButton.h>
 #include <SceneGraph/Geometry.h>
-#include <SceneGraph/GraphNode.h>
+#include <SceneGraph/SceneGraphList.h>
 #include <Vrui/Application.h>
 #include <Vrui/ToolManager.h>
 #include <Vrui/SurfaceNavigationTool.h>
@@ -45,16 +45,6 @@ class SceneGraphViewer:public Vrui::Application
 	typedef SceneGraph::Point Point;
 	typedef SceneGraph::Vector Vector;
 	
-	struct SGItem // Structure for scene graph list items
-		{
-		/* Elements: */
-		public:
-		std::string fileName; // Name of file from which the scene graph was loaded
-		SceneGraph::GraphNodePointer root; // Pointer to the scene graph's root node
-		bool navigational; // Flag whether the scene graph is in navigational coordinates
-		bool enabled; // Flag whether the scene graph is currently enabled
-		};
-	
 	struct AlignmentState:public Vrui::SurfaceNavigationTool::AlignmentState // Structure to keep track of continuing surface-aligned navigation sequences
 		{
 		public:
@@ -73,13 +63,14 @@ class SceneGraphViewer:public Vrui::Application
 	
 	/* Elements: */
 	private:
-	std::vector<SGItem> sceneGraphs; // List of loaded scene graphs
+	SceneGraph::SceneGraphList physicalSceneGraphs; // List of scene graphs in physical space
+	SceneGraph::SceneGraphList navigationalSceneGraphs; // List of scene graphs in navigational space
 	GLMotif::PopupMenu* mainMenu;
 	
 	/* Private methods: */
 	void goToPhysicalSpaceCallback(Misc::CallbackData* cbData);
-	void sceneGraphToggleCallback(GLMotif::ToggleButton::ValueChangedCallbackData* cbData,const int& index);
-	void reloadAllSceneGraphsCallback(Misc::CallbackData* cbData);
+	void showPhysicalSceneGraphListCallback(Misc::CallbackData* cbData);
+	void showNavigationalSceneGraphListCallback(Misc::CallbackData* cbData);
 	void alignSurfaceFrame(Vrui::SurfaceNavigationTool::AlignmentData& alignmentData);
 	
 	/* Constructors and destructors: */

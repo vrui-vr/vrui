@@ -113,9 +113,17 @@ class SceneGraphManager
 	SceneGraphManager(void); // Creates a manager with empty physical- and navigational scene graphs
 	
 	/* Methods: */
+	SceneGraph::GroupNode& getPhysicalRoot(void) // Returns the root node of the physical-space scene graph
+		{
+		return *physicalRoot;
+		}
 	void addPhysicalNode(SceneGraph::GraphNode& node); // Adds the given node to the physical-space scene graph
 	void removePhysicalNode(SceneGraph::GraphNode& node); // Removes the given node from the physical-space scene graph
 	
+	SceneGraph::GroupNode& getNavigationalRoot(void) // Returns the root node of the navigational-space scene graph
+		{
+		return *navigationalRoot;
+		}
 	void addNavigationalNode(SceneGraph::GraphNode& node); // Adds the given node to the navigational-space scene graph
 	void removeNavigationalNode(SceneGraph::GraphNode& node); // Removes the given node from the navigational-space scene graph
 	
