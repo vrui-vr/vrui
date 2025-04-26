@@ -2,7 +2,7 @@
 FactoryManager - Generic base class for managers of factory classes
 derived from a common base class. Intended to manage loading of dynamic
 shared objects.
-Copyright (c) 2003-2024 Oliver Kreylos
+Copyright (c) 2003-2025 Oliver Kreylos
 
 This file is part of the Plugin Handling Library (Plugins).
 
@@ -24,20 +24,18 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef PLUGINS_FACTORYMANAGER_INCLUDED
 #define PLUGINS_FACTORYMANAGER_INCLUDED
 
-#include <list>
+#include <utility>
 #include <string>
+#include <vector>
 #include <stdexcept>
 #include <Misc/FileLocator.h>
 
 namespace Plugins {
 
-template <class ManagedFactoryParam>
-class FactoryManager
+class FactoryManagerBase // Non-templatized base class for type-specific factory managers
 	{
 	/* Embedded classes: */
 	public:
-	typedef ManagedFactoryParam ManagedFactory; // Base class of factories actually managed
-
 	typedef unsigned short int ClassIdType; // Type to store class IDs
 	static const unsigned int maxClassId=65536; // One-past-maximum value for class IDs
 	
@@ -62,6 +60,59 @@ class FactoryManager
 		DsoError(const char* source); // Creates DsoError object from error string returned by dl_* calls
 		};
 	
+	protected:
+	struct LoadDsoResults // Structure holding results from loading and resolving functions from a managed factory DSO
+		{
+		/* Embedded classes: */
+		public:
+		typedef void (*FunctionPointer)(void); // Type for generic untyped C-style function pointers
+		
+		/* Elements: */
+		void* dsoHandle; // Handle to the DSO
+		FunctionPointer resolveDependencies; // The factory dependency resolution function
+		FunctionPointer createFactory; // The factory creation function
+		FunctionPointer destroyFactory; // The factory destruction function
+		
+		/* Methods: */
+		FunctionPointer resolveFunction(const char* functionNameTemplate,const char* className); // Function to resolve one of the class management functions from a DSO
+		};
+	
+	/* Elements: */
+	private:
+	std::string dsoNameTemplate; // printf-style format string to create DSO names from class names; must contain exactly one %s conversion
+	Misc::FileLocator dsoLocator; // File locator to find DSO files
+	
+	/* Protected methods: */
+	protected:
+	std::pair<std::string,bool> extractClassName(const char* className) const; // Returns the class name contained in the given string, which might be a full DSO path name; second part of return value is true if the DSO template needs to be applied
+	LoadDSOResults loadDSO(const char* className) const; // Loads the DSO corresponding to the given managed factory class name
+	
+	/* Constructors and destructors: */
+	public:
+	FactoryManagerBase(const std::string& sDsoNameTemplate); // Creates "empty" manager; initializes DSO locator search path to template's base directory
+	
+	/* Methods: */
+	const std::string& getDsoNameTemplate(void) const // Returns the DSO name template
+		{
+		return dsoNameTemplate;
+		}
+	const Misc::FileLocator& getDsoLocator(void) const // Returns reference to the DSO file locator
+		{
+		return dsoLocator;
+		}
+	Misc::FileLocator& getDsoLocator(void) // Ditto
+		{
+		return dsoLocator;
+		}
+	};
+
+template <class ManagedFactoryParam>
+class FactoryManager:public FactoryManagerBase
+	{
+	/* Embedded classes: */
+	public:
+	typedef ManagedFactoryParam ManagedFactory; // Base class of factories managed by this manager
+	
 	private:
 	typedef void (*ResolveDependenciesFunction)(FactoryManager<ManagedFactory>&); // Type of dependency resolution function stored in DSOs
 	typedef ManagedFactory* (*CreateFactoryFunction)(FactoryManager<ManagedFactory>&); // Type of class loader function stored in DSOs
@@ -85,7 +136,7 @@ class FactoryManager
 			}
 		};
 	
-	typedef std::list<FactoryData> FactoryList;
+	typedef std::vector<FactoryData> FactoryList;
 	
 	public:
 	class FactoryIterator
@@ -182,8 +233,6 @@ class FactoryManager
 	
 	/* Elements: */
 	private:
-	std::string dsoNameTemplate; // printf-style format string to create DSO names from class names
-	Misc::FileLocator dsoLocator; // File locator to find DSO files
 	FactoryList factories; // List of loaded factories
 	
 	/* Private methods: */
@@ -195,18 +244,13 @@ class FactoryManager
 	
 	/* Constructors and destructors: */
 	public:
-	FactoryManager(std::string sDsoNameTemplate); // Creates "empty" manager; initializes DSO locator search path to template's base directory
+	FactoryManager(std::string sDsoNameTemplate) // Creates "empty" manager; initializes DSO locator search path to template's base directory
+		:FactoryManagerBase(sDsoNameTemplate)
+		{
+		}
 	~FactoryManager(void); // Releases all loaded object classes and DSOs
 	
 	/* Methods: */
-	const Misc::FileLocator& getDsoLocator(void) const // Returns reference to the DSO file locator
-		{
-		return dsoLocator;
-		}
-	Misc::FileLocator& getDsoLocator(void) // Ditto
-		{
-		return dsoLocator;
-		}
 	ManagedFactory* loadClass(const char* className); // Loads an object class at runtime and returns class object pointer
 	void addClass(ManagedFactory* newFactory,DestroyFactoryFunction newDestroyFactoryFunction =0); // Adds an existing factory to the manager
 	void releaseClass(ManagedFactory* factory); // Destroys an object class at runtime; throws exception if class cannot be removed due to dependencies
