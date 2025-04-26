@@ -1,6 +1,6 @@
 /***********************************************************************
 FileLocator - Class to find files from an ordered list of search paths.
-Copyright (c) 2007-2024 Oliver Kreylos
+Copyright (c) 2007-2025 Oliver Kreylos
 Based on code written by Braden Pellett.
 
 This file is part of the Miscellaneous Support Library (Misc).
@@ -146,20 +146,9 @@ Methods of class FileLocator:FileNotFound:
 *****************************************/
 
 FileLocator::FileNotFound::FileNotFound(const char* source,const char* sFileName)
-	:std::runtime_error(makeStdErrMsg(source,"File \"%s\" not found",sFileName).c_str())
+	:std::runtime_error(makeStdErrMsg(source,"File \"%s\" not found",sFileName).c_str()),
+	 fileName(sFileName)
 	{
-	/* Copy the file name into the exception: */
-	size_t fileNameLen=strlen(sFileName);
-	if(fileNameLen<=sizeof(fileName)-1)
-		memcpy(fileName,sFileName,fileNameLen+1);
-	else
-		{
-		/* Abbreviate the file name: */
-		memcpy(fileName,sFileName,sizeof(fileName)-4);
-		for(size_t i=0;i<3;++i)
-			fileName[sizeof(fileName)-4+i]='.';
-		fileName[sizeof(fileName)-1]='\0';
-		}
 	}
 
 /****************************
@@ -366,19 +355,29 @@ void FileLocator::addPathFromApplication(const char* executablePath)
 
 std::string FileLocator::locateFile(const char* fileName)
 	{
-	/* Look for a file of the given name in all search paths in the list: */
+	/* Strip a potential path prefix of the given file name first: */
+	const char* actualFileName=fileName;
+	for(const char* fnPtr=fileName;*fnPtr!='\0';++fnPtr)
+		if(*fnPtr=='/')
+			actualFileName=fnPtr+1;
+	
+	/* If the given file name has a path prefix, check the given path first: */
+	if(actualFileName!=fileName&&Misc::doesPathExist(fileName)
+		return fileName;
+	
+	/* Look for a file of the actual given name in all search paths in the list: */
 	for(std::vector<std::string>::const_iterator plIt=pathList.begin();plIt!=pathList.end();++plIt)
 		{
-		/* Check if a file of the given name exists in the search path: */
+		/* Check if a file of the actual given name exists in the search path: */
 		std::string pathName=*plIt;
 		pathName.push_back('/');
-		pathName+=fileName;
+		pathName+=actualFileName;
 		if(Misc::doesPathExist(pathName.c_str()))
 			return pathName;
 		}
 	
 	/* Instead of returning an empty string or somesuch, throw an exception: */
-	throw FileNotFound(__PRETTY_FUNCTION__,fileName);
+	throw FileNotFound(__PRETTY_FUNCTION__,actualFileName);
 	}
 
 std::string FileLocator::locateNumberedFile(const char* fileNameTemplate)

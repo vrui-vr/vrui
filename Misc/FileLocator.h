@@ -1,6 +1,6 @@
 /***********************************************************************
 FileLocator - Class to find files from an ordered list of search paths.
-Copyright (c) 2007-2022 Oliver Kreylos
+Copyright (c) 2007-2025 Oliver Kreylos
 Based on code written by Braden Pellett.
 
 This file is part of the Miscellaneous Support Library (Misc).
@@ -38,7 +38,7 @@ class FileLocator
 		{
 		/* Elements: */
 		public:
-		char fileName[128]; // The requested file name
+		std::string fileName; // The requested file name
 		
 		/* Constructors and destructors: */
 		FileNotFound(const char* source,const char* sFileName);
@@ -56,18 +56,18 @@ class FileLocator
 	void addCurrentDirectory(void); // Adds the current working directory to the search path list
 	void addPath(const char* newPath); // Adds a new path to the search path list
 	void addPath(const char* newPathBegin,const char* newPathEnd); // Ditto
-	void addPath(std::string newPath) // Ditto
+	void addPath(const std::string& newPath) // Ditto
 		{
 		addPath(newPath.c_str());
 		}
 	void addPathFromFile(const char* fileName); // Adds the path leading to the given file name to the search path list
 	void addPathList(const char* newPathList); // Adds a list of colon-separated paths to the search path list
-	void addPathList(std::string newPathList) // Ditto
+	void addPathList(const std::string& newPathList) // Ditto
 		{
 		addPathList(newPathList.c_str());
 		}
 	void addPathFromApplication(const char* executablePath); // Assumes that the executable names an "application package" and adds the application's resource paths to the search path list
-	void addPathFromApplication(std::string executablePath) // Ditto
+	void addPathFromApplication(const std::string& executablePath) // Ditto
 		{
 		addPathFromApplication(executablePath.c_str());
 		}
@@ -75,7 +75,7 @@ class FileLocator
 		{
 		return pathList;
 		}
-	std::string locateFile(const char* fileName); // Returns the path of the first file matching the given name from the search path list
+	std::string locateFile(const char* fileName); // Returns the path of the first file matching the given name from the search path list; if the given name has a path prefix, search in that path first, then in the other search paths
 	std::string locateNumberedFile(const char* fileNameTemplate); // Returns the path of the highest-numbered file matching the given file name template, which must contain exactly one %u conversion, from the search path list
 	};
 
