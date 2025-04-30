@@ -8375,3 +8375,16 @@ Vrui-13.1-001:
   Vrui::SceneGraphManager.
 - Changed SceneGraphViewer example program to use
   SceneGraph::SceneGraphList class.
+- Fixes and improvements to Misc::FileLocator:
+  - Fix call-by-value use of std::string.
+  - If file name given to locateFile has a path prefix, look at the
+    given location first, then proceed to search paths.
+- Improvements to Plugins::FactoryManager:
+  - Refactored type-independent code into Plugins::FactoryManagerBase
+    to reduce code bloat and hide dependencies.
+  - Add ability to load a factory based on a full DSO name including an
+    optional path prefix.
+  - Added new loadClassAndCheck method that returns a flag whether the
+    returned class factory is freshly loaded from a DSO.
+  - Kept original loadClass method for simplicity and legacy support,
+    delegating to new method.

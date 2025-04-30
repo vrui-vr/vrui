@@ -1,7 +1,7 @@
 /***********************************************************************
 ToolManager - Class to manage tool classes, and dynamic assignment of
 tools to input devices.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -905,18 +905,14 @@ void ToolManager::releaseClass(ToolFactory* factory)
 
 void ToolManager::addClass(const char* className)
 	{
-	/* Bail out if a tool class of the given name already exists: */
-	if(getFactory(className)!=0)
-		return;
-	
 	/* Call the base class method to load the tool class DSO: */
-	ToolFactory* newFactory=BaseClass::loadClass(className);
+	std::pair<ToolFactory*,bool> newFactoryAndFlag=BaseClass::loadClassAndCheck(className);
 	
-	/* Check if the tool selection menu already exists: */
-	if(toolMenuPopup!=0)
+	/* Check whether the tool class DSO was just loaded and the tool selection menu already exists: */
+	if(newFactoryAndFlag.second&&toolMenuPopup!=0)
 		{
 		/* Add the new class to the tool selection menu: */
-		addClassToMenu(newFactory);
+		addClassToMenu(newFactoryAndFlag.first);
 		}
 	}
 
