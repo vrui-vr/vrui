@@ -43,7 +43,7 @@ FactoryManagerBase::DsoError::DsoError(const char* source)
 Methods of class FactoryManagerBase::LoadDsoResults:
 ***************************************************/
 
-FactoryManagerBase::LoadDsoResults::FunctionPointer FactoryManagerBase::LoadDsoResults::resolveFunction(const char* functionNameTemplate,const char* className)
+FactoryManagerBase::LoadDsoResults::FunctionPointer FactoryManagerBase::LoadDsoResults::resolveFunction(const char* functionNameTemplate,const std::string& shortClassName)
 	{
 	/*********************************************************************
 	For all DSO function names, try a generic name first, and then a
@@ -67,8 +67,8 @@ FactoryManagerBase::LoadDsoResults::FunctionPointer FactoryManagerBase::LoadDsoR
 	if(result==0)
 		{
 		/* Try the function name template with the class name second: */
-		snprintf(functionName,sizeof(functionName),functionNameTemplate,className);
-		result=reinterpret_cast<ptrdiff_t>(dlsym(dsoHandle,functionName))
+		snprintf(functionName,sizeof(functionName),functionNameTemplate,shortClassName.c_str());
+		result=reinterpret_cast<ptrdiff_t>(dlsym(dsoHandle,functionName));
 		}
 	
 	/* Cast the resolved function name to a generic function pointer and return it: */
@@ -104,7 +104,7 @@ std::pair<std::string,bool> FactoryManagerBase::extractClassName(const char* cla
 		
 		/* Match the end of the class name against the template's suffix after the %s placeholder: */
 		const char* cnPtr2=cnEnd;
-		std::string::const_iterator dnIt2=dsoNameTemplate.end();
+		std::string::const_iterator dntIt2=dsoNameTemplate.end();
 		while(cnPtr2!=cnPtr1&&dntIt2!=dntIt1&&cnPtr2[-1]==dntIt2[-1])
 			{
 			--cnPtr2;
@@ -118,24 +118,35 @@ std::pair<std::string,bool> FactoryManagerBase::extractClassName(const char* cla
 			}
 		}
 	
-	/* Return the entire class name minus a potential path prefix: */
-	return std::make_pair(std::string(cnBegin,cnEnd),cnBegin==className);
+	/* Throw an error if there is a path prefix on a class name that does not match the DSO name template: */
+	if(cnBegin!=className)
+		throw Error(Misc::makeStdErrMsg(__PRETTY_FUNCTION__,"Invalid class name %s",className));
+	
+	/* Return the class name as given: */
+	return std::make_pair(className,true);
 	}
 
-FactoryManagerBase::LoadDSOResults FactoryManagerBase::loadDSO(const char* className) const
+FactoryManagerBase::LoadDsoResults FactoryManagerBase::loadDso(const char* className,bool applyTemplate,const std::string& shortClassName) const
 	{
-	LoadDSOResults result;
+	LoadDsoResults result;
 	
-	/* Construct the DSO name from the given class name: */
-	char dsoName[256];
-	snprintf(dsoName,sizeof(dsoName),dsoNameTemplate.c_str(),className);
-	
-	/* Locate and open the DSO containing the class implementation: */
-	result.dsoHandle=0;
+	/* Locate the DSO containing the class implementation: */
+	std::string fullDsoName;
 	try
 		{
-		std::string fullDsoName=dsoLocator.locateFile(dsoName);
-		result.dsoHandle=dlopen(fullDsoName.c_str(),RTLD_LAZY|RTLD_GLOBAL);
+		/* Locate the DSO defining the requested class: */
+		if(applyTemplate)
+			{
+			/* Construct the DSO name from the given class name: */
+			char dsoName[256];
+			snprintf(dsoName,sizeof(dsoName),dsoNameTemplate.c_str(),className);
+			fullDsoName=dsoLocator.locateFile(dsoName);
+			}
+		else
+			{
+			/* Use the given class name as-is: */
+			fullDsoName=dsoLocator.locateFile(className);
+			}
 		}
 	catch(const std::runtime_error& err)
 		{
@@ -143,18 +154,23 @@ FactoryManagerBase::LoadDSOResults FactoryManagerBase::loadDSO(const char* class
 		throw Error(err.what());
 		}
 	
-	/* Check if DSO handle is valid: */
+	/* Open the located DSO and check for errors: */
+	result.dsoHandle=dlopen(fullDsoName.c_str(),RTLD_LAZY|RTLD_GLOBAL);
 	if(result.dsoHandle==0)
 		throw DsoError(__PRETTY_FUNCTION__);
 	
 	/* Get the address of the optional dependency resolution function (if it exists): */
-	result.resolveDependencies=result.resolveFunction("resolve%sDependencies",className);
+	result.resolveDependencies=result.resolveFunction("resolve%sDependencies",shortClassName);
 	
 	/* Get the address of the factory creation function: */
-	result.createFactory=result.resolveFunction("create%sFactory",className);
+	result.createFactory=result.resolveFunction("create%sFactory",shortClassName);
+	if(result.createFactory==0)
+		throw DsoError(__PRETTY_FUNCTION__);
 	
 	/* Get the address of the factory destruction function: */
-	result.destroyFactory=result.resolveFunction("destroy%sFactory",className);
+	result.destroyFactory=result.resolveFunction("destroy%sFactory",shortClassName);
+	if(result.destroyFactory==0)
+		throw DsoError(__PRETTY_FUNCTION__);
 	
 	return result;
 	}

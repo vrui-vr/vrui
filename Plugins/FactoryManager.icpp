@@ -2,7 +2,7 @@
 FactoryManager - Generic base class for managers of factory classes
 derived from a common base class. Intended to manage loading of dynamic
 shared objects.
-Copyright (c) 2003-2024 Oliver Kreylos
+Copyright (c) 2003-2025 Oliver Kreylos
 
 This file is part of the Plugin Handling Library (Plugins).
 
@@ -57,84 +57,6 @@ FactoryManager<ManagedFactoryParam>::getNewClassId(
 	while(fIt!=factories.end());
 	
 	return newClassId;
-	}
-
-template <class ManagedFactoryParam>
-inline
-typename FactoryManager<ManagedFactoryParam>::FactoryData
-FactoryManager<ManagedFactoryParam>::loadClassFromDSO(
-	const char* className)
-	{
-	/* Construct the DSO name from the given class name: */
-	char dsoName[256];
-	snprintf(dsoName,sizeof(dsoName),dsoNameTemplate.c_str(),className);
-	
-	/* Locate and open the DSO containing the class implementation: */
-	void* dsoHandle;
-	try
-		{
-		std::string fullDsoName=dsoLocator.locateFile(dsoName);
-		dsoHandle=dlopen(fullDsoName.c_str(),RTLD_LAZY|RTLD_GLOBAL);
-		}
-	catch(const std::runtime_error& err)
-		{
-		/* Re-throw the error as a factory manager error: */
-		throw Error(err.what());
-		}
-	
-	/* Check if DSO handle is valid: */
-	if(dsoHandle==0)
-		throw DsoError(__PRETTY_FUNCTION__);
-	
-	/*********************************************************************
-	For all DSO function names, try a generic name first, and then a
-	class-specific name if the generic one doesn't exist. I want to move
-	to always using generic names (less editing), but need to respect
-	legacy factory classes.
-	*********************************************************************/
-	
-	/* Get address of dependency resolution function (if it exists): */
-	ResolveDependenciesFunction resolveDependenciesFunction=ResolveDependenciesFunction(nowarninghack_dlsym(dsoHandle,"resolveDependencies"));
-	if(resolveDependenciesFunction==0)
-		{
-		char resolveDependenciesFunctionName[256];
-		snprintf(resolveDependenciesFunctionName,sizeof(resolveDependenciesFunctionName),"resolve%sDependencies",className);
-		resolveDependenciesFunction=ResolveDependenciesFunction(nowarninghack_dlsym(dsoHandle,resolveDependenciesFunctionName));
-		}
-	
-	/* Get address of factory creation function: */
-	CreateFactoryFunction createFactoryFunction=CreateFactoryFunction(nowarninghack_dlsym(dsoHandle,"createFactory"));
-	if(createFactoryFunction==0)
-		{
-		char createFactoryFunctionName[256];
-		snprintf(createFactoryFunctionName,sizeof(createFactoryFunctionName),"create%sFactory",className);
-		createFactoryFunction=CreateFactoryFunction(nowarninghack_dlsym(dsoHandle,createFactoryFunctionName));
-		}
-	if(createFactoryFunction==0)
-		throw DsoError(__PRETTY_FUNCTION__);
-	
-	/* Get address to factory destruction function: */
-	DestroyFactoryFunction destroyFactoryFunction=DestroyFactoryFunction(nowarninghack_dlsym(dsoHandle,"destroyFactory"));
-	if(destroyFactoryFunction==0)
-		{
-		char destroyFactoryFunctionName[256];
-		snprintf(destroyFactoryFunctionName,sizeof(destroyFactoryFunctionName),"destroy%sFactory",className);
-		destroyFactoryFunction=DestroyFactoryFunction(nowarninghack_dlsym(dsoHandle,destroyFactoryFunctionName));
-		}
-	if(destroyFactoryFunction==0)
-		throw DsoError(__PRETTY_FUNCTION__);
-	
-	/* Resolve DSO's dependencies: */
-	if(resolveDependenciesFunction!=0)
-		resolveDependenciesFunction(*this);
-	
-	/* Create factory: */
-	ManagedFactory* factory=createFactoryFunction(*this);
-	if(factory==0)
-		throw Error(Misc::makeStdErrMsg(__PRETTY_FUNCTION__,"Unable to create factory object for class %s",className));
-	
-	/* Store factory data: */
-	return FactoryData(dsoHandle,factory,destroyFactoryFunction);
 	}
 
 template <class ManagedFactoryParam>
@@ -198,27 +120,45 @@ FactoryManager<ManagedFactoryParam>::~FactoryManager(
 
 template <class ManagedFactoryParam>
 inline
-typename FactoryManager<ManagedFactoryParam>::ManagedFactory*
-FactoryManager<ManagedFactoryParam>::loadClass(
+std::pair<typename FactoryManager<ManagedFactoryParam>::ManagedFactory*,bool>
+FactoryManager<ManagedFactoryParam>::loadClassAndCheck(
 	const char* className)
 	{
+	/* Extract an identifying class name from the given name, which might be the full name of a DSO: */
+	std::pair<std::string,bool> cn=extractClassName(className);
+	
 	/* Check if the requested class already exists: */
-	typename FactoryList::iterator fIt=findFactory(className);
+	typename FactoryList::iterator fIt=findFactory(cn.first.c_str());
 	if(fIt!=factories.end())
 		{
 		/* Return the existing factory: */
-		return fIt->factory;
+		return std::make_pair(fIt->factory,false);
 		}
 	else
 		{
-		/* Load class from DSO: */
-		FactoryData newFactoryData=loadClassFromDSO(className);
+		/* Load the DSO corresponding to the requested class name: */
+		LoadDsoResults ldr=loadDso(className,cn.second,cn.first);
 		
-		/* Store new factory in list: */
+		/* Call the dependency resolution function if it is provided: */
+		if(ldr.resolveDependencies!=0)
+			{
+			typedef void (*ResolveDependenciesFunction)(FactoryManager<ManagedFactory>&); // Type of dependency resolution function stored in DSOs
+			ResolveDependenciesFunction(ldr.resolveDependencies)(*this);
+			}
+		
+		/* Create a factory: */
+		typedef ManagedFactory* (*CreateFactoryFunction)(FactoryManager<ManagedFactory>&); // Type of class loader function stored in DSOs
+		ManagedFactory* newFactory=CreateFactoryFunction(ldr.createFactory)(*this);
+		if(newFactory==0)
+			throw Error(Misc::makeStdErrMsg(__PRETTY_FUNCTION__,"Cannot create factory object for class %s",cn.first.c_str()));
+		
+		/* Add the new factory to the list: */
+		FactoryData newFactoryData(ldr.dsoHandle,newFactory,DestroyFactoryFunction(ldr.destroyFactory));
 		newFactoryData.classId=getNewClassId();
 		factories.push_back(newFactoryData);
 		
-		return newFactoryData.factory;
+		/* Return the new factory: */
+		return std::make_pair(newFactory,true);
 		}
 	}
 

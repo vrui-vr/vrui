@@ -39,7 +39,7 @@ class FactoryManagerBase // Non-templatized base class for type-specific factory
 	typedef unsigned short int ClassIdType; // Type to store class IDs
 	static const unsigned int maxClassId=65536; // One-past-maximum value for class IDs
 	
-	class Error:public std::runtime_error
+	class Error:public std::runtime_error // Base class for factory manager errors
 		{
 		/* Constructors and destructors: */
 		public:
@@ -74,7 +74,7 @@ class FactoryManagerBase // Non-templatized base class for type-specific factory
 		FunctionPointer destroyFactory; // The factory destruction function
 		
 		/* Methods: */
-		FunctionPointer resolveFunction(const char* functionNameTemplate,const char* className); // Function to resolve one of the class management functions from a DSO
+		FunctionPointer resolveFunction(const char* functionNameTemplate,const std::string& shortClassName); // Function to resolve one of the class management functions from a DSO
 		};
 	
 	/* Elements: */
@@ -84,8 +84,8 @@ class FactoryManagerBase // Non-templatized base class for type-specific factory
 	
 	/* Protected methods: */
 	protected:
-	std::pair<std::string,bool> extractClassName(const char* className) const; // Returns the class name contained in the given string, which might be a full DSO path name; second part of return value is true if the DSO template needs to be applied
-	LoadDSOResults loadDSO(const char* className) const; // Loads the DSO corresponding to the given managed factory class name
+	std::pair<std::string,bool> extractClassName(const char* className) const; // Returns the class name contained in the given string, which might be a full DSO name with an optional path; second part of return value is true if the DSO template needs to be applied; throws exception if class name is malformed
+	LoadDsoResults loadDso(const char* className,bool applyTemplate,const std::string& shortClassName) const; // Loads the DSO corresponding to the given managed factory class name; apply the DSO name template if flag is true
 	
 	/* Constructors and destructors: */
 	public:
@@ -112,11 +112,6 @@ class FactoryManager:public FactoryManagerBase
 	/* Embedded classes: */
 	public:
 	typedef ManagedFactoryParam ManagedFactory; // Base class of factories managed by this manager
-	
-	private:
-	typedef void (*ResolveDependenciesFunction)(FactoryManager<ManagedFactory>&); // Type of dependency resolution function stored in DSOs
-	typedef ManagedFactory* (*CreateFactoryFunction)(FactoryManager<ManagedFactory>&); // Type of class loader function stored in DSOs
-	public:
 	typedef void (*DestroyFactoryFunction)(ManagedFactory*); // Type of class unloader function stored in DSOs
 	
 	private:
@@ -237,7 +232,6 @@ class FactoryManager:public FactoryManagerBase
 	
 	/* Private methods: */
 	ClassIdType getNewClassId(void) const; // Returns a unique class ID
-	FactoryData loadClassFromDSO(const char* className); // Loads class of given name from DSO and returns factory pointer
 	typename FactoryList::const_iterator findFactory(const char* className) const; // Returns an iterator to the factory of the given class name
 	typename FactoryList::iterator findFactory(const char* className); // Ditto
 	void destroyFactory(typename FactoryList::iterator factoryIt); // Destroys the given object class at runtime; throws exception if class cannot be removed due to dependencies
@@ -251,7 +245,12 @@ class FactoryManager:public FactoryManagerBase
 	~FactoryManager(void); // Releases all loaded object classes and DSOs
 	
 	/* Methods: */
-	ManagedFactory* loadClass(const char* className); // Loads an object class at runtime and returns class object pointer
+	std::pair<ManagedFactory*,bool> loadClassAndCheck(const char* className); // Loads an object class at runtime and returns class object pointer and flag indicating if class was newly-loaded from a DSO
+	ManagedFactory* loadClass(const char* className) // Ditto, ignoring the second part of the return value, mimicking legacy API
+		{
+		/* Delegate to the other method and ignore the "newly added" flag: */
+		return loadClassAndCheck(className).first;
+		}
 	void addClass(ManagedFactory* newFactory,DestroyFactoryFunction newDestroyFactoryFunction =0); // Adds an existing factory to the manager
 	void releaseClass(ManagedFactory* factory); // Destroys an object class at runtime; throws exception if class cannot be removed due to dependencies
 	void releaseClass(const char* className) // Ditto, identifying the class by name
