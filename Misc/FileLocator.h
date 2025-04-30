@@ -75,8 +75,8 @@ class FileLocator
 		{
 		return pathList;
 		}
-	std::string locateFile(const char* fileName); // Returns the path of the first file matching the given name from the search path list; if the given name has a path prefix, search in that path first, then in the other search paths
-	std::string locateNumberedFile(const char* fileNameTemplate); // Returns the path of the highest-numbered file matching the given file name template, which must contain exactly one %u conversion, from the search path list
+	std::string locateFile(const char* fileName) const; // Returns the path of the first file matching the given name from the search path list; if the given name has a path prefix, search in that path first, then in the other search paths
+	std::string locateNumberedFile(const char* fileNameTemplate) const; // Returns the path of the highest-numbered file matching the given file name template, which must contain exactly one %u conversion, from the search path list
 	};
 
 }

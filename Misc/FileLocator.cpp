@@ -353,7 +353,7 @@ void FileLocator::addPathFromApplication(const char* executablePath)
 	#endif
 	}
 
-std::string FileLocator::locateFile(const char* fileName)
+std::string FileLocator::locateFile(const char* fileName) const
 	{
 	/* Strip a potential path prefix of the given file name first: */
 	const char* actualFileName=fileName;
@@ -362,7 +362,7 @@ std::string FileLocator::locateFile(const char* fileName)
 			actualFileName=fnPtr+1;
 	
 	/* If the given file name has a path prefix, check the given path first: */
-	if(actualFileName!=fileName&&Misc::doesPathExist(fileName)
+	if(actualFileName!=fileName&&Misc::doesPathExist(fileName))
 		return fileName;
 	
 	/* Look for a file of the actual given name in all search paths in the list: */
@@ -380,7 +380,7 @@ std::string FileLocator::locateFile(const char* fileName)
 	throw FileNotFound(__PRETTY_FUNCTION__,actualFileName);
 	}
 
-std::string FileLocator::locateNumberedFile(const char* fileNameTemplate)
+std::string FileLocator::locateNumberedFile(const char* fileNameTemplate) const
 	{
 	/* Find the file name template's potential directory prefix and conversion location: */
 	const char* fileNameStart=fileNameTemplate;
