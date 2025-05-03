@@ -18,8 +18,8 @@ repository using `git clone`, or by downloading and unpacking a zip file.
 ### Downloading And Unpacking A Zip File From GitHub
 
 If you are unfamiliar with git and/or GitHub, you should probably go the zip 
-file route. On the Vrui repository's main page, 
-`https://github.com/vrui-vr/vrui`, click on the green "<> Code" button, and 
+file route. On [the Vrui repository's main page](https://github.com/vrui-vr/vrui),
+click on the green "<> Code" button, and 
 then click on "Download ZIP" in the menu that pops up in response. Depending on 
 your browser settings, you may be asked where to store the file being 
 downloaded, or it might be stored in a default location such as your 
