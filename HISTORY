@@ -8388,3 +8388,11 @@ Vrui-13.1-001:
     returned class factory is freshly loaded from a DSO.
   - Kept original loadClass method for simplicity and legacy support,
     delegating to new method.
+  - Changed tool class loading code in Vrui::ToolManager to use new
+    loadClassAndCheck method.
+- Created a shell script InstallPrerequisites.sh to automate installing
+  Vrui's prerequisite system packages on several Linux distributions.
+- Created new Installation.md file with simplified installation
+  instructions.
+- Mention Installation.md and BuildForDevelopment.md at the beginning
+  of the README file.

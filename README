@@ -3,6 +3,16 @@ README for Vrui version 13.1, build 001
 Copyright (c) 1998-2025 Oliver Kreylos
 ========================================================================
 
+Quick notes
+===========
+
+Please see Installation.md for quick instructions to install Vrui in the
+"standard way" on several Linux distributions.
+
+Please see BuildForDevelopment.md for instructions on how to build and
+install a "development" version of Vrui, in order to develop Vrui
+itself.
+
 Overview
 ========
 
@@ -42,6 +52,8 @@ The full list of libraries used by Vrui on Linux:
 -------------------------------------------------
 
 Required:
+* essentials   (Essential building tools such as find and make)
+* G++          (The GNU C++ compiler)
 * zlib         (zlib compression/decompression library)
 * GL           (OpenGL 3D graphics library)
 * GLU          (OpenGL utility package)
@@ -63,6 +75,8 @@ Recommended:
                 devices)
 * libXi        (X11 Input2 extension library to support multitouch
                 devices)
+* GNU fonts    (Standard GNU fonts (Helvetica, Times New Roman, ...)
+                in TrueType format)
 
 Optional:
 * bluez-libs   (user-space bluetooth library to talk to Wiimote
@@ -75,8 +89,6 @@ Optional:
 
 Quick Installation Guide for the Impatient
 ==========================================
-
-Also see the BuildForDevelopment.md file.
 
 (Replace <build> by the current Vrui build number.)
 
