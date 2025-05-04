@@ -8396,3 +8396,5 @@ Vrui-13.1-001:
   instructions.
 - Mention Installation.md and BuildForDevelopment.md at the beginning
   of the README file.
+- Minor fixes re installation directory in example programs and project
+  template makefiles.

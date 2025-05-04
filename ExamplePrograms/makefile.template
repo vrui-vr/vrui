@@ -22,7 +22,7 @@
 # matches the default Vrui installation; if Vrui's installation
 # directory was changed during Vrui's installation, the directory below
 # must be adapted.
-VRUI_MAKEDIR := 
+VRUI_MAKEDIR = 
 
 # Base installation directory for the example programs. If this is set
 # to the default of $(PROJECT_ROOT), the example programs do not have to
@@ -31,7 +31,7 @@ VRUI_MAKEDIR :=
 # directory, respectively.
 # Important note: Do not use ~ as an abbreviation for the user's home
 # directory here; use $(HOME) instead.
-INSTALLDIR := $(PROJECT_ROOT)
+INSTALLDIR = $(PROJECT_ROOT)
 
 ########################################################################
 # Everything below here should not have to be changed
@@ -46,8 +46,8 @@ PROJECT_DISPLAYNAME = Vrui Example Programs
 # clobbering each other. The value should be identical to the
 # major.minor version number found in VERSION in the root package
 # directory.
-PROJECT_MAJOR = 12
-PROJECT_MINOR = 3
+PROJECT_MAJOR = 13
+PROJECT_MINOR = 1
 
 # Include definitions for the system environment and system-provided
 # packages
