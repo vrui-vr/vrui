@@ -2542,19 +2542,19 @@ $(TEMPLATEMAKEFILE): $(VRUI_MAKEDIR)/makefile.template $(DEPDIR)/Configure-Insta
 ExamplePrograms/makefile: ExamplePrograms/makefile.template $(DEPDIR)/Configure-Install
 	@echo Configuring makefile in ExamplePrograms...
 	@cp ExamplePrograms/makefile.template ExamplePrograms/makefile
-	@sed -i -e 's@^VRUI_MAKEDIR := .*@VRUI_MAKEDIR := $(MAKEINSTALLDIR)@' ExamplePrograms/makefile
+	@sed -i -e 's@^VRUI_MAKEDIR = .*@VRUI_MAKEDIR = $(MAKEINSTALLDIR)@' ExamplePrograms/makefile
 
 # Pseudo-target to configure the ExamplePrograms/MeshEditor makefile
 ExamplePrograms/MeshEditor/makefile: ExamplePrograms/MeshEditor/makefile.template $(DEPDIR)/Configure-Install
 	@echo Configuring makefile in ExamplePrograms/MeshEditor...
 	@cp ExamplePrograms/MeshEditor/makefile.template ExamplePrograms/MeshEditor/makefile
-	@sed -i -e 's@^VRUISHAREDIR := .*@VRUISHAREDIR := $(SHAREINSTALLDIR)@' ExamplePrograms/MeshEditor/makefile
+	@sed -i -e 's@^VRUISHAREDIR = .*@VRUISHAREDIR = $(SHAREINSTALLDIR)@' ExamplePrograms/MeshEditor/makefile
 
 # Pseudo-target to configure the ExamplePrograms/VRMLViewer makefile
 ExamplePrograms/VRMLViewer/makefile: ExamplePrograms/VRMLViewer/makefile.template $(DEPDIR)/Configure-Install
 	@echo Configuring makefile in ExamplePrograms/VRMLViewer...
 	@cp ExamplePrograms/VRMLViewer/makefile.template ExamplePrograms/VRMLViewer/makefile
-	@sed -i -e 's@^VRUI_MAKEDIR := .*@VRUI_MAKEDIR := $(MAKEINSTALLDIR)@' ExamplePrograms/VRMLViewer/makefile
+	@sed -i -e 's@^VRUI_MAKEDIR = .*@VRUI_MAKEDIR = $(MAKEINSTALLDIR)@' ExamplePrograms/VRMLViewer/makefile
 
 BUILDROOT_FILES = $(VRUI_MAKEDIR)/SystemDefinitions \
                   $(VRUI_MAKEDIR)/Packages.System \

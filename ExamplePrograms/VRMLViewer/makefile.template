@@ -1,6 +1,6 @@
 ########################################################################
 # Makefile for the Virtual Reality VRML viewer.
-# Copyright (c) 2000-2023 Oliver Kreylos
+# Copyright (c) 2000-2025 Oliver Kreylos
 #
 # This file is part of the Virtual Reality VRML viewer (VRMLViewer).
 #
@@ -24,7 +24,7 @@
 # matches the default Vrui installation; if Vrui's installation
 # directory was changed during Vrui's installation, the directory below
 # must be adapted.
-VRUI_MAKEDIR := 
+VRUI_MAKEDIR = 
 
 # Include definitions for the system environment and system-provided
 # packages
