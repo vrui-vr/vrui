@@ -9,6 +9,12 @@ are supposed to enter starts with a `$` denoting the terminal's command prompt.
 Do *not* enter that `$`, but enter everything that follows, and end each line by 
 pressing the Enter key.
 
+Angle brackets `<>` in commands below are placeholders, meaning that 
+you have to replace everything between, and including, the angle 
+brackets with some text that depends on your specific circumstances. For 
+example, if your host has eight CPUs, instead of entering `-j<number of 
+CPUs>` as part of some command, you would enter `-j8`.
+
 ## Step 0: Download The Vrui Repository From GitHub
 
 If you are reading this, you probably have already done this. :) If not, 
@@ -47,9 +53,18 @@ Finally, check for the name of your new Vrui directory by entering:
 ```
 $ ls
 ```
-which will list all files in the new `src` directory, which should at this 
-point be only the Vrui directory. It should be called something like 
-`vrui-main`. Take note of this name for the next step.
+
+which will list all files in the new `src` directory, which should at 
+this point be only the Vrui directory. It should be called something 
+like `vrui-main`. Take note of this name, and then enter into that 
+directory by entering into the terminal window:
+
+```
+$ cd <Vrui directory>
+```
+where you replace `<Vrui directory>` with the name of the directory 
+where you cloned/unpacked Vrui in the previous step, as printed by 
+`ls`.
 
 ## Step 1: Install Prerequisite Packages
 
@@ -61,15 +76,8 @@ of Vrui's functionality.
 
 To simplify installation, we provide a shell script that tries to determine the 
 Linux distribution installed on the host, and tries to download and install 
-prerequisite packages automatically. To run that script, first enter into the 
-Vrui directory:
-```
-$ cd ~/src/vrui-main
-```
-where you potentially replace `~/src/vrui-main` with the name of the directory 
-where you cloned/unpacked Vrui in the previous step.
-
-Then run the script by entering:
+prerequisite packages automatically. To run that script, enter into the 
+same terminal window:
 ```
 $ bash ./InstallPrerequisites.sh
 ```
@@ -88,16 +96,21 @@ $ make
 You can speed up the build process if your host has multiple CPUs or CPU cores. 
 Instead of the above, enter into the same terminal:
 ```
-$ make -j<num_cpus>
+$ make -j<number of cpus>
 ```
-where you replace `<num_cpus>` with the number of CPUs or CPU cores on your 
-host, say `-j8` if you have eight cores.
+where you replace `<number of cpus>` with the number of CPUs or CPU 
+cores on your host, say `-j8` if you have eight cores. Note that there 
+is no space between the `-j` and the number of cores.
 
 Building Vrui might take a few minutes, and will print lots of output to the 
 terminal window. Be patient, and, once it's done, check that there were no 
 error messages. The quickest way to check whether Vrui built successfully is to 
-run `make` a second time. If everything went well the first time, it will 
-print:
+run `make` a second time:
+```
+$ make
+```
+
+If everything went well the first time, it will print:
 ```
 make: Nothing to be done for 'all'.
 ```
@@ -145,10 +158,10 @@ If there were no errors, you are done!
 
 ## Optional: Build Vrui's Example Applications
 
-Vrui comes packaged with a few example applications, to demonstrate how to 
-create Vrui applications. You can build these now to get a feel for how to 
-build other Vrui applications later, or to test whether Vrui is working 
-properly.
+Vrui comes packaged with a few example applications demonstrating how 
+to create Vrui-based VR applications. You can build these now to get a 
+feel for how to build other Vrui applications later, or to test whether 
+Vrui is working properly.
 
 ### Step 1: Enter The ExamplePrograms Directory
 
@@ -166,10 +179,20 @@ building other Vrui applications later, you should still pass the location of
 Vrui's build system, mentioned above, to `make`. Enter into the same terminal 
 window:
 ```
+$ make VRUI_MAKEDIR=<Vrui build system location>
+```
+where you replace `<Vrui build system location>` with the location of 
+Vrui's build system on your host, as described in the previous section. 
+For example, your command might end up being:
+```
 $ make VRUI_MAKEDIR=/usr/local/share/Vrui-13.1/make
 ```
-(Adjust the value after the equal sign if the build system installation 
-directory you saw when building Vrui was different from the example here.)
+
+You can again use the `-j<number of cpus>` option to speed up the build 
+process, for example
+```
+$ make VRUI_MAKEDIR=/usr/local/share/Vrui-13.1/make -j8
+```
 
 If there were no errors, you should now see a new `bin` directory in the 
 `ExamplePrograms` directory.
