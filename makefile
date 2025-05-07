@@ -2536,7 +2536,7 @@ endif
 $(TEMPLATEMAKEFILE): $(VRUI_MAKEDIR)/makefile.template $(DEPDIR)/Configure-Install
 	@echo Configuring template makefile...
 	@cp $(VRUI_MAKEDIR)/makefile.template $(TEMPLATEMAKEFILE)
-	@sed -i -e 's@^VRUI_MAKEDIR := .*@VRUI_MAKEDIR := $(MAKEINSTALLDIR)@' $(TEMPLATEMAKEFILE)
+	@sed -i -e 's@^VRUI_MAKEDIR = .*@VRUI_MAKEDIR = $(MAKEINSTALLDIR)@' $(TEMPLATEMAKEFILE)
 
 # Pseudo-target to configure the ExamplePrograms makefile
 ExamplePrograms/makefile: ExamplePrograms/makefile.template $(DEPDIR)/Configure-Install
