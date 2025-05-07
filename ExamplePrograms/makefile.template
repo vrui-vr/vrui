@@ -304,7 +304,7 @@ install: $(ALL)
 	@install -d $(SHAREINSTALLDIR)
 	@install $(RESOURCES) $(SHAREINSTALLDIR)
 	@install -d $(SHAREINSTALLDIR)/Shaders
-	@install $(RESOURCEDIR)/Shaders/* $(SHAREINSTALLDIR)/Shaders
+	@install $(PROJECT_SHAREDIR)/Shaders/* $(SHAREINSTALLDIR)/Shaders
 
 #
 # Rule to install a "live" version of the Vrui Example Programs in the
