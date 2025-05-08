@@ -597,7 +597,7 @@ CONFIGFILES += ExamplePrograms/makefile \
                ExamplePrograms/VRMLViewer/makefile
 
 # Remember the names of all generated files for "make clean":
-ALL = $(BUILDUTILS) $(CONFIGFILES) $(LIBRARIES) $(EXECUTABLES) $(PLUGINS) $(RESOURCES)
+ALL = $(BUILDUTILS) $(LIBRARIES) $(EXECUTABLES) $(PLUGINS) $(RESOURCES)
 
 .PHONY: all
 all: $(ALL)
@@ -690,6 +690,7 @@ extraclean:
 .PHONY: extrasqueakyclean
 extrasqueakyclean:
 	-rm -f $(ALL)
+	-rm -f $(CONFIGFILES)
 	-rm -f $(MAKEFILEFRAGMENT) $(MAKECONFIGFILE) $(PKGCONFIGFILE)
 	-rm -f $(VRUI_SCRIPTDIR)/Vrui.makeinclude $(VRUI_SCRIPTDIR)/Vrui.debug.makeinclude
 	-rm -f $(VRUI_MAKEDIR)/Configuration.Vrui
