@@ -1,7 +1,7 @@
 /***********************************************************************
 RadioBox - Subclass of RowColumn that contains only mutually exclusive
 ToggleButton objects.
-Copyright (c) 2001-2019 Oliver Kreylos
+Copyright (c) 2001-2025 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -124,6 +124,7 @@ class RadioBox:public RowColumn,public VariableTracker
 		if(findAndSelectToggle(newSelectedToggleIndex))
 			setTrackedSInt(newSelectedToggleIndex);
 		}
+	void removeToggle(ToggleButton* toggle); // Removes, but does not delete, the given toggle button from the radio box and updates the selection as needed
 	Misc::CallbackList& getValueChangedCallbacks(void) // Returns list of value changed callbacks
 		{
 		return valueChangedCallbacks;

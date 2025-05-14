@@ -1,7 +1,7 @@
 /***********************************************************************
 RadioBox - Subclass of RowColumn that contains only mutually exclusive
 ToggleButton objects.
-Copyright (c) 2001-2024 Oliver Kreylos
+Copyright (c) 2001-2025 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -265,6 +265,64 @@ void RadioBox::setSelectedToggle(ToggleButton* newSelectedToggle)
 		selectedToggle=0;
 		setTrackedSInt(-1);
 		}
+	}
+
+void RadioBox::removeToggle(ToggleButton* toggle)
+	{
+	/* Check if the to-be-removed toggle is the currently selected one: */
+	if(selectedToggle==toggle)
+		{
+		if(selectionMode==ALWAYS_ONE)
+			{
+			/* Select the toggle after the removed one, or the one before if there is none after: */
+			ToggleButton* pred=0;
+			ToggleButton* succ=0;
+			ToggleButton* p=0;
+			for(WidgetList::iterator chIt=children.begin();chIt!=children.end();++chIt)
+				{
+				ToggleButton* t=dynamic_cast<ToggleButton*>(*chIt);
+				if(t!=0)
+					{
+					if(t==selectedToggle)
+						pred=p;
+					else if(p==selectedToggle)
+						succ=t;
+					p=t;
+					}
+				}
+			if(succ!=0)
+				selectedToggle=succ;
+			else
+				selectedToggle=pred;
+			}
+		else
+			{
+			/* Select no toggle: */
+			selectedToggle=0;
+			}
+		
+		/* Select the new selected toggle, if there is one: */
+		if(selectedToggle!=0)
+			selectedToggle->setToggle(true);
+		}
+	
+	/* Remove the toggle from the radio box: */
+	removeChild(toggle);
+	
+	/* Update a potential tracked variable: */
+	int selectedIndex=-1;
+	int index=0;
+	for(WidgetList::iterator chIt=children.begin();chIt!=children.end();++chIt)
+		{
+		ToggleButton* t=dynamic_cast<ToggleButton*>(*chIt);
+		if(t!=0)
+			{
+			if(t==selectedToggle)
+				selectedIndex==index;
+			++index;
+			}
+		}
+	setTrackedSInt(selectedIndex);
 	}
 
 }
