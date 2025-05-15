@@ -375,7 +375,8 @@ EventDevice::EventDevice(const char* deviceFileName)
 	:fd(-1),
 	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
 	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
-	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false)
+	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false),
+	 eventDispatcher(0),listenerKey(0)
 	{
 	/* Try opening the device file of the given name: */
 	fd=open(deviceFileName,O_RDONLY);
@@ -389,7 +390,8 @@ EventDevice::EventDevice(EventDevice::DeviceMatcher& deviceMatcher)
 	:fd(findDevice(deviceMatcher)),
 	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
 	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
-	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false)
+	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false),
+	 eventDispatcher(0),listenerKey(0)
 	{
 	if(fd<0)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No matching event device found");
@@ -401,7 +403,8 @@ EventDevice::EventDevice(const char* deviceName,unsigned int index)
 	:fd(-1),
 	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
 	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
-	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0)
+	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false),
+	 eventDispatcher(0),listenerKey(0)
 	{
 	/* Find the matching device: */
 	SelectDeviceMatcher deviceMatcher(SelectDeviceMatcher::Name,0,0,0,0,deviceName,index);
@@ -416,7 +419,8 @@ EventDevice::EventDevice(unsigned short vendorId,unsigned short productId,unsign
 	:fd(-1),
 	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
 	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
-	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0)
+	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false),
+	 eventDispatcher(0),listenerKey(0)
 	{
 	/* Find the matching device: */
 	SelectDeviceMatcher deviceMatcher(SelectDeviceMatcher::VendorID|SelectDeviceMatcher::ProductID,0,vendorId,productId,0,0,index);
@@ -431,7 +435,8 @@ EventDevice::EventDevice(unsigned short vendorId,unsigned short productId,const 
 	:fd(-1),
 	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
 	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
-	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0)
+	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false),
+	 eventDispatcher(0),listenerKey(0)
 	{
 	/* Find the matching device: */
 	SelectDeviceMatcher deviceMatcher(SelectDeviceMatcher::VendorID|SelectDeviceMatcher::ProductID|SelectDeviceMatcher::Name,0,vendorId,productId,0,deviceName,index);
@@ -451,8 +456,13 @@ EventDevice::EventDevice(EventDevice&& source)
 	 keyFeatureEventCallbacks(std::move(source.keyFeatureEventCallbacks)),
 	 absAxisFeatureEventCallbacks(std::move(source.absAxisFeatureEventCallbacks)),
 	 relAxisFeatureEventCallbacks(std::move(source.relAxisFeatureEventCallbacks)),
-	 synReportEventCallbacks(std::move(source.synReportEventCallbacks))
+	 synReportEventCallbacks(std::move(source.synReportEventCallbacks)),
+	 eventDispatcher(0),listenerKey(0)
 	{
+	/* Throw an exception if the source is currently registered with an event dispatcher: */
+	if(source.eventDispatcher!=0)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unable to move-copy an event device currently registered with an event dispatcher");
+	
 	/* Invalidate the source: */
 	source.fd=-1;
 	source.numKeyFeatures=0;
@@ -470,6 +480,10 @@ EventDevice::EventDevice(EventDevice&& source)
 
 EventDevice::~EventDevice(void)
 	{
+	/* Unregister the event device from any event dispatchers: */
+	if(eventDispatcher!=0)
+		eventDispatcher->removeIOEventListener(listenerKey);
+	
 	/* Release allocated resources: */
 	delete[] keyFeatureMap;
 	delete[] keyFeatureCodes;
@@ -638,12 +652,26 @@ void EventDevice::processEvents(void)
 		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Unable to read events");
 	}
 
-Threads::EventDispatcher::ListenerKey EventDevice::registerEventHandler(Threads::EventDispatcher& eventDispatcher)
+void EventDevice::registerEventHandler(Threads::EventDispatcher& newEventDispatcher)
 	{
-	/* Add an I/O listener to the given event dispatcher: */
-	Threads::EventDispatcher::ListenerKey key=eventDispatcher.addIOEventListener(fd,Threads::EventDispatcher::Read,ioEventCallback,this);
+	/* Check if the event device is already registered with an event dispatcher: */
+	if(eventDispatcher!=0)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Event device is already registered with an event dispatcher");
 	
-	return key;
+	/* Add an I/O listener to the given event dispatcher: */
+	eventDispatcher=&newEventDispatcher;
+	listenerKey=eventDispatcher->addIOEventListener(fd,Threads::EventDispatcher::Read,ioEventCallback,this);
+	}
+
+void EventDevice::unregisterEventHandler(void)
+	{
+	/* Check if the event device is actually registered with an event dispatcher: */
+	if(eventDispatcher==0)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Event device is not registered with an event dispatcher");
+	
+	if(eventDispatcher!=0)
+		eventDispatcher->removeIOEventListener(listenerKey);
+	eventDispatcher=0;
 	}
 
 }

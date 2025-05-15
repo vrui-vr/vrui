@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterHID - Linux-specific version of HID input device
 adapter.
-Copyright (c) 2009-2024 Oliver Kreylos
+Copyright (c) 2009-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -485,121 +485,100 @@ void InputDeviceAdapterHID::createInputDevice(int deviceIndex,const Misc::Config
 	devices.push_back(newDevice);
 	}
 
-void* InputDeviceAdapterHID::devicePollingThreadMethod(void)
+void InputDeviceAdapterHID::ioEventCallback(Threads::EventDispatcher::IOEvent& event)
 	{
-	/* Enable immediate cancellation: */
-	Threads::Thread::setCancelState(Threads::Thread::CANCEL_ENABLE);
-	// Threads::Thread::setCancelType(Threads::Thread::CANCEL_ASYNCHRONOUS);
+	/* Get a reference to the device that has events available and the input device adapter: */
+	Device* device=static_cast<Device*>(event.getUserData());
+	InputDeviceAdapterHID* thisPtr=device->adapter;
 	
-	while(true)
+	Threads::Mutex::Lock deviceStateLock(thisPtr->deviceStateMutex);
+	
+	/* Attempt to read multiple events at once: */
+	input_event events[128];
+	ssize_t numEvents=read(device->deviceFd,events,sizeof(events));
+	if(numEvents>0)
 		{
-		/* Poll the device files of all devices: */
-		Misc::FdSet deviceFds;
-		for(std::vector<Device>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
-			deviceFds.add(dIt->deviceFd);
-		if(Misc::select(&deviceFds,0,0)>0)
+		/* Process all read events in order: */
+		numEvents/=sizeof(input_event);
+		for(ssize_t i=0;i<numEvents;++i)
 			{
-			/* Read events from all device files: */
-			{
-			Threads::Mutex::Lock deviceStateLock(deviceStateMutex);
-			for(std::vector<Device>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
-				if(deviceFds.isSet(dIt->deviceFd))
+			switch(events[i].type)
+				{
+				case EV_KEY:
 					{
-					/* Attempt to read multiple events at once: */
-					input_event events[32];
-					ssize_t numEvents=read(dIt->deviceFd,events,sizeof(events));
-					if(numEvents>0)
+					/* Check if the key has a valid button index: */
+					int buttonIndex=device->keyMap[events[i].code];
+					if(buttonIndex>=0)
 						{
-						/* Process all read events in order: */
-						numEvents/=sizeof(input_event);
-						for(ssize_t i=0;i<numEvents;++i)
+						/* Check if the button is part of an exclusion set: */
+						int esi=device->buttonExclusionSets[buttonIndex];
+						if(esi>=0)
 							{
-							switch(events[i].type)
+							if(events[i].value!=0) // Button has been pressed
 								{
-								case EV_KEY:
+								if(device->exclusionSetPresseds[esi]==-1)
 									{
-									/* Check if the key has a valid button index: */
-									int buttonIndex=dIt->keyMap[events[i].code];
-									if(buttonIndex>=0)
-										{
-										/* Check if the button is part of an exclusion set: */
-										int esi=dIt->buttonExclusionSets[buttonIndex];
-										if(esi>=0)
-											{
-											if(events[i].value!=0) // Button has been pressed
-												{
-												if(dIt->exclusionSetPresseds[esi]==-1)
-													{
-													/* Press the button and its exclusion set: */
-													buttonStates[dIt->firstButtonIndex+buttonIndex]=true;
-													dIt->exclusionSetPresseds[esi]=buttonIndex;
-													}
-												}
-											else // Button has been released
-												{
-												/* Release the exclusion set if this button activated it: */
-												if(dIt->exclusionSetPresseds[esi]==buttonIndex)
-													dIt->exclusionSetPresseds[esi]=-1;
-												
-												/* Release the button: */
-												buttonStates[dIt->firstButtonIndex+buttonIndex]=false;
-												}
-											}
-										else
-											{
-											/* Set the button's new state: */
-											buttonStates[dIt->firstButtonIndex+buttonIndex]=events[i].value!=0;
-											}
-										}
-									break;
-									}
-								
-								case EV_ABS:
-									{
-									if(dIt->axisPosition)
-										{
-										/* Check if the absolute axis is used to define the device position: */
-										int positionAxisIndex=dIt->positionAxisMap[events[i].code];
-										if(positionAxisIndex>=0)
-											{
-											/* Remember the new position axis value: */
-											dIt->positionValues[positionAxisIndex]=Scalar(events[i].value);
-											}
-										}
-									
-									/* Check if the absolute axis has a valid valuator index: */
-									int valuatorIndex=dIt->absAxisMap[events[i].code];
-									if(valuatorIndex>=0)
-										{
-										/* Set the valuators's new state: */
-										valuatorStates[dIt->firstValuatorIndex+valuatorIndex]=dIt->axisValueMappers[valuatorIndex].map(double(events[i].value));
-										}
-									break;
-									}
-								
-								case EV_REL:
-									{
-									/* Check if the relative axis has a valid valuator index: */
-									int valuatorIndex=dIt->relAxisMap[events[i].code];
-									if(valuatorIndex>=0)
-										{
-										/* Set the valuators's new state: */
-										valuatorStates[dIt->firstValuatorIndex+valuatorIndex]=dIt->axisValueMappers[valuatorIndex].map(double(events[i].value));
-										}
-									break;
+									/* Press the button and its exclusion set: */
+									thisPtr->buttonStates[device->firstButtonIndex+buttonIndex]=true;
+									device->exclusionSetPresseds[esi]=buttonIndex;
 									}
 								}
+							else // Button has been released
+								{
+								/* Release the exclusion set if this button activated it: */
+								if(device->exclusionSetPresseds[esi]==buttonIndex)
+									device->exclusionSetPresseds[esi]=-1;
+								
+								/* Release the button: */
+								thisPtr->buttonStates[device->firstButtonIndex+buttonIndex]=false;
+								}
+							}
+						else
+							{
+							/* Set the button's new state: */
+							thisPtr->buttonStates[device->firstButtonIndex+buttonIndex]=events[i].value!=0;
 							}
 						}
+					break;
 					}
-			}
-			
-			/* Request a Vrui update: */
-			requestUpdate();
+				
+				case EV_ABS:
+					{
+					if(device->axisPosition)
+						{
+						/* Check if the absolute axis is used to define the device position: */
+						int positionAxisIndex=device->positionAxisMap[events[i].code];
+						if(positionAxisIndex>=0)
+							{
+							/* Remember the new position axis value: */
+							device->positionValues[positionAxisIndex]=Scalar(events[i].value);
+							}
+						}
+					
+					/* Check if the absolute axis has a valid valuator index: */
+					int valuatorIndex=device->absAxisMap[events[i].code];
+					if(valuatorIndex>=0)
+						{
+						/* Set the valuators's new state: */
+						thisPtr->valuatorStates[device->firstValuatorIndex+valuatorIndex]=device->axisValueMappers[valuatorIndex].map(double(events[i].value));
+						}
+					break;
+					}
+				
+				case EV_REL:
+					{
+					/* Check if the relative axis has a valid valuator index: */
+					int valuatorIndex=device->relAxisMap[events[i].code];
+					if(valuatorIndex>=0)
+						{
+						/* Set the valuators's new state: */
+						thisPtr->valuatorStates[device->firstValuatorIndex+valuatorIndex]=device->axisValueMappers[valuatorIndex].map(double(events[i].value));
+						}
+					break;
+					}
+				}
 			}
 		}
-	
-	return 0;
 	}
 
 InputDeviceAdapterHID::InputDeviceAdapterHID(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection)
@@ -628,26 +607,25 @@ InputDeviceAdapterHID::InputDeviceAdapterHID(InputDeviceManager* sInputDeviceMan
 	for(int i=0;i<totalNumValuators;++i)
 		valuatorStates[i]=0.0;
 	
-	/* Start the device polling thread: */
-	devicePollingThread.start(this,&InputDeviceAdapterHID::devicePollingThreadMethod);
+	/* Register all HIDs with the shared event dispatcher: */
+	Threads::EventDispatcher& eventDispatcher=inputDeviceManager->acquireEventDispatcher();
+	for(std::vector<Device>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
+		dIt->listenerKey=eventDispatcher.addIOEventListener(dIt->deviceFd,Threads::EventDispatcher::Read,ioEventCallback,&*dIt);
 	}
 
 InputDeviceAdapterHID::~InputDeviceAdapterHID(void)
 	{
-	/* Shut down the device polling thread: */
-	{
-	Threads::Mutex::Lock deviceStateLock(deviceStateMutex);
-	devicePollingThread.cancel();
-	devicePollingThread.join();
-	}
+	/* Unregister all HIDs from the shared event dispatcher and close all device files: */
+	Threads::EventDispatcher& eventDispatcher=inputDeviceManager->acquireEventDispatcher();
+	for(std::vector<Device>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
+		{
+		eventDispatcher.removeIOEventListener(dIt->listenerKey);
+		close(dIt->deviceFd);
+		}
 	
 	/* Delete the device state arrays: */
 	delete[] buttonStates;
 	delete[] valuatorStates;
-	
-	/* Close all device files: */
-	for(std::vector<Device>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
-		close(dIt->deviceFd);
 	}
 
 std::string InputDeviceAdapterHID::getFeatureName(const InputDeviceFeature& feature) const

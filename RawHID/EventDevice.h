@@ -218,6 +218,8 @@ class EventDevice
 	Misc::CallbackList absAxisFeatureEventCallbacks;
 	Misc::CallbackList relAxisFeatureEventCallbacks;
 	Misc::CallbackList synReportEventCallbacks;
+	Threads::EventDispatcher* eventDispatcher; // Pointer to event dispatcher with which this event device is registered, or null
+	Threads::EventDispatcher::ListenerKey listenerKey; // Listener key with which this event device is registered
 	
 	/* Private methods: */
 	static int findDevice(EventDevice::DeviceMatcher& deviceMatcher); // Returns a file descriptor for the event device file matching the given device matcher
@@ -284,7 +286,7 @@ class EventDevice
 		{
 		return relAxisFeatureCodes[relAxisFeatureIndex];
 		}
-	bool haveSynReport(void) const
+	bool hasSynReport(void) const
 		{
 		return synReport;
 		}
@@ -305,7 +307,8 @@ class EventDevice
 		return synReportEventCallbacks;
 		}
 	void processEvents(void); // Processes a number of pending device events; blocks until at least one event has been processed
-	Threads::EventDispatcher::ListenerKey registerEventHandler(Threads::EventDispatcher& eventDispatcher); // Registers the event device with the given event dispatcher; returns listener key
+	void registerEventHandler(Threads::EventDispatcher& newEventDispatcher); // Registers the event device with the given event dispatcher
+	void unregisterEventHandler(void); // Unregisters the event device from an event dispatcher with which it is currently registered
 	};
 
 }

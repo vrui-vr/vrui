@@ -91,12 +91,12 @@ PenDeviceConfig::PenDeviceConfig(EventDevice& device)
 		{
 		switch(device.getKeyFeatureCode(i))
 			{
-			case BTN_TOUCH:
+			case BTN_TOOL_PEN:
 				touchKeyIndex=i;
 				featureMask|=0x04U;
 				break;
 			
-			case BTN_TOOL_PEN:
+			case BTN_TOUCH:
 				pressKeyIndex=i;
 				featureMask|=0x08U;
 				break;

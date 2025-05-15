@@ -2,7 +2,7 @@
 InputDeviceAdapterDeviceDaemon - Class to convert from Vrui's own
 distributed device driver architecture to Vrui's internal device
 representation.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -252,7 +252,7 @@ void InputDeviceAdapterDeviceDaemon::createInputDevice(int deviceIndex,const Mis
 
 InputDeviceAdapterDeviceDaemon::InputDeviceAdapterDeviceDaemon(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection)
 	:InputDeviceAdapterIndexMap(sInputDeviceManager),
-	 deviceClient(dispatcher,configFileSection),
+	 deviceClient(inputDeviceManager->acquireEventDispatcher(),configFileSection),
 	 predictMotion(configFileSection.retrieveValue("./predictMotion",false)),
 	 motionPredictionDelta(configFileSection.retrieveValue("./motionPredictionDelta",0.0)),
 	 validFlags(0),batteryStateIndexMap(0),batteryStates(0)

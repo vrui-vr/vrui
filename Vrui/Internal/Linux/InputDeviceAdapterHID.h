@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterHID - Linux-specific version of HID input device
 adapter.
-Copyright (c) 2009-2016 Oliver Kreylos
+Copyright (c) 2009-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -27,7 +27,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <string>
 #include <vector>
 #include <Threads/Mutex.h>
-#include <Threads/Thread.h>
+#include <Threads/EventDispatcher.h>
 #include <Math/BrokenLine.h>
 #include <Geometry/Point.h>
 #include <Vrui/Internal/InputDeviceAdapter.h>
@@ -50,7 +50,9 @@ class InputDeviceAdapterHID:public InputDeviceAdapter
 		typedef Math::BrokenLine<double> AxisValueMapper; // Type for axis value mappers
 		
 		/* Elements: */
+		InputDeviceAdapterHID* adapter; // Pointer to the adapter owning this device for simpler event handling
 		int deviceFd; // HID's device file handle
+		Threads::EventDispatcher::ListenerKey listenerKey; // Listener key for the HID on the shared event dispatcher
 		int firstButtonIndex; // Index of HID's first button in device state array
 		int numButtons; // Number of HID's buttons
 		std::vector<int> keyMap; // Vector mapping key features to device button indices
@@ -79,7 +81,6 @@ class InputDeviceAdapterHID:public InputDeviceAdapter
 	Threads::Mutex deviceStateMutex; // Mutex protecting the device state array
 	bool* buttonStates; // Button state array
 	double* valuatorStates; // Valuator state array
-	Threads::Thread devicePollingThread; // Thread polling the event files of all HIDs
 	
 	/* Protected methods from InputDeviceAdapter: */
 	protected:
@@ -87,7 +88,7 @@ class InputDeviceAdapterHID:public InputDeviceAdapter
 	
 	/* New private methods: */
 	private:
-	void* devicePollingThreadMethod(void); // Method polling the event files of all HIDs
+	static void ioEventCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when there are events on a HID's device file
 	
 	/* Constructors and destructors: */
 	public:

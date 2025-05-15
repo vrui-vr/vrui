@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterPenPad - Input device adapter for pen pads or pen
 displays represented by one or more component HIDs.
-Copyright (c) 2023-2024 Oliver Kreylos
+Copyright (c) 2023-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -27,10 +27,9 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <string>
 #include <vector>
 #include <Threads/Mutex.h>
-#include <Threads/EventDispatcherThread.h>
 #include <RawHID/EventDevice.h>
-#include <Geometry/Point.h>
 #include <Vrui/Internal/InputDeviceAdapter.h>
+#include <Vrui/Internal/TouchscreenCalibrator.h>
 
 /* Forward declarations: */
 namespace Vrui {
@@ -42,13 +41,8 @@ namespace Vrui {
 
 class InputDeviceAdapterPenPad:public InputDeviceAdapter
 	{
-	/* Embedded classes: */
-	private:
-	typedef Geometry::Point<Scalar,2> PPoint; // Type for points in the pen pad plane
-	
 	/* Elements: */
 	private:
-	Threads::EventDispatcherThread eventDispatcher; // Dispatcher for events on the component HIDs
 	std::vector<RawHID::EventDevice> devices; // List of component HIDs
 	Threads::Mutex featureMutex; // Mutex serializing access to the device features
 	RawHID::EventDevice::AbsAxisFeature posAxes[2]; // Absolute axis features defining the pen's position
@@ -57,11 +51,7 @@ class InputDeviceAdapterPenPad:public InputDeviceAdapter
 	unsigned int numButtons; // Number of other buttons on the pen pad
 	RawHID::EventDevice::KeyFeature* buttons; // Array of other buttons on the pen pad
 	bool* buttonStates; // Array mirroring pen pad button states
-	int degrees[2]; // Degrees of the calibration B-spline patch
-	int numPoints[2]; // Numbers of control points of the calibration B-spline patch
-	PPoint* cps; // Array of control points of the calibration B-spline patch
-	PPoint* xs; // Evaluation array for x-direction B-splines
-	PPoint* ys; // Evaluation array for y-direction B-spline
+	TouchscreenCalibrator* calibrator; // Pointer to a calibrator to convert raw touchscreen measurements into points in screen space
 	std::vector<std::string> featureNames; // Names of pen device features
 	VRScreen* penScreen; // Pointer to the Vrui screen representing the pen pad
 	int pressedButtonIndex; // Index of the pen device button that's currently pressed, or -1 if no button is pressed

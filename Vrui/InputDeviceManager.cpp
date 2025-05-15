@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceManager - Class to manage physical and virtual input devices,
 tools associated to input devices, and the input device update graph.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -38,6 +38,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <Threads/EventDispatcherThread.h>
 #include <Vrui/InputDeviceFeature.h>
 #include <Vrui/InputGraphManager.h>
 #include <Vrui/Internal/InputDeviceAdapter.h>
@@ -95,7 +96,7 @@ Methods of class InputDeviceManager:
 ***********************************/
 
 InputDeviceManager::InputDeviceManager(InputGraphManager* sInputGraphManager,TextEventDispatcher* sTextEventDispatcher)
-	:inputGraphManager(sInputGraphManager),textEventDispatcher(sTextEventDispatcher),
+	:inputGraphManager(sInputGraphManager),textEventDispatcher(sTextEventDispatcher),eventDispatcher(0),
 	 numInputDeviceAdapters(0),inputDeviceAdapters(0),
 	 hapticFeatureMap(17),handleTransformMap(17),
 	 predictDeviceStates(false),predictionTime(0,0)
@@ -109,6 +110,9 @@ InputDeviceManager::~InputDeviceManager(void)
 		delete inputDeviceAdapters[i];
 	delete[] inputDeviceAdapters;
 	
+	/* Delete the background event dispatcher: */
+	delete eventDispatcher;
+	
 	/* Delete all leftover input devices: */
 	for(InputDevices::iterator idIt=inputDevices.begin();idIt!=inputDevices.end();++idIt)
 		{
@@ -121,6 +125,15 @@ InputDeviceManager::~InputDeviceManager(void)
 		/* Remove the device from the input graph: */
 		inputGraphManager->removeInputDevice(device);
 		}
+	}
+
+Threads::EventDispatcher& InputDeviceManager::acquireEventDispatcher(void)
+	{
+	/* Create a new event dispatcher if there is none yet: */
+	if(eventDispatcher==0)
+		eventDispatcher=new Threads::EventDispatcherThread;
+	
+	return *eventDispatcher;
 	}
 
 void InputDeviceManager::initialize(const Misc::ConfigurationFileSection& configFileSection)
