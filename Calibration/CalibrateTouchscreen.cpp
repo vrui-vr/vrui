@@ -27,193 +27,65 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <iostream>
 #include <iomanip>
 #include <fstream>
+#include <Misc/Size.h>
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
-#include <Misc/ValueCoder.h>
+#include <Misc/ConfigurationFile.h>
 #include <Realtime/Time.h>
 #include <Threads/Mutex.h>
 #include <Threads/EventDispatcherThread.h>
 #include <RawHID/EventDevice.h>
 #include <RawHID/PenDeviceConfig.h>
-#include <Math/Matrix.h>
-#include <Math/GaussNewtonMinimizer.h>
 #include <Geometry/Point.h>
 #include <Geometry/OrthonormalTransformation.h>
-#include <Geometry/AffineTransformation.h>
-#include <Geometry/ProjectiveTransformation.h>
-#include <Geometry/PointAlignerATransform.h>
-#include <Geometry/PointAlignerPTransform.h>
 #include <Geometry/OutputOperators.h>
-#include <Geometry/GeometryValueCoders.h>
 #include <GL/gl.h>
 #include <GL/GLColor.h>
 #include <GL/GLTransformationWrappers.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/Application.h>
 #include <Vrui/VRScreen.h>
+#include <Vrui/Internal/TouchscreenCalibrator.h>
+#include <Vrui/Internal/TouchscreenCalibratorRectilinear.h>
+#include <Vrui/Internal/TouchscreenCalibratorAffine.h>
+#include <Vrui/Internal/TouchscreenCalibratorProjective.h>
+#include <Vrui/Internal/TouchscreenCalibratorBSpline.h>
 
 class CalibrateTouchscreen:public Vrui::Application
 	{
 	/* Embedded classes: */
 	private:
-	typedef Geometry::Point<double,2> Point; // Type for points in screen space
-	
-	struct CalibrationPoint
-		{
-		/* Elements: */
-		public:
-		Point measured; // Measured position in raw pen device coordinates
-		Point ideal; // Ideal position in screen coordinates
-		};
-	
-	typedef std::vector<CalibrationPoint> CalibrationPointList; // Type for lists of calibration points
+	typedef Misc::Size<2> Size; // Type for mesh sizes etc.
+	typedef Vrui::Scalar Scalar; // Scalar type
+	typedef Vrui::TouchscreenCalibrator::Point Point; // Type for points in screen space
+	typedef Vrui::TouchscreenCalibrator::Box Box; // Type for boxes in screen space
+	typedef Vrui::TouchscreenCalibrator::TiePoint TiePoint; // Type for tie points between touchscreen measurement space and screen space
+	typedef std::vector<TiePoint> TiePointList; // Type for lists of tie points
 	typedef RawHID::EventDevice::AbsAxisConfig AxisConfig;
-	
-	class Calibrator // Base class for calibration algorithms
-		{
-		/* Elements: */
-		protected:
-		double axisMin[2],axisMax[2]; // Minimum and maximum values for the two absolute axes
-		
-		/* Protected methods: */
-		Point normalize(double rawX,double rawY) const // Normalizes the given raw axis values
-			{
-			return Point((rawX-axisMin[0])/(axisMax[0]-axisMin[0]),(rawY-axisMin[1])/(axisMax[1]-axisMin[1]));
-			}
-		Point normalize(const Point& raw) const // Ditto
-			{
-			return Point((raw[0]-axisMin[0])/(axisMax[0]-axisMin[0]),(raw[1]-axisMin[1])/(axisMax[1]-axisMin[1]));
-			}
-		
-		/* Constructors and destructors: */
-		public:
-		Calibrator(const AxisConfig& configX,const AxisConfig& configY)
-			{
-			/* Store the axis value ranges: */
-			axisMin[0]=double(configX.min);
-			axisMax[0]=double(configX.max);
-			axisMin[1]=double(configY.min);
-			axisMax[1]=double(configY.max);
-			}
-		virtual ~Calibrator(void)
-			{
-			}
-		
-		/* Methods: */
-		virtual Point calibrate(double rawX,double rawY) const =0; // Returns a calibrated point for the given raw absolute axis values
-		};
-	
-	class RectilinearCalibrator:public Calibrator // Class for rectilinear calibration
-		{
-		/* Elements: */
-		private:
-		double aX,aY,bX,bY; // Scale factors and offsets for the two axes
-		
-		/* Constructors and destructors: */
-		public:
-		RectilinearCalibrator(const AxisConfig& configX,const AxisConfig& configY,const CalibrationPointList& points);
-		
-		/* Methods from class Calibrator: */
-		virtual Point calibrate(double rawX,double rawY) const
-			{
-			Point r=normalize(rawX,rawY);
-			return Point(aX*r[0]+bX,aY*r[1]+bY);
-			}
-		};
-	
-	class AffineCalibrator:public Calibrator // Class for affine calibration
-		{
-		/* Elements: */
-		private:
-		Geometry::AffineTransformation<double,2> transform; // The calibration transformation
-		
-		/* Constructors and destructors: */
-		public:
-		AffineCalibrator(const AxisConfig& configX,const AxisConfig& configY,const CalibrationPointList& points);
-		
-		/* Methods from class Calibrator: */
-		virtual Point calibrate(double rawX,double rawY) const
-			{
-			return transform.transform(normalize(rawX,rawY));
-			}
-		};
-	
-	class ProjectiveCalibrator:public Calibrator // Class for projective calibration
-		{
-		/* Elements: */
-		private:
-		Geometry::ProjectiveTransformation<double,2> transform; // The calibration transformation
-		
-		/* Constructors and destructors: */
-		public:
-		ProjectiveCalibrator(const AxisConfig& configX,const AxisConfig& configY,const CalibrationPointList& points);
-		
-		/* Methods from class Calibrator: */
-		virtual Point calibrate(double rawX,double rawY) const
-			{
-			return transform.transform(normalize(rawX,rawY));
-			}
-		};
-	
-	class BsplineCalibrator:public Calibrator // Class for B-spline mesh calibration
-		{
-		/* Elements: */
-		private:
-		int degrees[2]; // B-spline degrees
-		int numPoints[2]; // B-spline mesh size
-		Point* mesh; // Array of B-spline mesh control points
-		Point* xs; // X-direction B-spline evaluation array
-		Point* ys; // Y-direction B-spline evaluation array
-		
-		/* Private methods: */
-		static double bspline(int i,int n,double t) // Returns the value of a B-spline basis function
-			{
-			/* Use dynamic programming on the Cox-de Boor formulation: */
-			double eval[21]; // Only up to degree 20!
-			
-			/* Initialize the evaluation array: */
-			for(int j=0;j<=n;++j)
-				eval[j]=t>=double(i+j)&&t<double(i+j+1)?1.0:0.0;
-			
-			/* Raise the degree: */
-			for(int deg=1;deg<=n;++deg)
-				for(int j=0;j<=n-deg+1;++j)
-					eval[j]=((t-double(i+j))*eval[j]+(double(i+j+deg+1)-t)*eval[j+1])/double(deg);
-			
-			return eval[0];
-			}
-			
-		/* Constructors and destructors: */
-		public:
-		BsplineCalibrator(const AxisConfig& configX,const AxisConfig& configY,const int sDegrees[2],const int sNumPoints[2],const CalibrationPointList& points);
-		virtual ~BsplineCalibrator(void);
-		
-		/* Methods from class Calibrator: */
-		virtual Point calibrate(double rawX,double rawY) const;
-		};
 	
 	/* Elements: */
 	RawHID::EventDevice* penDevice; // The input device associated with the touchscreen's pen device
 	Threads::EventDispatcherThread dispatcher; // Event dispatcher for events on the pen device
 	unsigned int axisIndices[2]; // Feature indices of the pen's absolute x and y axes
+	Box axisDomain; // Domain of pen's absolute x and y axes
 	bool haveTilt; // Flag if the pen provides tilt measurements
 	unsigned int tiltIndices[2]; // Feature indices of the pen's x and y tilt axes
 	unsigned int hoverButtonIndex; // Feature index of the pen's "in range" button
 	unsigned int buttonIndex; // Feature index of the pen's touch button
 	Vrui::VRScreen* screen; // The screen associated with the touchscreen
-	double screenSize[2]; // Width and height of the touchscreen in physical coordinate units
-	double gridGap; // Gap between the outer edges of the screen and the grid in grid tile units
-	unsigned int numPoints[2]; // Number of calibration points in x and y
+	Scalar screenSize[2]; // Width and height of the touchscreen in physical coordinate units
+	Scalar gridGap; // Gap between the outer edges of the screen and the grid in grid tile units
+	Size numPoints; // Number of calibration points in x and y
 	unsigned int currentPoint; // Current calibration point
 	Realtime::TimePointMonotonic measureStart; // Earliest time at which a new measurement can start
-	double pointAccum[2]; // Absolute axis accumulators for the current point
-	double tiltAccum[2]; // Tilt axis accumulators for the current point
+	Scalar pointAccum[2]; // Absolute axis accumulators for the current point
+	Scalar tiltAccum[2]; // Tilt axis accumulators for the current point
 	unsigned int numAccum; // Number of accumulated points
-	CalibrationPointList calibrationPoints; // List of already collected calibration points
+	TiePointList tiePoints; // List of already collected calibration tie points
 	int calibrationType; // Type of calibration method
-	int splineDegrees[2]; // Degrees for calibration B-spline
-	int splineNumPoints[2]; // Numbers of control points for calibration B-spline
-	Calibrator* calibrator; // Pointer to a calibration object, or 0 if calibration is incomplete
+	Size splineDegree; // Degree for B-Spline calibrator
+	Size splineSize; // Mesh size for B-Spline calibrator
+	Vrui::TouchscreenCalibrator* calibrator; // Pointer to a calibration object, or 0 if calibration is incomplete
 	mutable Threads::Mutex penStateMutex; // Mutex protecting the current pen state
 	bool hovering; // Flag whether the pen is currently close enough to the touch screen for the pen position to be valid
 	Point penPos; // Calibration pen position when a calibration has been calculated
@@ -236,289 +108,6 @@ class CalibrateTouchscreen:public Vrui::Application
 	virtual void eventCallback(EventID eventId,Vrui::InputDevice::ButtonCallbackData* cbData);
 	};
 
-/************************************************************
-Methods of class CalibrateTouchscreen::RectilinearCalibrator:
-************************************************************/
-
-CalibrateTouchscreen::RectilinearCalibrator::RectilinearCalibrator(const CalibrateTouchscreen::AxisConfig& configX,const CalibrateTouchscreen::AxisConfig& configY,const CalibrationPointList& points)
-	:Calibrator(configX,configY)
-	{
-	/* Calculate a rectilinear calibration: */
-	Math::Matrix xata(2,2,0.0);
-	Math::Matrix xatb(2,1,0.0);
-	Math::Matrix yata(2,2,0.0);
-	Math::Matrix yatb(2,1,0.0);
-	for(CalibrationPointList::const_iterator cpIt=points.begin();cpIt!=points.end();++cpIt)
-		{
-		Point m=normalize(cpIt->measured);
-		
-		xata(0,0)+=m[0]*m[0];
-		xata(0,1)+=m[0];
-		xata(1,0)+=m[0];
-		xata(1,1)+=1.0;
-		xatb(0)+=m[0]*cpIt->ideal[0];
-		xatb(1)+=cpIt->ideal[0];
-		
-		yata(0,0)+=m[1]*m[1];
-		yata(0,1)+=m[1];
-		yata(1,0)+=m[1];
-		yata(1,1)+=1.0;
-		yatb(0)+=m[1]*cpIt->ideal[1];
-		yatb(1)+=cpIt->ideal[1];
-		}
-	
-	Math::Matrix xc=xatb;
-	xc.divideFullPivot(xata);
-	Math::Matrix yc=yatb;
-	yc.divideFullPivot(yata);
-	
-	/* Retrieve the calibration coefficients: */
-	aX=xc(0);
-	bX=xc(1);
-	aY=yc(0);
-	bY=yc(1);
-	
-	/* Calculate the calibration residual: */
-	double rms2=0.0;
-	double linf2=0.0;
-	for(CalibrationPointList::const_iterator cpIt=points.begin();cpIt!=points.end();++cpIt)
-		{
-		Point m=normalize(cpIt->measured);
-		Point cal(aX*m[0]+bX,aY*m[1]+bY);
-		double dist2=Geometry::sqrDist(cpIt->ideal,cal);
-		rms2+=dist2;
-		if(linf2<dist2)
-			linf2=dist2;
-		}
-	std::cout<<"Final calibration residual: "<<Math::sqrt(rms2/double(points.size()))<<" RMS, "<<Math::sqrt(linf2)<<" Linf"<<std::endl;
-	
-	/* Print a calibrator configuration section: */
-	std::cout<<std::endl;
-	std::cout<<"section Calibrator"<<std::endl;
-	std::cout<<"\ttype Rectilinear"<<std::endl;
-	std::cout<<"\tscales ("<<aX<<", "<<aY<<")"<<std::endl;
-	std::cout<<"\toffsets ("<<bX<<", "<<bY<<")"<<std::endl;
-	std::cout<<"endsection"<<std::endl;
-	}
-
-/*******************************************************
-Methods of class CalibrateTouchscreen::AffineCalibrator:
-*******************************************************/
-
-CalibrateTouchscreen::AffineCalibrator::AffineCalibrator(const CalibrateTouchscreen::AxisConfig& configX,const CalibrateTouchscreen::AxisConfig& configY,const CalibrationPointList& points)
-	:Calibrator(configX,configY)
-	{
-	/* Set up a point aligner based on a affine transformation: */
-	typedef Geometry::PointAlignerATransform<double,2> Aligner;
-	Aligner pointAligner;
-	for(CalibrationPointList::const_iterator cpIt=points.begin();cpIt!=points.end();++cpIt)
-		pointAligner.addPointPair(normalize(cpIt->measured),cpIt->ideal);
-	
-	/* Estimate the initial calibration transformation: */
-	pointAligner.condition();
-	pointAligner.estimateTransform();
-	
-	/* Improve the calibration transformation with a few steps of Gauss-Newton iteration: */
-	Math::GaussNewtonMinimizer<Aligner> minimizer(1000);
-	minimizer.minimize(pointAligner);
-	
-	/* Calculate the residual: */
-	std::pair<double,double> res2=pointAligner.calcResidualToSpace(pointAligner.getTransform());
-	std::cout<<"Final calibration residual: "<<res2.first<<" RMS, "<<res2.second<<" Linf"<<std::endl;
-	
-	/* Retrieve the final calibration transformation: */
-	transform=pointAligner.getTransform();
-	
-	/* Print a calibrator configuration section: */
-	std::cout<<std::endl;
-	std::cout<<"section Calibrator"<<std::endl;
-	std::cout<<"\ttype Affine"<<std::endl;
-	std::cout<<"\ttransform "<<Misc::ValueCoder<Aligner::Transform>::encode(transform)<<std::endl;
-	std::cout<<"endsection"<<std::endl;
-	}
-
-/***********************************************************
-Methods of class CalibrateTouchscreen::ProjectiveCalibrator:
-***********************************************************/
-
-CalibrateTouchscreen::ProjectiveCalibrator::ProjectiveCalibrator(const CalibrateTouchscreen::AxisConfig& configX,const CalibrateTouchscreen::AxisConfig& configY,const CalibrationPointList& points)
-	:Calibrator(configX,configY)
-	{
-	/* Set up a point aligner based on a projective transformation: */
-	typedef Geometry::PointAlignerPTransform<double,2> Aligner;
-	Aligner pointAligner;
-	for(CalibrationPointList::const_iterator cpIt=points.begin();cpIt!=points.end();++cpIt)
-		pointAligner.addPointPair(normalize(cpIt->measured),cpIt->ideal);
-	
-	/* Estimate the initial calibration transformation: */
-	pointAligner.condition();
-	pointAligner.estimateTransform();
-	
-	/* Improve the calibration transformation with a few steps of Gauss-Newton iteration: */
-	Math::GaussNewtonMinimizer<Aligner> minimizer(1000);
-	minimizer.minimize(pointAligner);
-	
-	/* Calculate the residual: */
-	std::pair<double,double> res2=pointAligner.calcResidualToSpace(pointAligner.getTransform());
-	std::cout<<"Final calibration residual: "<<res2.first<<" RMS, "<<res2.second<<" Linf"<<std::endl;
-	
-	/* Retrieve and normalize the final calibration transformation: */
-	transform=pointAligner.getTransform();
-	for(int i=0;i<3;++i)
-		for(int j=0;j<3;++j)
-			transform.getMatrix()(i,j)/=transform.getMatrix()(2,2);
-	
-	/* Print a calibrator configuration section: */
-	std::cout<<std::endl;
-	std::cout<<"section Calibrator"<<std::endl;
-	std::cout<<"\ttype Projective"<<std::endl;
-	std::cout<<"\ttransform "<<Misc::ValueCoder<Aligner::Transform>::encode(transform)<<std::endl;
-	std::cout<<"endsection"<<std::endl;
-	}
-
-/********************************************************
-Methods of class CalibrateTouchscreen::BsplineCalibrator:
-********************************************************/
-
-CalibrateTouchscreen::BsplineCalibrator::BsplineCalibrator(const CalibrateTouchscreen::AxisConfig& configX,const CalibrateTouchscreen::AxisConfig& configY,const int sDegrees[2],const int sNumPoints[2],const CalibrateTouchscreen::CalibrationPointList& points)
-	:Calibrator(configX,configY),
-	 mesh(0),xs(0),ys(0)
-	{
-	/* Copy B-spline mesh layout and initialize mesh control point array: */
-	for(int i=0;i<2;++i)
-		{
-		degrees[i]=sDegrees[i];
-		numPoints[i]=sNumPoints[i];
-		}
-	
-	/* Create the least-squares calibration system: */
-	int eqSize=numPoints[1]*numPoints[0];
-	Math::Matrix ata(eqSize,eqSize,0.0);
-	Math::Matrix atb(eqSize,2,0.0);
-	double* eq=new double[eqSize];
-	for(CalibrationPointList::const_iterator cpIt=points.begin();cpIt!=points.end();++cpIt)
-		{
-		/* Transform the measured point to B-spline mesh space: */
-		double px=(cpIt->measured[0]-axisMin[0])*double(numPoints[0]-degrees[0])/(axisMax[0]-axisMin[0])+double(degrees[0]);
-		double py=(cpIt->measured[1]-axisMin[1])*double(numPoints[1]-degrees[1])/(axisMax[1]-axisMin[1])+double(degrees[1]);
-		
-		/* Enter the measured point's B-spline weights into the calibration system: */
-		for(int i=0;i<numPoints[1];++i)
-			for(int j=0;j<numPoints[0];++j)
-				eq[i*numPoints[0]+j]=bspline(i,degrees[1],py)*bspline(j,degrees[0],px);
-		for(int i=0;i<eqSize;++i)
-			{
-			for(int j=0;j<eqSize;++j)
-				ata(i,j)+=eq[i]*eq[j];
-			for(int j=0;j<2;++j)
-				atb(i,j)+=eq[i]*cpIt->ideal[j];
-			}
-		}
-	delete[] eq;
-	
-	/* Solve the system: */
-	Math::Matrix x=atb;
-	x.divideFullPivot(ata);
-	
-	/* Extract the control point mesh: */
-	mesh=new Point[numPoints[1]*numPoints[0]];
-	for(int i=0;i<numPoints[1];++i)
-		for(int j=0;j<numPoints[0];++j)
-			for(int k=0;k<2;++k)
-				mesh[i*numPoints[0]+j][k]=x(i*numPoints[0]+j,k);
-	
-	/* Create the B-spline evaluation arrays: */
-	xs=new Point[degrees[0]+1];
-	ys=new Point[degrees[1]+1];
-	
-	/* Calculate the calibration residual: */
-	double rms2=0.0;
-	double linf2=0.0;
-	for(CalibrationPointList::const_iterator cpIt=points.begin();cpIt!=points.end();++cpIt)
-		{
-		/* Calibrate the measured point: */
-		Point cal=calibrate(cpIt->measured[0],cpIt->measured[1]);
-		
-		/* Update the error metrics: */
-		double dist2=Geometry::sqrDist(cpIt->ideal,cal);
-		rms2+=dist2;
-		if(linf2<dist2)
-			linf2=dist2;
-		}
-	std::cout<<"Calibration residual: "<<Math::sqrt(rms2/double(points.size()))<<" RMS, "<<Math::sqrt(linf2)<<" Linf"<<std::endl;
-	
-	/* Print a calibrator configuration section: */
-	std::cout<<std::endl;
-	std::cout<<"section Calibrator"<<std::endl;
-	std::cout<<"\ttype Bspline"<<std::endl;
-	std::cout<<"\tdegrees ("<<degrees[0]<<", "<<degrees[1]<<")"<<std::endl;
-	std::cout<<"\tnumPoints ("<<numPoints[0]<<", "<<numPoints[1]<<")"<<std::endl;
-	for(int i=0;i<numPoints[1];++i)
-		{
-		if(i>0)
-			std::cout<<"\t        (";
-		else
-			std::cout<<"\tpoints ((";
-		for(int j=0;j<numPoints[0];++j)
-			{
-			if(j>0)
-				std::cout<<", ";
-			std::cout<<"("<<mesh[i*numPoints[0]+j][0]<<", "<<mesh[i*numPoints[0]+j][1]<<")";
-			}
-		if(i<numPoints[1]-1)
-			std::cout<<"), \\"<<std::endl;
-		else
-			std::cout<<"))"<<std::endl;
-		}
-	std::cout<<"endsection"<<std::endl;
-	}
-
-CalibrateTouchscreen::BsplineCalibrator::~BsplineCalibrator(void)
-	{
-	delete[] mesh;
-	delete[] xs;
-	delete[] ys;
-	}
-
-CalibrateTouchscreen::Point CalibrateTouchscreen::BsplineCalibrator::calibrate(double rawX,double rawY) const
-	{
-	/* Transform the raw point to B-spline mesh space and find the knot intervals containing it: */
-	double px=(rawX-axisMin[0])*double(numPoints[0]-degrees[0])/(axisMax[0]-axisMin[0])+double(degrees[0]);
-	int ivx=Math::clamp(int(Math::floor(px)),degrees[0],numPoints[0]-1);
-	double py=(rawY-axisMin[1])*double(numPoints[1]-degrees[1])/(axisMax[1]-axisMin[1])+double(degrees[1]);
-	int ivy=Math::clamp(int(Math::floor(py)),degrees[1],numPoints[1]-1);
-	
-	/* Evaluate x-direction B-spline curves: */
-	for(int y=0;y<=degrees[1];++y)
-		{
-		/* Copy the partial control point array: */
-		for(int x=0;x<=degrees[0];++x)
-			xs[x]=mesh[(ivy-degrees[1]+y)*numPoints[0]+(ivx-degrees[0]+x)];
-		
-		/* Run Cox-de Boor's algorithm on the partial array: */
-		for(int k=0;k<degrees[0];++k)
-			{
-			int subDeg=degrees[0]-k;
-			for(int x=0;x<subDeg;++x)
-				xs[x]=Geometry::affineCombination(xs[x],xs[x+1],(px-double(ivx-subDeg+1+x))/double(subDeg));
-			}
-		
-		/* Put the final point into the y-direction B-spline curve evaluation array: */
-		ys[y]=xs[0];
-		}
-	
-	/* Evaluate the y-direction B-spline curve: */
-	for(int k=0;k<degrees[1];++k)
-		{
-		int subDeg=degrees[1]-k;
-		for(int y=0;y<subDeg;++y)
-			ys[y]=Geometry::affineCombination(ys[y],ys[y+1],(py-double(ivy-subDeg+1+y))/double(subDeg));
-		}
-	
-	/* Return the final point: */
-	return ys[0];
-	}
-
 /*************************************
 Methods of class CalibrateTouchscreen:
 *************************************/
@@ -537,14 +126,14 @@ void CalibrateTouchscreen::keyCallback(RawHID::EventDevice::KeyFeatureEventCallb
 		
 		if(cbData->newValue)
 			{
-			if(now>=measureStart&&currentPoint<numPoints[1]*numPoints[0])
+			if(now>=measureStart&&currentPoint<numPoints.volume())
 				{
 				/* Start accumulating data for the current point: */
 				for(int i=0;i<2;++i)
-					pointAccum[i]=double(penDevice->getAbsAxisFeatureValue(axisIndices[i]));
+					pointAccum[i]=Scalar(penDevice->getAbsAxisFeatureValue(axisIndices[i]));
 				if(haveTilt)
 					for(int i=0;i<2;++i)
-						tiltAccum[i]=double(penDevice->getAbsAxisFeatureValue(tiltIndices[i]));
+						tiltAccum[i]=Scalar(penDevice->getAbsAxisFeatureValue(tiltIndices[i]));
 				numAccum=1;
 				}
 			}
@@ -553,13 +142,13 @@ void CalibrateTouchscreen::keyCallback(RawHID::EventDevice::KeyFeatureEventCallb
 			if(numAccum>=1)
 				{
 				/* Print the current measurement: */
-				std::cout<<currentPoint<<": pos "<<pointAccum[0]/double(numAccum)<<", "<<pointAccum[1]/double(numAccum);
+				std::cout<<currentPoint<<": pos "<<pointAccum[0]/Scalar(numAccum)<<", "<<pointAccum[1]/Scalar(numAccum);
 				if(haveTilt)
-					std::cout<<", tilt "<<tiltAccum[0]/double(numAccum)<<", "<<tiltAccum[1]/double(numAccum);
+					std::cout<<", tilt "<<tiltAccum[0]/Scalar(numAccum)<<", "<<tiltAccum[1]/Scalar(numAccum);
 				std::cout<<std::endl;
 				
-				/* Create a new calibration point from the accumulated measurements: */
-				CalibrationPoint cp;
+				/* Create a new calibration tie point from the accumulated measurements: */
+				TiePoint tp;
 				unsigned int index[2];
 				index[0]=currentPoint%numPoints[0];
 				index[1]=currentPoint/numPoints[0];
@@ -567,13 +156,13 @@ void CalibrateTouchscreen::keyCallback(RawHID::EventDevice::KeyFeatureEventCallb
 					index[0]=numPoints[0]-1-index[0];
 				for(int i=0;i<2;++i)
 					{
-					cp.measured[i]=pointAccum[i]/double(numAccum);
-					cp.ideal[i]=(double(index[i])+gridGap)/(double(numPoints[i]-1)+gridGap*2.0)*screenSize[i];
+					tp.raw[i]=pointAccum[i]/Scalar(numAccum);
+					tp.screen[i]=(Scalar(index[i])+gridGap)/(Scalar(numPoints[i]-1)+Scalar(2)*gridGap)*screenSize[i];
 					}
-				calibrationPoints.push_back(cp);
+				tiePoints.push_back(tp);
 				
 				/* Calculate a calibration if a full set of points has been collected: */
-				if(calibrationPoints.size()>=numPoints[1]*numPoints[0])
+				if(tiePoints.size()>=numPoints.volume())
 					calibrate();
 				
 				/* Move to the next point: */
@@ -611,7 +200,7 @@ void CalibrateTouchscreen::absAxisCallback(RawHID::EventDevice::AbsAxisFeatureEv
 			else
 				raw[i]=penDevice->getAbsAxisFeatureValue(axisIndices[i]);
 			}
-		penPos=calibrator->calibrate(raw[0],raw[1]);
+		penPos=calibrator->calibrate(Point(raw[0],raw[1]));
 		
 		Vrui::requestUpdate();
 		}
@@ -621,9 +210,9 @@ void CalibrateTouchscreen::absAxisCallback(RawHID::EventDevice::AbsAxisFeatureEv
 		for(int i=0;i<2;++i)
 			{
 			if(cbData->featureIndex==axisIndices[i])
-				pointAccum[i]+=double(cbData->newValue);
+				pointAccum[i]+=Scalar(cbData->newValue);
 			else
-				pointAccum[i]+=double(penDevice->getAbsAxisFeatureValue(axisIndices[i]));
+				pointAccum[i]+=Scalar(penDevice->getAbsAxisFeatureValue(axisIndices[i]));
 			}
 		++numAccum;
 		}
@@ -636,7 +225,7 @@ void CalibrateTouchscreen::synReportCallback(Misc::CallbackData* cbData)
 	if(calibrator!=0)
 		{
 		/* Calculate the current pen position: */
-		penPos=calibrator->calibrate(penDevice->getAbsAxisFeatureValue(axisIndices[0]),penDevice->getAbsAxisFeatureValue(axisIndices[1]));
+		penPos=calibrator->calibrate(Point(penDevice->getAbsAxisFeatureValue(axisIndices[0]),penDevice->getAbsAxisFeatureValue(axisIndices[1])));
 		
 		Vrui::requestUpdate();
 		}
@@ -644,46 +233,62 @@ void CalibrateTouchscreen::synReportCallback(Misc::CallbackData* cbData)
 		{
 		/* Accumulate the current axis values: */
 		for(int i=0;i<2;++i)
-			pointAccum[i]+=double(penDevice->getAbsAxisFeatureValue(axisIndices[i]));
+			pointAccum[i]+=Scalar(penDevice->getAbsAxisFeatureValue(axisIndices[i]));
 		if(haveTilt)
 			for(int i=0;i<2;++i)
-				tiltAccum[i]+=double(penDevice->getAbsAxisFeatureValue(tiltIndices[i]));
+				tiltAccum[i]+=Scalar(penDevice->getAbsAxisFeatureValue(tiltIndices[i]));
 		++numAccum;
 		}
 	}
 
 void CalibrateTouchscreen::calibrate(void)
 	{
-	Threads::Mutex::Lock penStateLock(penStateMutex);
-	
 	{
 	/* Save the calibration point set to a CSV file: */
 	std::ofstream csv("/home/okreylos/Desktop/CalibrationData.csv");
-	for(CalibrationPointList::iterator cpIt=calibrationPoints.begin();cpIt!=calibrationPoints.end();++cpIt)
-		csv<<cpIt->measured[0]<<','<<cpIt->measured[1]<<','<<cpIt->ideal[0]<<','<<cpIt->ideal[1]<<std::endl;
+	for(TiePointList::iterator tpIt=tiePoints.begin();tpIt!=tiePoints.end();++tpIt)
+		csv<<tpIt->raw[0]<<','<<tpIt->raw[1]<<','<<tpIt->screen[0]<<','<<tpIt->screen[1]<<std::endl;
 	}
 	
+	#if 0
+	/* Do all the calibrations to compare them: */
+	calibrator=new Vrui::TouchscreenCalibratorRectilinear(axisDomain,tiePoints);
+	delete calibrator;
+	calibrator=new Vrui::TouchscreenCalibratorAffine(axisDomain,tiePoints);
+	delete calibrator;
+	calibrator=new Vrui::TouchscreenCalibratorProjective(axisDomain,tiePoints);
+	delete calibrator;
+	calibrator=new Vrui::TouchscreenCalibratorBSpline(splineDegree,splineSize,axisDomain,tiePoints);
+	delete calibrator;
+	#endif
+	
 	/* Create a calibrator object: */
-	const AxisConfig& configX=penDevice->getAbsAxisFeatureConfig(axisIndices[0]);
-	const AxisConfig& configY=penDevice->getAbsAxisFeatureConfig(axisIndices[1]);
 	switch(calibrationType)
 		{
 		case 0:
-			calibrator=new RectilinearCalibrator(configX,configY,calibrationPoints);
+			calibrator=new Vrui::TouchscreenCalibratorRectilinear(axisDomain,tiePoints);
 			break;
 		
 		case 1:
-			calibrator=new AffineCalibrator(configX,configY,calibrationPoints);
+			calibrator=new Vrui::TouchscreenCalibratorAffine(axisDomain,tiePoints);
 			break;
 		
 		case 2:
-			calibrator=new ProjectiveCalibrator(configX,configY,calibrationPoints);
+			calibrator=new Vrui::TouchscreenCalibratorProjective(axisDomain,tiePoints);
 			break;
 		
 		case 3:
-			calibrator=new BsplineCalibrator(configX,configY,splineDegrees,splineNumPoints,calibrationPoints);
+			calibrator=new Vrui::TouchscreenCalibratorBSpline(splineDegree,splineSize,axisDomain,tiePoints);
 			break;
 		}
+	
+	/* Get the calibrator's residuals and print a configuration file section: */
+	std::pair<Scalar,Scalar> residuals=calibrator->getResiduals(tiePoints);
+	std::cout<<"Approximation residuals: "<<residuals.first<<" L^2, "<<residuals.second<<" L^infinity"<<std::endl;
+	Misc::ConfigurationFile configFile;
+	Misc::ConfigurationFileSection root(configFile.getCurrentSection());
+	calibrator->writeConfig(root);
+	configFile.saveAs("/home/okreylos/Desktop/TouchscreenCalibration.cfg");
 	}
 
 void CalibrateTouchscreen::listPenDevices(void)
@@ -712,7 +317,8 @@ void CalibrateTouchscreen::listPenDevices(void)
 			}
 		catch(const std::runtime_error& err)
 			{
-			Misc::formattedUserError("Cannot open event device %s due to exception %s",edIt->c_str(),err.what());
+			/* Ignore the error silently not to clog up the output with error messages: */
+			// Misc::formattedUserError("Cannot open event device %s due to exception %s",edIt->c_str(),err.what());
 			}
 		}
 	}
@@ -722,8 +328,9 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 	 penDevice(0),
 	 haveTilt(false),
 	 screen(0),
+	 numPoints(4,3),
 	 numAccum(0),
-	 calibrationType(0),
+	 calibrationType(0),splineDegree(2,2),splineSize(4,3),
 	 calibrator(0),
 	 hovering(false)
 	{
@@ -738,11 +345,6 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 	axisIndices[1]=1U;
 	buttonIndex=0U;
 	gridGap=0.2;
-	numPoints[0]=4;
-	numPoints[1]=3;
-	splineDegrees[1]=splineDegrees[0]=2;
-	splineNumPoints[0]=10;
-	splineNumPoints[1]=8;
 	for(int argi=1;argi<argc;++argi)
 		{
 		if(argv[argi][0]=='-')
@@ -813,6 +415,9 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 					{
 					for(int i=0;i<2;++i)
 						numPoints[i]=(unsigned int)(strtoul(argv[argi+1+i],0,10));
+					
+					/* Initialize the B-Spline mesh size to the calibration size: */
+					splineSize=numPoints;
 					}
 				
 				argi+=2;
@@ -830,9 +435,9 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 				if(argi+4<argc)
 					{
 					for(int i=0;i<2;++i)
-						splineDegrees[i]=int(strtol(argv[argi+1+i],0,10));
+						splineDegree[i]=(unsigned int)(strtoul(argv[argi+1+i],0,10));
 					for(int i=0;i<2;++i)
-						splineNumPoints[i]=int(strtol(argv[argi+3+i],0,10));
+						splineSize[i]=(unsigned int)(strtoul(argv[argi+3+i],0,10));
 					}
 				
 				argi+=4;
@@ -890,6 +495,10 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 	const RawHID::EventDevice::AbsAxisConfig& configX=penDevice->getAbsAxisFeatureConfig(axisIndices[0]);
 	const RawHID::EventDevice::AbsAxisConfig& configY=penDevice->getAbsAxisFeatureConfig(axisIndices[1]);
 	std::cout<<"Pen device position axis ranges: ["<<configX.min<<", "<<configX.max<<"], ["<<configY.min<<", "<<configY.max<<"]"<<std::endl;
+	axisDomain.min[0]=Scalar(configX.min);
+	axisDomain.max[0]=Scalar(configX.max);
+	axisDomain.min[1]=Scalar(configY.min);
+	axisDomain.max[1]=Scalar(configY.max);
 	haveTilt=penDeviceConfig.haveTilt;
 	if(haveTilt)
 		{
@@ -901,7 +510,7 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 	/* Install event callbacks with the pen device: */
 	penDevice->getKeyFeatureEventCallbacks().add(this,&CalibrateTouchscreen::keyCallback);
 	
-	if(penDevice->haveSynReport())
+	if(penDevice->hasSynReport())
 		penDevice->getSynReportEventCallbacks().add(this,&CalibrateTouchscreen::synReportCallback);
 	else
 		penDevice->getAbsAxisFeatureEventCallbacks().add(this,&CalibrateTouchscreen::absAxisCallback);
@@ -928,7 +537,7 @@ void CalibrateTouchscreen::prepareMainLoop(void)
 	/* Query the screen to be calibrated: */
 	screen=Vrui::getMainScreen();
 	for(int i=0;i<2;++i)
-		screenSize[i]=double(screen->getScreenSize()[i]);
+		screenSize[i]=screen->getScreenSize()[i];
 	
 	/* Start the calibration procedure: */
 	currentPoint=0;
@@ -967,8 +576,8 @@ void CalibrateTouchscreen::display(GLContextData& contextData) const
 			}
 		else
 			glColor3f(0.8f,0.8f,0.8f);
-		double sy=(double(y)+gridGap)/(double(numPoints[1]-1)+gridGap*2.0)*screenSize[1];
-		glVertex2d(0.0,sy);
+		Scalar sy=(Scalar(y)+gridGap)/(Scalar(numPoints[1]-1)+Scalar(2)*gridGap)*screenSize[1];
+		glVertex2d(Scalar(0),sy);
 		glVertex2d(screenSize[0],sy);
 		}
 	for(unsigned int x=0;x<numPoints[0];++x)
@@ -984,8 +593,8 @@ void CalibrateTouchscreen::display(GLContextData& contextData) const
 			}
 		else
 			glColor3f(0.8f,0.8f,0.8f);
-		double sx=(double(x)+gridGap)/(double(numPoints[0]-1)+gridGap*2.0)*screenSize[0];
-		glVertex2d(sx,0.0);
+		Scalar sx=(Scalar(x)+gridGap)/(Scalar(numPoints[0]-1)+Scalar(2)*gridGap)*screenSize[0];
+		glVertex2d(sx,Scalar(0));
 		glVertex2d(sx,screenSize[1]);
 		}
 	glEnd();
@@ -995,9 +604,9 @@ void CalibrateTouchscreen::display(GLContextData& contextData) const
 		/* Draw all calibrated measurement points: */
 		glBegin(GL_POINTS);
 		glColor3f(0.0f,0.5f,0.0f);
-		for(CalibrationPointList::const_iterator cpIt=calibrationPoints.begin();cpIt!=calibrationPoints.end();++cpIt)
+		for(TiePointList::const_iterator tpIt=tiePoints.begin();tpIt!=tiePoints.end();++tpIt)
 			{
-			Point cal=calibrator->calibrate(cpIt->measured[0],cpIt->measured[1]);
+			Point cal=calibrator->calibrate(tpIt->raw);
 			glVertex2d(cal[0],cal[1]);
 			}
 		glEnd();
@@ -1007,9 +616,9 @@ void CalibrateTouchscreen::display(GLContextData& contextData) const
 			/* Indicate the current pen position: */
 			glBegin(GL_LINES);
 			glColor3f(0.0f,0.0f,0.0f);
-			glVertex2d(penPos[0],0.0);
+			glVertex2d(penPos[0],Scalar(0));
 			glVertex2d(penPos[0],screenSize[1]);
-			glVertex2d(0.0,penPos[1]);
+			glVertex2d(Scalar(0),penPos[1]);
 			glVertex2d(screenSize[0],penPos[1]);
 			glEnd();
 			}
@@ -1031,7 +640,7 @@ void CalibrateTouchscreen::eventCallback(Vrui::Application::EventID eventId,Vrui
 			case 0: // Undo last calibration point
 				if(currentPoint>0)
 					{
-					calibrationPoints.pop_back();
+					tiePoints.pop_back();
 					--currentPoint;
 					}
 				

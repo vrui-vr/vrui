@@ -8417,3 +8417,7 @@ Vrui-14.0-001:
   - Updated Vrui::InputDeviceAdapterDeviceDaemon,
     Vrui::InputDeviceAdapterHID, and Vrui::InputDeviceAdapterPenPad to
     use shared event dispatcher.
+- Created new Vrui::TouchscreenCalibrator class hierarchy to simplify
+  dealing with touchscreen / pen devices.
+  - Updated CalibrateTouchscreen utility in Calibration directory to use
+    new TouchscreenCalibrator classes.
