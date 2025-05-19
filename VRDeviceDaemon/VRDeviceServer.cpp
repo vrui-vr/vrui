@@ -1,7 +1,7 @@
 /***********************************************************************
 VRDeviceServer - Class encapsulating the VR device protocol's server
 side.
-Copyright (c) 2002-2024 Oliver Kreylos
+Copyright (c) 2002-2025 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -23,6 +23,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <VRDeviceDaemon/VRDeviceServer.h>
 
+#include <stdlib.h>
 #include <stdio.h>
 #include <utility>
 #include <stdexcept>
@@ -137,6 +138,155 @@ void VRDeviceServer::newUnixConnectionCallback(Threads::EventDispatcher::IOEvent
 	{
 	VRDeviceServer* thisPtr=static_cast<VRDeviceServer*>(event.getUserData());
 	thisPtr->connectNewClient(*thisPtr->unixListeningSocket);
+	}
+
+void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent& event)
+	{
+	VRDeviceServer* thisPtr=static_cast<VRDeviceServer*>(event.getUserData());
+	
+	/* Open a new TCP connection to the HTTP client: */
+	Comm::TCPPipe pipe(thisPtr->httpListeningSocket.accept());
+	
+	/* Attach a value source to the connection to parse the client's request: */
+	IO::ValueSource request(&pipe);
+	request.setPunctuation("\n");
+	request.setWhitespace(" \r");
+	request.skipWs();
+	
+	/* Check for the POST keyword: */
+	bool requestOk=request.isString("POST");
+	
+	/* Check for a valid root URL: */
+	requestOk=requestOk&&request.isString("/ServerStatus.html");
+	
+	/* Check for the protocol identifier: */
+	requestOk=requestOk&&request.isString("HTTP/1.1")&&request.isLiteral('\n');
+	
+	/* Parse request data fields: */
+	request.setPunctuation(":\n");
+	bool haveContentType=false;
+	unsigned int contentLength=0;
+	while(!request.eof()&&requestOk)
+		{
+		/* Bail out if the line is empty: */
+		if(request.peekc()=='\n')
+			break;
+		
+		/* Read a data field: */
+		std::string fieldName;
+		if(requestOk)
+			fieldName=request.readString();
+		requestOk=requestOk&&request.isLiteral(':');
+		std::string fieldValue;
+		if(requestOk)
+			fieldValue=request.readString();
+		requestOk=requestOk&&request.isLiteral('\n');
+		
+		/* Parse the data field: */
+		if(requestOk)
+			{
+			if(fieldName=="Host")
+				{
+				}
+			else if(fieldName=="Content-Type")
+				{
+				requestOk=fieldValue=="application/x-www-form-urlencoded";
+				haveContentType=true;
+				}
+			else if(fieldName=="Content-Length")
+				{
+				contentLength=atoi(fieldValue.c_str());
+				}
+			}
+		}
+	requestOk=requestOk&&haveContentType&&request.isLiteral('\n');
+	
+	/* Parse the actual command name/value pairs: */
+	if(requestOk)
+		{
+		while(contentLength>0)
+			{
+			std::string name;
+			for(;!request.eof()&&contentLength>0&&request.peekc()!='=';--contentLength)
+				name.push_back(request.getChar());
+			if(!request.eof())
+				{
+				request.getChar();
+				--contentLength;
+				}
+			std::string value;
+			for(;!request.eof()&&contentLength>0&&request.peekc()!='&';--contentLength)
+				value.push_back(request.getChar());
+			
+			if(name=="command")
+				{
+				if(value=="getServerStatus")
+					{
+					/* Send the server's current status as a json file: */
+					IO::OStream reply(&pipe);
+					reply<<"HTTP/1.1 200 OK\n";
+					reply<<"Content-Type: application/json\n";
+					reply<<"\n";
+					reply<<"{\n";
+					reply<<"\tdevices : [\n";
+					
+					/* Send information about all virtual devices: */
+					int numVirtualDevices=thisPtr->deviceManager->getNumVirtualDevices();
+					for(int deviceIndex=0;deviceIndex<numVirtualDevices;++deviceIndex)
+						{
+						const Vrui::VRDeviceDescriptor& vrd=thisPtr->deviceManager->getVirtualDevice(deviceIndex);
+						
+						reply<<"\t\t{\n";
+						
+						reply<<"\t\t\tname : "<<vrd.name<<"\n";
+						reply<<"\t\t\thasBattery : "<<(vrd.hasBattery?"true":"false")<<"\n";
+						if(vrd.hasBattery)
+							{
+							reply<<"\t\t\tbatteryLevel : "<<thisPtr->batteryStates[deviceIndex].batteryLevel<<"\n";
+							reply<<"\t\t\tbatteryCharging : "<<(thisPtr->batteryStates[deviceIndex].charging?"true":"false")<<"\n";
+							}
+						reply<<"\t\t\tcanPowerOff : "<<(vrd.canPowerOff?"true":"false")<<"\n";
+						
+						if(vrd.numButtons>0)
+							{
+							reply<<"\t\t\tbuttons : [\n";
+							
+							for(int buttonIndex=0;buttonIndex<vrd.numButtons;++buttonIndex)
+								{
+								reply<<"\t\t\t\t{\n";
+								reply<<"\t\t\t\t\tname : "<<vrd.buttonNames[buttonIndex]<<"\n";
+								reply<<"\t\t\t\t}\n";
+								}
+							
+							reply<<"\t\t\t]\n";
+							}
+						
+						if(vrd.numValuators>0)
+							{
+							reply<<"\t\t\tvaluators : [\n";
+							
+							for(int valuatorIndex=0;valuatorIndex<vrd.numValuators;++valuatorIndex)
+								{
+								reply<<"\t\t\t\t{\n";
+								reply<<"\t\t\t\t\tname : "<<vrd.valuatorNames[valuatorIndex]<<"\n";
+								reply<<"\t\t\t\t}\n";
+								}
+							
+							reply<<"\t\t\t]\n";
+							}
+						
+						reply<<"\t\t}\n";
+						reply<<"\t]\n";
+						}
+					
+					reply<<"}\n";
+					}
+				}
+			}
+		}
+	
+	/* Send the reply and close the pipe: */
+	pipe.flush();
 	}
 
 void VRDeviceServer::suspendTimerCallback(Threads::EventDispatcher::TimerEvent& event)

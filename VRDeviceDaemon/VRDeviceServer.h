@@ -109,6 +109,8 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	Comm::ListeningSocketPtr unixListeningSocket; // Optional UNIX domain socket on which the server accepts incoming client connections
 	Threads::EventDispatcher::ListenerKey unixListeningSocketKey; // Key for IO events on the listening UNIX domain socket
 	int deviceStateMemoryFd; // File descriptor to access the device manager's shared-memory device state
+	Comm::ListeningSocketPtr httpListeningSocket; // Optional TCP socket on which the server accepts requests and commands in HTML format
+	Threads::EventDispatcher::ListenerKey httpListeningSocketKey; // Key for IO events on the listening HTTP socket
 	
 	ClientStateList clientStates; // List of currently connected clients
 	unsigned int numActiveClients; // Number of clients that are currently active
