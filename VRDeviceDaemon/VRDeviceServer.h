@@ -1,7 +1,7 @@
 /***********************************************************************
 VRDeviceServer - Class encapsulating the VR device protocol's server
 side.
-Copyright (c) 2002-2024 Oliver Kreylos
+Copyright (c) 2002-2025 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -139,6 +139,7 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	void connectNewClient(Comm::ListeningSocket& listeningSocket); // Connects a new client over the given listening socket
 	static void newTcpConnectionCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when an incoming connection is waiting at the TCP listening socket
 	static void newUnixConnectionCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when an incoming connection is waiting at the UNIX domain listening socket
+	static void newHttpConnectionCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when an incoming connection is waiting at the TCP listening socket serving HTTP requests
 	static void suspendTimerCallback(Threads::EventDispatcher::TimerEvent& event); // Callback called after a period of inactivity
 	static void environmentDefinitionUpdatedCallback(Threads::EventDispatcher::SignalEvent& event); // Callback called when a client updates the environment definition
 	void goInactive(void); // Sets the server to inactive mode when the last client leaves active state

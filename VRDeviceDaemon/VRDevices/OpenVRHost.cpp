@@ -1,7 +1,7 @@
 /***********************************************************************
 OpenVRHost - Class to wrap a low-level OpenVR tracking and display
 device driver in a VRDevice.
-Copyright (c) 2016-2024 Oliver Kreylos
+Copyright (c) 2016-2025 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -1009,6 +1009,12 @@ OpenVRHost::OpenVRHost(VRDevice::Factory* sFactory,VRDeviceManager* sDeviceManag
 				vd->trackType=Vrui::VRDeviceDescriptor::TRACK_POS|Vrui::VRDeviceDescriptor::TRACK_DIR|Vrui::VRDeviceDescriptor::TRACK_ORIENT;
 				vd->rayDirection=Vrui::VRDeviceDescriptor::Vector(0,0,-1);
 				vd->rayStart=0.0f;
+				
+				/* Set if the device has a battery: */
+				vd->hasBattery=deviceType==Controller||deviceType==Tracker;
+				
+				/* Set if the device can be powered off: */
+				vd->canPowerOff=dc.numPowerFeatures>0;
 				
 				/* Assign a tracker index: */
 				vd->trackerIndex=getTrackerIndex(nextTrackerIndex++);

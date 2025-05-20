@@ -1,7 +1,7 @@
 /***********************************************************************
 JsonEntityTypes - Classes for concrete entities parsed from JSON
 (JavaScript Object Notation) files.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2025 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -148,6 +148,30 @@ class JsonArray:public JsonEntity // Class representing ordered lists of entitie
 		{
 		return array[index];
 		}
+	void addItem(JsonEntity& newItem) // Adds the given item to the end of the array
+		{
+		array.push_back(&newItem);
+		}
+	void addItem(bool newItem) // Convenience method to add a boolean item to the end of the array
+		{
+		array.push_back(new JsonBoolean(newItem));
+		}
+	void addItem(unsigned int newItem) // Convenience method to add an unsigned integer number item to the end of the array
+		{
+		array.push_back(new JsonNumber(newItem));
+		}
+	void addItem(int newItem) // Convenience method to add an integer number item to the end of the array
+		{
+		array.push_back(new JsonNumber(newItem));
+		}
+	void addItem(double newItem) // Convenience method to add a number item to the end of the array
+		{
+		array.push_back(new JsonNumber(newItem));
+		}
+	void addItem(const std::string& newItem) // Convenience method to add a string item to the end of the array
+		{
+		array.push_back(new JsonString(newItem));
+		}
 	};
 
 class JsonObject:public JsonEntity // Class representing an unordered collection of name-value pairs
@@ -189,6 +213,30 @@ class JsonObject:public JsonEntity // Class representing an unordered collection
 		{
 		/* Return the entity associated with the given name, throwing an exception if it is not there: */
 		return map.getEntry(name).getDest();
+		}
+	void setProperty(const std::string& newName,JsonEntity& newValue) // Adds the given name/value pair to the object
+		{
+		map.setEntry(Map::Entry(newName,&newValue));
+		}
+	void setProperty(const std::string& newName,bool newValue) // Convenience method to add a boolean property
+		{
+		map.setEntry(Map::Entry(newName,new JsonBoolean(newValue)));
+		}
+	void setProperty(const std::string& newName,unsigned int newValue) // Convenience method to add an unsigned integer number property
+		{
+		map.setEntry(Map::Entry(newName,new JsonNumber(newValue)));
+		}
+	void setProperty(const std::string& newName,int newValue) // Convenience method to add an integer number property
+		{
+		map.setEntry(Map::Entry(newName,new JsonNumber(newValue)));
+		}
+	void setProperty(const std::string& newName,double newValue) // Convenience method to add a number property
+		{
+		map.setEntry(Map::Entry(newName,new JsonNumber(newValue)));
+		}
+	void setProperty(const std::string& newName,const std::string& newValue) // Convenience method to add a string property
+		{
+		map.setEntry(Map::Entry(newName,new JsonString(newValue)));
 		}
 	};
 

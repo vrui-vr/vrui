@@ -8421,3 +8421,10 @@ Vrui-14.0-001:
   dealing with touchscreen / pen devices.
   - Updated CalibrateTouchscreen utility in Calibration directory to use
     new TouchscreenCalibrator classes.
+- Added addItem and setProperty convenience methods to IO::JsonArray and
+  IO::JsonObject classes in IO/JsonEntityTypes.h.
+- Fixed printing of power off capability in DeviceTest utility.
+- Added HTTP interface to VRDeviceServer that listens to HTTP POST
+  requests on a TCP socket and executes commands or returns information
+  as JSON files.
+- Fixed virtual device intialization in OpenVRHost device driver module.
