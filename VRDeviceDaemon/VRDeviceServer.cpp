@@ -26,7 +26,6 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
-#include <utility>
 #include <stdexcept>
 #include <Misc/SizedTypes.h>
 #include <Misc/PrintInteger.h>
@@ -42,6 +41,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Comm/UNIXPipe.h>
 #include <Comm/ListeningTCPSocket.h>
 #include <Comm/ListeningUNIXSocket.h>
+#include <Comm/HttpPostRequest.h>
 #include <Vrui/Internal/Config.h>
 #include <Vrui/Internal/VRDeviceDescriptor.h>
 #include <Vrui/Internal/HMDConfiguration.h>
@@ -151,279 +151,187 @@ void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent
 	/* Open a new TCP connection to the HTTP client: */
 	Comm::PipePtr pipe(thisPtr->httpListeningSocket->accept());
 	
-	/* Parse the request header: */
-	bool requestOk=true;
-	unsigned int contentLength=0;
+	/* Parse an HTTP POST request: */
+	Comm::HttpPostRequest request(*pipe);
+	const Comm::HttpPostRequest::NameValueList& nvl=request.getNameValueList();
 	
-	{
-	/* Attach a value source to the connection to parse the client's request: */
-	IO::ValueSource request(pipe);
-	request.setPunctuation("\n");
-	request.setWhitespace(" \r");
-	request.skipWs();
-	
-	/* Check for the POST keyword: */
-	requestOk=requestOk&&request.isString("POST");
-	
-	/* Check for a valid root URL: */
-	requestOk=requestOk&&request.isString("/ServerStatus.html");
-	
-	/* Check for the protocol identifier: */
-	requestOk=requestOk&&request.isString("HTTP/1.1")&&request.isLiteral('\n');
-	
-	/* Parse request data fields: */
-	request.setPunctuation(":\n");
-	bool haveContentType=false;
-	while(!request.eof()&&requestOk)
+	/* Check that there is a single command in the POST request: */
+	if(request.getActionUrl()=="/VRDeviceServer.cgi"&&nvl.size()==1&&nvl.front().name=="command")
 		{
-		/* Bail out if the line is empty: */
-		if(request.peekc()=='\n')
-			break;
+		/* Compose the server's reply as a JSON-encoded object: */
+		IO::JsonObjectPointer replyRoot=new IO::JsonObject;
 		
-		/* Read a data field: */
-		std::string fieldName;
-		if(requestOk)
-			fieldName=request.readString();
-		requestOk=requestOk&&request.isLiteral(':');
-		std::string fieldValue;
-		if(requestOk)
+		/* Process the command: */
+		if(nvl.front().value=="getServerStatus")
 			{
-			fieldValue=request.readLine();
-			request.skipWs();
+			/* Lock affected server state: */
+			Threads::Mutex::Lock stateLock(thisPtr->stateMutex);
+			Threads::Mutex::Lock batteryStateLock(thisPtr->batteryStateMutex);
+			Threads::Mutex::Lock baseStationLock(thisPtr->baseStationMutex);
 			
-			/* Strip trailing whitespace from the field value: */
-			while(isspace(fieldValue.back()))
-				fieldValue.pop_back();
-			}
-		
-		/* Parse the data field: */
-		if(requestOk)
-			{
-			if(fieldName=="Host")
-				{
-				}
-			else if(fieldName=="Content-Type")
-				{
-				requestOk=fieldValue=="application/x-www-form-urlencoded";
-				haveContentType=true;
-				}
-			else if(fieldName=="Content-Length")
-				{
-				contentLength=atoi(fieldValue.c_str());
-				}
-			}
-		}
-	requestOk=requestOk&&haveContentType&&request.isLiteral('\n');
-	}
-	
-	/* Parse the actual command name/value pairs: */
-	if(requestOk)
-		{
-		void* readBuffer;
-		size_t readSize=pipe->readInBuffer(readBuffer,contentLength);
-		char* postStart=static_cast<char*>(readBuffer);
-		char* postEnd=postStart+readSize;
-		char* pPtr=postStart;
-		while(pPtr!=postEnd)
-			{
-			/* Extract the next name=value pair: */
-			char* nameStart=pPtr;
-			char* nameEnd;
-			for(nameEnd=nameStart;nameEnd!=postEnd&&*nameEnd!='=';++nameEnd)
-				;
-			if(nameEnd==postEnd)
-				break;
+			/* Compose the list of devices: */
+			IO::JsonArrayPointer devices=new IO::JsonArray;
+			replyRoot->setProperty("devices",*devices);
 			
-			char* valueStart=nameEnd+1;
-			char* valueEnd;
-			for(valueEnd=valueStart;valueEnd!=postEnd&&*valueEnd!='&';++valueEnd)
-				;
-			
-			if(nameEnd-nameStart==7&&strncmp(nameStart,"command",7)==0)
+			int powerFeatureIndex=0;
+			int numVirtualDevices=thisPtr->deviceManager->getNumVirtualDevices();
+			for(int deviceIndex=0;deviceIndex<numVirtualDevices;++deviceIndex)
 				{
-				if(valueEnd-valueStart==15&&strncmp(valueStart,"getServerStatus",15)==0)
+				const Vrui::VRDeviceDescriptor& vrd=thisPtr->deviceManager->getVirtualDevice(deviceIndex);
+				IO::JsonObjectPointer device=new IO::JsonObject;
+				devices->addItem(*device);
+				
+				device->setProperty("name",vrd.name);
+				device->setProperty("hasTracker",vrd.trackType!=Vrui::VRDeviceDescriptor::TRACK_NONE);
+				if(vrd.trackType!=Vrui::VRDeviceDescriptor::TRACK_NONE)
 					{
-					#ifdef VERBOSE
-					printf("VRDeviceServer: Sending server status to HTTP client\n");
-					fflush(stdout);
-					#endif
-					
-					/* Describe the server's state as a JSON object: */
-					IO::JsonObjectPointer root=new IO::JsonObject;
-					
-					{
-					Threads::Mutex::Lock stateLock(thisPtr->stateMutex);
-					Threads::Mutex::Lock batteryStateLock(thisPtr->batteryStateMutex);
-					
-					IO::JsonArrayPointer devices=new IO::JsonArray;
-					root->setProperty("devices",*devices);
-					
-					int powerFeatureIndex=0;
-					int numVirtualDevices=thisPtr->deviceManager->getNumVirtualDevices();
-					for(int deviceIndex=0;deviceIndex<numVirtualDevices;++deviceIndex)
+					device->setProperty("trackerIndex",vrd.trackerIndex);
+					device->setProperty("isTracked",thisPtr->state.getTrackerValid(vrd.trackerIndex));
+					if(thisPtr->state.getTrackerValid(vrd.trackerIndex))
 						{
-						const Vrui::VRDeviceDescriptor& vrd=thisPtr->deviceManager->getVirtualDevice(deviceIndex);
-						IO::JsonObjectPointer device=new IO::JsonObject;
-						devices->addItem(*device);
+						IO::JsonObjectPointer trackerState=new IO::JsonObject;
+						device->setProperty("trackerState",*trackerState);
 						
-						device->setProperty("name",vrd.name);
-						device->setProperty("hasTracker",vrd.trackType!=Vrui::VRDeviceDescriptor::TRACK_NONE);
-						if(vrd.trackType!=Vrui::VRDeviceDescriptor::TRACK_NONE)
-							{
-							device->setProperty("trackerIndex",vrd.trackerIndex);
-							device->setProperty("isTracked",thisPtr->state.getTrackerValid(vrd.trackerIndex));
-							if(thisPtr->state.getTrackerValid(vrd.trackerIndex))
-								{
-								IO::JsonObjectPointer trackerState=new IO::JsonObject;
-								device->setProperty("trackerState",*trackerState);
-								
-								const Vrui::VRDeviceState::TrackerState& ts=thisPtr->state.getTrackerState(vrd.trackerIndex);
-								const Vrui::VRDeviceState::TrackerState::PositionOrientation&po=ts.positionOrientation;
-								
-								IO::JsonArrayPointer translation=new IO::JsonArray;
-								trackerState->setProperty("translation",*translation);
-								for(int i=0;i<3;++i)
-									translation->addItem(po.getTranslation()[i]);
-								
-								IO::JsonArrayPointer rotation=new IO::JsonArray;
-								trackerState->setProperty("rotation",*rotation);
-								for(int i=0;i<4;++i)
-									rotation->addItem(po.getRotation().getQuaternion()[i]);
-								
-								IO::JsonArrayPointer linearVelocity=new IO::JsonArray;
-								trackerState->setProperty("linearVelocity",*linearVelocity);
-								for(int i=0;i<3;++i)
-									linearVelocity->addItem(ts.linearVelocity[i]);
-								
-								IO::JsonArrayPointer angularVelocity=new IO::JsonArray;
-								trackerState->setProperty("angularVelocity",*angularVelocity);
-								for(int i=0;i<3;++i)
-									angularVelocity->addItem(ts.angularVelocity[i]);
-								}
-							}
-						device->setProperty("hasBattery",vrd.hasBattery);
-						if(vrd.hasBattery)
-							{
-							device->setProperty("batteryLevel",thisPtr->batteryStates[deviceIndex].batteryLevel);
-							device->setProperty("isCharging",thisPtr->batteryStates[deviceIndex].charging);
-							}
-						device->setProperty("canPowerOff",vrd.canPowerOff);
-						if(vrd.canPowerOff)
-							{
-							device->setProperty("powerFeatureIndex",powerFeatureIndex);
-							++powerFeatureIndex;
-							}
+						const Vrui::VRDeviceState::TrackerState& ts=thisPtr->state.getTrackerState(vrd.trackerIndex);
+						const Vrui::VRDeviceState::TrackerState::PositionOrientation&po=ts.positionOrientation;
 						
-						if(vrd.numButtons>0)
-							{
-							IO::JsonArrayPointer buttons=new IO::JsonArray;
-							device->setProperty("buttons",*buttons);
-							
-							for(int buttonIndex=0;buttonIndex<vrd.numButtons;++buttonIndex)
-								{
-								IO::JsonObjectPointer button=new IO::JsonObject;
-								buttons->addItem(*button);
-								
-								button->setProperty("name",vrd.buttonNames[buttonIndex]);
-								button->setProperty("index",vrd.buttonIndices[buttonIndex]);
-								button->setProperty("value",thisPtr->state.getButtonState(vrd.buttonIndices[buttonIndex]));
-								}
-							}
+						IO::JsonArrayPointer translation=new IO::JsonArray;
+						trackerState->setProperty("translation",*translation);
+						for(int i=0;i<3;++i)
+							translation->addItem(po.getTranslation()[i]);
 						
-						if(vrd.numValuators>0)
-							{
-							IO::JsonArrayPointer valuators=new IO::JsonArray;
-							device->setProperty("valuators",*valuators);
-							
-							for(int valuatorIndex=0;valuatorIndex<vrd.numButtons;++valuatorIndex)
-								{
-								IO::JsonObjectPointer valuator=new IO::JsonObject;
-								valuators->addItem(*valuator);
-								
-								valuator->setProperty("name",vrd.valuatorNames[valuatorIndex]);
-								valuator->setProperty("index",vrd.valuatorIndices[valuatorIndex]);
-								valuator->setProperty("value",thisPtr->state.getValuatorState(vrd.valuatorIndices[valuatorIndex]));
-								}
-							}
+						IO::JsonArrayPointer rotation=new IO::JsonArray;
+						trackerState->setProperty("rotation",*rotation);
+						for(int i=0;i<4;++i)
+							rotation->addItem(po.getRotation().getQuaternion()[i]);
 						
-						if(vrd.numHapticFeatures>0)
-							{
-							IO::JsonArrayPointer hapticFeatures=new IO::JsonArray;
-							device->setProperty("hapticFeatures",*hapticFeatures);
-							
-							for(int hapticFeatureIndex=0;hapticFeatureIndex<vrd.numHapticFeatures;++hapticFeatureIndex)
-								{
-								IO::JsonObjectPointer hapticFeature=new IO::JsonObject;
-								hapticFeatures->addItem(*hapticFeature);
-								
-								hapticFeature->setProperty("name",vrd.hapticFeatureNames[hapticFeatureIndex]);
-								hapticFeature->setProperty("index",vrd.hapticFeatureIndices[hapticFeatureIndex]);
-								}
-							}
+						IO::JsonArrayPointer linearVelocity=new IO::JsonArray;
+						trackerState->setProperty("linearVelocity",*linearVelocity);
+						for(int i=0;i<3;++i)
+							linearVelocity->addItem(ts.linearVelocity[i]);
+						
+						IO::JsonArrayPointer angularVelocity=new IO::JsonArray;
+						trackerState->setProperty("angularVelocity",*angularVelocity);
+						for(int i=0;i<3;++i)
+							angularVelocity->addItem(ts.angularVelocity[i]);
 						}
 					}
-					
+				device->setProperty("hasBattery",vrd.hasBattery);
+				if(vrd.hasBattery)
 					{
-					Threads::Mutex::Lock baseStationLock(thisPtr->baseStationMutex);
-					if(!thisPtr->baseStations.empty())
+					device->setProperty("batteryLevel",thisPtr->batteryStates[deviceIndex].batteryLevel);
+					device->setProperty("isCharging",thisPtr->batteryStates[deviceIndex].charging);
+					}
+				device->setProperty("canPowerOff",vrd.canPowerOff);
+				if(vrd.canPowerOff)
+					{
+					device->setProperty("powerFeatureIndex",powerFeatureIndex);
+					++powerFeatureIndex;
+					}
+				
+				if(vrd.numButtons>0)
+					{
+					IO::JsonArrayPointer buttons=new IO::JsonArray;
+					device->setProperty("buttons",*buttons);
+					
+					for(int buttonIndex=0;buttonIndex<vrd.numButtons;++buttonIndex)
 						{
-						IO::JsonArrayPointer baseStations=new IO::JsonArray;
-						root->setProperty("baseStations",*baseStations);
+						IO::JsonObjectPointer button=new IO::JsonObject;
+						buttons->addItem(*button);
 						
-						for(std::vector<Vrui::VRBaseStation>::const_iterator bsIt=thisPtr->baseStations.begin();bsIt!=thisPtr->baseStations.end();++bsIt)
-							{
-							IO::JsonObjectPointer baseStation=new IO::JsonObject;
-							baseStations->addItem(*baseStation);
-							
-							baseStation->setProperty("serialNumber",bsIt->getSerialNumber());
-							
-							IO::JsonArrayPointer fov=new IO::JsonArray;
-							baseStation->setProperty("fov",*fov);
-							for(int i=0;i<4;++i)
-								fov->addItem(bsIt->getFov()[i]);
-							
-							IO::JsonArrayPointer range=new IO::JsonArray;
-							baseStation->setProperty("range",*range);
-							for(int i=0;i<2;++i)
-								range->addItem(bsIt->getRange()[i]);
-							
-							baseStation->setProperty("isTracking",bsIt->getTracking());
-							
-							if(bsIt->getTracking())
-								{
-								IO::JsonObjectPointer positionOrientation=new IO::JsonObject;
-								baseStation->setProperty("positionOrientation",*positionOrientation);
-								
-								const Vrui::VRBaseStation::PositionOrientation& po=bsIt->getPositionOrientation();
-								
-								IO::JsonArrayPointer translation=new IO::JsonArray;
-								positionOrientation->setProperty("translation",*translation);
-								for(int i=0;i<3;++i)
-									translation->addItem(po.getTranslation()[i]);
-								
-								IO::JsonArrayPointer rotation=new IO::JsonArray;
-								positionOrientation->setProperty("rotation",*rotation);
-								for(int i=0;i<4;++i)
-									rotation->addItem(po.getRotation().getQuaternion()[i]);
-								}
-							}
+						button->setProperty("name",vrd.buttonNames[buttonIndex]);
+						button->setProperty("index",vrd.buttonIndices[buttonIndex]);
+						button->setProperty("value",thisPtr->state.getButtonState(vrd.buttonIndices[buttonIndex]));
 						}
 					}
+				
+				if(vrd.numValuators>0)
+					{
+					IO::JsonArrayPointer valuators=new IO::JsonArray;
+					device->setProperty("valuators",*valuators);
 					
-					/* Send the server's current status as a json file embedded in an HTTP reply: */
-					IO::OStream reply(pipe);
-					reply<<"HTTP/1.1 200 OK\n";
-					reply<<"Content-Type: application/json\n";
-					reply<<"\n";
-					reply<<*root<<std::endl;
+					for(int valuatorIndex=0;valuatorIndex<vrd.numButtons;++valuatorIndex)
+						{
+						IO::JsonObjectPointer valuator=new IO::JsonObject;
+						valuators->addItem(*valuator);
+						
+						valuator->setProperty("name",vrd.valuatorNames[valuatorIndex]);
+						valuator->setProperty("index",vrd.valuatorIndices[valuatorIndex]);
+						valuator->setProperty("value",thisPtr->state.getValuatorState(vrd.valuatorIndices[valuatorIndex]));
+						}
+					}
+				
+				if(vrd.numHapticFeatures>0)
+					{
+					IO::JsonArrayPointer hapticFeatures=new IO::JsonArray;
+					device->setProperty("hapticFeatures",*hapticFeatures);
+					
+					for(int hapticFeatureIndex=0;hapticFeatureIndex<vrd.numHapticFeatures;++hapticFeatureIndex)
+						{
+						IO::JsonObjectPointer hapticFeature=new IO::JsonObject;
+						hapticFeatures->addItem(*hapticFeature);
+						
+						hapticFeature->setProperty("name",vrd.hapticFeatureNames[hapticFeatureIndex]);
+						hapticFeature->setProperty("index",vrd.hapticFeatureIndices[hapticFeatureIndex]);
+						}
 					}
 				}
 			
-			/* Go to the next name/value pair: */
-			pPtr=valueEnd;
-			if(pPtr!=postEnd)
-				++pPtr;
+			/* Compose the list of base stations: */
+			if(!thisPtr->baseStations.empty())
+				{
+				IO::JsonArrayPointer baseStations=new IO::JsonArray;
+				replyRoot->setProperty("baseStations",*baseStations);
+				
+				for(std::vector<Vrui::VRBaseStation>::const_iterator bsIt=thisPtr->baseStations.begin();bsIt!=thisPtr->baseStations.end();++bsIt)
+					{
+					IO::JsonObjectPointer baseStation=new IO::JsonObject;
+					baseStations->addItem(*baseStation);
+					
+					baseStation->setProperty("serialNumber",bsIt->getSerialNumber());
+					
+					IO::JsonArrayPointer fov=new IO::JsonArray;
+					baseStation->setProperty("fov",*fov);
+					for(int i=0;i<4;++i)
+						fov->addItem(bsIt->getFov()[i]);
+					
+					IO::JsonArrayPointer range=new IO::JsonArray;
+					baseStation->setProperty("range",*range);
+					for(int i=0;i<2;++i)
+						range->addItem(bsIt->getRange()[i]);
+					
+					baseStation->setProperty("isTracking",bsIt->getTracking());
+					
+					if(bsIt->getTracking())
+						{
+						IO::JsonObjectPointer positionOrientation=new IO::JsonObject;
+						baseStation->setProperty("positionOrientation",*positionOrientation);
+						
+						const Vrui::VRBaseStation::PositionOrientation& po=bsIt->getPositionOrientation();
+						
+						IO::JsonArrayPointer translation=new IO::JsonArray;
+						positionOrientation->setProperty("translation",*translation);
+						for(int i=0;i<3;++i)
+							translation->addItem(po.getTranslation()[i]);
+						
+						IO::JsonArrayPointer rotation=new IO::JsonArray;
+						positionOrientation->setProperty("rotation",*rotation);
+						for(int i=0;i<4;++i)
+							rotation->addItem(po.getRotation().getQuaternion()[i]);
+						}
+					}
+				}
 			}
+		else if(nvl.front().value=="getDeviceStates")
+			{
+			}
+	
+		/* Send the server's reply as a json file embedded in an HTTP reply: */
+		IO::OStream reply(pipe);
+		reply<<"HTTP/1.1 200 OK\n";
+		reply<<"Content-Type: application/json\n";
+		reply<<"\n";
+		reply<<*replyRoot<<std::endl;
 		
 		/* Send the reply: */
 		pipe->flush();

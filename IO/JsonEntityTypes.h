@@ -234,6 +234,10 @@ class JsonObject:public JsonEntity // Class representing an unordered collection
 		{
 		map.setEntry(Map::Entry(newName,new JsonNumber(newValue)));
 		}
+	void setProperty(const std::string& newName,const char* newValue) // Convenience method to add a string property
+		{
+		map.setEntry(Map::Entry(newName,new JsonString(newValue)));
+		}
 	void setProperty(const std::string& newName,const std::string& newValue) // Convenience method to add a string property
 		{
 		map.setEntry(Map::Entry(newName,new JsonString(newValue)));
