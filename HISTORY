@@ -8431,3 +8431,10 @@ Vrui-14.0-001:
 - Added ServerLauncher to Vrui/Utilities; meta-server to listen to
   commands as HTTP POST requests on a TCP socket and run VRDeviceDaemon
   and VRCompositingServer sub-processes in an orderly fashion.
+- Added array keeping track of virtual devices' connected states to
+  VRDeviceManager, with new methods setVirtualDeviceConnected and
+  isVirtualDeviceConnected.
+  - Added code to update devices' connected states to OpenVRHost class.
+- Added hapticTick and powerOff commands to VRDeviceServer's HTTP
+  interface.
+  - Moved getServerStatus code into separate method of same name.

@@ -1045,6 +1045,9 @@ OpenVRHost::OpenVRHost(VRDevice::Factory* sFactory,VRDeviceManager* sDeviceManag
 				
 				/* Register the virtual device: */
 				virtualDeviceIndices[deviceType][deviceIndex]=addVirtualDevice(vd);
+				
+				/* Mark the device as unconnected: */
+				deviceManager->setVirtualDeviceConnected(virtualDeviceIndices[deviceType][deviceIndex],false);
 				}
 			}
 		else
@@ -2206,6 +2209,7 @@ void OpenVRHost::TrackedDevicePoseUpdated(uint32_t unWhichDevice,const vr::Drive
 		{
 		/* Change the device's connected state: */
 		ds.connected=newPose.deviceIsConnected;
+		deviceManager->setVirtualDeviceConnected(ds.virtualDeviceIndex,ds.connected);
 		
 		log(1,"Tracked device with serial number %s is now %s\n",ds.serialNumber.c_str(),ds.connected?"connected":"disconnected");
 		}

@@ -175,7 +175,10 @@ void ServerLauncher::newConnectionCallback(Threads::EventDispatcher::IOEvent& ev
 		IO::OStream reply(&pipe);
 		reply<<"HTTP/1.1 200 OK\n";
 		if(replyRoot!=0)
+			{
 			reply<<"Content-Type: application/json\n";
+			reply<<"Access-Control-Allow-Origin: *\n";
+			}
 		reply<<"\n";
 		if(replyRoot!=0)
 			reply<<*replyRoot;
