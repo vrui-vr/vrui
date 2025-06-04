@@ -2151,6 +2151,9 @@ bool OpenVRHost::TrackedDeviceAdded(const char* pchDeviceSerialNumber,vr::ETrack
 		{
 		/* Register the new base station with the device manager: */
 		ds.deviceIndex=deviceManager->addBaseStation(ds.serialNumber);
+		
+		/* Assign an invalid virtual device index: */
+		ds.virtualDeviceIndex=~0U;
 		}
 	else
 		{
@@ -2209,7 +2212,8 @@ void OpenVRHost::TrackedDevicePoseUpdated(uint32_t unWhichDevice,const vr::Drive
 		{
 		/* Change the device's connected state: */
 		ds.connected=newPose.deviceIsConnected;
-		deviceManager->setVirtualDeviceConnected(ds.virtualDeviceIndex,ds.connected);
+		if(ds.virtualDeviceIndex!=~0U)
+			deviceManager->setVirtualDeviceConnected(ds.virtualDeviceIndex,ds.connected);
 		
 		log(1,"Tracked device with serial number %s is now %s\n",ds.serialNumber.c_str(),ds.connected?"connected":"disconnected");
 		}

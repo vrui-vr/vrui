@@ -315,76 +315,86 @@ void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent
 	{
 	VRDeviceServer* thisPtr=static_cast<VRDeviceServer*>(event.getUserData());
 	
-	/* Open a new TCP connection to the HTTP client: */
-	Comm::PipePtr pipe(thisPtr->httpListeningSocket->accept());
-	
-	/* Parse an HTTP POST request: */
-	Comm::HttpPostRequest request(*pipe);
-	const Comm::HttpPostRequest::NameValueList& nvl=request.getNameValueList();
-	
-	/* Check that there is a command in the POST request: */
-	if(request.getActionUrl()=="/VRDeviceServer.cgi"&&nvl.size()>=1&&nvl.front().name=="command")
+	try
 		{
-		/* Compose the server's reply as a JSON-encoded object: */
-		IO::JsonPointer replyRoot;
+		/* Open a new TCP connection to the HTTP client: */
+		Comm::PipePtr pipe(thisPtr->httpListeningSocket->accept());
 		
-		/* Process the command: */
-		if(nvl.front().value=="getServerStatus")
+		/* Parse an HTTP POST request: */
+		Comm::HttpPostRequest request(*pipe);
+		const Comm::HttpPostRequest::NameValueList& nvl=request.getNameValueList();
+		
+		/* Check that there is a command in the POST request: */
+		if(request.getActionUrl()=="/VRDeviceServer.cgi"&&nvl.size()>=1&&nvl.front().name=="command")
 			{
-			/* Compose the JSON object representing the current server state: */
-			replyRoot=thisPtr->getServerStatus();
-			}
-		else if(nvl.front().value=="getDeviceStates")
-			{
-			}
-		else if(nvl.front().value=="hapticTick"&&nvl.size()>1&&nvl[1].name=="hapticFeatureIndex")
-			{
-			/* Extract the haptic feature index: */
-			unsigned int hapticFeatureIndex(strtoul(nvl[1].value.c_str(),0,10));
+			/* Compose the server's reply as a JSON-encoded object: */
+			IO::JsonPointer replyRoot;
 			
-			/* Extract optional haptic tick duration, frequency, and amplitude: */
-			unsigned int duration=100;
-			unsigned int frequency=100;
-			unsigned int amplitude=255;
-			for(unsigned int i=2;i<nvl.size();++i)
+			/* Process the command: */
+			if(nvl.front().value=="getServerStatus")
 				{
-				if(nvl[i].name=="duration")
-					duration=(unsigned int)(strtoul(nvl[i].value.c_str(),0,10));
-				else if(nvl[i].name=="frequency")
-					frequency=(unsigned int)(strtoul(nvl[i].value.c_str(),0,10));
-				else if(nvl[i].name=="amplitude")
-					amplitude=Math::clamp((unsigned int)(strtoul(nvl[i].value.c_str(),0,10)),0U,255U);
+				/* Compose the JSON object representing the current server state: */
+				replyRoot=thisPtr->getServerStatus();
 				}
-			
-			/* Request a haptic tick: */
-			if(hapticFeatureIndex<thisPtr->deviceManager->getNumHapticFeatures())
-				thisPtr->deviceManager->hapticTick(hapticFeatureIndex,duration,frequency,amplitude);
-			}
-		else if(nvl.front().value=="powerOff"&&nvl.size()>=2&&nvl[1].name=="powerFeatureIndex")
-			{
-			/* Extract the power feature index: */
-			unsigned int powerFeatureIndex(strtoul(nvl[1].value.c_str(),0,10));
-			
-			/* Power off the device: */
-			if(powerFeatureIndex<thisPtr->deviceManager->getNumPowerFeatures())
-				thisPtr->deviceManager->powerOff(powerFeatureIndex);
-			}
-	
-		/* Send the server's reply as a json file embedded in an HTTP reply: */
-		IO::OStream reply(pipe);
-		reply<<"HTTP/1.1 200 OK\n";
-		if(replyRoot!=0)
-			{
-			reply<<"Content-Type: application/json\n";
-			reply<<"Access-Control-Allow-Origin: *\n";
-			}
-		reply<<"\n";
-		if(replyRoot!=0)
-			reply<<*replyRoot;
-		reply<<std::endl;
+			else if(nvl.front().value=="getDeviceStates")
+				{
+				}
+			else if(nvl.front().value=="hapticTick"&&nvl.size()>1&&nvl[1].name=="hapticFeatureIndex")
+				{
+				/* Extract the haptic feature index: */
+				unsigned int hapticFeatureIndex(strtoul(nvl[1].value.c_str(),0,10));
+				
+				/* Extract optional haptic tick duration, frequency, and amplitude: */
+				unsigned int duration=100;
+				unsigned int frequency=100;
+				unsigned int amplitude=255;
+				for(unsigned int i=2;i<nvl.size();++i)
+					{
+					if(nvl[i].name=="duration")
+						duration=(unsigned int)(strtoul(nvl[i].value.c_str(),0,10));
+					else if(nvl[i].name=="frequency")
+						frequency=(unsigned int)(strtoul(nvl[i].value.c_str(),0,10));
+					else if(nvl[i].name=="amplitude")
+						amplitude=Math::clamp((unsigned int)(strtoul(nvl[i].value.c_str(),0,10)),0U,255U);
+					}
+				
+				/* Request a haptic tick: */
+				if(hapticFeatureIndex<thisPtr->deviceManager->getNumHapticFeatures())
+					thisPtr->deviceManager->hapticTick(hapticFeatureIndex,duration,frequency,amplitude);
+				}
+			else if(nvl.front().value=="powerOff"&&nvl.size()>=2&&nvl[1].name=="powerFeatureIndex")
+				{
+				/* Extract the power feature index: */
+				unsigned int powerFeatureIndex(strtoul(nvl[1].value.c_str(),0,10));
+				
+				/* Power off the device: */
+				if(powerFeatureIndex<thisPtr->deviceManager->getNumPowerFeatures())
+					thisPtr->deviceManager->powerOff(powerFeatureIndex);
+				}
 		
-		/* Send the reply: */
-		pipe->flush();
+			/* Send the server's reply as a json file embedded in an HTTP reply: */
+			IO::OStream reply(pipe);
+			reply<<"HTTP/1.1 200 OK\n";
+			if(replyRoot!=0)
+				{
+				reply<<"Content-Type: application/json\n";
+				reply<<"Access-Control-Allow-Origin: *\n";
+				}
+			reply<<"\n";
+			if(replyRoot!=0)
+				reply<<*replyRoot;
+			reply<<std::endl;
+			
+			/* Send the reply: */
+			pipe->flush();
+			}
+		}
+	catch(const std::runtime_error& err)
+		{
+		#ifdef VERBOSE
+		// printf("VRDeviceServer: Ignoring HTTP request due to exception %s\n",err.what());
+		// fflush(stdout);
+		#endif
 		}
 	}
 
