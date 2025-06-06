@@ -145,10 +145,8 @@ void VRDeviceServer::newUnixConnectionCallback(Threads::EventDispatcher::IOEvent
 	thisPtr->connectNewClient(*thisPtr->unixListeningSocket);
 	}
 
-IO::JsonPointer VRDeviceServer::getServerStatus(void)
+void VRDeviceServer::getServerStatus(IO::JsonObject& replyRoot)
 	{
-	IO::JsonObjectPointer result=new IO::JsonObject;
-	
 	/* Lock affected server state: */
 	Threads::Mutex::Lock stateLock(stateMutex);
 	Threads::Mutex::Lock batteryStateLock(batteryStateMutex);
@@ -156,7 +154,7 @@ IO::JsonPointer VRDeviceServer::getServerStatus(void)
 	
 	/* Compose the list of devices: */
 	IO::JsonArrayPointer devices=new IO::JsonArray;
-	result->setProperty("devices",*devices);
+	replyRoot.setProperty("devices",*devices);
 	
 	int powerFeatureIndex=0;
 	int numVirtualDevices=deviceManager->getNumVirtualDevices();
@@ -267,7 +265,7 @@ IO::JsonPointer VRDeviceServer::getServerStatus(void)
 	if(!baseStations.empty())
 		{
 		IO::JsonArrayPointer stations=new IO::JsonArray;
-		result->setProperty("baseStations",*stations);
+		replyRoot.setProperty("baseStations",*stations);
 		
 		for(std::vector<Vrui::VRBaseStation>::const_iterator bsIt=baseStations.begin();bsIt!=baseStations.end();++bsIt)
 			{
@@ -307,8 +305,6 @@ IO::JsonPointer VRDeviceServer::getServerStatus(void)
 				}
 			}
 		}
-	
-	return result;
 	}
 
 void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent& event)
@@ -328,13 +324,15 @@ void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent
 		if(request.getActionUrl()=="/VRDeviceServer.cgi"&&nvl.size()>=1&&nvl.front().name=="command")
 			{
 			/* Compose the server's reply as a JSON-encoded object: */
-			IO::JsonPointer replyRoot;
+			IO::JsonObjectPointer replyRoot=new IO::JsonObject;
+			replyRoot->setProperty("command",nvl.front().value);
 			
 			/* Process the command: */
 			if(nvl.front().value=="getServerStatus")
 				{
 				/* Compose the JSON object representing the current server state: */
-				replyRoot=thisPtr->getServerStatus();
+				thisPtr->getServerStatus(*replyRoot);
+				replyRoot->setProperty("status","Success");
 				}
 			else if(nvl.front().value=="getDeviceStates")
 				{
@@ -360,7 +358,12 @@ void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent
 				
 				/* Request a haptic tick: */
 				if(hapticFeatureIndex<thisPtr->deviceManager->getNumHapticFeatures())
+					{
 					thisPtr->deviceManager->hapticTick(hapticFeatureIndex,duration,frequency,amplitude);
+					replyRoot->setProperty("status","Success");
+					}
+				else
+					replyRoot->setProperty("status","Invalid hapticFeatureIndex");
 				}
 			else if(nvl.front().value=="powerOff"&&nvl.size()>=2&&nvl[1].name=="powerFeatureIndex")
 				{
@@ -369,21 +372,23 @@ void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent
 				
 				/* Power off the device: */
 				if(powerFeatureIndex<thisPtr->deviceManager->getNumPowerFeatures())
+					{
 					thisPtr->deviceManager->powerOff(powerFeatureIndex);
+					replyRoot->setProperty("status","Success");
+					}
+				else
+					replyRoot->setProperty("status","Invalid powerFeatureIndex");
 				}
-		
+			else
+				replyRoot->setProperty("status","Invalid command");
+			
 			/* Send the server's reply as a json file embedded in an HTTP reply: */
 			IO::OStream reply(pipe);
 			reply<<"HTTP/1.1 200 OK\n";
-			if(replyRoot!=0)
-				{
-				reply<<"Content-Type: application/json\n";
-				reply<<"Access-Control-Allow-Origin: *\n";
-				}
+			reply<<"Content-Type: application/json\n";
+			reply<<"Access-Control-Allow-Origin: *\n";
 			reply<<"\n";
-			if(replyRoot!=0)
-				reply<<*replyRoot;
-			reply<<std::endl;
+			reply<<*replyRoot<<std::endl;
 			
 			/* Send the reply: */
 			pipe->flush();

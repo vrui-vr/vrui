@@ -25,7 +25,6 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <vector>
 #include <Misc/SimpleObjectSet.h>
 #include <Threads/EventDispatcher.h>
-#include <IO/JsonEntity.h>
 #include <Comm/ListeningSocket.h>
 #include <Vrui/EnvironmentDefinition.h>
 #include <Vrui/Internal/VRDeviceProtocol.h>
@@ -35,6 +34,9 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 /* Forward declarations: */
 namespace Misc {
 class ConfigurationFile;
+}
+namespace IO {
+class JsonObject;
 }
 namespace Vrui {
 class BatteryState;
@@ -140,7 +142,7 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	void connectNewClient(Comm::ListeningSocket& listeningSocket); // Connects a new client over the given listening socket
 	static void newTcpConnectionCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when an incoming connection is waiting at the TCP listening socket
 	static void newUnixConnectionCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when an incoming connection is waiting at the UNIX domain listening socket
-	IO::JsonPointer getServerStatus(void); // Returns a JSON object describing the server's current state
+	void getServerStatus(IO::JsonObject& replyRoot); // Encodes the server's current state in the given JSON object
 	static void newHttpConnectionCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when an incoming connection is waiting at the TCP listening socket serving HTTP requests
 	static void suspendTimerCallback(Threads::EventDispatcher::TimerEvent& event); // Callback called after a period of inactivity
 	static void environmentDefinitionUpdatedCallback(Threads::EventDispatcher::SignalEvent& event); // Callback called when a client updates the environment definition
