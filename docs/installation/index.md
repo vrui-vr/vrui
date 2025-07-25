@@ -1,8 +1,8 @@
-# Simple VRUI Installation
+# Getting started with VRUI
 
 Follow these instructions to install VRUI with standard settings in a standard location, to simplify building and installing add-on packages and VRUI applications.
 
-??? note
+??? info "Heads up!"
     Angle brackets `<>` in commands below are placeholders, meaning that you have to replace everything between, and including, the angle brackets with some text that depends on your specific circumstances.
 
     For example, if your host has eight CPUs, instead of entering `-j<number of CPUs>` as part of some command, you would enter `-j8`.
