@@ -185,6 +185,7 @@ void InputDeviceAdapterHID::createInputDevice(int deviceIndex,const Misc::Config
 	
 	/* Create a new device structure: */
 	Device newDevice;
+	newDevice.adapter=this;
 	newDevice.deviceFd=deviceFd;
 	
 	/* Query all feature types of the device: */
