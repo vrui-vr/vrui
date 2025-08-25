@@ -286,8 +286,8 @@ void InputDeviceAdapterHID::initializeInputDevice(int deviceIndex,const Misc::Co
 		
 		/* Create an axis value mapper in normalized axis space: */
 		Device::AxisValueMapper avm;
-		double s=0.5*(double(absAxisConfig.max)-double(absAxisConfig.min));
-		double o=double(absAxisConfig.min)+s;
+		double s=double(absAxisConfig.max)-double(absAxisConfig.min);
+		double o=double(absAxisConfig.min);
 		avm.min=(double(absAxisConfig.min)-o)/s;
 		double mid=Math::mid(double(absAxisConfig.min),double(absAxisConfig.max));
 		double flat=Math::div2(double(absAxisConfig.flat));
