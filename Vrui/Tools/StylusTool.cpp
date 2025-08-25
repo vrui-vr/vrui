@@ -180,7 +180,7 @@ void StylusTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackD
 		if(selectorButtonIndex!=newSelectorButtonIndex)
 			{
 			/* Reset the previously-active virtual input device button: */
-			transformedDevice->setButtonState(selectorButtonIndex,cbData->newButtonState);
+			transformedDevice->setButtonState(selectorButtonIndex,false);
 			
 			/* Update the current selector button index: */
 			selectorButtonIndex=newSelectorButtonIndex;
