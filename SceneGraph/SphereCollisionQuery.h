@@ -1,7 +1,7 @@
 /***********************************************************************
 SphereCollisionQuery - Class to query the collision of a sliding sphere
 with a scene graph.
-Copyright (c) 2020 Oliver Kreylos
+Copyright (c) 2020-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -27,6 +27,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Geometry/Point.h>
 #include <Geometry/Vector.h>
 #include <SceneGraph/Geometry.h>
+
+/* Forward declarations: */
+namespace SceneGraph {
+struct CollisionEdge;
+struct CollisionTriangle;
+struct CollisionPolygon;
+}
 
 namespace SceneGraph {
 
@@ -75,7 +82,11 @@ class SphereCollisionQuery
 	bool doesHitBox(const Box& box) const; // Returns true if the sphere hits the given box based on current collision state
 	bool testVertexAndUpdate(const Point& vertex); // Tests sphere against a vertex; returns true if previous hit result changed
 	bool testEdgeAndUpdate(const Point& vertex0,const Point& vertex1); // Tests sphere against an edge defined by two vertices; returns true if previous hit result changed
+	bool testEdgeAndUpdate(const Point& center,const Vector& axis,Scalar axisSqr); // Tests sphere against an edge defined by the center point between two vertices, the vector from the first to the second vertex, and the squared length of that vector; returns true if previous hit result changed
 	bool testPlaneAndUpdate(const Point& center,const Vector& normal); // Tests sphere against a plane; returns true if previous hit result changed
+	bool testEdgeAndUpdate(const CollisionEdge& edge); // Tests sphere against an edge; returns true if previous hit result changed
+	bool testTriangleAndUpdate(const CollisionTriangle& triangle); // Tests sphere against a triangle; returns true if previous hit result changed
+	bool testPolygonAndUpdate(const CollisionPolygon& polygon); // Tests sphere against a polygon; returns true if previous hit result changed
 	
 	/* Transformation methods: */
 	SphereCollisionQuery transform(const OGTransform& transform) const; // Returns a transformed copy of the collision query
