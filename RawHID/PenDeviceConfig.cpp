@@ -112,4 +112,28 @@ PenDeviceConfig::PenDeviceConfig(EventDevice& device)
 	haveTilt=(featureMask&0x30U)==0x30U;
 	}
 
+PenDeviceConfig::PenState PenDeviceConfig::getPenState(const EventDevice& device) const
+	{
+	PenState result;
+	
+	/* Check if the pen is within range of the device: */
+	result.valid=device.getKeyFeatureValue(touchKeyIndex);
+	if(result.valid)
+		{
+		/* Extract the pen position: */
+		for(int i=0;i<2;++i)
+			result.pos[i]=device.getAbsAxisFeatureValue(posAxisIndices[i]);
+		
+		/* Extract the pen tilt angles if supported: */
+		if(haveTilt)
+			for(int i=0;i<2;++i)
+				result.tilt[i]=device.getAbsAxisFeatureValue(tiltAxisIndices[i]);
+		
+		/* Check if the pen is pressed: */
+		result.pressed=device.getKeyFeatureValue(pressKeyIndex);
+		}
+	
+	return result;
+	}
+
 }
