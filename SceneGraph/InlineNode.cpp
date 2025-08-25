@@ -1,7 +1,7 @@
 /***********************************************************************
 InlineNode - Class for group nodes that read their children from an
 external VRML file.
-Copyright (c) 2009-2021 Oliver Kreylos
+Copyright (c) 2009-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -24,7 +24,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <string.h>
 #include <stdexcept>
+#include <Misc/FileNameExtensions.h>
 #include <Misc/MessageLogger.h>
+#include <IO/Directory.h>
 #include <SceneGraph/VRMLFile.h>
 #include <SceneGraph/SceneGraphReader.h>
 #include <SceneGraph/SceneGraphWriter.h>
@@ -58,9 +60,21 @@ void InlineNode::parseField(const char* fieldName,VRMLFile& vrmlFile)
 		
 		try
 			{
-			/* Load the external VRML file: */
-			VRMLFile externalVrmlFile(vrmlFile.getBaseDirectory(),url.getValue(0),vrmlFile.getNodeCreator());
-			externalVrmlFile.parse(*this);
+			/* Check if the scene graph file is a binary file or a VRML 2.0 file: */
+			if(Misc::hasCaseExtension(url.getValue(0).c_str(),".bwrl"))
+				{
+				/* Load a binary scene graph file: */
+				SceneGraphReader reader(vrmlFile.getBaseDirectory().openFile(url.getValue(0).c_str()),vrmlFile.getNodeCreator());
+				addChild(*reader.readTypedNode<SceneGraph::GraphNode>());
+				}
+			else if(Misc::hasCaseExtension(url.getValue(0).c_str(),".wrl"))
+				{
+				/* Load a VRML v2.0 scene graph file: */
+				VRMLFile externalVrmlFile(vrmlFile.getBaseDirectory(),url.getValue(0),vrmlFile.getNodeCreator());
+				externalVrmlFile.parse(*this);
+				}
+			else
+				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Scene graph file name has unrecognized extension %s",Misc::getExtension(url.getValue(9).c_str()));
 			}
 		catch(const std::runtime_error& err)
 			{
