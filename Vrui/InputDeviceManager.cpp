@@ -49,7 +49,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Internal/InputDeviceAdapterVisBox.h>
 #ifdef __linux__
 #include <Vrui/Internal/Linux/InputDeviceAdapterHID.h>
-#include <Vrui/Internal/Linux/InputDeviceAdapterPenPad.h>
 #endif
 #ifdef __APPLE__
 #include <Vrui/Internal/MacOSX/InputDeviceAdapterHID.h>
@@ -165,14 +164,13 @@ void InputDeviceManager::initialize(const Misc::ConfigurationFileSection& config
 	int multitouchAdapterIndex=-1;
 	for(int i=0;i<numInputDeviceAdapters;++i)
 		{
-		/* Go to input device adapter's section: */
-		Misc::ConfigurationFileSection inputDeviceAdapterSection=configFileSection.getSection(inputDeviceAdapterNames[i].c_str());
-		
-		/* Determine input device adapter's type: */
-		std::string inputDeviceAdapterType=inputDeviceAdapterSection.retrieveString("./inputDeviceAdapterType");
-		bool typeFound=true;
 		try
 			{
+			/* Go to input device adapter's section: */
+			Misc::ConfigurationFileSection inputDeviceAdapterSection=configFileSection.getSection(inputDeviceAdapterNames[i].c_str());
+			
+			/* Determine input device adapter's type: */
+			std::string inputDeviceAdapterType=inputDeviceAdapterSection.retrieveString("./inputDeviceAdapterType");
 			if(inputDeviceAdapterType=="Mouse")
 				{
 				/* Check if there is already a mouse input device adapter: */
@@ -227,11 +225,6 @@ void InputDeviceManager::initialize(const Misc::ConfigurationFileSection& config
 				/* Create HID input device adapter: */
 				inputDeviceAdapters[i]=new InputDeviceAdapterHID(this,inputDeviceAdapterSection);
 				}
-			else if(inputDeviceAdapterType=="PenPad")
-				{
-				/* Create pen pad input device adapter: */
-				inputDeviceAdapters[i]=new InputDeviceAdapterPenPad(this,inputDeviceAdapterSection);
-				}
 			else if(inputDeviceAdapterType=="OVRD")
 				{
 				/* Create OVRD input device adapter: */
@@ -248,7 +241,7 @@ void InputDeviceManager::initialize(const Misc::ConfigurationFileSection& config
 				inputDeviceAdapters[i]=new InputDeviceAdapterDummy(this,inputDeviceAdapterSection);
 				}
 			else
-				typeFound=false;
+				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid input device adapter type %s",inputDeviceAdapterType.c_str());
 			}
 		catch(const std::runtime_error& err)
 			{
@@ -259,9 +252,6 @@ void InputDeviceManager::initialize(const Misc::ConfigurationFileSection& config
 			inputDeviceAdapters[i]=0;
 			++numIgnoredAdapters;
 			}
-		
-		if(!typeFound)
-			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unknown input device adapter type \"%s\"",inputDeviceAdapterType.c_str());
 		}
 	
 	if(numIgnoredAdapters!=0)
@@ -271,10 +261,7 @@ void InputDeviceManager::initialize(const Misc::ConfigurationFileSection& config
 		int newNumInputDeviceAdapters=0;
 		for(int i=0;i<numInputDeviceAdapters;++i)
 			if(inputDeviceAdapters[i]!=0)
-				{
-				newInputDeviceAdapters[newNumInputDeviceAdapters]=inputDeviceAdapters[i];
-				++newNumInputDeviceAdapters;
-				}
+				newInputDeviceAdapters[newNumInputDeviceAdapters++]=inputDeviceAdapters[i];
 		delete[] inputDeviceAdapters;
 		numInputDeviceAdapters=newNumInputDeviceAdapters;
 		inputDeviceAdapters=newInputDeviceAdapters;

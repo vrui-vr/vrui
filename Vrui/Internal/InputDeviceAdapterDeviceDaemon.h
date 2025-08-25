@@ -60,16 +60,16 @@ class InputDeviceAdapterDeviceDaemon:public InputDeviceAdapterIndexMap
 	void errorCallback(const VRDeviceClient::ProtocolError& error);
 	void batteryStateUpdatedCallback(unsigned int deviceIndex);
 	
-	/* Protected methods from InputDeviceAdapter: */
+	/* Protected methods from class InputDeviceAdapter: */
 	protected:
-	virtual void createInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection);
+	virtual void initializeInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection);
 	
 	/* Constructors and destructors: */
 	public:
 	InputDeviceAdapterDeviceDaemon(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection); // Creates adapter by connecting to server and initializing Vrui input devices
 	virtual ~InputDeviceAdapterDeviceDaemon(void);
 	
-	/* Methods from InputDeviceAdapter: */
+	/* Methods from class InputDeviceAdapter: */
 	virtual std::string getFeatureName(const InputDeviceFeature& feature) const;
 	virtual int getFeatureIndex(InputDevice* device,const char* featureName) const;
 	virtual void updateInputDevices(void);

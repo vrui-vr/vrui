@@ -1,7 +1,6 @@
 /***********************************************************************
-TouchscreenCalibratorProjective - Class to calibrate raw measurements
-from a touchscreen device to rectified screen space using a projective
-transformation.
+PenPadCalibratorProjective - Class to calibrate a pen pad's position
+using a projective transformation.
 Copyright (c) 2023-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
@@ -22,31 +21,35 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 02111-1307 USA
 ***********************************************************************/
 
-#ifndef VRUI_INTERNAL_TOUCHSCREENCALIBRATORPROJECTIVE_INCLUDED
-#define VRUI_INTERNAL_TOUCHSCREENCALIBRATORPROJECTIVE_INCLUDED
+#ifndef VRUI_INTERNAL_PENPADCALIBRATORPROJECTIVE_INCLUDED
+#define VRUI_INTERNAL_PENPADCALIBRATORPROJECTIVE_INCLUDED
 
 #include <Geometry/ProjectiveTransformation.h>
-#include <Vrui/Internal/TouchscreenCalibrator.h>
+#include <Vrui/Internal/PenPadCalibrator.h>
+
+/* Forward declarations: */
+namespace Misc {
+class ConfigurationFileSection;
+}
 
 namespace Vrui {
 
-class TouchscreenCalibratorProjective:public TouchscreenCalibrator
+class PenPadCalibratorProjective:public PenPadCalibrator
 	{
 	/* Embedded classes: */
 	private:
 	typedef Geometry::ProjectiveTransformation<Scalar,2> Transform; // Type for projective transformations
 	
 	/* Elements: */
-	Transform transform; // Transformation from raw measurement space to rectified screen space
+	Transform transform; // Transformation from raw measurement space to rectified normalized screen space
 	
 	/* Constructors and destructors: */
 	public:
-	TouchscreenCalibratorProjective(const Box& rawDomain,const std::vector<TiePoint>& tiePoints); // Creates a projective calibrator from the given set of tie points from the given raw measurement domain
-	TouchscreenCalibratorProjective(const Misc::ConfigurationFileSection& configFileSection); // Creates a projective calibrator from the given configuration file section
+	PenPadCalibratorProjective(const TiePointList& tiePoints,const Box2& rawDomain,Misc::ConfigurationFileSection& configFileSection); // Calculates a calibration from the given tie points and raw measurement domain and writes the result to the given configuration file section
+	PenPadCalibratorProjective(const Misc::ConfigurationFileSection& configFileSection,const Box2& rawDomain); // Creates a calibrator by reading from a configuration file section based on the given raw measurement domain
 	
-	/* Methods from class TouchscreenCalibrator: */
-	virtual void writeConfig(Misc::ConfigurationFileSection& configFileSection) const;
-	virtual Point calibrate(const Point& raw) const;
+	/* Methods from class PenPadCalibrator: */
+	virtual Point2 calibrate(const Point2& raw) const;
 	};
 
 }

@@ -35,6 +35,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Threads/Mutex.h>
 #include <Threads/EventDispatcherThread.h>
 #include <RawHID/EventDevice.h>
+#include <RawHID/EventDeviceMatcher.h>
 #include <RawHID/PenDeviceConfig.h>
 #include <Geometry/Point.h>
 #include <Geometry/OrthonormalTransformation.h>
@@ -45,11 +46,11 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Vrui.h>
 #include <Vrui/Application.h>
 #include <Vrui/VRScreen.h>
-#include <Vrui/Internal/TouchscreenCalibrator.h>
-#include <Vrui/Internal/TouchscreenCalibratorRectilinear.h>
-#include <Vrui/Internal/TouchscreenCalibratorAffine.h>
-#include <Vrui/Internal/TouchscreenCalibratorProjective.h>
-#include <Vrui/Internal/TouchscreenCalibratorBSpline.h>
+#include <Vrui/Internal/PenPadCalibrator.h>
+#include <Vrui/Internal/PenPadCalibratorRectilinear.h>
+#include <Vrui/Internal/PenPadCalibratorAffine.h>
+#include <Vrui/Internal/PenPadCalibratorProjective.h>
+#include <Vrui/Internal/PenPadCalibratorBSpline.h>
 
 class CalibrateTouchscreen:public Vrui::Application
 	{
@@ -57,21 +58,17 @@ class CalibrateTouchscreen:public Vrui::Application
 	private:
 	typedef Misc::Size<2> Size; // Type for mesh sizes etc.
 	typedef Vrui::Scalar Scalar; // Scalar type
-	typedef Vrui::TouchscreenCalibrator::Point Point; // Type for points in screen space
-	typedef Vrui::TouchscreenCalibrator::Box Box; // Type for boxes in screen space
-	typedef Vrui::TouchscreenCalibrator::TiePoint TiePoint; // Type for tie points between touchscreen measurement space and screen space
-	typedef std::vector<TiePoint> TiePointList; // Type for lists of tie points
+	typedef Vrui::PenPadCalibrator::Point2 Point2; // Type for points in screen space
+	typedef Vrui::PenPadCalibrator::Box2 Box2; // Type for boxes in screen space
+	typedef Vrui::PenPadCalibrator::TiePoint TiePoint; // Type for tie points between touchscreen measurement space and screen space
+	typedef Vrui::PenPadCalibrator::TiePointList TiePointList; // Type for lists of tie points
 	typedef RawHID::EventDevice::AbsAxisConfig AxisConfig;
 	
 	/* Elements: */
 	RawHID::EventDevice* penDevice; // The input device associated with the touchscreen's pen device
+	RawHID::PenDeviceConfig penDeviceConfig; // The pen device's configuration
 	Threads::EventDispatcherThread dispatcher; // Event dispatcher for events on the pen device
-	unsigned int axisIndices[2]; // Feature indices of the pen's absolute x and y axes
-	Box axisDomain; // Domain of pen's absolute x and y axes
-	bool haveTilt; // Flag if the pen provides tilt measurements
-	unsigned int tiltIndices[2]; // Feature indices of the pen's x and y tilt axes
-	unsigned int hoverButtonIndex; // Feature index of the pen's "in range" button
-	unsigned int buttonIndex; // Feature index of the pen's touch button
+	Box2 posDomain; // Domain of pen's position axes
 	Vrui::VRScreen* screen; // The screen associated with the touchscreen
 	Scalar screenSize[2]; // Width and height of the touchscreen in physical coordinate units
 	Scalar gridGap; // Gap between the outer edges of the screen and the grid in grid tile units
@@ -85,10 +82,10 @@ class CalibrateTouchscreen:public Vrui::Application
 	int calibrationType; // Type of calibration method
 	Size splineDegree; // Degree for B-Spline calibrator
 	Size splineSize; // Mesh size for B-Spline calibrator
-	Vrui::TouchscreenCalibrator* calibrator; // Pointer to a calibration object, or 0 if calibration is incomplete
+	Vrui::PenPadCalibrator* calibrator; // Pointer to a calibration object, or 0 if calibration is incomplete
 	mutable Threads::Mutex penStateMutex; // Mutex protecting the current pen state
 	bool hovering; // Flag whether the pen is currently close enough to the touch screen for the pen position to be valid
-	Point penPos; // Calibration pen position when a calibration has been calculated
+	Point2 penPos; // Calibration pen position when a calibration has been calculated
 	
 	/* Private methods: */
 	void keyCallback(RawHID::EventDevice::KeyFeatureEventCallbackData* cbData);
@@ -120,7 +117,7 @@ void CalibrateTouchscreen::keyCallback(RawHID::EventDevice::KeyFeatureEventCallb
 	if(calibrator!=0)
 		return;
 	
-	if(cbData->featureIndex==buttonIndex)
+	if(cbData->featureIndex==penDeviceConfig.pressKeyIndex)
 		{
 		Realtime::TimePointMonotonic now;
 		
@@ -129,11 +126,12 @@ void CalibrateTouchscreen::keyCallback(RawHID::EventDevice::KeyFeatureEventCallb
 			if(now>=measureStart&&currentPoint<numPoints.volume())
 				{
 				/* Start accumulating data for the current point: */
+				RawHID::PenDeviceConfig::PenState ps=penDeviceConfig.getPenState(*penDevice);
 				for(int i=0;i<2;++i)
-					pointAccum[i]=Scalar(penDevice->getAbsAxisFeatureValue(axisIndices[i]));
-				if(haveTilt)
+					pointAccum[i]=Scalar(ps.pos[i]);
+				if(penDeviceConfig.haveTilt)
 					for(int i=0;i<2;++i)
-						tiltAccum[i]=Scalar(penDevice->getAbsAxisFeatureValue(tiltIndices[i]));
+						tiltAccum[i]=Scalar(ps.tilt[i]);
 				numAccum=1;
 				}
 			}
@@ -143,7 +141,7 @@ void CalibrateTouchscreen::keyCallback(RawHID::EventDevice::KeyFeatureEventCallb
 				{
 				/* Print the current measurement: */
 				std::cout<<currentPoint<<": pos "<<pointAccum[0]/Scalar(numAccum)<<", "<<pointAccum[1]/Scalar(numAccum);
-				if(haveTilt)
+				if(penDeviceConfig.haveTilt)
 					std::cout<<", tilt "<<tiltAccum[0]/Scalar(numAccum)<<", "<<tiltAccum[1]/Scalar(numAccum);
 				std::cout<<std::endl;
 				
@@ -157,7 +155,7 @@ void CalibrateTouchscreen::keyCallback(RawHID::EventDevice::KeyFeatureEventCallb
 				for(int i=0;i<2;++i)
 					{
 					tp.raw[i]=pointAccum[i]/Scalar(numAccum);
-					tp.screen[i]=(Scalar(index[i])+gridGap)/(Scalar(numPoints[i]-1)+Scalar(2)*gridGap)*screenSize[i];
+					tp.screen[i]=(Scalar(index[i])+gridGap)/(Scalar(numPoints[i]-1)+Scalar(2)*gridGap);
 					}
 				tiePoints.push_back(tp);
 				
@@ -176,7 +174,7 @@ void CalibrateTouchscreen::keyCallback(RawHID::EventDevice::KeyFeatureEventCallb
 			measureStart=now+Realtime::TimeVector(1,0);
 			}
 		}
-	else if(cbData->featureIndex==hoverButtonIndex)
+	else if(cbData->featureIndex==penDeviceConfig.touchKeyIndex)
 		{
 		/* Update the hovering flag: */
 		hovering=cbData->newValue;
@@ -189,32 +187,38 @@ void CalibrateTouchscreen::absAxisCallback(RawHID::EventDevice::AbsAxisFeatureEv
 	{
 	Threads::Mutex::Lock penStateLock(penStateMutex);
 	
-	if(calibrator!=0)
+	/* Get the current pen state: */
+	RawHID::PenDeviceConfig::PenState ps=penDeviceConfig.getPenState(*penDevice);
+	if(ps.valid)
 		{
-		/* Calculate the current pen position: */
-		int raw[2];
+		/* Update the pen state with this callback: */
 		for(int i=0;i<2;++i)
 			{
-			if(cbData->featureIndex==axisIndices[i])
-				raw[i]=cbData->newValue;
-			else
-				raw[i]=penDevice->getAbsAxisFeatureValue(axisIndices[i]);
+			if(cbData->featureIndex==penDeviceConfig.posAxisIndices[i])
+				ps.pos[i]=cbData->newValue;
+			if(cbData->featureIndex==penDeviceConfig.tiltAxisIndices[i])
+				ps.tilt[i]=cbData->newValue;
 			}
-		penPos=calibrator->calibrate(Point(raw[0],raw[1]));
 		
-		Vrui::requestUpdate();
-		}
-	else if(penDevice->getKeyFeatureValue(buttonIndex))
-		{
-		/* Accumulate the new axis values: */
-		for(int i=0;i<2;++i)
+		if(calibrator!=0)
 			{
-			if(cbData->featureIndex==axisIndices[i])
-				pointAccum[i]+=Scalar(cbData->newValue);
-			else
-				pointAccum[i]+=Scalar(penDevice->getAbsAxisFeatureValue(axisIndices[i]));
+			/* Calibrate the new pen position: */
+			penPos=calibrator->calibrate(Point2(ps.pos[0],ps.pos[1]));
+			for(int i=0;i<2;++i)
+				penPos[i]*=screenSize[i];
+			
+			Vrui::requestUpdate();
 			}
-		++numAccum;
+		else
+			{
+			/* Accumulate the new pen position: */
+			for(int i=0;i<2;++i)
+				pointAccum[i]+=Scalar(ps.pos[i]);
+			if(penDeviceConfig.haveTilt)
+				for(int i=0;i<2;++i)
+					tiltAccum[i]+=Scalar(ps.tilt[i]);
+			++numAccum;
+			}
 		}
 	}
 
@@ -222,22 +226,28 @@ void CalibrateTouchscreen::synReportCallback(Misc::CallbackData* cbData)
 	{
 	Threads::Mutex::Lock penStateLock(penStateMutex);
 	
-	if(calibrator!=0)
+	RawHID::PenDeviceConfig::PenState ps=penDeviceConfig.getPenState(*penDevice);
+	if(ps.valid)
 		{
-		/* Calculate the current pen position: */
-		penPos=calibrator->calibrate(Point(penDevice->getAbsAxisFeatureValue(axisIndices[0]),penDevice->getAbsAxisFeatureValue(axisIndices[1])));
-		
-		Vrui::requestUpdate();
-		}
-	else if(numAccum>0)
-		{
-		/* Accumulate the current axis values: */
-		for(int i=0;i<2;++i)
-			pointAccum[i]+=Scalar(penDevice->getAbsAxisFeatureValue(axisIndices[i]));
-		if(haveTilt)
+		if(calibrator!=0)
+			{
+			/* Calibrate the new pen position: */
+			penPos=calibrator->calibrate(Point2(ps.pos[0],ps.pos[1]));
 			for(int i=0;i<2;++i)
-				tiltAccum[i]+=Scalar(penDevice->getAbsAxisFeatureValue(tiltIndices[i]));
-		++numAccum;
+				penPos[i]*=screenSize[i];
+			
+			Vrui::requestUpdate();
+			}
+		else if(numAccum>0)
+			{
+			/* Accumulate the new pen position: */
+			for(int i=0;i<2;++i)
+				pointAccum[i]+=Scalar(ps.pos[i]);
+			if(penDeviceConfig.haveTilt)
+				for(int i=0;i<2;++i)
+					tiltAccum[i]+=Scalar(ps.tilt[i]);
+			++numAccum;
+			}
 		}
 	}
 
@@ -250,44 +260,62 @@ void CalibrateTouchscreen::calibrate(void)
 		csv<<tpIt->raw[0]<<','<<tpIt->raw[1]<<','<<tpIt->screen[0]<<','<<tpIt->screen[1]<<std::endl;
 	}
 	
-	#if 0
+	/* Create a configuration file to hold the final calibration: */
+	Misc::ConfigurationFile configFile;
+	Misc::ConfigurationFileSection root(configFile.getCurrentSection());
+	
+	#if 1
+	
 	/* Do all the calibrations to compare them: */
-	calibrator=new Vrui::TouchscreenCalibratorRectilinear(axisDomain,tiePoints);
+	std::pair<Vrui::Scalar,Vrui::Scalar> residuals;
+	Misc::ConfigurationFileSection rectilinear=root.getSection("Rectilinear");
+	calibrator=new Vrui::PenPadCalibratorRectilinear(tiePoints,posDomain,rectilinear);
+	residuals=calibrator->calcResiduals(tiePoints,screenSize);
+	std::cout<<"Rectilinear approximation residuals: "<<residuals.first<<" L^2, "<<residuals.second<<" L^infinity"<<std::endl;
 	delete calibrator;
-	calibrator=new Vrui::TouchscreenCalibratorAffine(axisDomain,tiePoints);
+	Misc::ConfigurationFileSection affine=root.getSection("Affine");
+	calibrator=new Vrui::PenPadCalibratorAffine(tiePoints,posDomain,affine);
+	residuals=calibrator->calcResiduals(tiePoints,screenSize);
+	std::cout<<"Affine approximation residuals: "<<residuals.first<<" L^2, "<<residuals.second<<" L^infinity"<<std::endl;
 	delete calibrator;
-	calibrator=new Vrui::TouchscreenCalibratorProjective(axisDomain,tiePoints);
+	Misc::ConfigurationFileSection projective=root.getSection("Projective");
+	calibrator=new Vrui::PenPadCalibratorProjective(tiePoints,posDomain,projective);
+	residuals=calibrator->calcResiduals(tiePoints,screenSize);
+	std::cout<<"Projective approximation residuals: "<<residuals.first<<" L^2, "<<residuals.second<<" L^infinity"<<std::endl;
 	delete calibrator;
-	calibrator=new Vrui::TouchscreenCalibratorBSpline(splineDegree,splineSize,axisDomain,tiePoints);
+	Misc::ConfigurationFileSection bspline=root.getSection("BSpline");
+	calibrator=new Vrui::PenPadCalibratorBSpline(splineDegree,splineSize,tiePoints,posDomain,bspline);
+	residuals=calibrator->calcResiduals(tiePoints,screenSize);
+	std::cout<<"B-Spline approximation residuals: "<<residuals.first<<" L^2, "<<residuals.second<<" L^infinity"<<std::endl;
 	delete calibrator;
+	
 	#endif
 	
 	/* Create a calibrator object: */
 	switch(calibrationType)
 		{
 		case 0:
-			calibrator=new Vrui::TouchscreenCalibratorRectilinear(axisDomain,tiePoints);
+			calibrator=new Vrui::PenPadCalibratorRectilinear(tiePoints,posDomain,root);
 			break;
 		
 		case 1:
-			calibrator=new Vrui::TouchscreenCalibratorAffine(axisDomain,tiePoints);
+			calibrator=new Vrui::PenPadCalibratorAffine(tiePoints,posDomain,root);
 			break;
 		
 		case 2:
-			calibrator=new Vrui::TouchscreenCalibratorProjective(axisDomain,tiePoints);
+			calibrator=new Vrui::PenPadCalibratorProjective(tiePoints,posDomain,root);
 			break;
 		
 		case 3:
-			calibrator=new Vrui::TouchscreenCalibratorBSpline(splineDegree,splineSize,axisDomain,tiePoints);
+			calibrator=new Vrui::PenPadCalibratorBSpline(splineDegree,splineSize,tiePoints,posDomain,root);
 			break;
 		}
 	
-	/* Get the calibrator's residuals and print a configuration file section: */
-	std::pair<Scalar,Scalar> residuals=calibrator->getResiduals(tiePoints);
-	std::cout<<"Approximation residuals: "<<residuals.first<<" L^2, "<<residuals.second<<" L^infinity"<<std::endl;
-	Misc::ConfigurationFile configFile;
-	Misc::ConfigurationFileSection root(configFile.getCurrentSection());
-	calibrator->writeConfig(root);
+	/* Calculate the calibrator's residuals: */
+	residuals=calibrator->calcResiduals(tiePoints,screenSize);
+	std::cout<<"Selected approximation residuals: "<<residuals.first<<" L^2, "<<residuals.second<<" L^infinity"<<std::endl;
+	
+	/* Save the configuration file: */
 	configFile.saveAs("/home/okreylos/Desktop/TouchscreenCalibration.cfg");
 	}
 
@@ -326,24 +354,16 @@ void CalibrateTouchscreen::listPenDevices(void)
 CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 	:Vrui::Application(argc,argv),
 	 penDevice(0),
-	 haveTilt(false),
 	 screen(0),
 	 numPoints(4,3),
 	 numAccum(0),
-	 calibrationType(0),splineDegree(2,2),splineSize(4,3),
+	 calibrationType(0),splineDegree(2,2),splineSize(5,3),
 	 calibrator(0),
 	 hovering(false)
 	{
 	/* Parse the command line: */
 	bool listDevices=false;
-	int matchMode=0x0;
-	unsigned int penDeviceVendorId=0x0U;
-	unsigned int penDeviceProductId=0x0U;
-	const char* penDeviceName=0;
-	unsigned int penDeviceIndex=0;
-	axisIndices[0]=0U;
-	axisIndices[1]=1U;
-	buttonIndex=0U;
+	RawHID::SelectEventDeviceMatcher deviceMatcher;
 	gridGap=0.2;
 	for(int argi=1;argi<argc;++argi)
 		{
@@ -355,9 +375,8 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 				{
 				if(argi+2<argc)
 					{
-					matchMode|=0x1;
-					penDeviceVendorId=(unsigned int)(strtoul(argv[argi+1],0,16));
-					penDeviceProductId=(unsigned int)(strtoul(argv[argi+2],0,16));
+					deviceMatcher.setVendorId((unsigned short)(strtoul(argv[argi+1],0,16)));
+					deviceMatcher.setProductId((unsigned short)(strtoul(argv[argi+2],0,16)));
 					}
 				
 				argi+=2;
@@ -365,40 +384,16 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 			else if(strcasecmp(argv[argi]+1,"deviceName")==0||strcasecmp(argv[argi]+1,"dn")==0)
 				{
 				if(argi+1<argc)
-					{
-					matchMode|=0x2;
-					penDeviceName=argv[argi+1];
-					}
+					deviceMatcher.setDeviceName(argv[argi+1]);
 				
 				++argi;
 				}
 			else if(strcasecmp(argv[argi]+1,"index")==0||strcasecmp(argv[argi]+1,"i")==0)
 				{
 				if(argi+1<argc)
-					{
-					penDeviceIndex=(unsigned int)(strtoul(argv[argi+1],0,10));
-					}
+					deviceMatcher.setIndex((unsigned int)(strtoul(argv[argi+1],0,10)));
 				
 				++argi;
-				}
-			else if(strcasecmp(argv[argi]+1,"axes")==0||strcasecmp(argv[argi]+1,"a")==0)
-				{
-				if(argi+2<argc)
-					{
-					for(int i=0;i<2;++i)
-						axisIndices[i]=(unsigned int)(strtoul(argv[argi+1+i],0,10));
-					}
-				
-				argi+=2;
-				}
-			else if(strcasecmp(argv[argi]+1,"button")==0||strcasecmp(argv[argi]+1,"b")==0)
-				{
-				if(argi+1<argc)
-					{
-					buttonIndex=(unsigned int)(strtoul(argv[argi+1],0,10));
-					}
-				
-				argi+=1;
 				}
 			else if(strcasecmp(argv[argi]+1,"gridGap")==0||strcasecmp(argv[argi]+1,"gg")==0)
 				{
@@ -415,9 +410,6 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 					{
 					for(int i=0;i<2;++i)
 						numPoints[i]=(unsigned int)(strtoul(argv[argi+1+i],0,10));
-					
-					/* Initialize the B-Spline mesh size to the calibration size: */
-					splineSize=numPoints;
 					}
 				
 				argi+=2;
@@ -454,17 +446,10 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 		}
 	
 	/* Open the pen device: */
-	if(matchMode==0x1)
-		penDevice=new RawHID::EventDevice(penDeviceVendorId,penDeviceProductId,penDeviceIndex);
-	else if(matchMode==0x2)
-		penDevice=new RawHID::EventDevice(penDeviceName,penDeviceIndex);
-	else if(matchMode==0x3)
-		penDevice=new RawHID::EventDevice(penDeviceVendorId,penDeviceProductId,penDeviceName,penDeviceIndex);
-	else
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No pen device specification provided");
+	penDevice=new RawHID::EventDevice(deviceMatcher);
 	
 	/* Retrieve the pen device's configuration: */
-	RawHID::PenDeviceConfig penDeviceConfig(*penDevice);
+	penDeviceConfig=RawHID::PenDeviceConfig(*penDevice);
 	if(!penDeviceConfig.valid)
 		{
 		delete penDevice;
@@ -482,28 +467,18 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 	if(!penDevice->grabDevice())
 		std::cout<<"Unable to grab the pen device!"<<std::endl;
 	
-	/* Retrieve the pen device's relevant feature indices: */
-	for(int i=0;i<2;++i)
-		{
-		axisIndices[i]=penDeviceConfig.posAxisIndices[i];
-		tiltIndices[i]=penDeviceConfig.tiltAxisIndices[i];
-		}
-	hoverButtonIndex=penDeviceConfig.touchKeyIndex;
-	buttonIndex=penDeviceConfig.pressKeyIndex;
-	
 	/* Check the device's capabilities: */
-	const RawHID::EventDevice::AbsAxisConfig& configX=penDevice->getAbsAxisFeatureConfig(axisIndices[0]);
-	const RawHID::EventDevice::AbsAxisConfig& configY=penDevice->getAbsAxisFeatureConfig(axisIndices[1]);
+	const RawHID::EventDevice::AbsAxisConfig& configX=penDevice->getAbsAxisFeatureConfig(penDeviceConfig.posAxisIndices[0]);
+	const RawHID::EventDevice::AbsAxisConfig& configY=penDevice->getAbsAxisFeatureConfig(penDeviceConfig.posAxisIndices[1]);
 	std::cout<<"Pen device position axis ranges: ["<<configX.min<<", "<<configX.max<<"], ["<<configY.min<<", "<<configY.max<<"]"<<std::endl;
-	axisDomain.min[0]=Scalar(configX.min);
-	axisDomain.max[0]=Scalar(configX.max);
-	axisDomain.min[1]=Scalar(configY.min);
-	axisDomain.max[1]=Scalar(configY.max);
-	haveTilt=penDeviceConfig.haveTilt;
-	if(haveTilt)
+	posDomain.min[0]=Scalar(configX.min);
+	posDomain.max[0]=Scalar(configX.max);
+	posDomain.min[1]=Scalar(configY.min);
+	posDomain.max[1]=Scalar(configY.max);
+	if(penDeviceConfig.haveTilt)
 		{
-		const RawHID::EventDevice::AbsAxisConfig& configX=penDevice->getAbsAxisFeatureConfig(tiltIndices[0]);
-		const RawHID::EventDevice::AbsAxisConfig& configY=penDevice->getAbsAxisFeatureConfig(tiltIndices[1]);
+		const RawHID::EventDevice::AbsAxisConfig& configX=penDevice->getAbsAxisFeatureConfig(penDeviceConfig.tiltAxisIndices[0]);
+		const RawHID::EventDevice::AbsAxisConfig& configY=penDevice->getAbsAxisFeatureConfig(penDeviceConfig.tiltAxisIndices[1]);
 		std::cout<<"Pen device tilt axis ranges: ["<<configX.min<<", "<<configX.max<<"], ["<<configY.min<<", "<<configY.max<<"]"<<std::endl;
 		}
 	
@@ -569,7 +544,7 @@ void CalibrateTouchscreen::display(GLContextData& contextData) const
 			{
 			if(numAccum>0)
 				glColor3f(0.0f,1.0f,0.0f);
-			else if(hoverButtonIndex!=(unsigned int)(-1)&&hovering)
+			else if(hovering)
 				glColor3f(0.0f,0.333f,0.0f);
 			else
 				glColor3f(0.0f,0.0f,0.0f);
@@ -586,7 +561,7 @@ void CalibrateTouchscreen::display(GLContextData& contextData) const
 			{
 			if(numAccum>0)
 				glColor3f(0.0f,1.0f,0.0f);
-			else if(hoverButtonIndex!=(unsigned int)(-1)&&hovering)
+			else if(hovering)
 				glColor3f(0.0f,0.333f,0.0f);
 			else
 				glColor3f(0.0f,0.0f,0.0f);
@@ -606,8 +581,8 @@ void CalibrateTouchscreen::display(GLContextData& contextData) const
 		glColor3f(0.0f,0.5f,0.0f);
 		for(TiePointList::const_iterator tpIt=tiePoints.begin();tpIt!=tiePoints.end();++tpIt)
 			{
-			Point cal=calibrator->calibrate(tpIt->raw);
-			glVertex2d(cal[0],cal[1]);
+			Point2 cal=calibrator->calibrate(tpIt->raw);
+			glVertex2d(cal[0]*screenSize[0],cal[1]*screenSize[1]);
 			}
 		glEnd();
 		

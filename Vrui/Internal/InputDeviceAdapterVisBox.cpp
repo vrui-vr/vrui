@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterVisBox - Class to connect the VisBox head tracking
 daemon to a Vrui application.
-Copyright (c) 2007-2024 Oliver Kreylos
+Copyright (c) 2007-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -70,13 +70,9 @@ InputDeviceAdapterVisBox::InputDeviceAdapterVisBox(InputDeviceManager* sInputDev
 	inputDevices=new InputDevice*[numInputDevices];
 	
 	/* Create new input device: */
-	std::string deviceName=configFileSection.retrieveString("./name");
-	inputDevices[0]=inputDeviceManager->createInputDevice(deviceName.c_str(),InputDevice::TRACK_POS|InputDevice::TRACK_DIR|InputDevice::TRACK_ORIENT,0,0,true);
-	inputDevices[0]->setDeviceRay(configFileSection.retrieveValue("./deviceRayDirection",Vector(0,1,0)),configFileSection.retrieveValue("./deviceRayStart",-getInchFactor()));
-	
-	/* Initialize the new device's glyph from the current configuration file section: */
-	Glyph& deviceGlyph=inputDeviceManager->getInputGraphManager()->getInputDeviceGlyph(inputDevices[0]);
-	deviceGlyph.configure(configFileSection,"./deviceGlyphType","./deviceGlyphMaterial");
+	std::string name=configFileSection.retrieveString("./name");
+	int trackType=InputDevice::TRACK_POS|InputDevice::TRACK_DIR|InputDevice::TRACK_ORIENT;
+	inputDevices[0]=createInputDevice(name.c_str(),trackType,0,0,configFileSection);
 	
 	/* Set device's linear and angular velocities to zero, because we don't know any better: */
 	inputDevices[0]->setLinearVelocity(Vector::zero);

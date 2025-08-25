@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterDummy - Class to create "dummy" devices to simulate
 behavior of non-existent devices.
-Copyright (c) 2015-2024 Oliver Kreylos
+Copyright (c) 2015-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -23,18 +23,14 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/Internal/InputDeviceAdapterDummy.h>
 
-#include <stdio.h>
 #include <Misc/StdError.h>
 #include <Misc/StandardValueCoders.h>
-#include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Geometry/OrthonormalTransformation.h>
 #include <Geometry/GeometryValueCoders.h>
 #include <Vrui/Types.h>
-#include <Vrui/Vrui.h>
 #include <Vrui/InputDevice.h>
-#include <Vrui/InputDeviceManager.h>
-#include <Vrui/InputGraphManager.h>
+#include <Vrui/InputDeviceFeature.h>
 
 namespace Vrui {
 
@@ -42,10 +38,20 @@ namespace Vrui {
 Methods of class InputDeviceAdapterDummy:
 ****************************************/
 
-void InputDeviceAdapterDummy::createInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection)
+void InputDeviceAdapterDummy::initializeInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection)
 	{
-	/* Call the base class method: */
-	InputDeviceAdapter::createInputDevice(deviceIndex,configFileSection);
+	/* Read input device name: */
+	std::string name=configFileSection.retrieveString("./name",configFileSection.getName());
+	
+	/* Determine the input device's tracking type: */
+	int trackType=updateTrackType(InputDevice::TRACK_NONE,configFileSection);
+	
+	/* Determine numbers of buttons and valuators: */
+	int numButtons=configFileSection.retrieveValue<int>("./numButtons",0);
+	int numValuators=configFileSection.retrieveValue<int>("./numValuators",0);
+	
+	/* Create and save the new input device: */
+	inputDevices[deviceIndex]=createInputDevice(name.c_str(),trackType,numButtons,numValuators,configFileSection,buttonNames,valuatorNames);
 	
 	/* Set the just-created device's position and orientation: */
 	TrackerState transform=configFileSection.retrieveValue("./transform",TrackerState::identity);
@@ -54,40 +60,6 @@ void InputDeviceAdapterDummy::createInputDevice(int deviceIndex,const Misc::Conf
 	/* Set device's linear and angular velocities to zero: */
 	inputDevices[deviceIndex]->setLinearVelocity(Vector::zero);
 	inputDevices[deviceIndex]->setAngularVelocity(Vector::zero);
-	
-	/* Read the list of button names for this device: */
-	/* Read the names of all button features: */
-	typedef std::vector<std::string> StringList;
-	StringList tempButtonNames;
-	configFileSection.updateValue("./buttonNames",tempButtonNames);
-	int buttonIndex=0;
-	for(StringList::iterator bnIt=tempButtonNames.begin();bnIt!=tempButtonNames.end()&&buttonIndex<inputDevices[deviceIndex]->getNumButtons();++bnIt,++buttonIndex)
-		{
-		/* Store the button name: */
-		buttonNames.push_back(*bnIt);
-		}
-	for(;buttonIndex<inputDevices[deviceIndex]->getNumButtons();++buttonIndex)
-		{
-		char buttonName[40];
-		snprintf(buttonName,sizeof(buttonName),"Button%d",buttonIndex);
-		buttonNames.push_back(buttonName);
-		}
-	
-	/* Read the names of all valuator features: */
-	StringList tempValuatorNames;
-	configFileSection.updateValue("./valuatorNames",tempValuatorNames);
-	int valuatorIndex=0;
-	for(StringList::iterator vnIt=tempValuatorNames.begin();vnIt!=tempValuatorNames.end()&&valuatorIndex<inputDevices[deviceIndex]->getNumValuators();++vnIt,++valuatorIndex)
-		{
-		/* Store the valuator name: */
-		valuatorNames.push_back(*vnIt);
-		}
-	for(;valuatorIndex<inputDevices[deviceIndex]->getNumValuators();++valuatorIndex)
-		{
-		char valuatorName[40];
-		snprintf(valuatorName,sizeof(valuatorName),"Valuator%d",valuatorIndex);
-		valuatorNames.push_back(valuatorName);
-		}
 	}
 
 InputDeviceAdapterDummy::InputDeviceAdapterDummy(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection)

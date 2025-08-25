@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapter - Base class to convert from diverse "raw" input
 device representations to Vrui's internal input device representation.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -26,6 +26,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <string.h>
 #include <stdio.h>
 #include <Misc/StdError.h>
+#include <Misc/MessageLogger.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
@@ -45,41 +46,123 @@ namespace Vrui {
 Methods of class InputDeviceAdapter:
 ***********************************/
 
-void InputDeviceAdapter::createInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection)
+int InputDeviceAdapter::updateTrackType(int trackType,const Misc::ConfigurationFileSection& configFileSection)
+	{
+	/* Convert the given tracking type to a string: */
+	std::string trackTypeString;
+	switch(trackType)
+		{
+		case InputDevice::TRACK_NONE:
+			trackTypeString="None";
+			break;
+		
+		case InputDevice::TRACK_POS:
+			trackTypeString="3D";
+			break;
+		
+		case InputDevice::TRACK_POS|InputDevice::TRACK_DIR:
+			trackTypeString="Ray";
+			break;
+		
+		case InputDevice::TRACK_POS|InputDevice::TRACK_DIR|InputDevice::TRACK_ORIENT:
+			trackTypeString="6D";
+			break;
+		
+		default:
+			trackTypeString="Invalid";
+		}
+	
+	/* Update the tracking type from the configuration file section: */
+	configFileSection.updateString("./trackType",trackTypeString);
+	
+	/* Parse the updated tracking type: */
+	if(trackTypeString=="None")
+		return InputDevice::TRACK_NONE;
+	else if(trackTypeString=="3D")
+		return InputDevice::TRACK_POS;
+	else if(trackTypeString=="Ray")
+		return InputDevice::TRACK_POS|InputDevice::TRACK_DIR;
+	else if(trackTypeString=="6D")
+		return InputDevice::TRACK_POS|InputDevice::TRACK_DIR|InputDevice::TRACK_ORIENT;
+	else
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid tracking type %s",trackTypeString.c_str());
+	}
+
+InputDevice* InputDeviceAdapter::createInputDevice(const char* name,int trackType,int numButtons,int numValuators,const Misc::ConfigurationFileSection& configFileSection)
+	{
+	/* Create the new input device as a physical device: */
+	InputDevice* newDevice=inputDeviceManager->createInputDevice(name,trackType,numButtons,numValuators,true);
+	
+	/* Initialize the new device's ray from the configuration file section: */
+	Vector deviceRayDirection=configFileSection.retrieveValue("./deviceRayDirection",Vector(0,1,0));
+	Scalar deviceRayStart=configFileSection.retrieveValue("./deviceRayStart",-getInchFactor());
+	newDevice->setDeviceRay(deviceRayDirection,deviceRayStart);
+	
+	/* Initialize the new device's glyph from the configuration file section: */
+	Glyph& deviceGlyph=inputDeviceManager->getInputGraphManager()->getInputDeviceGlyph(newDevice);
+	deviceGlyph.configure(configFileSection,"./deviceGlyphType","./deviceGlyphMaterial");
+	
+	return newDevice;
+	}
+
+InputDevice* InputDeviceAdapter::createInputDevice(const char* name,int trackType,int numButtons,int numValuators,const Misc::ConfigurationFileSection& configFileSection,std::vector<std::string>& buttonNames,std::vector<std::string>& valuatorNames)
+	{
+	/* Call the other method: */
+	InputDevice* newDevice=createInputDevice(name,trackType,numButtons,numValuators,configFileSection);
+	
+	typedef std::vector<std::string> StringList;
+	
+	/* Read a (partial) list of button names from the configuration file section: */
+	StringList tempButtonNames;
+	configFileSection.updateValue("./buttonNames",tempButtonNames);
+	int buttonIndex=0;
+	
+	/* Copy names from the beginning of the read list: */
+	for(StringList::iterator bnIt=tempButtonNames.begin();bnIt!=tempButtonNames.end()&&buttonIndex<numButtons;++bnIt,++buttonIndex)
+		buttonNames.push_back(*bnIt);
+	
+	/* Assign default names to all remaining buttons: */
+	for(;buttonIndex<numButtons;++buttonIndex)
+		{
+		char buttonName[40];
+		snprintf(buttonName,sizeof(buttonName),"Button%d",buttonIndex);
+		buttonNames.push_back(buttonName);
+		}
+	
+	/* Read a (partial) list of valuator names from the configuration file section: */
+	StringList tempValuatorNames;
+	configFileSection.updateValue("./valuatorNames",tempValuatorNames);
+	int valuatorIndex=0;
+	
+	/* Copy names from the beginning of the read list: */
+	for(StringList::iterator vnIt=tempValuatorNames.begin();vnIt!=tempValuatorNames.end()&&valuatorIndex<numValuators;++vnIt,++valuatorIndex)
+		valuatorNames.push_back(*vnIt);
+	
+	/* Assign default names to all remaining valuators: */
+	for(;valuatorIndex<numValuators;++valuatorIndex)
+		{
+		char valuatorName[40];
+		snprintf(valuatorName,sizeof(valuatorName),"Valuator%d",valuatorIndex);
+		valuatorNames.push_back(valuatorName);
+		}
+	
+	return newDevice;
+	}
+
+void InputDeviceAdapter::initializeInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection)
 	{
 	/* Read input device name: */
 	std::string name=configFileSection.retrieveString("./name",configFileSection.getName());
 	
-	/* Determine input device type: */
-	int trackType=InputDevice::TRACK_NONE;
-	std::string trackTypeString=configFileSection.retrieveString("./trackType","None");
-	if(trackTypeString=="None")
-		trackType=InputDevice::TRACK_NONE;
-	else if(trackTypeString=="3D")
-		trackType=InputDevice::TRACK_POS;
-	else if(trackTypeString=="Ray")
-		trackType=InputDevice::TRACK_POS|InputDevice::TRACK_DIR;
-	else if(trackTypeString=="6D")
-		trackType=InputDevice::TRACK_POS|InputDevice::TRACK_DIR|InputDevice::TRACK_ORIENT;
-	else
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unknown tracking type \"%s\"",trackTypeString.c_str());
+	/* Determine the input device's tracking type: */
+	int trackType=updateTrackType(InputDevice::TRACK_NONE,configFileSection);
 	
 	/* Determine numbers of buttons and valuators: */
 	int numButtons=configFileSection.retrieveValue<int>("./numButtons",0);
 	int numValuators=configFileSection.retrieveValue<int>("./numValuators",0);
 	
-	/* Create new input device as a physical device: */
-	InputDevice* newDevice=inputDeviceManager->createInputDevice(name.c_str(),trackType,numButtons,numValuators,true);
-	Vector deviceRayDirection=configFileSection.retrieveValue("./deviceRayDirection",Vector(0,1,0));
-	Scalar deviceRayStart=configFileSection.retrieveValue("./deviceRayStart",-getInchFactor());
-	newDevice->setDeviceRay(deviceRayDirection,deviceRayStart);
-	
-	/* Initialize the new device's glyph from the current configuration file section: */
-	Glyph& deviceGlyph=inputDeviceManager->getInputGraphManager()->getInputDeviceGlyph(newDevice);
-	deviceGlyph.configure(configFileSection,"./deviceGlyphType","./deviceGlyphMaterial");
-	
-	/* Save the new input device: */
-	inputDevices[deviceIndex]=newDevice;
+	/* Create and save the new input device: */
+	inputDevices[deviceIndex]=createInputDevice(name.c_str(),trackType,numButtons,numValuators,configFileSection);
 	}
 
 void InputDeviceAdapter::initializeAdapter(const Misc::ConfigurationFileSection& configFileSection)
@@ -93,13 +176,39 @@ void InputDeviceAdapter::initializeAdapter(const Misc::ConfigurationFileSection&
 		inputDevices[i]=0;
 	
 	/* Initialize input devices: */
+	int numIgnoredDevices=0;
 	for(int i=0;i<numInputDevices;++i)
 		{
-		/* Go to device's section: */
-		Misc::ConfigurationFileSection deviceSection=configFileSection.getSection(inputDeviceNames[i].c_str());
-		
-		/* Initialize input device: */
-		createInputDevice(i,deviceSection);
+		try
+			{
+			/* Go to device's section: */
+			Misc::ConfigurationFileSection deviceSection=configFileSection.getSection(inputDeviceNames[i].c_str());
+			
+			/* Initialize input device: */
+			initializeInputDevice(i,deviceSection);
+			}
+		catch(const std::runtime_error& err)
+			{
+			/* Print an error message: */
+			Misc::sourcedConsoleError(__PRETTY_FUNCTION__,"Ignoring input device %s due to exception %s",inputDeviceNames[i].c_str(),err.what());
+			
+			/* Ignore the input device: */
+			inputDevices[i]=0;
+			++numIgnoredDevices;
+			}
+		}
+	
+	if(numIgnoredDevices!=0)
+		{
+		/* Remove any ignored input devices from the array: */
+		InputDevice** newInputDevices=new InputDevice*[numInputDevices-numIgnoredDevices];
+		int newNumInputDevices=0;
+		for(int i=0;i<numInputDevices;++i)
+			if(inputDevices[i]!=0)
+				newInputDevices[newNumInputDevices++]=inputDevices[i];
+		delete[] inputDevices;
+		numInputDevices=newNumInputDevices;
+		inputDevices=newInputDevices;
 		}
 	}
 

@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterPlayback - Class to read input device states from a
 pre-recorded file for playback and/or movie generation.
-Copyright (c) 2004-2023 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -85,7 +85,7 @@ class InputDeviceAdapterPlayback:public InputDeviceAdapter
 	InputDeviceAdapterPlayback(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection); // Creates adapter by opening and reading pre-recorded device data file
 	virtual ~InputDeviceAdapterPlayback(void);
 	
-	/* Methods from InputDeviceAdapter: */
+	/* Methods from class InputDeviceAdapter: */
 	virtual std::string getFeatureName(const InputDeviceFeature& feature) const;
 	virtual int getFeatureIndex(InputDevice* device,const char* featureName) const;
 	virtual void prepareMainLoop(void);

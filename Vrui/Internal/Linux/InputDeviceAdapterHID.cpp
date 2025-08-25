@@ -23,27 +23,15 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/Internal/Linux/InputDeviceAdapterHID.h>
 
-#include <stdlib.h>
-#include <string.h>
-#include <stdio.h>
-#include <unistd.h>
-#ifndef __USE_GNU
-#define __USE_GNU
-#include <dirent.h>
-#undef __USE_GNU
-#else
-#include <dirent.h>
-#endif
-#include <fcntl.h>
-#include <sys/ioctl.h>
-#include <linux/input.h>
+#include <Misc/SelfDestructPointer.h>
+#include <Misc/SelfDestructArray.h>
 #include <Misc/StdError.h>
-#include <Misc/FdSet.h>
+#include <Misc/PrintIntegerString.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <RawHID/EventDeviceMatcher.h>
 #include <Math/MathValueCoders.h>
-#include <Geometry/Vector.h>
 #include <Geometry/OrthonormalTransformation.h>
 #include <Geometry/GeometryValueCoders.h>
 #include <Vrui/Vrui.h>
@@ -53,587 +41,365 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Viewer.h>
 #include <Vrui/UIManager.h>
 #include <Vrui/Internal/Config.h>
-
-#if !VRUI_INTERNAL_CONFIG_INPUT_H_HAS_STRUCTS
-
-/*******************************************************************
-Classes to deal with HID devices (should all be defined in input.h):
-*******************************************************************/
-
-struct input_id
-	{
-	/* Elements: */
-	public:
-	unsigned short bustype;
-	unsigned short vendor;
-	unsigned short product;
-	unsigned short version;
-	};
-
-struct input_absinfo
-	{
-	/* Elements: */
-	public:
-	int value;
-	int minimum;
-	int maximum;
-	int fuzz;
-	int flat;
-	};
-
-#endif
-
-namespace {
-
-/****************
-Helper functions:
-****************/
-
-int isEventFile(const struct dirent* directoryEntry)
-	{
-	return strncmp(directoryEntry->d_name,"event",5)==0;
-	}
-
-}
+#include <Vrui/Internal/HIDPositionerCopy.h>
 
 namespace Vrui {
+
+/**********************************************
+Methods of class InputDeviceAdapterHID::Device:
+**********************************************/
+
+void InputDeviceAdapterHID::Device::keyFeatureEventCallback(RawHID::EventDevice::KeyFeatureEventCallbackData* cbData)
+	{
+	/* There is nothing to do but lock the device state mutex: */
+	Threads::Mutex::Lock deviceStateLock(adapter.deviceStateMutex);
+	
+	Vrui::requestUpdate();
+	}
+
+void InputDeviceAdapterHID::Device::absAxisFeatureEventCallback(RawHID::EventDevice::AbsAxisFeatureEventCallbackData* cbData)
+	{
+	/* There is nothing to do but lock the device state mutex: */
+	Threads::Mutex::Lock deviceStateLock(adapter.deviceStateMutex);
+	
+	Vrui::requestUpdate();
+	}
+
+void InputDeviceAdapterHID::Device::relAxisFeatureEventCallback(RawHID::EventDevice::RelAxisFeatureEventCallbackData* cbData)
+	{
+	/* Accumulate the new relative axis value into the relative axis value array: */
+	Threads::Mutex::Lock deviceStateLock(adapter.deviceStateMutex);
+	if(relAxisFeatureMap[cbData->featureIndex]!=~0U)
+		relAxisValues[relAxisFeatureMap[cbData->featureIndex]]+=cbData->value;
+	
+	Vrui::requestUpdate();
+	}
+
+void InputDeviceAdapterHID::Device::synReportEventCallback(RawHID::EventDevice::CallbackData* cbData)
+	{
+	/* There is nothing to do but lock the device state mutex: */
+	Threads::Mutex::Lock deviceStateLock(adapter.deviceStateMutex);
+	
+	Vrui::requestUpdate();
+	}
+
+InputDeviceAdapterHID::Device::Device(RawHID::EventDeviceMatcher& deviceMatcher,InputDeviceAdapterHID& sAdapter)
+	:RawHID::EventDevice(deviceMatcher),
+	 adapter(sAdapter),grabbed(false),device(0),
+	 positioner(0),
+	 numKeys(0),keyFeatureIndices(0),
+	 numAbsAxes(0),absAxisFeatureIndices(0),absAxisValueMappers(0),
+	 numRelAxes(0),relAxisFeatureMap(0),relAxisValues(0),relAxisValueMappers(0)
+	{
+	/* Attempt to grab the HID: */
+	grabbed=grabDevice();
+	}
+
+InputDeviceAdapterHID::Device::~Device(void)
+	{
+	/* Release the HID if it was grabbed: */
+	if(grabbed)
+		releaseDevice();
+	
+	/* Release allocated resources: */
+	delete positioner;
+	delete[] keyFeatureIndices;
+	delete[] absAxisFeatureIndices;
+	delete[] absAxisValueMappers;
+	delete[] relAxisFeatureMap;
+	delete[] relAxisValues;
+	delete[] relAxisValueMappers;
+	}
+
+void InputDeviceAdapterHID::Device::prepareMainLoop(void)
+	{
+	/* Prepare a potential positioner: */
+	if(positioner!=0)
+		positioner->prepareMainLoop();
+	}
+
+void InputDeviceAdapterHID::Device::update(void)
+	{
+	/* Update the device's button states: */
+	for(unsigned int i=0;i<numKeys;++i)
+		device->setButtonState(i,getKeyFeatureValue(keyFeatureIndices[i]));
+	
+	/* Update the device's absolute axes: */
+	for(unsigned int i=0;i<numAbsAxes;++i)
+		device->setValuator(i,absAxisValueMappers[i].map(double(getAbsAxisFeatureValue(absAxisFeatureIndices[i]))));
+	
+	/* Update the device's relative axes and reset the accumulated axis values: */
+	for(unsigned int i=0;i<numRelAxes;++i)
+		{
+		device->setValuator(numAbsAxes+i,relAxisValueMappers[i].map(double(relAxisValues[i])));
+		relAxisValues[i]=0;
+		}
+	
+	/* Update the device's tracking state: */
+	if(positioner!=0)
+		positioner->updateDevice(device);
+	}
 
 /**************************************
 Methods of class InputDeviceAdapterHID:
 **************************************/
 
-void InputDeviceAdapterHID::createInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection)
+void InputDeviceAdapterHID::initializeInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection)
 	{
-	/* Read input device name: */
-	std::string name=configFileSection.retrieveString("./name");
+	/* Retrieve the name of this device: */
+	std::string name=configFileSection.retrieveString("./name",configFileSection.getName());
 	
-	/* Read HID's vendor / product IDs: */
-	std::string deviceVendorProductId=configFileSection.retrieveString("./deviceVendorProductId");
+	/*************************************************************
+	Find and open the HID to be associated with this input device:
+	*************************************************************/
 	
-	/* Split ID string into vendor ID / product ID: */
-	char* colonPtr;
-	unsigned int vendorId=strtoul(deviceVendorProductId.c_str(),&colonPtr,16);
-	char* endPtr;
-	unsigned int productId=strtoul(colonPtr+1,&endPtr,16);
-	if(*colonPtr!=':'||*endPtr!='\0')
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Malformed vendorId:productId string \"%s\" for device %s",deviceVendorProductId.c_str(),name.c_str());
+	/* Get the index of the device among matching devices: */
+	RawHID::SelectEventDeviceMatcher deviceMatcher;
 	
-	/* Check if there is a device name to match: */
-	std::string matchingDeviceName=configFileSection.retrieveString("./deviceName",std::string());
-	
-	/* Get the device index: */
-	int matchingDeviceIndex=configFileSection.retrieveValue<int>("./deviceIndex",0);
-	
-	/* Create list of all available /dev/input/eventX devices, in numerical order: */
-	struct dirent** eventFiles=0;
-	int numEventFiles=scandir("/dev/input",&eventFiles,isEventFile,versionsort);
-	
-	/* Check all event files for the wanted device: */
-	int deviceFd=-1;
-	for(int eventFileIndex=0;eventFileIndex<numEventFiles;++eventFileIndex)
+	/* Add an optional vendor/product ID to the device matcher: */
+	if(configFileSection.hasTag("./deviceVendorProductId"))
 		{
-		/* Open the event file: */
-		char eventFileName[288];
-		snprintf(eventFileName,sizeof(eventFileName),"/dev/input/%s",eventFiles[eventFileIndex]->d_name);
-		int eventFd=open(eventFileName,O_RDONLY);
-		if(eventFd>=0)
-			{
-			/* Get device information: */
-			input_id deviceInformation;
-			if(ioctl(eventFd,EVIOCGID,&deviceInformation)>=0)
-				{
-				if(deviceInformation.vendor==vendorId&&deviceInformation.product==productId)
-					{
-					/* Check if the device's name matches the optional matching device name: */
-					bool match=true;
-					if(!matchingDeviceName.empty())
-						{
-						/* Retrieve the device name and check it against the requested name: */
-						char deviceName[256];
-						match=ioctl(eventFd,EVIOCGNAME(sizeof(deviceName)),deviceName)>=0&&matchingDeviceName==deviceName;
-						}
-					
-					if(match)
-						{
-						/* We have a match: */
-						if(matchingDeviceIndex==0)
-							{
-							/* We have a winner! */
-							deviceFd=eventFd;
-							break;
-							}
-						
-						/* Try again on the next matching device: */
-						--matchingDeviceIndex;
-						}
-					}
-				}
-			
-			/* This is not the device you are looking for, go to the next: */
-			close(eventFd);
-			}
+		/* Read HID's vendor / product IDs: */
+		std::string deviceVendorProductId=configFileSection.retrieveString("./deviceVendorProductId");
+		
+		/* Split ID string into vendor ID / product ID: */
+		char* colonPtr;
+		unsigned int vendorId=strtoul(deviceVendorProductId.c_str(),&colonPtr,16);
+		char* endPtr;
+		unsigned int productId=strtoul(colonPtr+1,&endPtr,16);
+		if(*colonPtr!=':'||*endPtr!='\0')
+			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Malformed vendorId:productId string \"%s\" for device %s",deviceVendorProductId.c_str(),name.c_str());
+		
+		deviceMatcher.setVendorId(vendorId);
+		deviceMatcher.setProductId(productId);
 		}
 	
-	/* Destroy list of event files: */
-	for(int i=0;i<numEventFiles;++i)
-		free(eventFiles[i]);
-	free(eventFiles);
+	/* Add an optional version number to the device matcher: */
+	if(configFileSection.hasTag("./deviceVersion"))
+		deviceMatcher.setVersion(configFileSection.retrieveValue<unsigned int>("./deviceVersion"));
 	
-	/* Check if a matching device was found: */
-	if(deviceFd<0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No match for vendorId:productId \"%s\" for device %s",deviceVendorProductId.c_str(),name.c_str());
+	/* Add an optional device name to the device matcher: */
+	if(configFileSection.hasTag("./deviceName"))
+		deviceMatcher.setDeviceName(configFileSection.retrieveString("./deviceName"));
 	
-	/* Create a new device structure: */
-	Device newDevice;
-	newDevice.adapter=this;
-	newDevice.deviceFd=deviceFd;
+	/* Add an optional device serial number to the device matcher: */
+	if(configFileSection.hasTag("./deviceSerialNumber"))
+		deviceMatcher.setSerialNumber(configFileSection.retrieveString("./deviceSerialNumber"));
 	
-	/* Query all feature types of the device: */
-	unsigned char featureTypeBits[EV_MAX/8+1];
-	memset(featureTypeBits,0,EV_MAX/8+1);
-	if(ioctl(deviceFd,EVIOCGBIT(0,sizeof(featureTypeBits)),featureTypeBits)<0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot query device feature types for device %s",name.c_str());
+	/* Add an optional match index to the device matcher: */
+	if(configFileSection.hasTag("./deviceIndex"))
+		deviceMatcher.setIndex(configFileSection.retrieveValue<unsigned int>("./deviceIndex"));
 	
-	/* Count the number of keys: */
-	newDevice.numButtons=0;
+	/* Create a new device object: */
+	Misc::SelfDestructPointer<Device> newDevice=new Device(deviceMatcher,*this);
 	
-	/* Query the number of keys/buttons on the device: */
-	if(featureTypeBits[EV_KEY/8]&(1<<(EV_KEY%8)))
+	/************************************
+	Set up tracking for the input device:
+	************************************/
+	
+	/* Create an array of flags to ignore a subset of the HID's key, absolute axis, and relative axis features, in that order: */
+	unsigned int numFeatures=newDevice->getNumKeyFeatures()+newDevice->getNumAbsAxisFeatures()+newDevice->getNumRelAxisFeatures();
+	Misc::SelfDestructArray<bool> ignoredFeatures(numFeatures);
+	for(unsigned int i=0;i<numFeatures;++i)
+		ignoredFeatures[i]=false;
+	
+	/* Get pointers to the ignore array parts: */
+	bool* ignoredKeys=ignoredFeatures.getArray();
+	bool* ignoredAbsAxes=ignoredKeys+newDevice->getNumKeyFeatures();
+	bool* ignoredRelAxes=ignoredAbsAxes+newDevice->getNumAbsAxisFeatures();
+	
+	/* Create a positioner for the associated Vrui input device: */
+	int trackType=InputDevice::TRACK_NONE;
+	if(configFileSection.hasTag("./positioner"))
 		{
-		/* Query key features: */
-		unsigned char keyBits[KEY_MAX/8+1];
-		memset(keyBits,0,KEY_MAX/8+1);
-		if(ioctl(deviceFd,EVIOCGBIT(EV_KEY,sizeof(keyBits)),keyBits)<0)
-			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot query keys for device %s",name.c_str());
+		/* Create a HID positioner from the configuration file section of the given name: */
+		newDevice->positioner=HIDPositioner::create(*newDevice,configFileSection.getSection(configFileSection.retrieveString("./positioner").c_str()),ignoredFeatures.getArray());
 		
-		/* Initialize the key translation array: */
-		newDevice.keyMap.reserve(KEY_MAX+1);
-		for(int i=0;i<=KEY_MAX;++i)
-			{
-			if(keyBits[i/8]&(1<<(i%8)))
-				{
-				newDevice.keyMap.push_back(newDevice.numButtons);
-				++newDevice.numButtons;
-				}
-			else
-				newDevice.keyMap.push_back(-1);
-			}
-		}
-	
-	/* Set up mutual exclusion sets for buttons on this input device: */
-	newDevice.buttonExclusionSets.reserve(newDevice.numButtons);
-	for(int i=0;i<newDevice.numButtons;++i)
-		newDevice.buttonExclusionSets.push_back(-1);
-	
-	/* Process a list of sets from the configuration file: */
-	std::vector<std::vector<int> > buttonExclusionSets;
-	configFileSection.updateValue("./buttonExclusionSets",buttonExclusionSets);
-	unsigned int numExclusionSets=buttonExclusionSets.size();
-	newDevice.exclusionSetPresseds.reserve(numExclusionSets);
-	for(unsigned int i=0;i<numExclusionSets;++i)
-		{
-		/* Assign all buttons in the set to this set: */
-		for(std::vector<int>::iterator bIt=buttonExclusionSets[i].begin();bIt!=buttonExclusionSets[i].end();++bIt)
-			{
-			if(*bIt>=0&&*bIt<newDevice.numButtons)
-				newDevice.buttonExclusionSets[*bIt]=i;
-			else
-				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid button index %d in button exclusion set",*bIt);
-			}
-		
-		/* Initialize the set's state: */
-		newDevice.exclusionSetPresseds.push_back(-1);
-		}
-	
-	/* Determine if the input device has a 3D position defined by a set of absolute axes: */
-	newDevice.axisPosition=configFileSection.hasTag("./positionAxes");
-	if(newDevice.axisPosition)
-		{
-		/* Retrieve the origin of the device position mapping: */
-		newDevice.positionOrigin=configFileSection.retrieveValue("./positionOrigin",Point::origin);
-		
-		/* Retrieve the list of HID absolute axis to device position mappers: */
-		typedef std::pair<int,Vector> PositionAxisMapper;
-		typedef std::vector<PositionAxisMapper> PositionAxisMapperList;
-		PositionAxisMapperList pams=configFileSection.retrieveValue<PositionAxisMapperList>("./positionAxes");
-		
-		/* Create the position axis mapping arrays: */
-		newDevice.positionAxisMap.reserve(ABS_MAX+1);
-		for(int i=0;i<=ABS_MAX;++i)
-			newDevice.positionAxisMap.push_back(-1);
-		newDevice.positionAxes.reserve(pams.size());
-		newDevice.positionValues.reserve(pams.size());
-		int nextAxisIndex=0;
-		for(PositionAxisMapperList::iterator pamIt=pams.begin();pamIt!=pams.end();++pamIt,++nextAxisIndex)
-			{
-			newDevice.positionAxisMap[pamIt->first]=nextAxisIndex;
-			
-			/* Scale the axis vector by the range of its associated device absolute axis: */
-			Vector a=pamIt->second;
-			input_absinfo absAxisConf;
-			if(ioctl(deviceFd,EVIOCGABS(pamIt->first),&absAxisConf)>=0)
-				{
-				a/=Scalar(absAxisConf.maximum-absAxisConf.minimum);
-				newDevice.positionOrigin-=a*Scalar(absAxisConf.minimum);
-				}
-			newDevice.positionAxes.push_back(a);
-			
-			newDevice.positionValues.push_back(Scalar(0));
-			}
-		}
-	
-	/* Count the number of absolute and relative axes: */
-	newDevice.numValuators=0;
-	
-	/* Query the number of absolute axes on the device: */
-	if(featureTypeBits[EV_ABS/8]&(1<<(EV_ABS%8)))
-		{
-		/* Query absolute axis features: */
-		unsigned char absAxisBits[ABS_MAX/8+1];
-		memset(absAxisBits,0,ABS_MAX/8+1);
-		if(ioctl(deviceFd,EVIOCGBIT(EV_ABS,sizeof(absAxisBits)),absAxisBits)<0)
-			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot query absolute axes for device %s",name.c_str());
-		
-		/* Initialize the axis translation array: */
-		newDevice.absAxisMap.reserve(ABS_MAX+1);
-		for(int i=0;i<=ABS_MAX;++i)
-			{
-			if(absAxisBits[i/8]&(1<<(i%8))&&(!newDevice.axisPosition||newDevice.positionAxisMap[i]==-1))
-				{
-				/* Enter the next valuator index into the axis map: */
-				newDevice.absAxisMap.push_back(newDevice.numValuators);
-				
-				/* Query the configuration of this axis: */
-				input_absinfo absAxisConf;
-				if(ioctl(deviceFd,EVIOCGABS(i),&absAxisConf)<0)
-					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot query absolute axis configuration for device %s",name.c_str());
-				
-				/* Create an absolute axis value mapper: */
-				Device::AxisValueMapper avm;
-				avm.min=double(absAxisConf.minimum);
-				double mid=Math::mid(double(absAxisConf.minimum),double(absAxisConf.maximum));
-				avm.deadMin=mid-double(absAxisConf.flat);
-				avm.deadMax=mid+double(absAxisConf.flat);
-				avm.max=double(absAxisConf.maximum);
-				
-				/* Override axis value mapper from configuration file: */
-				char axisSettingsTag[20];
-				snprintf(axisSettingsTag,sizeof(axisSettingsTag),"axis%dSettings",newDevice.numValuators);
-				configFileSection.updateValue(axisSettingsTag,avm);
-				
-				/* Store the axis value mapper: */
-				newDevice.axisValueMappers.push_back(avm);
-				
-				++newDevice.numValuators;
-				}
-			else
-				newDevice.absAxisMap.push_back(-1);
-			}
-		}
-	
-	/* Query the number of relative axes on the device: */
-	if(featureTypeBits[EV_REL/8]&(1<<(EV_REL%8)))
-		{
-		/* Query relative axis features: */
-		unsigned char relAxisBits[REL_MAX/8+1];
-		memset(relAxisBits,0,REL_MAX/8+1);
-		if(ioctl(deviceFd,EVIOCGBIT(EV_REL,sizeof(relAxisBits)),relAxisBits)<0)
-			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot query relative axes for device %s",name.c_str());
-		
-		/* Initialize the axis translation array: */
-		newDevice.relAxisMap.reserve(REL_MAX+1);
-		for(int i=0;i<=REL_MAX;++i)
-			{
-			if(relAxisBits[i/8]&(1<<(i%8)))
-				{
-				/* Enter the next valuator index into the axis map: */
-				newDevice.relAxisMap.push_back(newDevice.numValuators);
-				
-				/* Create a relative axis value mapper: */
-				Device::AxisValueMapper avm;
-				avm.min=-1.0;
-				avm.deadMin=0.0;
-				avm.deadMax=0.0;
-				avm.max=1.0;
-				
-				/* Override axis value mapper from configuration file: */
-				char axisSettingsTag[20];
-				snprintf(axisSettingsTag,sizeof(axisSettingsTag),"axis%dSettings",newDevice.numValuators);
-				configFileSection.updateValue(axisSettingsTag,avm);
-				
-				/* Store the axis value mapper: */
-				newDevice.axisValueMappers.push_back(avm);
-				
-				++newDevice.numValuators;
-				}
-			else
-				newDevice.relAxisMap.push_back(-1);
-			}
-		}
-	
-	/* Check if the device tracks its own position or copies another device's tracking state: */
-	newDevice.trackingDevice=0;
-	newDevice.projectDevice=false;
-	int newTrackType=InputDevice::TRACK_NONE;
-	if(newDevice.axisPosition)
-		newTrackType=InputDevice::TRACK_POS|InputDevice::TRACK_DIR;
-	else if(configFileSection.hasTag("./trackingDeviceName"))
-		{
-		/* Get the device whose tracking state to shadow: */
-		std::string trackingDeviceName=configFileSection.retrieveString("./trackingDeviceName");
-		newDevice.trackingDevice=Vrui::findInputDevice(trackingDeviceName.c_str());
-		if(newDevice.trackingDevice==0)
-			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Tracking device %s not found",trackingDeviceName.c_str());
-		
-		/* Determine the new device's tracking type: */
-		std::string trackTypeString;
-		switch(newDevice.trackingDevice->getTrackType())
-			{
-			case InputDevice::TRACK_NONE:
-				trackTypeString="None";
-				break;
-			
-			case InputDevice::TRACK_POS:
-				trackTypeString="3D";
-				break;
-			
-			case InputDevice::TRACK_POS|InputDevice::TRACK_DIR:
-				trackTypeString="Ray";
-				break;
-			
-			case InputDevice::TRACK_POS|InputDevice::TRACK_DIR|InputDevice::TRACK_ORIENT:
-				trackTypeString="6D";
-				break;
-			
-			default:
-				trackTypeString="None";
-			}
-		trackTypeString=configFileSection.retrieveString("./trackingDeviceType",trackTypeString);
-		newTrackType=InputDevice::TRACK_NONE;
-		if(trackTypeString=="None")
-			newTrackType=InputDevice::TRACK_NONE;
-		else if(trackTypeString=="3D")
-			newTrackType=InputDevice::TRACK_POS;
-		else if(trackTypeString=="Ray")
-			newTrackType=InputDevice::TRACK_POS|InputDevice::TRACK_DIR;
-		else if(trackTypeString=="6D")
-			newTrackType=InputDevice::TRACK_POS|InputDevice::TRACK_DIR|InputDevice::TRACK_ORIENT;
-		else
-			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unknown tracking type \"%s\"",trackTypeString.c_str());
+		/* Override the HID positioner's tracking type from the configuration file: */
+		trackType=updateTrackType(newDevice->positioner->getTrackType(),configFileSection);
 		
 		/* Determine whether the new input device should be projected by the UI manager: */
-		newDevice.projectDevice=((newDevice.trackingDevice->getTrackType()^newTrackType)&InputDevice::TRACK_ORIENT)!=0x0; // Project if the source device is a 6-DOF device, and the HID device is a ray device
+		bool projectDevice=((newDevice->positioner->getTrackType()^trackType)&InputDevice::TRACK_ORIENT)!=0x0; // Project if the source device is a 6-DOF device, and the HID device is a ray device
+		configFileSection.updateValue("./projectDevice",projectDevice);
+		newDevice->positioner->setProject(projectDevice);
 		}
 	
-	/* Create new input device as a physical device: */
-	inputDevices[deviceIndex]=newDevice.device=inputDeviceManager->createInputDevice(name.c_str(),newTrackType,newDevice.numButtons,newDevice.numValuators,true);
+	/* Read lists of key and absolute and relative axis features to ignore: */
+	typedef std::vector<unsigned int> IndexList;
 	
-	/* Initialize the device tracking state: */
-	TrackerState newTransform;
-	if(newDevice.axisPosition)
+	IndexList ignoreKeyFeatures;
+	configFileSection.updateValue("./ignoreKeyFeatures",ignoreKeyFeatures);
+	for(IndexList::iterator iIt=ignoreKeyFeatures.begin();iIt!=ignoreKeyFeatures.end();++iIt)
+		if(*iIt<newDevice->getNumKeyFeatures())
+			ignoredKeys[*iIt]=true;
+	
+	IndexList ignoreAbsAxisFeatures;
+	configFileSection.updateValue("./ignoreAbsAxisFeatures",ignoreAbsAxisFeatures);
+	for(IndexList::iterator iIt=ignoreAbsAxisFeatures.begin();iIt!=ignoreAbsAxisFeatures.end();++iIt)
+		if(*iIt<newDevice->getNumAbsAxisFeatures())
+			ignoredAbsAxes[*iIt]=true;
+	
+	IndexList ignoreRelAxisFeatures;
+	configFileSection.updateValue("./ignoreRelAxisFeatures",ignoreRelAxisFeatures);
+	for(IndexList::iterator iIt=ignoreRelAxisFeatures.begin();iIt!=ignoreRelAxisFeatures.end();++iIt)
+		if(*iIt<newDevice->getNumRelAxisFeatures())
+			ignoredRelAxes[*iIt]=true;
+	
+	/********************************************************
+	Represent the HID's key features as input device buttons:
+	********************************************************/
+	
+	/* Count the number of unignored key features: */
+	for(unsigned int i=0;i<newDevice->getNumKeyFeatures();++i)
+		if(!ignoredKeys[i])
+			++newDevice->numKeys;
+	
+	/* Create the key feature index array: */
+	newDevice->keyFeatureIndices=new unsigned int[newDevice->numKeys];
+	unsigned int keyIndex=0;
+	for(unsigned int i=0;i<newDevice->getNumKeyFeatures();++i)
+		if(!ignoredKeys[i])
+			newDevice->keyFeatureIndices[keyIndex++]=i;
+	
+	/********************************************************************
+	Represent the HID's absolute axis features as input device valuators:
+	********************************************************************/
+	
+	/* Count the number of unignored absolute axes: */
+	for(unsigned int i=0;i<newDevice->getNumAbsAxisFeatures();++i)
+		if(!ignoredAbsAxes[i])
+			++newDevice->numAbsAxes;
+	
+	/* Create the absolute axis feature index array: */
+	newDevice->absAxisFeatureIndices=new unsigned int[newDevice->numAbsAxes];
+	unsigned int absAxisIndex=0;
+	for(unsigned int i=0;i<newDevice->getNumAbsAxisFeatures();++i)
+		if(!ignoredAbsAxes[i])
+			newDevice->absAxisFeatureIndices[absAxisIndex++]=i;
+	
+	/* Create the absolute axis value mapper array: */
+	newDevice->absAxisValueMappers=new Device::AxisValueMapper[newDevice->numAbsAxes];
+	for(unsigned int i=0;i<newDevice->numAbsAxes;++i)
 		{
-		newTransform=TrackerState::translateFromOriginTo(newDevice.positionOrigin);
-		inputDevices[deviceIndex]->setLinearVelocity(Vector::zero);
-		inputDevices[deviceIndex]->setAngularVelocity(Vector::zero);
-		}
-	else if(newDevice.trackingDevice!=0)
-		{
-		inputDevices[deviceIndex]->copyTrackingState(newDevice.trackingDevice);
-		newTransform=inputDevices[deviceIndex]->getTransformation();
+		/* Retrieve the HID axis feature's default axis mapping: */
+		const RawHID::EventDevice::AbsAxisConfig& absAxisConfig=newDevice->getAbsAxisFeatureConfig(newDevice->absAxisFeatureIndices[i]);
+		
+		/* Create an axis value mapper in normalized axis space: */
+		Device::AxisValueMapper avm;
+		double s=0.5*(double(absAxisConfig.max)-double(absAxisConfig.min));
+		double o=double(absAxisConfig.min)+s;
+		avm.min=(double(absAxisConfig.min)-o)/s;
+		double mid=Math::mid(double(absAxisConfig.min),double(absAxisConfig.max));
+		double flat=Math::div2(double(absAxisConfig.flat));
+		avm.deadMin=(mid-flat-o)/s;
+		avm.deadMax=(mid+flat-o)/s;
+		avm.max=(double(absAxisConfig.max)-o)/s;
+		
+		/* Override the axis value mapper from the configuration file section: */
+		configFileSection.updateValue((std::string("./valuatorMapping")+Misc::printString(i)).c_str(),avm);
+		
+		/* Store the axis value mapper in raw axis space: */
+		avm.min=avm.min*s+o;
+		avm.deadMin=avm.deadMin*s+o;
+		avm.deadMax=avm.deadMax*s+o;
+		avm.max=avm.max*s+o;
+		newDevice->absAxisValueMappers[i]=avm;
 		}
 	
-	/* Determine whether the new input device should be projected by the UI manager: */
-	newDevice.projectDevice=newTrackType!=InputDevice::TRACK_NONE&&configFileSection.retrieveValue("./projectDevice",newDevice.projectDevice);
-	if(newDevice.projectDevice)
-		getUiManager()->projectDevice(newDevice.device,newTransform);
+	/********************************************************************
+	Represent the HID's relative axis features as input device valuators:
+	********************************************************************/
+	
+	/* Count the number of unignored relative axes: */
+	for(unsigned int i=0;i<newDevice->getNumRelAxisFeatures();++i)
+		if(!ignoredRelAxes[i])
+			++newDevice->numRelAxes;
+	
+	/* Create the relative axis feature map: */
+	newDevice->relAxisFeatureMap=new unsigned int[newDevice->getNumRelAxisFeatures()];
+	unsigned int relAxisIndex=0;
+	for(unsigned int i=0;i<newDevice->getNumRelAxisFeatures();++i)
+		if(!ignoredRelAxes[i])
+			newDevice->relAxisFeatureMap[i]=relAxisIndex++;
+		else
+			newDevice->relAxisFeatureMap[i]=~0U;
+	
+	/* Create the relative axis value array: */
+	newDevice->relAxisValues=new int[newDevice->numRelAxes];
+	for(unsigned int i=0;i<newDevice->numRelAxes;++i)
+		newDevice->relAxisValues[i]=0;
+	
+	/* Create the relative axis value mapper array: */
+	newDevice->relAxisValueMappers=new Device::AxisValueMapper[newDevice->numRelAxes];
+	for(unsigned int i=0;i<newDevice->numRelAxes;++i)
+		{
+		/* Create a default axis value mapper: */
+		Device::AxisValueMapper avm(-1.0,0.0,0.0,1.0);
+		
+		/* Override the axis value mapper from the configuration file section: */
+		configFileSection.updateValue((std::string("./valuatorMapping")+Misc::printString(newDevice->numAbsAxes+i)).c_str(),avm);
+		
+		/* Store the axis value mapper: */
+		newDevice->relAxisValueMappers[i]=avm;
+		}
+	
+	/**************************************************
+	Create the Vrui input device representing this HID:
+	**************************************************/
+	
+	/* Create the Vrui input device representing this HID as a physical input device: */
+	inputDevices[deviceIndex]=newDevice->device=createInputDevice(name.c_str(),trackType,newDevice->numKeys,newDevice->numAbsAxes+newDevice->numRelAxes,configFileSection,newDevice->buttonNames,newDevice->valuatorNames);
+	
+	/* Initialize the Vrui input device's tracking state: */
+	if(newDevice->positioner!=0)
+		newDevice->positioner->updateDevice(newDevice->device);
+	
+	/*****************************
+	Finalize the new input device:
+	*****************************/
+	
+	/* Register callbacks with the HID: */
+	if(newDevice->hasSynReport())
+		{
+		/* Register a synchronization callback: */
+		newDevice->getSynReportEventCallbacks().add(newDevice.getTarget(),&Device::synReportEventCallback);
+		}
 	else
-		newDevice.device->setTransformation(newTransform);
-	
-	/* Read the names of all button features: */
-	typedef std::vector<std::string> StringList;
-	StringList buttonNames;
-	configFileSection.updateValue("./buttonNames",buttonNames);
-	int buttonIndex=0;
-	for(StringList::iterator bnIt=buttonNames.begin();bnIt!=buttonNames.end()&&buttonIndex<newDevice.numButtons;++bnIt,++buttonIndex)
 		{
-		/* Store the button name: */
-		newDevice.buttonNames.push_back(*bnIt);
+		/* Register key and absolute axis feature callbacks: */
+		newDevice->getKeyFeatureEventCallbacks().add(newDevice.getTarget(),&Device::keyFeatureEventCallback);
+		newDevice->getAbsAxisFeatureEventCallbacks().add(newDevice.getTarget(),&Device::absAxisFeatureEventCallback);
 		}
-	for(;buttonIndex<newDevice.numButtons;++buttonIndex)
-		{
-		char buttonName[40];
-		snprintf(buttonName,sizeof(buttonName),"Button%d",buttonIndex);
-		newDevice.buttonNames.push_back(buttonName);
-		}
-	
-	/* Read the names of all valuator features: */
-	StringList valuatorNames;
-	configFileSection.updateValue("./valuatorNames",valuatorNames);
-	int valuatorIndex=0;
-	for(StringList::iterator vnIt=valuatorNames.begin();vnIt!=valuatorNames.end()&&valuatorIndex<newDevice.numValuators;++vnIt,++valuatorIndex)
-		{
-		/* Store the valuator name: */
-		newDevice.valuatorNames.push_back(*vnIt);
-		}
-	for(;valuatorIndex<newDevice.numValuators;++valuatorIndex)
-		{
-		char valuatorName[40];
-		snprintf(valuatorName,sizeof(valuatorName),"Valuator%d",valuatorIndex);
-		newDevice.valuatorNames.push_back(valuatorName);
-		}
+	newDevice->getRelAxisFeatureEventCallbacks().add(newDevice.getTarget(),&Device::relAxisFeatureEventCallback);
 	
 	/* Store the new device structure: */
-	devices.push_back(newDevice);
-	}
-
-void InputDeviceAdapterHID::ioEventCallback(Threads::EventDispatcher::IOEvent& event)
-	{
-	/* Get a reference to the device that has events available and the input device adapter: */
-	Device* device=static_cast<Device*>(event.getUserData());
-	InputDeviceAdapterHID* thisPtr=device->adapter;
-	
-	Threads::Mutex::Lock deviceStateLock(thisPtr->deviceStateMutex);
-	
-	/* Attempt to read multiple events at once: */
-	input_event events[128];
-	ssize_t numEvents=read(device->deviceFd,events,sizeof(events));
-	if(numEvents>0)
-		{
-		/* Process all read events in order: */
-		numEvents/=sizeof(input_event);
-		for(ssize_t i=0;i<numEvents;++i)
-			{
-			switch(events[i].type)
-				{
-				case EV_KEY:
-					{
-					/* Check if the key has a valid button index: */
-					int buttonIndex=device->keyMap[events[i].code];
-					if(buttonIndex>=0)
-						{
-						/* Check if the button is part of an exclusion set: */
-						int esi=device->buttonExclusionSets[buttonIndex];
-						if(esi>=0)
-							{
-							if(events[i].value!=0) // Button has been pressed
-								{
-								if(device->exclusionSetPresseds[esi]==-1)
-									{
-									/* Press the button and its exclusion set: */
-									thisPtr->buttonStates[device->firstButtonIndex+buttonIndex]=true;
-									device->exclusionSetPresseds[esi]=buttonIndex;
-									}
-								}
-							else // Button has been released
-								{
-								/* Release the exclusion set if this button activated it: */
-								if(device->exclusionSetPresseds[esi]==buttonIndex)
-									device->exclusionSetPresseds[esi]=-1;
-								
-								/* Release the button: */
-								thisPtr->buttonStates[device->firstButtonIndex+buttonIndex]=false;
-								}
-							}
-						else
-							{
-							/* Set the button's new state: */
-							thisPtr->buttonStates[device->firstButtonIndex+buttonIndex]=events[i].value!=0;
-							}
-						}
-					break;
-					}
-				
-				case EV_ABS:
-					{
-					if(device->axisPosition)
-						{
-						/* Check if the absolute axis is used to define the device position: */
-						int positionAxisIndex=device->positionAxisMap[events[i].code];
-						if(positionAxisIndex>=0)
-							{
-							/* Remember the new position axis value: */
-							device->positionValues[positionAxisIndex]=Scalar(events[i].value);
-							}
-						}
-					
-					/* Check if the absolute axis has a valid valuator index: */
-					int valuatorIndex=device->absAxisMap[events[i].code];
-					if(valuatorIndex>=0)
-						{
-						/* Set the valuators's new state: */
-						thisPtr->valuatorStates[device->firstValuatorIndex+valuatorIndex]=device->axisValueMappers[valuatorIndex].map(double(events[i].value));
-						}
-					break;
-					}
-				
-				case EV_REL:
-					{
-					/* Check if the relative axis has a valid valuator index: */
-					int valuatorIndex=device->relAxisMap[events[i].code];
-					if(valuatorIndex>=0)
-						{
-						/* Set the valuators's new state: */
-						thisPtr->valuatorStates[device->firstValuatorIndex+valuatorIndex]=device->axisValueMappers[valuatorIndex].map(double(events[i].value));
-						}
-					break;
-					}
-				}
-			}
-		}
+	devices.push_back(newDevice.releaseTarget());
 	}
 
 InputDeviceAdapterHID::InputDeviceAdapterHID(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection)
-	:InputDeviceAdapter(sInputDeviceManager),
-	 buttonStates(0),valuatorStates(0)
+	:InputDeviceAdapter(sInputDeviceManager)
 	{
 	/* Initialize input device adapter: */
 	InputDeviceAdapter::initializeAdapter(configFileSection);
 	
-	/* Count the total number of buttons and valuators: */
-	int totalNumButtons=0;
-	int totalNumValuators=0;
-	for(std::vector<Device>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
-		{
-		dIt->firstButtonIndex=totalNumButtons;
-		totalNumButtons+=dIt->numButtons;
-		dIt->firstValuatorIndex=totalNumValuators;
-		totalNumValuators+=dIt->numValuators;
-		}
-	
-	/* Create the device state arrays: */
-	buttonStates=new bool[totalNumButtons];
-	for(int i=0;i<totalNumButtons;++i)
-		buttonStates[i]=false;
-	valuatorStates=new double[totalNumValuators];
-	for(int i=0;i<totalNumValuators;++i)
-		valuatorStates[i]=0.0;
-	
 	/* Register all HIDs with the shared event dispatcher: */
 	Threads::EventDispatcher& eventDispatcher=inputDeviceManager->acquireEventDispatcher();
-	for(std::vector<Device>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
-		dIt->listenerKey=eventDispatcher.addIOEventListener(dIt->deviceFd,Threads::EventDispatcher::Read,ioEventCallback,&*dIt);
+	for(std::vector<Device*>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
+		(*dIt)->registerEventHandler(eventDispatcher);
 	}
 
 InputDeviceAdapterHID::~InputDeviceAdapterHID(void)
 	{
-	/* Unregister all HIDs from the shared event dispatcher and close all device files: */
-	Threads::EventDispatcher& eventDispatcher=inputDeviceManager->acquireEventDispatcher();
-	for(std::vector<Device>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
-		{
-		eventDispatcher.removeIOEventListener(dIt->listenerKey);
-		close(dIt->deviceFd);
-		}
-	
-	/* Delete the device state arrays: */
-	delete[] buttonStates;
-	delete[] valuatorStates;
+	/* Delete all devices: */
+	for(std::vector<Device*>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
+		delete *dIt;
 	}
 
 std::string InputDeviceAdapterHID::getFeatureName(const InputDeviceFeature& feature) const
 	{
 	/* Find the HID structure for the given input device: */
-	std::vector<Device>::const_iterator dIt;
-	for(dIt=devices.begin();dIt!=devices.end()&&dIt->device!=feature.getDevice();++dIt)
+	std::vector<Device*>::const_iterator dIt;
+	for(dIt=devices.begin();dIt!=devices.end()&&(*dIt)->device!=feature.getDevice();++dIt)
 		;
 	if(dIt==devices.end())
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unknown device %s",feature.getDevice()->getDeviceName());
@@ -643,12 +409,12 @@ std::string InputDeviceAdapterHID::getFeatureName(const InputDeviceFeature& feat
 	if(feature.isButton())
 		{
 		/* Return the button feature's name: */
-		result=dIt->buttonNames[feature.getIndex()];
+		result=(*dIt)->buttonNames[feature.getIndex()];
 		}
 	if(feature.isValuator())
 		{
 		/* Return the valuator feature's name: */
-		result=dIt->valuatorNames[feature.getIndex()];
+		result=(*dIt)->valuatorNames[feature.getIndex()];
 		}
 	
 	return result;
@@ -657,67 +423,38 @@ std::string InputDeviceAdapterHID::getFeatureName(const InputDeviceFeature& feat
 int InputDeviceAdapterHID::getFeatureIndex(InputDevice* device,const char* featureName) const
 	{
 	/* Find the HID structure for the given input device: */
-	std::vector<Device>::const_iterator dIt;
-	for(dIt=devices.begin();dIt!=devices.end()&&dIt->device!=device;++dIt)
+	std::vector<Device*>::const_iterator dIt;
+	for(dIt=devices.begin();dIt!=devices.end()&&(*dIt)->device!=device;++dIt)
 		;
 	if(dIt==devices.end())
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unknown device %s",device->getDeviceName());
 	
 	/* Check if the feature names a button or a valuator: */
-	for(int buttonIndex=0;buttonIndex<dIt->numButtons;++buttonIndex)
-		if(dIt->buttonNames[buttonIndex]==featureName)
+	int numButtons((*dIt)->numKeys);
+	for(int buttonIndex=0;buttonIndex<numButtons;++buttonIndex)
+		if((*dIt)->buttonNames[buttonIndex]==featureName)
 			return device->getButtonFeatureIndex(buttonIndex);
-	for(int valuatorIndex=0;valuatorIndex<dIt->numValuators;++valuatorIndex)
-		if(dIt->valuatorNames[valuatorIndex]==featureName)
+	int numValuators((*dIt)->numAbsAxes+(*dIt)->numRelAxes);
+	for(int valuatorIndex=0;valuatorIndex<numValuators;++valuatorIndex)
+		if((*dIt)->valuatorNames[valuatorIndex]==featureName)
 			return device->getValuatorFeatureIndex(valuatorIndex);
 	
 	return -1;
 	}
 
+void InputDeviceAdapterHID::prepareMainLoop(void)
+	{
+	/* Prepare all represented devices: */
+	for(std::vector<Device*>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
+		(*dIt)->prepareMainLoop();
+	}
+
 void InputDeviceAdapterHID::updateInputDevices(void)
 	{
-	/* Copy the current device state array into the input devices: */
+	/* Call the update methods of all represented devices: */
 	Threads::Mutex::Lock deviceStateLock(deviceStateMutex);
-	
-	for(std::vector<Device>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
-		{
-		TrackerState newTransform;
-		if(dIt->axisPosition)
-			{
-			/* Calculate the device position: */
-			Point devicePos=dIt->positionOrigin;
-			size_t numAxes=dIt->positionAxes.size();
-			for(size_t i=0;i<numAxes;++i)
-				devicePos+=dIt->positionAxes[i]*dIt->positionValues[i];
-			newTransform=TrackerState::translateFromOriginTo(devicePos);
-			
-			if(getMainViewer()!=0)
-				{
-				/* Calculate the device ray direction: */
-				Vector rayDir=devicePos-getMainViewer()->getHeadPosition();
-				Scalar rayLen=Scalar(Geometry::mag(rayDir));
-				dIt->device->setDeviceRay(rayDir/rayLen,-rayLen);
-				}
-			}
-		else if(dIt->trackingDevice!=0)
-			{
-			/* Copy the source device's tracking state: */
-			dIt->device->copyTrackingState(dIt->trackingDevice);
-			newTransform=dIt->device->getTransformation();
-			}
-		
-		/* Let the UI manager project the device if requested: */
-		if(dIt->projectDevice)
-			getUiManager()->projectDevice(dIt->device,newTransform);
-		else
-			dIt->device->setTransformation(newTransform);
-		
-		/* Set the device's button and valuator states: */
-		for(int i=0;i<dIt->numButtons;++i)
-			dIt->device->setButtonState(i,buttonStates[dIt->firstButtonIndex+i]);
-		for(int i=0;i<dIt->numValuators;++i)
-			dIt->device->setValuator(i,valuatorStates[dIt->firstValuatorIndex+i]);
-		}
+	for(std::vector<Device*>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
+		(*dIt)->update();
 	}
 
 }

@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterDummy - Class to create "dummy" devices to simulate
 behavior of non-existent devices.
-Copyright (c) 2015-2016 Oliver Kreylos
+Copyright (c) 2015-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -42,15 +42,15 @@ class InputDeviceAdapterDummy:public InputDeviceAdapter
 	std::vector<std::string> buttonNames; // Array of button names for all defined input devices
 	std::vector<std::string> valuatorNames; // Array of valuator names for all defined input devices
 	
-	/* Protected methods from InputDeviceAdapter: */
-	virtual void createInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection);
+	/* Protected methods from class InputDeviceAdapter: */
+	virtual void initializeInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection);
 	
 	/* Constructors and destructors: */
 	public:
 	InputDeviceAdapterDummy(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection);
 	virtual ~InputDeviceAdapterDummy(void);
 	
-	/* Methods: */
+	/* Methods from class InputDeviceAdapter: */
 	virtual std::string getFeatureName(const InputDeviceFeature& feature) const;
 	virtual int getFeatureIndex(InputDevice* device,const char* featureName) const;
 	virtual void updateInputDevices(void);

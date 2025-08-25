@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapter - Base class to convert from diverse "raw" input
 device representations to Vrui's internal input device representation.
-Copyright (c) 2004-2023 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -25,6 +25,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #define VRUI_INTERNAL_INPUTDEVICEADAPTER_INCLUDED
 
 #include <string>
+#include <vector>
 #include <Vrui/Types.h>
 
 /* Forward declarations: */
@@ -45,11 +46,14 @@ class InputDeviceAdapter
 	/* Elements: */
 	protected:
 	InputDeviceManager* inputDeviceManager; // Pointer to input device manager
-	int numInputDevices; // Number of Vrui input devices mapped to
+	int numInputDevices; // Number of Vrui input devices owned by this adapter
 	InputDevice** inputDevices; // Array of pointers to Vrui input devices owned by this adapter
 	
 	/* Protected methods: */
-	virtual void createInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection); // Creates input device by reading current configuration file section
+	int updateTrackType(int trackType,const Misc::ConfigurationFileSection& configFileSection); // Updates the given input device tracking type from the given configuration file section
+	InputDevice* createInputDevice(const char* name,int trackType,int numButtons,int numValuators,const Misc::ConfigurationFileSection& configFileSection); // Creates and configures a new input device; updates the given arrays of button and valuator names
+	InputDevice* createInputDevice(const char* name,int trackType,int numButtons,int numValuators,const Misc::ConfigurationFileSection& configFileSection,std::vector<std::string>& buttonNames,std::vector<std::string>& valuatorNames); // Ditto; updates the given arrays of button and valuator names
+	virtual void initializeInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection); // Initializes a component input device by reading the given configuration file section
 	void initializeAdapter(const Misc::ConfigurationFileSection& configFileSection); // Initializes adapter by reading configuration file section
 	
 	/* Constructors and destructors: */
