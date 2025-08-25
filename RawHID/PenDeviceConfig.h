@@ -40,21 +40,25 @@ struct PenDeviceConfig
 		{
 		/* Elements: */
 		public:
-		bool valid; // Flag if the pen is within range of the device
+		bool valid; // Flag if the pen is within range of the device and the position/tilt values are valid
+		unsigned int toolIndex; // Index of the sub-component of the pen which is in range of the device
 		int pos[2]; // Pen position
 		int tilt[2]; // Pen tilt angles if the device supports tilt
-		bool pressed; // Flag if the pen is pressed against the device
+		bool touching; // Flag if the pen is touching the device and the pressure value is valid
+		int pressure; // Pen pressure if the device supports pressure
 		};
 	
 	/* Elements: */
 	public:
 	unsigned int posAxisIndices[2]; // Device indices of the device's position axes
 	unsigned int tiltAxisIndices[2]; // Device indices of the device's tilt axes
-	unsigned int touchKeyIndex; // Index of the device's touch key
-	unsigned int pressKeyIndex; // Index of the device's press key
+	unsigned int pressureAxisIndex; // Device index of the device's pressure axis
+	std::vector<unsigned int> hoverKeyIndices; // Indices of the device's hover keys, usually indicating whether different pen sub-components or roles (pen, eraser, ...) are in range of the device
+	unsigned int touchKeyIndex; // Index of the device's touch key, indicating that the pen is touching the device
 	std::vector<unsigned int> otherKeyIndices; // Indices of other keys available on the device
 	bool valid; // Flag if the device has the required axes/buttons for a pen device
 	bool haveTilt; // Flag if the device has tilt axes
+	bool havePressure; // Flag if the device has a pressure axis
 	
 	/* Constructors and destructors: */
 	PenDeviceConfig(void); // Creates an invalid pen device configuration

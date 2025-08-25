@@ -35,6 +35,10 @@ class StylusToolFactory:public ToolFactory
 	{
 	friend class StylusTool;
 	
+	/* Elements: */
+	private:
+	int numComponents; // Number of component tools (pen, eraser, ...) represented by the input device
+	
 	/* Constructors and destructors: */
 	public:
 	StylusToolFactory(ToolManager& toolManager);
@@ -54,7 +58,9 @@ class StylusTool:public TransformTool
 	/* Elements: */
 	private:
 	static StylusToolFactory* factory; // Pointer to the factory object for this class
-	int selectorButtonIndex; // Index of the highest-priority pressed selector button plus 1, or 0 if no selector buttons are pressed
+	int numModifiers; // Number of modifier buttons
+	int component; // Index of the active component tool
+	int modifierMask; // Current mask of pressed modifier buttons
 	
 	/* Constructors and destructors: */
 	public:

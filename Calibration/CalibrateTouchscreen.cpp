@@ -117,7 +117,7 @@ void CalibrateTouchscreen::keyCallback(RawHID::EventDevice::KeyFeatureEventCallb
 	if(calibrator!=0)
 		return;
 	
-	if(cbData->featureIndex==penDeviceConfig.pressKeyIndex)
+	if(cbData->featureIndex==penDeviceConfig.touchKeyIndex)
 		{
 		Realtime::TimePointMonotonic now;
 		

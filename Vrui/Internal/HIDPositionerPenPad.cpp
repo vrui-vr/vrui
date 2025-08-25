@@ -30,6 +30,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Math/Math.h>
 #include <Geometry/OrthonormalTransformation.h>
 #include <Vrui/Vrui.h>
+#include <Vrui/Viewer.h>
 #include <Vrui/VRScreen.h>
 #include <Vrui/UIManager.h>
 #include <Vrui/Internal/PenPadCalibrator.h>
@@ -54,7 +55,10 @@ HIDPositionerPenPad::HIDPositionerPenPad(RawHID::EventDevice& sHid,const Misc::C
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Given HID %s is not a pen pad device",hid.getDeviceName().c_str());
 	
 	/* Ignore HID features directly related to pen pad operation: */
-	ignoredFeatures[config.touchKeyIndex]=true;
+	#if 0 // We're not ignoring the hover buttons; let a Vrui tool sort it out
+	for(std::vector<unsigned int>::iterator hkiIt=config.hoverKeyIndices.begin();hkiIt!=config.hoverKeyIndices.end();++hkiIt)
+		ignoredFeatures[*hkiIt]=true;
+	#endif
 	unsigned int nkf=hid.getNumKeyFeatures();
 	for(int i=0;i<2;++i)
 		ignoredFeatures[nkf+config.posAxisIndices[i]]=true;
@@ -136,12 +140,24 @@ void HIDPositionerPenPad::updateDevice(InputDevice* device)
 		/* Update the device's tracking state: */
 		device->setTransformation(transform);
 		
-		/* We should calculate linear and angular velocities here... */
-		// ...
-		
 		/* Project the copied tracking state with the UI manager if requested: */
 		if(project)
 			getUiManager()->projectDevice(device,device->getTransformation());
+		
+		/* We should calculate linear and angular velocities here... */
+		// ...
+		
+		/* Transform the physical-space head position to device coordinates: */
+		Point deviceHeadPos=device->getTransformation().inverseTransform(getMainViewer()->getHeadPosition());
+		
+		/* Calculate the ray direction and ray origin offset in device coordinates: */
+		Vector deviceRayDir=Point::origin-deviceHeadPos;
+		Scalar deviceRayDirLen=Geometry::mag(deviceRayDir);
+		deviceRayDir/=deviceRayDirLen;
+		Scalar deviceRayStart=-(deviceHeadPos[1]+getFrontplaneDist())*deviceRayDirLen/deviceHeadPos[1];
+		
+		/* Update the device's ray: */
+		device->setDeviceRay(deviceRayDir,deviceRayStart);
 		
 		/* Enable the device: */
 		getInputGraphManager()->enable(device);

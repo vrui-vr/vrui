@@ -25,6 +25,8 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Tools/StylusTool.h>
 
 #include <Misc/StdError.h>
+#include <Misc/StandardValueCoders.h>
+#include <Misc/ConfigurationFile.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/InputGraphManager.h>
 #include <Vrui/ToolManager.h>
@@ -36,15 +38,20 @@ Methods of class StylusToolFactory:
 **********************************/
 
 StylusToolFactory::StylusToolFactory(ToolManager& toolManager)
-	:ToolFactory("StylusTool",toolManager)
+	:ToolFactory("StylusTool",toolManager),
+	 numComponents(1)
 	{
+	/* Load class settings: */
+	Misc::ConfigurationFileSection cfs=toolManager.getToolClassSection(getClassName());
+	cfs.updateValue("./numComponents",numComponents);
+	
+	/* Initialize tool layout: */
+	layout.setNumButtons(numComponents+1,true);
+	
 	/* Insert class into class hierarchy: */
 	TransformToolFactory* transformToolFactory=dynamic_cast<TransformToolFactory*>(toolManager.loadClass("TransformTool"));
 	transformToolFactory->addChildClass(this);
 	addParentClass(transformToolFactory);
-	
-	/* Initialize tool layout: */
-	layout.setNumButtons(1,true);
 	
 	/* Set tool class's factory pointer: */
 	StylusTool::factory=this;
@@ -63,10 +70,12 @@ const char* StylusToolFactory::getName(void) const
 
 const char* StylusToolFactory::getButtonFunction(int buttonSlotIndex) const
 	{
-	if(buttonSlotIndex==0)
-		return "Main Button";
+	if(buttonSlotIndex<numComponents)
+		return "Component Selector";
+	else if(buttonSlotIndex==numComponents)
+		return "Touch";
 	else
-		return "Selector Button";
+		return "Modifier";
 	}
 
 Tool* StylusToolFactory::createTool(const ToolInputAssignment& inputAssignment) const
@@ -114,7 +123,8 @@ Methods of class StylusTool:
 
 StylusTool::StylusTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
 	:TransformTool(factory,inputAssignment),
-	 selectorButtonIndex(0)
+	 numModifiers(input.getNumButtonSlots()-1-StylusTool::factory->numComponents),
+	 component(0),modifierMask(0x0)
 	{
 	}
 
@@ -125,7 +135,7 @@ StylusTool::~StylusTool(void)
 void StylusTool::initialize(void)
 	{
 	/* Create a virtual input device to shadow the source input device: */
-	transformedDevice=addVirtualInputDevice("StylusToolTransformedDevice",input.getNumButtonSlots(),0);
+	transformedDevice=addVirtualInputDevice("StylusToolTransformedDevice",factory->numComponents*(1<<numModifiers),0);
 	
 	/* Copy the source device's tracking type: */
 	transformedDevice->setTrackType(sourceDevice->getTrackType());
@@ -147,47 +157,31 @@ const ToolFactory* StylusTool::getFactory(void) const
 
 void StylusTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData)
 	{
-	/* Check if the main button or one of the selector buttons was pressed: */
-	if(buttonSlotIndex==0)
+	if(buttonSlotIndex<factory->numComponents)
 		{
-		/* Set the state of the selected virtual input device button to the state of the main button: */
-		transformedDevice->setButtonState(selectorButtonIndex,cbData->newButtonState);
+		if(cbData->newButtonState)
+			{
+			/* Change the current component: */
+			transformedDevice->setButtonState(component*(1<<numModifiers)+modifierMask,false);
+			component=buttonSlotIndex;
+			transformedDevice->setButtonState(component*(1<<numModifiers)+modifierMask,getButtonState(factory->numComponents));
+			}
+		}
+	else if(buttonSlotIndex==factory->numComponents)
+		{
+		/* Set the state of the currently selected button: */
+		transformedDevice->setButtonState(component*(1<<numModifiers)+modifierMask,cbData->newButtonState);
 		}
 	else
 		{
-		/* Determine the potentially changed selector button index: */
-		int newSelectorButtonIndex=selectorButtonIndex;
-		
-		/* Check if the button was pressed or released: */
+		/* Change the current modifier mask: */
+		transformedDevice->setButtonState(component*(1<<numModifiers)+modifierMask,false);
+		int modifierBit=1<<(buttonSlotIndex-(factory->numComponents+1));
 		if(cbData->newButtonState)
-			{
-			/* Check if the newly pressed selector button has higher priority than the currently pressed one: */
-			if(selectorButtonIndex<buttonSlotIndex)
-				newSelectorButtonIndex=buttonSlotIndex;
-			}
+			modifierMask|=modifierBit;
 		else
-			{
-			/* Check if the newly released selector button was the highest-priority one: */
-			if(selectorButtonIndex==buttonSlotIndex)
-				{
-				/* Find the next-highest priority pressed selector button: */
-				for(--newSelectorButtonIndex;newSelectorButtonIndex>0&&!getButtonState(newSelectorButtonIndex);--newSelectorButtonIndex)
-					;
-				}
-			}
-		
-		/* Check if the selector button changed: */
-		if(selectorButtonIndex!=newSelectorButtonIndex)
-			{
-			/* Reset the previously-active virtual input device button: */
-			transformedDevice->setButtonState(selectorButtonIndex,false);
-			
-			/* Update the current selector button index: */
-			selectorButtonIndex=newSelectorButtonIndex;
-			
-			/* Set the state of the selected virtual input device button to the state of the main button: */
-			transformedDevice->setButtonState(selectorButtonIndex,getButtonState(0));
-			}
+			modifierMask&=~modifierBit;
+		transformedDevice->setButtonState(component*(1<<numModifiers)+modifierMask,getButtonState(factory->numComponents));
 		}
 	}
 
@@ -216,11 +210,10 @@ InputDeviceFeatureSet StylusTool::getForwardedFeatures(const InputDeviceFeature&
 	/* Get the slot's button slot index: */
 	int buttonSlotIndex=input.getButtonSlotIndex(slotIndex);
 	
-	/* If the source feature is the main button, return all forwarded buttons; otherwise, return the empty set: */
+	/* If the source feature is the touch button, return the forwarded button; otherwise, return the empty set: */
 	InputDeviceFeatureSet result;
-	if(buttonSlotIndex==0)
-		for(int i=0;i<transformedDevice->getNumButtons();++i)
-			result.push_back(InputDeviceFeature(transformedDevice,InputDevice::BUTTON,i));
+	if(buttonSlotIndex==factory->numComponents)
+		result.push_back(InputDeviceFeature(transformedDevice,InputDevice::BUTTON,component*(1<<numModifiers)+modifierMask));
 	
 	return result;
 	}
