@@ -1,7 +1,7 @@
 /***********************************************************************
 ArrayValueCoders - Generic value coder classes for standard C-style
 arrays with fixed or dynamic array sizes or array wrapper classes.
-Copyright (c) 2004-2022 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -30,6 +30,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/Offset.h>
 #include <Misc/Size.h>
 #include <Misc/Rect.h>
+#include <Misc/StandardValueCoders.h>
 
 namespace Misc {
 
