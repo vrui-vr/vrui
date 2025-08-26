@@ -38,6 +38,7 @@ class StylusToolFactory:public ToolFactory
 	/* Elements: */
 	private:
 	int numComponents; // Number of component tools (pen, eraser, ...) represented by the input device
+	bool chordModifiers; // Flag if a tool's modifier buttons can be chorded
 	
 	/* Constructors and destructors: */
 	public:
@@ -58,9 +59,9 @@ class StylusTool:public TransformTool
 	/* Elements: */
 	private:
 	static StylusToolFactory* factory; // Pointer to the factory object for this class
-	int numModifiers; // Number of modifier buttons
+	int numComponentButtons; // Number of buttons per component tool
 	int component; // Index of the active component tool
-	int modifierMask; // Current mask of pressed modifier buttons
+	int modifierValue; // Current modifier button value
 	
 	/* Constructors and destructors: */
 	public:

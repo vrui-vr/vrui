@@ -39,11 +39,12 @@ Methods of class StylusToolFactory:
 
 StylusToolFactory::StylusToolFactory(ToolManager& toolManager)
 	:ToolFactory("StylusTool",toolManager),
-	 numComponents(1)
+	 numComponents(1),chordModifiers(false)
 	{
 	/* Load class settings: */
 	Misc::ConfigurationFileSection cfs=toolManager.getToolClassSection(getClassName());
 	cfs.updateValue("./numComponents",numComponents);
+	cfs.updateValue("./chordModifiers",chordModifiers);
 	
 	/* Initialize tool layout: */
 	layout.setNumButtons(numComponents+1,true);
@@ -123,9 +124,14 @@ Methods of class StylusTool:
 
 StylusTool::StylusTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
 	:TransformTool(factory,inputAssignment),
-	 numModifiers(input.getNumButtonSlots()-1-StylusTool::factory->numComponents),
-	 component(0),modifierMask(0x0)
+	 component(0),modifierValue(0)
 	{
+	/* Calculate the number of virtual buttons per component: */
+	int numModifierButtons=input.getNumButtonSlots()-(StylusTool::factory->numComponents+1);
+	if(StylusTool::factory->chordModifiers)
+		numComponentButtons=1<<numModifierButtons;
+	else
+		numComponentButtons=numModifierButtons+1;
 	}
 
 StylusTool::~StylusTool(void)
@@ -135,7 +141,7 @@ StylusTool::~StylusTool(void)
 void StylusTool::initialize(void)
 	{
 	/* Create a virtual input device to shadow the source input device: */
-	transformedDevice=addVirtualInputDevice("StylusToolTransformedDevice",factory->numComponents*(1<<numModifiers),0);
+	transformedDevice=addVirtualInputDevice("StylusToolTransformedDevice",factory->numComponents*numComponentButtons,0);
 	
 	/* Copy the source device's tracking type: */
 	transformedDevice->setTrackType(sourceDevice->getTrackType());
@@ -162,26 +168,47 @@ void StylusTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackD
 		if(cbData->newButtonState)
 			{
 			/* Change the current component: */
-			transformedDevice->setButtonState(component*(1<<numModifiers)+modifierMask,false);
+			transformedDevice->setButtonState(component*numComponentButtons+modifierValue,false);
 			component=buttonSlotIndex;
-			transformedDevice->setButtonState(component*(1<<numModifiers)+modifierMask,getButtonState(factory->numComponents));
+			transformedDevice->setButtonState(component*numComponentButtons+modifierValue,getButtonState(factory->numComponents));
 			}
 		}
 	else if(buttonSlotIndex==factory->numComponents)
 		{
 		/* Set the state of the currently selected button: */
-		transformedDevice->setButtonState(component*(1<<numModifiers)+modifierMask,cbData->newButtonState);
+		transformedDevice->setButtonState(component*numComponentButtons+modifierValue,cbData->newButtonState);
 		}
 	else
 		{
-		/* Change the current modifier mask: */
-		transformedDevice->setButtonState(component*(1<<numModifiers)+modifierMask,false);
-		int modifierBit=1<<(buttonSlotIndex-(factory->numComponents+1));
-		if(cbData->newButtonState)
-			modifierMask|=modifierBit;
+		/* Change the current modifier value: */
+		int modifierIndex=buttonSlotIndex-(factory->numComponents+1);
+		transformedDevice->setButtonState(component*numComponentButtons+modifierValue,false);
+		if(factory->chordModifiers)
+			{
+			/* Update the current modifier value as a bit mask of pressed modifier buttons: */
+			int modifierBit=1<<modifierIndex;
+			if(cbData->newButtonState)
+				modifierValue|=modifierBit;
+			else
+				modifierValue&=~modifierBit;
+			}
 		else
-			modifierMask&=~modifierBit;
-		transformedDevice->setButtonState(component*(1<<numModifiers)+modifierMask,getButtonState(factory->numComponents));
+			{
+			/* Find the highest-priority pressed modifier button: */
+			if(cbData->newButtonState)
+				{
+				if(modifierValue==0||modifierValue+1>modifierIndex)
+					modifierValue=modifierIndex+1;
+				}
+			else
+				{
+				modifierValue=0;
+				for(int i=factory->numComponents+1;i<getNumButtons()&&modifierValue==0;++i)
+					if(i!=buttonSlotIndex&&getButtonState(i))
+						modifierValue=i-(factory->numComponents+1)+1;
+				}
+			}
+		transformedDevice->setButtonState(component*numComponentButtons+modifierValue,getButtonState(factory->numComponents));
 		}
 	}
 
@@ -213,7 +240,7 @@ InputDeviceFeatureSet StylusTool::getForwardedFeatures(const InputDeviceFeature&
 	/* If the source feature is the touch button, return the forwarded button; otherwise, return the empty set: */
 	InputDeviceFeatureSet result;
 	if(buttonSlotIndex==factory->numComponents)
-		result.push_back(InputDeviceFeature(transformedDevice,InputDevice::BUTTON,component*(1<<numModifiers)+modifierMask));
+		result.push_back(InputDeviceFeature(transformedDevice,InputDevice::BUTTON,component*numComponentButtons+modifierValue));
 	
 	return result;
 	}
