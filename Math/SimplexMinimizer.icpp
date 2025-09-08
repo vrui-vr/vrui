@@ -2,7 +2,7 @@
 SimplexMinimizer - Generic class to minimize a set of equations in a
 least-squares sense using a simplex algorithm, templatized by a kernel
 class implementing a specific optimization problem.
-Copyright (c) 2014-2018 Oliver Kreylos
+Copyright (c) 2014-2025 Oliver Kreylos
 
 This file is part of the Templatized Math Library (Math).
 
@@ -321,7 +321,7 @@ SimplexMinimizer<KernelParam>::minimize(
 			}
 		
 		/* Bail out if the simplex is too small to continue: */
-		bool tiny;
+		bool tiny=true;
 		for(unsigned int i=0;i<numVariables&&tiny;++i)
 			{
 			/* Calculate the simplex's extent along this optimization space dimension: */
