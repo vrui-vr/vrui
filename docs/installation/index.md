@@ -95,7 +95,7 @@ cd <VRUI directory>
 where you replace `<VRUI directory>` with the name of the directory where you cloned/unpacked the VRUI in the previous step, as printed by `ls`.
 
 
-## Step 2: Install Prerequisite Packages
+## Step 2: Install prerequisite packages
 
 VRUI uses a relatively large set of system-provided packages to implement its functionality. Some of these are essential, some are optional, some are *very* optional. See the README file for the complete list of prerequisite system packages. Ideally, you should install the full set of packages to unlock all of VRUI's functionality.
 
@@ -163,7 +163,7 @@ Documentation installation directory      : /usr/local/share/doc/VRUI-13.1
 The most important of those lines is this one:
 
 ```sh
-Build system installation directory       : /usr/local/share/VRUI-13.1/make
+Build system installation directory: /usr/local/share/VRUI-13.1/make
 ```
 
 showing the location of VRUI's build system, and this is the location you will need to use to build add-on packages or VRUI applications later. Take note of the precise location, in this example `/usr/local/share/VRUI-13.1/make`.
@@ -180,18 +180,18 @@ which will ask you for your user account's password to install VRUI in a system 
 
 If there were no errors, you are done! 🎉
 
-## Optional: Build VRUI's Example Applications
+## Optional: Build VRUI's example applications
 
 VRUI comes packaged with a few example applications demonstrating how to create VRUI-based VR applications. You can build these now to get a feel for how to build other VRUI applications later, or to test whether VRUI is working properly.
 
-### Step 1: Enter The ExamplePrograms Directory
+### Step 1: Enter the `ExamplePrograms` directory
 
 Enter into the same terminal window:
 ```
 cd ExamplePrograms
 ```
 
-### Step 2: Build The Example Applications
+### Step 2: Build the example applications
 
 Run `make` to build the example programs. During building VRUI itself, the build procedure automatically configured the `makefile` in the `ExamplePrograms` directory to find the VRUI installation. But to practice for building other VRUI applications later, you should still pass the location of VRUI's build system, mentioned above, to `make`. Enter into the same terminal window:
 
@@ -221,7 +221,7 @@ where you replace `<VRUI build system location>` with the location of VRUI's bui
 
 If there were no errors, you should now see a new `bin` directory in the `ExamplePrograms` directory.
 
-### Step 3: Run An Example Application
+### Step 3: Run an example application
 
 To run one of the example applications, enter into the same terminal window:
 
