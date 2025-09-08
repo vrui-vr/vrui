@@ -163,7 +163,7 @@ Documentation installation directory      : /usr/local/share/doc/VRUI-13.1
 The most important of those lines is this one:
 
 ```sh
-Build system installation directory       : /usr/local/share/VRUI-13.1/make
+Build system installation directory: /usr/local/share/VRUI-13.1/make
 ```
 
 showing the location of VRUI's build system, and this is the location you will need to use to build add-on packages or VRUI applications later. Take note of the precise location, in this example `/usr/local/share/VRUI-13.1/make`.
