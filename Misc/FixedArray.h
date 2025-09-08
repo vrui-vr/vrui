@@ -1,6 +1,6 @@
 /***********************************************************************
 FixedArray - Class for 1-dimensional arrays of compile-time fixed size.
-Copyright (c) 2012-2020 Oliver Kreylos
+Copyright (c) 2012-2025 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -71,6 +71,39 @@ class FixedArray
 		}
 	
 	/* Methods: */
+	FixedArray& operator=(const FixedArray& source) // Assignment operator
+		{
+		if(this!=&source)
+			{
+			for(int i=0;i<size;++i)
+				elements[i]=source.elements[i];
+			}
+		return *this;
+		}
+	template <class SourceElementParam>
+	FixedArray& operator=(const FixedArray<SourceElementParam,sizeParam>& source) // Assignment operator with type conversion
+		{
+		if(this!=&source)
+			{
+			for(int i=0;i<size;++i)
+				elements[i]=Element(source.elements[i]);
+			}
+		return *this;
+		}
+	bool operator==(const FixedArray& other) const // Comparison operator
+		{
+		for(int i=0;i<size;++i)
+			if(elements[i]!=other.elements[i])
+				return false;
+		return true;
+		}
+	bool operator!=(const FixedArray& other) const // Comparison operator
+		{
+		for(int i=0;i<size;++i)
+			if(elements[i]!=other.elements[i])
+				return true;
+		return false;
+		}
 	const Element* getElements(void) const // Returns C-style array
 		{
 		return elements;
