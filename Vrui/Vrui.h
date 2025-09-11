@@ -168,6 +168,19 @@ struct NavigationToolActivationCallbackData:public Misc::CallbackData // Callbac
 		}
 	};
 
+struct PreRenderingCallbackData:public Misc::CallbackData // Callback data passed to pre-rendering callbacks
+	{
+	/* Elements: */
+	public:
+	GLContextData& contextData; // Reference to the OpenGL context data object associated with the current OpenGL context
+	
+	/* Constructors and destructors: */
+	PreRenderingCallbackData(GLContextData& sContextData)
+		:contextData(sContextData)
+		{
+		}
+	};
+
 typedef bool (*FrameCallback)(void* userData); // Function type for frame callbacks
 typedef void (*SynchronousIOCallback)(int fd,void* userData); // Function type for synchronous I/O callbacks
 
@@ -373,6 +386,8 @@ double getNextAnimationTime(void); // Returns the application time at which the 
 
 /* Callback management: */
 void addFrameCallback(FrameCallback newFrameCallback,void* newFrameCallbackUserData); // Adds a callback that is called once on every frame; callback is removed again if it returns true; can be called from background threads
+Misc::CallbackList& getPreRenderingCallbacks(void); // Returns the list of callbacks called from a window group's rendering thread immediately before anything is rendered; callbacks must not change application state
+Misc::CallbackList& getPostRenderingCallbacks(void); // Returns the list of callbacks called from main thread immediately after all window groups have been rendered
 Misc::CommandDispatcher& getCommandDispatcher(void); // Returns a dispatcher for pipe and console commands
 void addSynchronousIOCallback(int fd,SynchronousIOCallback newIOCallback,void* newIOCallbackData); // Adds a callback that is called synchronously at the beginning of a Vrui frame if there is readable data on the given file descriptor
 void removeSynchronousIOCallback(int fd); // Removes a previously installed synchronous I/O callback for the given file descriptor

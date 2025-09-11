@@ -3861,6 +3861,16 @@ void addFrameCallback(FrameCallback newFrameCallback,void* newFrameCallbackUserD
 	vruiState->frameCallbacks.push_back(fcs);
 	}
 
+Misc::CallbackList& getPreRenderingCallbacks(void)
+	{
+	return vruiState->preRenderingCallbacks;
+	}
+
+Misc::CallbackList& getPostRenderingCallbacks(void)
+	{
+	return vruiState->postRenderingCallbacks;
+	}
+
 Misc::CommandDispatcher& getCommandDispatcher(void)
 	{
 	return vruiState->commandDispatcher;
