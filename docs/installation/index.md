@@ -105,24 +105,25 @@ To simplify installation, we provide a shell script that tries to determine the 
 bash ./InstallPrerequisites.sh
 ```
 
-which  will ask you to enter your user account's password when necessary, and
-will print a green completion message at the end if at least all required
-system packages were successfully installed. Do not proceed if the script ends
-with a red error message.
+which will ask you to enter your user account's password when necessary, and will print a green completion message at the end if at least all required system packages were successfully installed. Do not proceed if the script ends with a red error message.
 
 ## Step 3: Build VRUI
 
-To build VRUI, enter into the same terminal window:
+To build VRUI inside the VRUI base directory, enter into the same terminal window:
 
 ```sh
 make
 ```
 
+You can modify the install location of VRUI by passing the VRUI_MAKEDIR=<Vrui build system location> argument to `make`: `make VRUI_MAKEDIR=<Vrui build system location>`, replacing `<Vrui build system location>` with the location you want to install VRUI's build system to.
+
+```sh
+
 ???+ tip
     You can **speed up the build process** if your host has multiple CPUs or CPU cores. Instead of the above, enter into the same terminal:
 
     ```
-    make VRUI_MAKEDIR=<Vrui build system location> -j<number of cpus>
+    make -j<number of cpus>
     ```
 
     again replacing `<Vrui build system location>` with the location of Vrui's build system on your host, and replacing `<number of cpus>` with the number of CPUs or CPU cores on your host, say `-j8` if you have eight cores. Note that there is no space between the `-j` and the number of cores.
@@ -135,11 +136,13 @@ Building VRUI might take a few minutes, and will print lots of output to the ter
 make
 ```
 
-If everything went well the first time, it will print:
+If everything went well the first time, it will print only this line:
 
 ```sh
 make: Nothing to be done for 'all'.
 ```
+
+If you run into an error like `/bin/sh: 1: locate: not found`, it means that one of the prerequisite packages was not installed correctly. You will need to correctly install the missing package and then run `make` again.
 
 This build process will prepare VRUI to be installed inside the `/usr/local` directory tree, which is the traditional place for software installed from source. Scroll back through the output from `make` and locate the following section towards the beginning:
 
@@ -193,7 +196,13 @@ cd ExamplePrograms
 
 ### Step 2: Build the example applications
 
-Run `make` to build the example programs. During building VRUI itself, the build procedure automatically configured the `makefile` in the `ExamplePrograms` directory to find the VRUI installation. But to practice for building other VRUI applications later, you should still pass the location of VRUI's build system, mentioned above, to `make`. Enter into the same terminal window:
+Run `make` to build the example programs. During building VRUI itself, the build procedure automatically configured the `makefile` in the `ExamplePrograms` directory to find the VRUI installation. But to practice for building other VRUI applications later, you should still pass the location of VRUI's build system, mentioned above, to `make`. Enter into the same terminal window to use the default install location:
+
+```sh
+make
+```
+
+OR for a custom install location, enter:
 
 ```sh
 make VRUI_MAKEDIR=<VRUI build system location>
@@ -204,7 +213,7 @@ where you replace `<VRUI build system location>` with the location of VRUI's bui
 !!! example
     Your command will look something like this:
 
-    ```sh
+    ```
     make VRUI_MAKEDIR=/usr/local/share/VRUI-13.1/make
     ```
 
