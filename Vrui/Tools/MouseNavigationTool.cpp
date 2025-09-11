@@ -1,7 +1,7 @@
 /***********************************************************************
 MouseNavigationTool - Class encapsulating the navigation behaviour of a
 mouse in the OpenInventor SoXtExaminerViewer.
-Copyright (c) 2004-2023 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -632,7 +632,7 @@ void MouseNavigationTool::frame(void)
 			NavTrackerState t=preScale;
 			t*=rotation;
 			t*=postScale;
-			setNavigationTransformation(t);
+			setNavigationTransformation(t,screenCenter);
 			break;
 			}
 		
@@ -644,7 +644,7 @@ void MouseNavigationTool::frame(void)
 			NavTrackerState t=preScale;
 			t*=rotation;
 			t*=postScale;
-			setNavigationTransformation(t);
+			setNavigationTransformation(t,screenCenter);
 			
 			/* Request another frame: */
 			scheduleUpdate(getNextAnimationTime());
@@ -657,7 +657,7 @@ void MouseNavigationTool::frame(void)
 			/* Update the navigation transformation: */
 			NavTrackerState t=NavTrackerState::translate(currentPos-motionStart);
 			t*=preScale;
-			setNavigationTransformation(t);
+			setNavigationTransformation(t,screenCenter);
 			break;
 			}
 		
@@ -667,7 +667,7 @@ void MouseNavigationTool::frame(void)
 			Scalar dollyDist=((currentPos-motionStart)*configuration.dollyingDirection)/configuration.dollyFactor;
 			NavTrackerState t=NavTrackerState::translate(dollyDirection*dollyDist);
 			t*=preScale;
-			setNavigationTransformation(t);
+			setNavigationTransformation(t,screenCenter);
 			break;
 			}
 		
@@ -678,7 +678,7 @@ void MouseNavigationTool::frame(void)
 			NavTrackerState t=preScale;
 			t*=NavTrackerState::scale(Math::exp(scale));
 			t*=postScale;
-			setNavigationTransformation(t);
+			setNavigationTransformation(t,screenCenter);
 			break;
 			}
 		
@@ -689,7 +689,7 @@ void MouseNavigationTool::frame(void)
 			currentWheelScale+=configuration.wheelDollyFactor*scale;
 			NavTrackerState t=NavTrackerState::translate(dollyDirection*currentWheelScale);
 			t*=preScale;
-			setNavigationTransformation(t);
+			setNavigationTransformation(t,screenCenter);
 			break;
 			}
 		
@@ -701,7 +701,7 @@ void MouseNavigationTool::frame(void)
 			NavTrackerState t=preScale;
 			t*=NavTrackerState::scale(currentWheelScale);
 			t*=postScale;
-			setNavigationTransformation(t);
+			setNavigationTransformation(t,screenCenter);
 			break;
 			}
 		

@@ -1,7 +1,7 @@
 /***********************************************************************
 ComeHitherNavigationTool - Class to navigate by smoothly moving the
 position of a 3D input device to the display center point.
-Copyright (c) 2008-2021 Oliver Kreylos
+Copyright (c) 2008-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -141,7 +141,7 @@ void ComeHitherNavigationTool::buttonCallback(int,InputDevice::ButtonCallbackDat
 		if(isActive()) // Tool is already active
 			{
 			/* Snap to the target transformation immediately: */
-			setNavigationTransformation(targetNav);
+			setNavigationTransformation(targetNav,getDisplayCenter());
 			
 			/* Deactivate this tool: */
 			deactivate();
@@ -181,7 +181,7 @@ void ComeHitherNavigationTool::buttonCallback(int,InputDevice::ButtonCallbackDat
 				if(linearMag<=factory->linearSnapThreshold&&angularMag<=factory->angularSnapThreshold)
 					{
 					/* Snap to the target transformation immediately: */
-					setNavigationTransformation(targetNav);
+					setNavigationTransformation(targetNav,getDisplayCenter());
 					
 					/* Deactivate this tool: */
 					deactivate();
@@ -214,7 +214,7 @@ void ComeHitherNavigationTool::frame(void)
 		if(time>=endTime)
 			{
 			/* Set the final navigation transformation: */
-			setNavigationTransformation(targetNav);
+			setNavigationTransformation(targetNav,getDisplayCenter());
 			
 			/* Deactivate this tool: */
 			deactivate();

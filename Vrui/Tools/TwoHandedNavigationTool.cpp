@@ -1,7 +1,7 @@
 /***********************************************************************
 TwoHandedNavigationTool - Class encapsulating the behaviour of the old
 famous Vrui two-handed navigation tool.
-Copyright (c) 2004-2017 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -229,7 +229,7 @@ void TwoHandedNavigationTool::frame(void)
 			navigation*=movingTransform;
 			
 			/* Update Vrui's navigation transformation: */
-			setNavigationTransformation(navigation);
+			setNavigationTransformation(navigation,getButtonDevicePosition(movingButtonSlotIndex));
 			break;
 			}
 		
@@ -257,13 +257,14 @@ void TwoHandedNavigationTool::frame(void)
 			physNormal.orthogonalize(physAxis);
 			
 			/* Construct the navigation transformation to align the normalized navigation frame with the physical axis and normal: */
-			NavTrackerState navigation=NavTrackerState::translateFromOriginTo(Geometry::mid(physPoss[0],physPoss[1]));
+			Point center=Geometry::mid(physPoss[0],physPoss[1]);
+			NavTrackerState navigation=NavTrackerState::translateFromOriginTo(center);
 			navigation*=NavTrackerState::rotate(Rotation::fromBaseVectors(physAxis,physNormal));
 			navigation*=NavTrackerState::scale(Math::sqrt(physLen2));
 			navigation*=postScaleTransform;
 			
 			/* Update Vrui's navigation transformation: */
-			setNavigationTransformation(navigation);
+			setNavigationTransformation(navigation,center);
 			break;
 			}
 		}

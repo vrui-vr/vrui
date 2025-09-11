@@ -2,7 +2,7 @@
 MouseDialogNavigationTool - Class providing a newbie-friendly interface
 to the standard MouseNavigationTool using a dialog box of navigation
 options.
-Copyright (c) 2007-2021 Oliver Kreylos
+Copyright (c) 2007-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -484,7 +484,7 @@ void MouseDialogNavigationTool::frame(void)
 			NavTrackerState t=preScale;
 			t*=rotation;
 			t*=postScale;
-			setNavigationTransformation(t);
+			setNavigationTransformation(t,screenCenter);
 			
 			/* Request another frame: */
 			scheduleUpdate(getNextAnimationTime());
@@ -512,7 +512,7 @@ void MouseDialogNavigationTool::frame(void)
 					NavTrackerState t=preScale;
 					t*=rotation;
 					t*=postScale;
-					setNavigationTransformation(t);
+					setNavigationTransformation(t,screenCenter);
 					break;
 					}
 				
@@ -521,7 +521,7 @@ void MouseDialogNavigationTool::frame(void)
 					/* Update the navigation transformation: */
 					NavTrackerState t=NavTrackerState::translate(currentPos-motionStart);
 					t*=preScale;
-					setNavigationTransformation(t);
+					setNavigationTransformation(t,screenCenter);
 					break;
 					}
 				
@@ -531,7 +531,7 @@ void MouseDialogNavigationTool::frame(void)
 					Scalar dollyDist=((currentPos-motionStart)*configuration.dollyingDirection)/configuration.dollyFactor;
 					NavTrackerState t=NavTrackerState::translate(dollyDirection*dollyDist);
 					t*=preScale;
-					setNavigationTransformation(t);
+					setNavigationTransformation(t,screenCenter);
 					break;
 					}
 				
@@ -542,7 +542,7 @@ void MouseDialogNavigationTool::frame(void)
 					NavTrackerState t=preScale;
 					t*=NavTrackerState::scale(Math::exp(scale));
 					t*=postScale;
-					setNavigationTransformation(t);
+					setNavigationTransformation(t,screenCenter);
 					break;
 					}
 				}

@@ -306,7 +306,7 @@ void SixDofWithScaleNavigationTool::frame(void)
 			navigation*=preScale;
 			
 			/* Update Vrui's navigation transformation: */
-			setNavigationTransformation(navigation);
+			setNavigationTransformation(navigation,getButtonDevicePosition(0));
 			break;
 			}
 		
@@ -320,15 +320,13 @@ void SixDofWithScaleNavigationTool::frame(void)
 			navigation*=postScale;
 			
 			/* Update Vrui's navigation transformation: */
-			setNavigationTransformation(navigation);
+			setNavigationTransformation(navigation,getButtonDevicePosition(1));
 			break;
 			}
 		}
 	
 	/* Update the virtual input device: */
-	InputDevice* device=getButtonDevice(1);
-	buttonDevice->setDeviceRay(device->getDeviceRayDirection(),device->getDeviceRayStart());
-	buttonDevice->setTransformation(device->getTransformation());
+	buttonDevice->copyTrackingState(getButtonDevice(1));
 	}
 
 void SixDofWithScaleNavigationTool::display(GLContextData& contextData) const

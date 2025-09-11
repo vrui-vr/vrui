@@ -339,6 +339,7 @@ Scalar getRayPickCosine(void); // Returns the cosine of the maximum angle to be 
 
 /* Navigation transformation management: */
 void setNavigationTransformation(const NavTransform& newNavigationTransformation); // Sets the navigation transformation
+void setNavigationTransformation(NavTransform& newNavigationTransformation,const Point& fixedPoint); // Sets the navigation transformation with an additional fixed point to be used by the kernel when constraining the navigation transformation; the passed navigation transformation is potentially adjusted
 void setNavigationTransformation(const Point& center,Scalar radius); // Sets the navigation transformation such that a model inside the given sphere appears in the middle of the environment
 void setNavigationTransformation(const Point& center,Scalar radius,const Vector& up); // Sets the navigation transformation such that a model inside the given sphere appears in the middle of the environment, and the given direction points "up"
 void concatenateNavigationTransformation(const NavTransform& t); // Concatenates the given transformation to the navigation transformation from the right
