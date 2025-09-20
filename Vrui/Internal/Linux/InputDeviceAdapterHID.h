@@ -57,6 +57,7 @@ class InputDeviceAdapterHID:public InputDeviceAdapter
 		
 		/* Vrui input device positioning state: */
 		HIDPositioner* positioner; // Object to assign a tracker state to the Vrui input device based on the HID's state
+		bool positionerReady; // Flag if the device has a positioner, and it is ready to position
 		
 		/* State to deal with HID key features: */
 		unsigned int numKeys; // Number of HID's key features that are represented as buttons on the Vrui input device
