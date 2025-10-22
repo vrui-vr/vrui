@@ -86,7 +86,7 @@ void InputDeviceAdapterHID::Device::synReportEventCallback(RawHID::EventDevice::
 InputDeviceAdapterHID::Device::Device(RawHID::EventDeviceMatcher& deviceMatcher,InputDeviceAdapterHID& sAdapter)
 	:RawHID::EventDevice(deviceMatcher),
 	 adapter(sAdapter),grabbed(false),device(0),
-	 positioner(0),
+	 positioner(0),positionerReady(false),
 	 numKeys(0),keyFeatureIndices(0),
 	 numAbsAxes(0),absAxisFeatureIndices(0),absAxisValueMappers(0),
 	 numRelAxes(0),relAxisFeatureMap(0),relAxisValues(0),relAxisValueMappers(0)
@@ -115,7 +115,10 @@ void InputDeviceAdapterHID::Device::prepareMainLoop(void)
 	{
 	/* Prepare a potential positioner: */
 	if(positioner!=0)
+		{
 		positioner->prepareMainLoop();
+		positionerReady=true;
+		}
 	}
 
 void InputDeviceAdapterHID::Device::update(void)
@@ -136,7 +139,7 @@ void InputDeviceAdapterHID::Device::update(void)
 		}
 	
 	/* Update the device's tracking state: */
-	if(positioner!=0)
+	if(positionerReady)
 		positioner->updateDevice(device);
 	}
 
@@ -350,9 +353,13 @@ void InputDeviceAdapterHID::initializeInputDevice(int deviceIndex,const Misc::Co
 	/* Create the Vrui input device representing this HID as a physical input device: */
 	inputDevices[deviceIndex]=newDevice->device=createInputDevice(name.c_str(),trackType,newDevice->numKeys,newDevice->numAbsAxes+newDevice->numRelAxes,configFileSection,newDevice->buttonNames,newDevice->valuatorNames);
 	
+	#if 0
+	
 	/* Initialize the Vrui input device's tracking state: */
 	if(newDevice->positioner!=0)
 		newDevice->positioner->updateDevice(newDevice->device);
+	
+	#endif
 	
 	/*****************************
 	Finalize the new input device:
