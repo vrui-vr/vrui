@@ -385,9 +385,6 @@ readBinaryImage(
 	unsigned int numChannels,
 	DestScalarParam* pixels)
 	{
-	/* Set the image's endianness: */
-	file.setEndianness(endianness);
-	
 	/* Read the image by rows in top-down order: */
 	ptrdiff_t rowStride=size[0]*numChannels;
 	DestScalarParam* rowPtr=pixels+(size[1]-1)*rowStride;
@@ -462,6 +459,9 @@ BaseImage ImageReaderPNM::readImage(void)
 		
 		case '5': // Binary grayscale image
 		case '6': // Binary RGB color image
+			/* Set the image's endianness: */
+			file->setEndianness(endianness);
+			
 			if(imageSpec.numFieldBytes==2)
 				readBinaryImage(*file,size,imageSpec.numChannels,static_cast<GLushort*>(result.replacePixels()));
 			else
@@ -471,8 +471,23 @@ BaseImage ImageReaderPNM::readImage(void)
 		
 		case 'f': // Floating-point grayscale image
 		case 'F': // Floating-point RGB image
-			readBinaryImage(*file,sizez,imageSpec.numChannels,static_cast<GLfloat*>(result.replacePixels()));
+			{
+			/* Set the image's endianness: */
+			file->setEndianness(endianness);
+			
+			GLfloat* pixels=static_cast<GLfloat*>(result.replacePixels());
+			readBinaryImage(*file,size,imageSpec.numChannels,pixels);
+			
+			/* Scale each pixel by the pixel scale factor: */
+			if(scale!=1.0f)
+				{
+				GLfloat* cEnd=pixels+size_t(size[1])*size_t(size[0])*size_t(imageSpec.numChannels);
+				for(GLfloat* cPtr=pixels;cPtr!=cEnd;++cPtr)
+					*cPtr*=scale;
+				}
+			
 			break;
+			}
 		}
 	
 	/* There can be only one image in a PNM file: */
