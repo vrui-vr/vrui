@@ -1,7 +1,7 @@
 /***********************************************************************
 ImageFileFormats - Types and functions to represent image file formats
 handled by the Image Handling Library.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2025 Oliver Kreylos
 
 This file is part of the Image Handling Library (Images).
 
@@ -49,7 +49,8 @@ ImageFileFormat getImageFileFormat(const char* imageFileName)
 	   &&(tolower(ext[2])=='b'
 	      ||tolower(ext[2])=='g'
 	      ||tolower(ext[2])=='n'
-	      ||tolower(ext[2])=='p')
+	      ||tolower(ext[2])=='p'
+	      ||tolower(ext[2])=='f')
 	   &&tolower(ext[3])=='m') // It's a Portable AnyMap image
 		iff=IFF_PNM;
 	else if(extLen==4&&strncasecmp(ext,".gif",extLen)==0) // It's a GIF image

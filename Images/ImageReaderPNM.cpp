@@ -1,7 +1,7 @@
 /***********************************************************************
 ImageReaderPNM - Class to read images from files in Portable aNyMap
 format.
-Copyright (c) 2013-2024 Oliver Kreylos
+Copyright (c) 2013-2025 Oliver Kreylos
 
 This file is part of the Image Handling Library (Images).
 
@@ -24,7 +24,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Misc/SizedTypes.h>
 #include <Misc/SelfDestructArray.h>
-#include <Misc/Endianness.h>
 #include <Misc/StdError.h>
 #include <IO/ValueSource.h>
 #include <Images/BaseImage.h>
@@ -161,6 +160,7 @@ Methods of class ImageReaderPNM:
 
 ImageReaderPNM::ImageReaderPNM(IO::File& sFile)
 	:ImageReader(sFile),
+	 endianness(Misc::BigEndian),
 	 done(false)
 	{
 	/* Attach a value source to the file to read the ASCII file header: */
@@ -170,11 +170,11 @@ ImageReaderPNM::ImageReaderPNM(IO::File& sFile)
 	/* Read the magic field including the image type indicator: */
 	int magic=header.getChar();
 	imageType=header.getChar();
-	if(magic!='P'||imageType<'1'||imageType>'6')
+	if(magic!='P'||((imageType<'1'||imageType>'6')&&imageType!='f'&&imageType!='F'))
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid PNM header");
 	header.skipWs();
 	
-	/* Read the image width, height, and maximal pixel component value: */
+	/* Read the image width, height, and maximal pixel component value or scale factor: */
 	skipComments(header);
 	imageSpec.rect.size[0]=header.readUnsignedInteger();
 	if(imageType=='1'||imageType=='4') // PBM files don't have the maxValue field
@@ -191,7 +191,24 @@ ImageReaderPNM::ImageReaderPNM(IO::File& sFile)
 		
 		skipComments(header);
 		header.setWhitespace(""); // Disable all whitespace to read the last header field
-		maxValue=header.readUnsignedInteger();
+		
+		if(imageType=='F'||imageType=='f')
+			{
+			/* Read the pixel value scale factor for floating-point images: */
+			scale=header.readNumber();
+			
+			/* A negative scale factor indicates little-endian byte layout: */
+			if(scale<0.0f)
+				{
+				scale=-scale;
+				endianness=Misc::LittleEndian;
+				}
+			}
+		else
+			{
+			/* Read the maximum pixel value field for integer images: */
+			maxValue=header.readUnsignedInteger();
+			}
 		}
 	
 	/* Read the single (whitespace) character separating the header from the image data: */
@@ -216,11 +233,19 @@ ImageReaderPNM::ImageReaderPNM(IO::File& sFile)
 		
 		case '3': // ASCII RGB image
 		case '6': // Binary RGB image
-			{
 			setFormatSpec(RGB,false);
 			setValueSpec(UnsignedInt,maxValue<256U?8U:16U);
 			break;
-			}
+		
+		case 'f': // Floating-point grayscale image
+			setFormatSpec(Grayscale,false);
+			setValueSpec(Float,32U);
+			break;
+		
+		case 'F': // Floating-point RGB image
+			setFormatSpec(RGB,false);
+			setValueSpec(Float,32U);
+			break;
 		}
 	}
 
@@ -360,8 +385,8 @@ readBinaryImage(
 	unsigned int numChannels,
 	DestScalarParam* pixels)
 	{
-	/* Binary PNM files are big endian: */
-	file.setEndianness(Misc::BigEndian);
+	/* Set the image's endianness: */
+	file.setEndianness(endianness);
 	
 	/* Read the image by rows in top-down order: */
 	ptrdiff_t rowStride=size[0]*numChannels;
@@ -401,7 +426,7 @@ BaseImage ImageReaderPNM::readImage(void)
 			break;
 			}
 		
-		case '2': // ASCII greyscale image
+		case '2': // ASCII grayscale image
 		case '3': // ASCII RGB color image
 			if(imageSpec.numFieldBytes==2)
 				readAsciiImage(*file,size,imageSpec.numChannels,static_cast<GLushort*>(result.replacePixels()));
@@ -435,13 +460,18 @@ BaseImage ImageReaderPNM::readImage(void)
 			break;
 			}
 		
-		case '5': // Binary greyscale image
+		case '5': // Binary grayscale image
 		case '6': // Binary RGB color image
 			if(imageSpec.numFieldBytes==2)
 				readBinaryImage(*file,size,imageSpec.numChannels,static_cast<GLushort*>(result.replacePixels()));
 			else
 				readBinaryImage(*file,size,imageSpec.numChannels,static_cast<GLubyte*>(result.replacePixels()));
 			
+			break;
+		
+		case 'f': // Floating-point grayscale image
+		case 'F': // Floating-point RGB image
+			readBinaryImage(*file,sizez,imageSpec.numChannels,static_cast<GLfloat*>(result.replacePixels()));
 			break;
 		}
 	

@@ -1,7 +1,7 @@
 /***********************************************************************
 ReadImageFile - Functions to read generic images from image files in a
 variety of formats.
-Copyright (c) 2005-2024 Oliver Kreylos
+Copyright (c) 2005-2025 Oliver Kreylos
 
 This file is part of the Image Handling Library (Images).
 
@@ -65,6 +65,7 @@ std::vector<std::string> getSupportedImageFileExtensions(void)
 	result.push_back(".pgm");
 	result.push_back(".pnm");
 	result.push_back(".ppm");
+	result.push_back(".pfm");
 	
 	result.push_back(".bip");
 	result.push_back(".bil");
