@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterHID - Linux-specific version of HID input device
 adapter.
-Copyright (c) 2009-2016 Oliver Kreylos
+Copyright (c) 2009-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -27,14 +27,15 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <string>
 #include <vector>
 #include <Threads/Mutex.h>
-#include <Threads/Thread.h>
+#include <Threads/EventDispatcher.h>
+#include <RawHID/EventDevice.h>
 #include <Math/BrokenLine.h>
-#include <Geometry/Point.h>
 #include <Vrui/Internal/InputDeviceAdapter.h>
 
 /* Forward declarations: */
 namespace Vrui {
 class InputDevice;
+class HIDPositioner;
 }
 
 namespace Vrui {
@@ -43,60 +44,69 @@ class InputDeviceAdapterHID:public InputDeviceAdapter
 	{
 	/* Embedded classes: */
 	private:
-	struct Device // Structure describing a human interface device
+	class Device:public RawHID::EventDevice // Class describing a human interface device
 		{
 		/* Embedded classes: */
 		public:
 		typedef Math::BrokenLine<double> AxisValueMapper; // Type for axis value mappers
 		
 		/* Elements: */
-		int deviceFd; // HID's device file handle
-		int firstButtonIndex; // Index of HID's first button in device state array
-		int numButtons; // Number of HID's buttons
-		std::vector<int> keyMap; // Vector mapping key features to device button indices
-		std::vector<int> buttonExclusionSets; // Indices of mutual exclusions sets to which each button belongs; -1 if not member of a set
-		std::vector<int> exclusionSetPresseds; // Array of indices of which buttons activated each exclusion set; -1 if the exclusion set is inactive
-		bool axisPosition; // Flag if the input device's position is defined by a subset of its absolute axes
-		Point positionOrigin; // Origin of device position mapping
-		std::vector<int> positionAxisMap; // Vector mapping absolute axis features to device position vectors
-		std::vector<Vector> positionAxes; // Array of vectors spanning the absolute axis-based device position space
-		std::vector<Scalar> positionValues; // Current values of position absolute axes
-		int firstValuatorIndex; // Index of HID's first axis in device state array
-		int numValuators; // Number of HID's axes translated to device valuators
-		std::vector<int> absAxisMap; // Vector mapping absolute axis features to device valuator indices
-		std::vector<int> relAxisMap; // Vector mapping relative axis features to device valuator indices
-		std::vector<AxisValueMapper> axisValueMappers; // Vector of axis value mappers converting from raw HID axis values to [-1, 1]
-		InputDevice* trackingDevice; // Pointer to Vrui input device from which this device gets its tracking data
-		bool projectDevice; // Flag whether to project the Vrui input device through the UI manager
-		InputDevice* device; // Pointer to Vrui input device associated with the HID
-		std::vector<std::string> buttonNames; // Array of button feature names
-		std::vector<std::string> valuatorNames; // Array of valuator feature names
+		InputDeviceAdapterHID& adapter; // Pointer to the adapter owning this device for simpler event handling
+		bool grabbed; // Flag if the HID was grabbed
+		InputDevice* device; // Pointer to Vrui input device representing this HID
+		
+		/* Vrui input device positioning state: */
+		HIDPositioner* positioner; // Object to assign a tracker state to the Vrui input device based on the HID's state
+		bool positionerReady; // Flag if the device has a positioner, and it is ready to position
+		
+		/* State to deal with HID key features: */
+		unsigned int numKeys; // Number of HID's key features that are represented as buttons on the Vrui input device
+		unsigned int* keyFeatureIndices; // Array of HID key feature indices assigned to buttons on the Vrui input device
+		std::vector<std::string> buttonNames; // Array of Vrui input device button names
+		
+		/* State to deal with HID absolute and relative axis features: */
+		unsigned int numAbsAxes; // Number of HID's absolute axis features that are represented as valuators on the Vrui input device
+		unsigned int* absAxisFeatureIndices; // Array of HID absolute axis feature indices assigned to valuators on the Vrui input device
+		AxisValueMapper* absAxisValueMappers; // Array of value mappers for the HID's absolute axes
+		unsigned int numRelAxes; // Number of HID's relative axis features that are represented as valuators on the Vrui input device
+		unsigned int* relAxisFeatureMap; // Array mapping HID relative axis feature indices to valuators on the Vrui input device
+		int* relAxisValues; // Array of current relative axis values
+		AxisValueMapper* relAxisValueMappers; // Array of value mappers for the HID's relative axes
+		std::vector<std::string> valuatorNames; // Array of Vrui input device valuator names
+		
+		/* Private methods: */
+		void keyFeatureEventCallback(RawHID::EventDevice::KeyFeatureEventCallbackData* cbData); // Callback for HID key feature events
+		void absAxisFeatureEventCallback(RawHID::EventDevice::AbsAxisFeatureEventCallbackData* cbData); // Callback for HID absolute axis feature events
+		void relAxisFeatureEventCallback(RawHID::EventDevice::RelAxisFeatureEventCallbackData* cbData); // Callback for HID relative axis feature events
+		void synReportEventCallback(RawHID::EventDevice::CallbackData* cbData); // Callback for synchronization report events
+		
+		/* Constructors and destructors: */
+		Device(RawHID::EventDeviceMatcher& deviceMatcher,InputDeviceAdapterHID& sAdapter); // Creates a device matching the given device matcher for the given input device adapter
+		~Device(void);
+		
+		/* Methods: */
+		void prepareMainLoop(void); // Called right before Vrui starts its main loop
+		void update(void); // Updates the Vrui input device associated with the HID
 		};
 	
 	/* Elements: */
 	private:
-	std::vector<Device> devices; // List of human interface devices
+	std::vector<Device*> devices; // List of human interface devices
 	Threads::Mutex deviceStateMutex; // Mutex protecting the device state array
-	bool* buttonStates; // Button state array
-	double* valuatorStates; // Valuator state array
-	Threads::Thread devicePollingThread; // Thread polling the event files of all HIDs
 	
-	/* Protected methods from InputDeviceAdapter: */
+	/* Protected methods from class InputDeviceAdapter: */
 	protected:
-	virtual void createInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection);
-	
-	/* New private methods: */
-	private:
-	void* devicePollingThreadMethod(void); // Method polling the event files of all HIDs
+	virtual void initializeInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection);
 	
 	/* Constructors and destructors: */
 	public:
 	InputDeviceAdapterHID(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection); // Creates adapter connected to a set of human interface devices
 	virtual ~InputDeviceAdapterHID(void);
 	
-	/* Methods from InputDeviceAdapter: */
+	/* Methods from class InputDeviceAdapter: */
 	virtual std::string getFeatureName(const InputDeviceFeature& feature) const;
 	virtual int getFeatureIndex(InputDevice* device,const char* featureName) const;
+	virtual void prepareMainLoop(void);
 	virtual void updateInputDevices(void);
 	};
 

@@ -1,7 +1,7 @@
 /***********************************************************************
 ValuatorFlyNavigationTool - Class providing a fly navigation tool using
 a single valuator.
-Copyright (c) 2004-2021 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -178,7 +178,7 @@ void ValuatorFlyNavigationTool::frame(void)
 		t*=getNavigationTransformation();
 		
 		/* Update Vrui's navigation transformation: */
-		setNavigationTransformation(t);
+		setNavigationTransformation(t,getValuatorDevicePosition(0));
 		
 		/* Request another frame: */
 		scheduleUpdate(getNextAnimationTime());

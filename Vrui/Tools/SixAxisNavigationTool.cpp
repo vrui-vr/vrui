@@ -1,7 +1,7 @@
 /***********************************************************************
 SixAxisNavigationTool - Class to convert an input device with six
 valuators into a navigation tool.
-Copyright (c) 2010-2021 Oliver Kreylos
+Copyright (c) 2010-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -285,18 +285,19 @@ void SixAxisNavigationTool::frame(void)
 			}
 		
 		/* Calculate an incremental transformation based on the translation and rotation: */
-		NavTrackerState deltaT=NavTrackerState::translateFromOriginTo(config.followDisplayCenter?getDisplayCenter():config.navigationCenter);
+		const Point& center=config.followDisplayCenter?getDisplayCenter():config.navigationCenter;
+		NavTrackerState deltaT=NavTrackerState::translateFromOriginTo(center);
 		deltaT*=NavTrackerState::translate(translation);
 		deltaT*=NavTrackerState::rotate(NavTrackerState::Rotation::rotateScaledAxis(rotation));
 		deltaT*=NavTrackerState::scale(Math::exp(-zoom));
-		deltaT*=NavTrackerState::translateToOriginFrom(config.followDisplayCenter?getDisplayCenter():config.navigationCenter);
+		deltaT*=NavTrackerState::translateToOriginFrom(center);
 		
 		/* Update the accumulated transformation: */
 		navTransform.leftMultiply(deltaT);
 		navTransform.renormalize();
 		
 		/* Update the navigation transformation: */
-		setNavigationTransformation(navTransform);
+		setNavigationTransformation(navTransform,center);
 		
 		/* Request another frame: */
 		scheduleUpdate(getNextAnimationTime());

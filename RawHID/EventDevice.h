@@ -29,22 +29,17 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Misc/CallbackList.h>
 #include <Threads/EventDispatcher.h>
 
+/* Forward declarations: */
+namespace RawHID {
+class EventDeviceMatcher;
+}
+
 namespace RawHID {
 
 class EventDevice
 	{
 	/* Embedded classes: */
 	public:
-	class DeviceMatcher // Helper class to match devices against bus type, vendor and product IDs, and device name
-		{
-		/* Constructors and destructors: */
-		public:
-		virtual ~DeviceMatcher(void); // Destroys the device matcher
-		
-		/* Methods: */
-		virtual bool match(unsigned short busType,unsigned short vendorId,unsigned short productId,unsigned short version,const char* deviceName) =0; // Returns true if a device's properties match the request
-		};
-	
 	class Feature // Base class representing a generic event device feature
 		{
 		/* Elements: */
@@ -218,9 +213,11 @@ class EventDevice
 	Misc::CallbackList absAxisFeatureEventCallbacks;
 	Misc::CallbackList relAxisFeatureEventCallbacks;
 	Misc::CallbackList synReportEventCallbacks;
+	Threads::EventDispatcher* eventDispatcher; // Pointer to event dispatcher with which this event device is registered, or null
+	Threads::EventDispatcher::ListenerKey listenerKey; // Listener key with which this event device is registered
 	
 	/* Private methods: */
-	static int findDevice(EventDevice::DeviceMatcher& deviceMatcher); // Returns a file descriptor for the event device file matching the given device matcher
+	static int findDevice(EventDeviceMatcher& deviceMatcher); // Returns a file descriptor for the event device file matching the given device matcher
 	void initFeatureMaps(void); // Initializes the device's feature maps
 	static void ioEventCallback(Threads::EventDispatcher::IOEvent& event); // Callback when there is data pending on the device's file
 	
@@ -228,10 +225,7 @@ class EventDevice
 	public:
 	static std::vector<std::string> getEventDeviceFileNames(void); // Returns a list containing the device file names of all event devices 
 	EventDevice(const char* deviceFileName); // Opens the event device associated with the given event device file name
-	EventDevice(DeviceMatcher& deviceMatcher); // Opens the first device that matches the given device matcher
-	EventDevice(const char* deviceName,unsigned int index); // Opens the index-th device matching the given device name
-	EventDevice(unsigned short vendorId,unsigned short productId,unsigned int index ); // Opens the index-th device matching the given vendor and product ID pair
-	EventDevice(unsigned short vendorId,unsigned short productId,const char* deviceName,unsigned int index); // Opens the index-th device matching the given vendor and product ID pair and device name
+	EventDevice(EventDeviceMatcher& deviceMatcher); // Opens the first device that matches the given device matcher
 	private:
 	EventDevice(const EventDevice& source); // Prohibit copy constructor
 	EventDevice& operator=(const EventDevice& source); // Prohibit assignment operator
@@ -284,7 +278,7 @@ class EventDevice
 		{
 		return relAxisFeatureCodes[relAxisFeatureIndex];
 		}
-	bool haveSynReport(void) const
+	bool hasSynReport(void) const
 		{
 		return synReport;
 		}
@@ -304,8 +298,16 @@ class EventDevice
 		{
 		return synReportEventCallbacks;
 		}
+	int addFFEffect(unsigned int direction,float strength); // Uploads a new constant force feedback effect to the device; returns the effect's per-device ID
+	void updateFFEffect(int effectId,unsigned int direction,float strength); // Updates the constant force feedback effect with the given ID
+	void removeFFEffect(int effectId); // Removes the force feedback effect of the given ID from the device
+	void playFFEffect(int effectId,int numRepetitions); // Plays the force feedback effect of the given ID the given number of times
+	void stopFFEffect(int effectId); // Stops playing the force feedback effect of the given ID
+	void setFFGain(float gain); // Sets the overall gain of force feedback events on the device to the range [0, 1]
+	void setFFAutocenter(float strength); // Sets the strength of the device's autocenter feature to the range [0, 1]
 	void processEvents(void); // Processes a number of pending device events; blocks until at least one event has been processed
-	Threads::EventDispatcher::ListenerKey registerEventHandler(Threads::EventDispatcher& eventDispatcher); // Registers the event device with the given event dispatcher; returns listener key
+	void registerEventHandler(Threads::EventDispatcher& newEventDispatcher); // Registers the event device with the given event dispatcher
+	void unregisterEventHandler(void); // Unregisters the event device from an event dispatcher with which it is currently registered
 	};
 
 }

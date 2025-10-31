@@ -364,6 +364,8 @@ struct VruiState
 	double animationFrameInterval; // Suggested frame interval to be used for animations
 	Threads::Mutex frameCallbacksMutex; // Mutex protecting the list of extra frame callbacks
 	std::vector<FrameCallbackSlot> frameCallbacks; // List of extra frame callbacks
+	Misc::CallbackList preRenderingCallbacks; // List of callbacks called for each window group before anything is rendered
+	Misc::CallbackList postRenderingCallbacks; // List of callbacks called after all window groups have finished rendering
 	Misc::CommandDispatcher commandDispatcher; // Dispatcher for pipe and console commands
 	
 	/* Transient dragging/moving/scaling state: */

@@ -39,65 +39,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <linux/input.h>
 #include <Misc/StdError.h>
 #include <RawHID/Config.h>
+#include <RawHID/EventDeviceMatcher.h>
 
 namespace RawHID {
 
-/*******************************************
-Methods of class EventDevice::DeviceMatcher:
-*******************************************/
-
-EventDevice::DeviceMatcher::~DeviceMatcher(void)
-	{
-	}
-
 namespace {
-
-/**************
-Helper classes:
-**************/
-
-class SelectDeviceMatcher:public EventDevice::DeviceMatcher
-	{
-	/* Embedded classes: */
-	public:
-	enum MatchMask
-		{
-		BusType=0x1,
-		VendorID=0x2,
-		ProductID=0x4,
-		Version=0x8,
-		Name=0x10
-		};
-	
-	/* Elements: */
-	private:
-	unsigned int matchMask;
-	unsigned short matchBusType,matchVendorId,matchProductId,matchVersion;
-	std::string matchDeviceName;
-	unsigned int index;
-	
-	/* Constructors and destructors: */
-	public:
-	SelectDeviceMatcher(unsigned int sMatchMask,unsigned short sMatchBusType,unsigned short sMatchVendorId,unsigned short sMatchProductId,unsigned short sMatchVersion,const char* sMatchDeviceName,unsigned int sIndex)
-		:matchMask(sMatchMask),
-		 matchBusType(sMatchBusType),matchVendorId(sMatchVendorId),matchProductId(sMatchProductId),matchVersion(sMatchVersion),
-		 matchDeviceName(sMatchDeviceName!=0?sMatchDeviceName:""),
-		 index(sIndex)
-		{
-		}
-	
-	/* Methods from class EventDevice::DeviceMatcher: */
-	virtual bool match(unsigned short busType,unsigned short vendorId,unsigned short productId,unsigned short version,const char* deviceName)
-		{
-		/* Is this too much? Should I not have done this? */
-		return ((matchMask&BusType)==0x0U||matchBusType==busType)&&
-		       ((matchMask&VendorID)==0x0U||matchVendorId==vendorId)&&
-		       ((matchMask&ProductID)==0x0U||matchProductId==productId)&&
-		       ((matchMask&Version)==0x0U||matchVersion==version)&&
-		       ((matchMask&Name)==0x0U||matchDeviceName==deviceName)&&
-		       index--==0U;
-		}
-	};
 
 /****************
 Helper functions:
@@ -168,7 +114,7 @@ void EventDevice::AbsAxisFeature::update(void)
 Methods of class EventDevice:
 ****************************/
 
-int EventDevice::findDevice(EventDevice::DeviceMatcher& deviceMatcher)
+int EventDevice::findDevice(EventDeviceMatcher& deviceMatcher)
 	{
 	/* Create list of all available /dev/input/eventX event device files, in numerical order: */
 	struct dirent** eventFiles=0;
@@ -181,7 +127,7 @@ int EventDevice::findDevice(EventDevice::DeviceMatcher& deviceMatcher)
 		/* Try opening the event device file: */
 		char eventFileName[288];
 		snprintf(eventFileName,sizeof(eventFileName),"%s/%s",RAWHID_EVENTDEVICEFILEDIR,eventFiles[eventFileIndex]->d_name);
-		int eventFileFd=open(eventFileName,O_RDONLY);
+		int eventFileFd=open(eventFileName,O_RDWR);
 		if(eventFileFd>=0)
 			{
 			/* Get the device information: */
@@ -192,12 +138,17 @@ int EventDevice::findDevice(EventDevice::DeviceMatcher& deviceMatcher)
 				char eventFileDeviceName[256];
 				if(ioctl(eventFileFd,EVIOCGNAME(sizeof(eventFileDeviceName)),eventFileDeviceName)>=0)
 					{
-					/* Call the device matcher: */
-					if(deviceMatcher.match(eventFileDeviceInfo.bustype,eventFileDeviceInfo.vendor,eventFileDeviceInfo.product,eventFileDeviceInfo.version,eventFileDeviceName))
+					/* Get the serial number: */
+					char eventFileSerialNumber[256];
+					if(ioctl(eventFileFd,EVIOCGUNIQ(sizeof(eventFileSerialNumber)),eventFileSerialNumber)>=0)
 						{
-						/* Use this device: */
-						matchedFd=eventFileFd;
-						break;
+						/* Call the device matcher: */
+						if(deviceMatcher.match(eventFileDeviceInfo.bustype,eventFileDeviceInfo.vendor,eventFileDeviceInfo.product,eventFileDeviceInfo.version,eventFileDeviceName,eventFileSerialNumber))
+							{
+							/* Use this device: */
+							matchedFd=eventFileFd;
+							break;
+							}
 						}
 					}
 				}
@@ -375,69 +326,26 @@ EventDevice::EventDevice(const char* deviceFileName)
 	:fd(-1),
 	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
 	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
-	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false)
+	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false),
+	 eventDispatcher(0),listenerKey(0)
 	{
 	/* Try opening the device file of the given name: */
-	fd=open(deviceFileName,O_RDONLY);
+	fd=open(deviceFileName,O_RDWR);
 	if(fd<0)
 		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot open event device file %s",deviceFileName);
 	
 	initFeatureMaps();
 	}
 
-EventDevice::EventDevice(EventDevice::DeviceMatcher& deviceMatcher)
+EventDevice::EventDevice(EventDeviceMatcher& deviceMatcher)
 	:fd(findDevice(deviceMatcher)),
 	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
 	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
-	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false)
+	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false),
+	 eventDispatcher(0),listenerKey(0)
 	{
 	if(fd<0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No matching event device found");
-	
-	initFeatureMaps();
-	}
-
-EventDevice::EventDevice(const char* deviceName,unsigned int index)
-	:fd(-1),
-	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
-	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
-	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0)
-	{
-	/* Find the matching device: */
-	SelectDeviceMatcher deviceMatcher(SelectDeviceMatcher::Name,0,0,0,0,deviceName,index);
-	fd=findDevice(deviceMatcher);
-	if(fd<0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unable to open requested event device %s",deviceName);
-	
-	initFeatureMaps();
-	}
-
-EventDevice::EventDevice(unsigned short vendorId,unsigned short productId,unsigned int index)
-	:fd(-1),
-	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
-	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
-	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0)
-	{
-	/* Find the matching device: */
-	SelectDeviceMatcher deviceMatcher(SelectDeviceMatcher::VendorID|SelectDeviceMatcher::ProductID,0,vendorId,productId,0,0,index);
-	fd=findDevice(deviceMatcher);
-	if(fd<0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unable to open requested event device %04x:%04x",(unsigned int)vendorId,(unsigned int)productId);
-	
-	initFeatureMaps();
-	}
-
-EventDevice::EventDevice(unsigned short vendorId,unsigned short productId,const char* deviceName,unsigned int index)
-	:fd(-1),
-	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
-	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
-	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0)
-	{
-	/* Find the matching device: */
-	SelectDeviceMatcher deviceMatcher(SelectDeviceMatcher::VendorID|SelectDeviceMatcher::ProductID|SelectDeviceMatcher::Name,0,vendorId,productId,0,deviceName,index);
-	fd=findDevice(deviceMatcher);
-	if(fd<0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unable to open requested event device %04x:%04x, %s",(unsigned int)vendorId,(unsigned int)productId,deviceName);
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No event device matching %s found",deviceMatcher.getMatchSpec().c_str());
 	
 	initFeatureMaps();
 	}
@@ -451,8 +359,13 @@ EventDevice::EventDevice(EventDevice&& source)
 	 keyFeatureEventCallbacks(std::move(source.keyFeatureEventCallbacks)),
 	 absAxisFeatureEventCallbacks(std::move(source.absAxisFeatureEventCallbacks)),
 	 relAxisFeatureEventCallbacks(std::move(source.relAxisFeatureEventCallbacks)),
-	 synReportEventCallbacks(std::move(source.synReportEventCallbacks))
+	 synReportEventCallbacks(std::move(source.synReportEventCallbacks)),
+	 eventDispatcher(0),listenerKey(0)
 	{
+	/* Throw an exception if the source is currently registered with an event dispatcher: */
+	if(source.eventDispatcher!=0)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unable to move-copy an event device currently registered with an event dispatcher");
+	
 	/* Invalidate the source: */
 	source.fd=-1;
 	source.numKeyFeatures=0;
@@ -470,6 +383,10 @@ EventDevice::EventDevice(EventDevice&& source)
 
 EventDevice::~EventDevice(void)
 	{
+	/* Unregister the event device from any event dispatchers: */
+	if(eventDispatcher!=0)
+		eventDispatcher->removeIOEventListener(listenerKey);
+	
 	/* Release allocated resources: */
 	delete[] keyFeatureMap;
 	delete[] keyFeatureCodes;
@@ -557,6 +474,149 @@ bool EventDevice::releaseDevice(void)
 	return ioctl(fd,EVIOCGRAB,(void*)(0))==0;
 	}
 
+int EventDevice::addFFEffect(unsigned int direction,float strength)
+	{
+	/* Set up an effect structure: */
+	ff_effect effect;
+	memset(&effect,0,sizeof(ff_effect));
+	effect.type=FF_CONSTANT;
+	effect.id=-1;
+	effect.direction=direction;
+	effect.trigger.button=0U;
+	effect.trigger.interval=0U;
+	effect.replay.length=10000U;
+	effect.replay.delay=0U;
+	
+	if(strength<-1.0f)
+		effect.u.constant.level=-32767;
+	else if(strength>=1.0f)
+		effect.u.constant.level=32767;
+	else if(strength<0.0f)
+		effect.u.constant.level=(int)(strength*32767.0f-0.5f);
+	else
+		effect.u.constant.level=(int)(strength*32767.0f+0.5f);
+	
+	effect.u.constant.envelope.attack_length=0U;
+	effect.u.constant.envelope.attack_level=0x7fffU;
+	effect.u.constant.envelope.fade_length=0U;
+	effect.u.constant.envelope.fade_level=0x7fffU;
+	
+	if(ioctl(fd,EVIOCSFF,&effect)<0)
+		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Unable to upload force feedback effect");
+	
+	/* Return the assigned effect ID: */
+	return effect.id;
+	}
+
+void EventDevice::updateFFEffect(int effectId,unsigned int direction,float strength)
+	{
+	/* Set up an effect structure: */
+	ff_effect effect;
+	memset(&effect,0,sizeof(ff_effect));
+	effect.type=FF_CONSTANT;
+	effect.id=effectId;
+	effect.direction=direction;
+	effect.trigger.button=0U;
+	effect.trigger.interval=0U;
+	effect.replay.length=10000U;
+	effect.replay.delay=0U;
+	
+	if(strength<-1.0f)
+		effect.u.constant.level=-32767;
+	else if(strength>=1.0f)
+		effect.u.constant.level=32767;
+	else if(strength<0.0f)
+		effect.u.constant.level=(int)(strength*32767.0f-0.5f);
+	else
+		effect.u.constant.level=(int)(strength*32767.0f+0.5f);
+	
+	effect.u.constant.envelope.attack_length=0U;
+	effect.u.constant.envelope.attack_level=0x7fffU;
+	effect.u.constant.envelope.fade_length=0U;
+	effect.u.constant.envelope.fade_level=0x7fffU;
+	
+	if(ioctl(fd,EVIOCSFF,&effect)<0)
+		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Unable to update force feedback effect");
+	}
+
+void EventDevice::removeFFEffect(int effectId)
+	{
+	/* Use a dummy ff_effect structure to cast the given effect ID to the correct type: */
+	ff_effect effect;
+	memset(&effect,0,sizeof(ff_effect));
+	effect.id=effectId;
+	if(ioctl(fd,EVIOCRMFF,effect.id)<0)
+		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Unable to remove force feedback effect");
+	}
+
+void EventDevice::playFFEffect(int effectId,int numRepetitions)
+	{
+	/* Set up an event structure: */
+	input_event event;
+	memset(&event,0,sizeof(input_event));
+	event.type=EV_FF;
+	event.code=effectId;
+	event.value=numRepetitions;
+	
+	/* Write the event structure to the device: */
+	if(write(fd,&event,sizeof(input_event))!=sizeof(input_event))
+		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Unable to play force feedback effect");
+	}
+
+void EventDevice::stopFFEffect(int effectId)
+	{
+	/* Set up an event structure: */
+	input_event event;
+	memset(&event,0,sizeof(input_event));
+	event.type=EV_FF;
+	event.code=effectId;
+	event.value=0;
+	if(write(fd,&event,sizeof(input_event))!=sizeof(input_event))
+		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Unable to stop force feedback effect");
+	}
+
+void EventDevice::setFFGain(float gain)
+	{
+	/* Set up an event structure: */
+	input_event event;
+	memset(&event,0,sizeof(input_event));
+	event.type=EV_FF;
+	event.code=FF_GAIN;
+	
+	/* Convert the gain to the raw integer range: */
+	if(gain<0.0f)
+		event.value=0U;
+	else if(gain>=1.0f)
+		event.value=65535U;
+	else
+		event.value=(unsigned int)(gain*65536.0f);
+	
+	/* Write the event structure to the device: */
+	if(write(fd,&event,sizeof(input_event))!=sizeof(input_event))
+		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Unable to set force feedback gain");
+	}
+
+void EventDevice::setFFAutocenter(float strength)
+	{
+	/* Set up an event structure: */
+	input_event event;
+	memset(&event,0,sizeof(input_event));
+	event.type=EV_FF;
+	event.code=FF_AUTOCENTER;
+	
+	/* Convert the strength to the raw integer range: */
+	if(strength<0.0f)
+		event.value=0U;
+	else if(strength>=1.0f)
+		event.value=65535U;
+	else
+		event.value=(unsigned int)(strength*65536.0f);
+	
+	/* Write the event structure to the device: */
+	if(write(fd,&event,sizeof(input_event))!=sizeof(input_event))
+		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Unable to set force feedback autocenter strength");
+	}
+
 void EventDevice::processEvents(void)
 	{
 	/* Read a bunch of events at once: */
@@ -638,12 +698,26 @@ void EventDevice::processEvents(void)
 		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Unable to read events");
 	}
 
-Threads::EventDispatcher::ListenerKey EventDevice::registerEventHandler(Threads::EventDispatcher& eventDispatcher)
+void EventDevice::registerEventHandler(Threads::EventDispatcher& newEventDispatcher)
 	{
-	/* Add an I/O listener to the given event dispatcher: */
-	Threads::EventDispatcher::ListenerKey key=eventDispatcher.addIOEventListener(fd,Threads::EventDispatcher::Read,ioEventCallback,this);
+	/* Check if the event device is already registered with an event dispatcher: */
+	if(eventDispatcher!=0)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Event device is already registered with an event dispatcher");
 	
-	return key;
+	/* Add an I/O listener to the given event dispatcher: */
+	eventDispatcher=&newEventDispatcher;
+	listenerKey=eventDispatcher->addIOEventListener(fd,Threads::EventDispatcher::Read,ioEventCallback,this);
+	}
+
+void EventDevice::unregisterEventHandler(void)
+	{
+	/* Check if the event device is actually registered with an event dispatcher: */
+	if(eventDispatcher==0)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Event device is not registered with an event dispatcher");
+	
+	if(eventDispatcher!=0)
+		eventDispatcher->removeIOEventListener(listenerKey);
+	eventDispatcher=0;
 	}
 
 }

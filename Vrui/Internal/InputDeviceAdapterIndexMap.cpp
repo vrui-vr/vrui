@@ -2,7 +2,7 @@
 InputDeviceAdapterIndexMap - Base class for input device adapters that
 use index maps to translate from "flat" device states to Vrui input
 devices.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -55,13 +55,13 @@ void InputDeviceAdapterIndexMap::createIndexMappings(void)
 		}
 	}
 
-void InputDeviceAdapterIndexMap::createInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection)
+void InputDeviceAdapterIndexMap::initializeInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection)
 	{
 	/* Ensure that the index mapping tables exist: */
 	createIndexMappings();
 	
 	/* Call base class method to initialize basic input device settings: */
-	InputDeviceAdapter::createInputDevice(deviceIndex,configFileSection);
+	InputDeviceAdapter::initializeInputDevice(deviceIndex,configFileSection);
 	
 	if(inputDevices[deviceIndex]->getTrackType()!=InputDevice::TRACK_NONE)
 		{

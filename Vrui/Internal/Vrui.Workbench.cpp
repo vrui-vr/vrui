@@ -710,10 +710,20 @@ void vruiDrawWindowGroup(VruiWindowGroup& windowGroup)
 	windowGroup.displayState->maxViewportSize=windowGroup.maxViewportSize;
 	windowGroup.displayState->maxFrameSize=windowGroup.maxFrameSize;
 	
-	/* Update all GLObjects for the group's context data and draw the first window : */
+	/* Make the window group's shared OpenGL context current with the first window: */
 	std::vector<VruiWindowGroup::Window>::iterator wIt=windowGroup.windows.begin();
 	wIt->window->makeCurrent();
+	
+	/* Update all GLObjects for the group's context data: */
 	windowGroup.context->getContextData().updateThings();
+	
+	/* Call all pre-rendering callbacks: */
+	{
+	PreRenderingCallbackData cbData(windowGroup.context->getContextData());
+	vruiState->preRenderingCallbacks.call(&cbData);
+	}
+	
+	/* Draw the first window: */
 	wIt->window->draw();
 	
 	/* Draw all remaining windows: */
@@ -2272,6 +2282,12 @@ void vruiInnerLoopSingleWindow(void)
 		#if VRUI_INSTRUMENT_MAINLOOP
 		vruiPrintTime(true);
 		#endif
+		
+		/* Call all post-rendering callbacks: */
+		{
+		Misc::CallbackData cbData;
+		vruiState->postRenderingCallbacks.call(&cbData);
+		}
 		
 		firstFrame=false;
 		}

@@ -1,8 +1,7 @@
 /***********************************************************************
 PanelButtonTool - Class to map a single input device button to several
-virtual input device buttons by presenting an extensible panel with GUI
-buttons.
-Copyright (c) 2013 Oliver Kreylos
+virtual input devices by presenting an extensible radio box widget.
+Copyright (c) 2013-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -25,15 +24,18 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #ifndef PANELBUTTONTOOL_INCLUDED
 #define PANELBUTTONTOOL_INCLUDED
 
+#include <GLMotif/RadioBox.h>
+#include <Vrui/ToolManager.h>
 #include <Vrui/TransformTool.h>
 
 /* Forward declarations: */
 namespace Misc {
+class CallbackData;
 class ConfigurationFileSection;
 }
 namespace GLMotif {
 class PopupWindow;
-class RowColumn;
+class Button;
 }
 
 namespace Vrui {
@@ -89,24 +91,34 @@ class PanelButtonTool:public TransformTool
 	/* Configuration state: */
 	PanelButtonToolFactory::Configuration config; // The tool configuration
 	
+	std::vector<InputDevice*> devices; // List of virtual devices selectable by the panel widget
 	GLMotif::PopupWindow* panelPopup; // Pointer to the top-level widget containing the button panel
-	GLMotif::RowColumn* panel; // Pointer to the button panel widget
-	int currentButton; // Index of the currently active virtual button
+	GLMotif::Button* removeDeviceButton; // Button to remove the currently selected virtual device
+	GLMotif::RadioBox* deviceSelector; // Pointer to the radio box widget to select the active virtual device
+	
+	/* Private methods: */
+	void addDevice(void); // Adds a new virtual device to the device list and the selector radio box
+	void addDeviceCallback(Misc::CallbackData* cbData); // Callback called when the "add device" button is selected
+	void removeDeviceCallback(Misc::CallbackData* cbData); // Callback called when the "remove device" button is selected
+	void selectedDeviceChangedCallback(GLMotif::RadioBox::ValueChangedCallbackData* cbData); // Callback called when the selected device button changes
+	int findDevice(Tool* tool); // Returns the index of the virtual device bound to the given tool, or -1
+	void toolCreationCallback(ToolManager::ToolCreationCallbackData* cbData); // Callback when a new tool is created, to potentially update the virtual device selector
+	void toolDestructionCallback(ToolManager::ToolDestructionCallbackData* cbData); // Callback when a tool is destroyed, to potentially update the virtual device selector
 	
 	/* Constructors and destructors: */
 	public:
 	PanelButtonTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment);
 	virtual ~PanelButtonTool(void);
 	
-	/* Methods from Tool: */
+	/* Methods from class Tool: */
 	virtual void configure(const Misc::ConfigurationFileSection& configFileSection);
 	virtual void storeState(Misc::ConfigurationFileSection& configFileSection) const;
 	virtual void initialize(void);
+	virtual void deinitialize(void);
 	virtual const ToolFactory* getFactory(void) const;
-	virtual void buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData);
-	virtual void frame(void);
 	
 	/* Methods from class DeviceForwarder: */
+	virtual std::vector<InputDevice*> getForwardedDevices(void);
 	virtual InputDeviceFeatureSet getSourceFeatures(const InputDeviceFeature& forwardedFeature);
 	virtual InputDeviceFeatureSet getForwardedFeatures(const InputDeviceFeature& sourceFeature);
 	};

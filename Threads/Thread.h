@@ -2,7 +2,7 @@
 Thread - Wrapper class for pthreads threads, mostly providing more
 convenient thread starting methods and "resource allocation as creation"
 paradigm.
-Copyright (c) 2005-2012 Oliver Kreylos
+Copyright (c) 2005-2025 Oliver Kreylos
 
 This file is part of the Portable Threading Library (Threads).
 
@@ -64,6 +64,8 @@ class Thread
 		CANCEL_DEFERRED=PTHREAD_CANCEL_DEFERRED,
 		CANCEL_ASYNCHRONOUS=PTHREAD_CANCEL_ASYNCHRONOUS
 		};
+	
+	typedef pthread_t LocalID; // Type to identify threads inside the same process
 	
 	class ID // Class to identify threads in a cross-process compatible manner
 		{
@@ -412,6 +414,14 @@ class Thread
 	/* Methods: */
 	
 	/* Methods called on thread objects: */
+	const LocalID& getLocalId(void) const // Returns the thread's per-process ID
+		{
+		return threadId;
+		}
+	bool isEqual(const LocalID& other) const // Returns true if this thread's oer-process ID is equal to the given per-process ID
+		{
+		return pthread_equal(threadId,other)!=0;
+		}
 	const ID& getId(void) const // Returns the thread's global ID
 		{
 		return id;
@@ -534,6 +544,14 @@ class Thread
 	static void exit(void* returnValue) // Terminates the calling thread and returns the given value
 		{
 		pthread_exit(returnValue);
+		}
+	static LocalID getSelfId(void) // Returns the per-process ID of the calling thread
+		{
+		return pthread_self();
+		}
+	static bool isSelfEqual(const LocalID& other) // Returns true if the calling thread's per-process ID is equal to the given per-process ID
+		{
+		return pthread_equal(pthread_self(),other)!=0;
 		}
 	static Thread* getThreadObject(void) // Returns the calling thread's thread object
 		{

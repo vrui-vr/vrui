@@ -1,7 +1,7 @@
 /***********************************************************************
 SixDofNavigationTool - Class for 6-DOF navigation by grabbing space
 using a single input device.
-Copyright (c) 2004-2010 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -145,7 +145,7 @@ void SixDofNavigationTool::frame(void)
 		navigation*=preScale;
 		
 		/* Update Vrui's navigation transformation: */
-		setNavigationTransformation(navigation);
+		setNavigationTransformation(navigation,getButtonDevicePosition(0));
 		}
 	}
 

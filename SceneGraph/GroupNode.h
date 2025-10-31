@@ -37,6 +37,7 @@ class GroupNode:public GraphNodeParent
 	public:
 	typedef MF<GraphNodePointer> MFGraphNode;
 	typedef MFGraphNode::ValueList ChildList;
+	struct TreeNode;
 	
 	/* Elements: */
 	static const char* className; // The class's name
@@ -61,6 +62,10 @@ class GroupNode:public GraphNodeParent
 	/* Derived state: */
 	protected:
 	Box* explicitBoundingBox; // Pointer to the explicit bounding box; null if there is no explicit bounding box
+	TreeNode* kdTreeRoot; // Pointer to the root of a collision acceleration tree
+	
+	/* Private methods: */
+	void createKdTree(void); // Creates a collision acceleration tree
 	
 	/* Constructors and destructors: */
 	public:

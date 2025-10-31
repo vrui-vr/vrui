@@ -1,5 +1,5 @@
 /***********************************************************************
-PrintIntegers - Simple helper functions to print integer values of
+PrintInteger - Simple helper functions to print integer values of
 several types. The functions expect a pointer after where the rightmost
 digit is expected, and write right-aligned from there. The functions
 NUL-terminate the written number, and return a pointer to the first

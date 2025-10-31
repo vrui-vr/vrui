@@ -32,26 +32,28 @@ Methods of struct PenDeviceConfig:
 *********************************/
 
 PenDeviceConfig::PenDeviceConfig(void)
-	:touchKeyIndex(~0x0U),pressKeyIndex(~0x0U),
-	 valid(false),haveTilt(false)
+	:pressureAxisIndex(~0U),
+	 touchKeyIndex(~0U),
+	 valid(false),haveTilt(false),havePressure(false)
 	{
 	/* Initialize the absolute axis indices to invalid: */
 	for(int i=0;i<2;++i)
 		{
-		posAxisIndices[i]=~0x0U;
-		tiltAxisIndices[i]=~0x0U;
+		posAxisIndices[i]=~0U;
+		tiltAxisIndices[i]=~0U;
 		}
 	}
 
 PenDeviceConfig::PenDeviceConfig(EventDevice& device)
-	:touchKeyIndex(~0x0U),pressKeyIndex(~0x0U),
-	 valid(false),haveTilt(false)
+	:pressureAxisIndex(~0U),
+	 touchKeyIndex(~0U),
+	 valid(false),haveTilt(false),havePressure(false)
 	{
 	/* Initialize the absolute axis indices to invalid: */
 	for(int i=0;i<2;++i)
 		{
-		posAxisIndices[i]=~0x0U;
-		tiltAxisIndices[i]=~0x0U;
+		posAxisIndices[i]=~0U;
+		tiltAxisIndices[i]=~0U;
 		}
 	
 	/* Find the absolute axes and keys that define a pen device: */
@@ -82,6 +84,11 @@ PenDeviceConfig::PenDeviceConfig(EventDevice& device)
 				tiltAxisIndices[1]=i;
 				featureMask|=0x20U;
 				break;
+			
+			case ABS_PRESSURE:
+				pressureAxisIndex=i;
+				havePressure=true;
+				break;
 			}
 		}
 	
@@ -91,13 +98,20 @@ PenDeviceConfig::PenDeviceConfig(EventDevice& device)
 		{
 		switch(device.getKeyFeatureCode(i))
 			{
-			case BTN_TOUCH:
-				touchKeyIndex=i;
+			case BTN_TOOL_PEN:
+			case BTN_TOOL_RUBBER:
+			case BTN_TOOL_BRUSH:
+			case BTN_TOOL_PENCIL:
+			case BTN_TOOL_AIRBRUSH:
+			case BTN_TOOL_FINGER:
+			case BTN_TOOL_MOUSE:
+			case BTN_TOOL_LENS:
+				hoverKeyIndices.push_back(i);
 				featureMask|=0x04U;
 				break;
 			
-			case BTN_TOOL_PEN:
-				pressKeyIndex=i;
+			case BTN_TOUCH:
+				touchKeyIndex=i;
 				featureMask|=0x08U;
 				break;
 			
@@ -110,6 +124,38 @@ PenDeviceConfig::PenDeviceConfig(EventDevice& device)
 	/* Check if all required and optional features are present: */
 	valid=(featureMask&0x0fU)==0x0fU;
 	haveTilt=(featureMask&0x30U)==0x30U;
+	}
+
+PenDeviceConfig::PenState PenDeviceConfig::getPenState(const EventDevice& device) const
+	{
+	PenState result;
+	
+	/* Find the index of the first pen sub-component that is in range of the device: */
+	result.valid=false;
+	result.toolIndex=0U;
+	for(std::vector<unsigned int>::const_iterator hkiIt=hoverKeyIndices.begin();hkiIt!=hoverKeyIndices.end()&&!result.valid;++hkiIt,++result.toolIndex)
+		result.valid=device.getKeyFeatureValue(*hkiIt);
+	
+	if(result.valid)
+		{
+		/* Extract the pen position: */
+		for(int i=0;i<2;++i)
+			result.pos[i]=device.getAbsAxisFeatureValue(posAxisIndices[i]);
+		
+		/* Extract the pen tilt angles if supported: */
+		if(haveTilt)
+			for(int i=0;i<2;++i)
+				result.tilt[i]=device.getAbsAxisFeatureValue(tiltAxisIndices[i]);
+		
+		/* Check if the pen is touching the device: */
+		result.touching=device.getKeyFeatureValue(touchKeyIndex);
+		
+		/* Extract the touch pressure if the pen is touching and pressure is supported: */
+		if(result.touching&&havePressure)
+			result.pressure=device.getAbsAxisFeatureValue(pressureAxisIndex);
+		}
+	
+	return result;
 	}
 
 }

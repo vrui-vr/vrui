@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterTrackd - Class to connect a trackd tracking daemon to
 a Vrui application.
-Copyright (c) 2013-2023 Oliver Kreylos
+Copyright (c) 2013-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -92,9 +92,9 @@ class InputDeviceAdapterTrackd:public InputDeviceAdapterIndexMap
 	Threads::Thread spinPollThread; // Background thread to poll the trackd daemon's shared memory segment for device updates to simulate event notification at the cost of 100% CPU utilization
 	volatile bool runSpinPollThread; // Flag to shut down the spin polling thread
 	
-	/* Protected methods from InputDeviceAdapter: */
+	/* Protected methods from class InputDeviceAdapter: */
 	protected:
-	virtual void createInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection);
+	virtual void initializeInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection);
 	
 	/* Private methods: */
 	void* spinPollThreadMethod(void); // Thread method for the spin polling thread
@@ -104,7 +104,7 @@ class InputDeviceAdapterTrackd:public InputDeviceAdapterIndexMap
 	InputDeviceAdapterTrackd(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection);
 	virtual ~InputDeviceAdapterTrackd(void);
 	
-	/* Methods from InputDeviceAdapter: */
+	/* Methods from class InputDeviceAdapter: */
 	virtual std::string getFeatureName(const InputDeviceFeature& feature) const;
 	virtual int getFeatureIndex(InputDevice* device,const char* featureName) const;
 	virtual void updateInputDevices(void);

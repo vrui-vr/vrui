@@ -1,7 +1,7 @@
 /***********************************************************************
 FlyNavigationTool - Class encapsulating the behaviour of the old
 infamous Vrui single-handed flying navigation tool.
-Copyright (c) 2004-2021 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -163,7 +163,7 @@ void FlyNavigationTool::frame(void)
 		t*=getNavigationTransformation();
 		
 		/* Update Vrui's navigation transformation: */
-		setNavigationTransformation(t);
+		setNavigationTransformation(t,getButtonDevicePosition(0));
 		
 		/* Request another frame: */
 		scheduleUpdate(getNextAnimationTime());

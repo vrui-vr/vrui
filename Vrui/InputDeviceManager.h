@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceManager - Class to manage physical and virtual input devices,
 tools associated to input devices, and the input device update graph.
-Copyright (c) 2004-2023 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -39,6 +39,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 /* Forward declarations: */
 namespace Misc {
 class ConfigurationFileSection;
+}
+namespace Threads {
+class EventDispatcher;
+class EventDispatcherThread;
 }
 class GLContextData;
 namespace Vrui {
@@ -124,6 +128,7 @@ class InputDeviceManager
 	private:
 	InputGraphManager* inputGraphManager; // Pointer to the input graph manager
 	TextEventDispatcher* textEventDispatcher; // Pointer to object dispatching GLMotif text and text control events
+	Threads::EventDispatcherThread* eventDispatcher; // Pointer to an event dispatcher running in a background thread that can be shared by all input device adapters
 	int numInputDeviceAdapters; // Number of input device adapters managed by the input device manager
 	InputDeviceAdapter** inputDeviceAdapters; // Array of pointers to managed input device adapters
 	InputDevices inputDevices; // List of all created input devices
@@ -145,6 +150,7 @@ class InputDeviceManager
 	~InputDeviceManager(void);
 	
 	/* Methods: */
+	Threads::EventDispatcher& acquireEventDispatcher(void); // Returns a reference to a shared event dispatcher running in a background thread
 	void initialize(const Misc::ConfigurationFileSection& configFileSection); // Creates all input device adapters listed in the configuration file section
 	void addAdapter(InputDeviceAdapter* newAdapter); // Adds an input device adapter to the input device manager
 	int getNumInputDeviceAdapters(void) const // Returns number of input device adapters

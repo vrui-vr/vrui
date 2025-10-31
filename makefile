@@ -230,10 +230,10 @@ VRDEVICES_USE_BLUETOOTH = $(SYSTEM_HAVE_BLUETOOTH)
 PROJECT_NAME = Vrui
 
 # Specify version of created dynamic shared libraries
-PROJECT_MAJOR = 13
-PROJECT_MINOR = 1
+PROJECT_MAJOR = 14
+PROJECT_MINOR = 0
 PROJECT_BUILD = 1
-PROJECT_NUMERICVERSION = 13001001
+PROJECT_NUMERICVERSION = 14000001
 
 # Override the include file and library search directories:
 VRUI_INCLUDEDIR = $(PROJECT_ROOT)
@@ -375,8 +375,7 @@ LIBRARIES += $(LIBRARY_NAMES:%=$(call LIBRARYNAME,%))
 #
 
 # Don't build the following tool modules because they are unfinished or experimental:
-VRTOOLS_IGNORE_SOURCES = Vrui/Tools/PanelButtonTool.cpp \
-                         Vrui/Tools/FPSArmTool.cpp
+VRTOOLS_IGNORE_SOURCES = Vrui/Tools/FPSArmTool.cpp
 
 VRTOOLS_SOURCES = $(filter-out $(VRTOOLS_IGNORE_SOURCES),$(wildcard Vrui/Tools/*.cpp))
 

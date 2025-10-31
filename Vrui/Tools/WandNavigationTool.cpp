@@ -1,7 +1,7 @@
 /***********************************************************************
 WandNavigationTool - Class encapsulating the navigation behaviour of a
 classical CAVE wand.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -358,7 +358,7 @@ void WandNavigationTool::frame(void)
 			navigation*=preScale;
 			
 			/* Update Vrui's navigation transformation: */
-			setNavigationTransformation(navigation);
+			setNavigationTransformation(navigation,getButtonDevicePosition(0));
 			break;
 			}
 		
@@ -381,9 +381,7 @@ void WandNavigationTool::frame(void)
 		}
 	
 	/* Update the virtual input device: */
-	InputDevice* device=getButtonDevice(1);
-	buttonDevice->setDeviceRay(device->getDeviceRayDirection(),device->getDeviceRayStart());
-	buttonDevice->setTransformation(device->getTransformation());
+	buttonDevice->copyTrackingState(getButtonDevice(1));
 	}
 
 std::vector<InputDevice*> WandNavigationTool::getForwardedDevices(void)

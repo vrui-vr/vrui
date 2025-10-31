@@ -2,7 +2,7 @@
 InputDeviceAdapterDeviceDaemon - Class to convert from Vrui's own
 distributed device driver architecture to Vrui's internal device
 representation.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -114,7 +114,7 @@ void InputDeviceAdapterDeviceDaemon::batteryStateUpdatedCallback(unsigned int de
 		}
 	}
 
-void InputDeviceAdapterDeviceDaemon::createInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection)
+void InputDeviceAdapterDeviceDaemon::initializeInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection)
 	{
 	/* Check if the device client has a virtual device of the same name as this configuration file section: */
 	for(int vdIndex=0;vdIndex<deviceClient.getNumVirtualDevices();++vdIndex)
@@ -203,42 +203,18 @@ void InputDeviceAdapterDeviceDaemon::createInputDevice(int deviceIndex,const Mis
 			}
 		}
 	
-	/* Call base class method to initialize the input device: */
-	InputDeviceAdapterIndexMap::createInputDevice(deviceIndex,configFileSection);
+	/* Read input device name: */
+	std::string name=configFileSection.retrieveString("./name",configFileSection.getName());
 	
-	/* Read the list of button names for this device: */
-	/* Read the names of all button features: */
-	typedef std::vector<std::string> StringList;
-	StringList tempButtonNames;
-	configFileSection.updateValue("./buttonNames",tempButtonNames);
-	int buttonIndex=0;
-	for(StringList::iterator bnIt=tempButtonNames.begin();bnIt!=tempButtonNames.end()&&buttonIndex<inputDevices[deviceIndex]->getNumButtons();++bnIt,++buttonIndex)
-		{
-		/* Store the button name: */
-		buttonNames.push_back(*bnIt);
-		}
-	for(;buttonIndex<inputDevices[deviceIndex]->getNumButtons();++buttonIndex)
-		{
-		char buttonName[40];
-		snprintf(buttonName,sizeof(buttonName),"Button%d",buttonIndex);
-		buttonNames.push_back(buttonName);
-		}
+	/* Determine the input device's tracking type: */
+	int trackType=updateTrackType(InputDevice::TRACK_NONE,configFileSection);
 	
-	/* Read the names of all valuator features: */
-	StringList tempValuatorNames;
-	configFileSection.updateValue("./valuatorNames",tempValuatorNames);
-	int valuatorIndex=0;
-	for(StringList::iterator vnIt=tempValuatorNames.begin();vnIt!=tempValuatorNames.end()&&valuatorIndex<inputDevices[deviceIndex]->getNumValuators();++vnIt,++valuatorIndex)
-		{
-		/* Store the valuator name: */
-		valuatorNames.push_back(*vnIt);
-		}
-	for(;valuatorIndex<inputDevices[deviceIndex]->getNumValuators();++valuatorIndex)
-		{
-		char valuatorName[40];
-		snprintf(valuatorName,sizeof(valuatorName),"Valuator%d",valuatorIndex);
-		valuatorNames.push_back(valuatorName);
-		}
+	/* Determine numbers of buttons and valuators: */
+	int numButtons=configFileSection.retrieveValue<int>("./numButtons",0);
+	int numValuators=configFileSection.retrieveValue<int>("./numValuators",0);
+	
+	/* Create and save the new input device: */
+	inputDevices[deviceIndex]=createInputDevice(name.c_str(),trackType,numButtons,numValuators,configFileSection,buttonNames,valuatorNames);
 	
 	/* Check if there is a handle transformation: */
 	ONTransform handleTransform;
@@ -252,7 +228,7 @@ void InputDeviceAdapterDeviceDaemon::createInputDevice(int deviceIndex,const Mis
 
 InputDeviceAdapterDeviceDaemon::InputDeviceAdapterDeviceDaemon(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection)
 	:InputDeviceAdapterIndexMap(sInputDeviceManager),
-	 deviceClient(dispatcher,configFileSection),
+	 deviceClient(inputDeviceManager->acquireEventDispatcher(),configFileSection),
 	 predictMotion(configFileSection.retrieveValue("./predictMotion",false)),
 	 motionPredictionDelta(configFileSection.retrieveValue("./motionPredictionDelta",0.0)),
 	 validFlags(0),batteryStateIndexMap(0),batteryStates(0)

@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceManager - Class to manage physical and virtual input devices,
 tools associated to input devices, and the input device update graph.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -38,6 +38,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <Threads/EventDispatcherThread.h>
 #include <Vrui/InputDeviceFeature.h>
 #include <Vrui/InputGraphManager.h>
 #include <Vrui/Internal/InputDeviceAdapter.h>
@@ -48,7 +49,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Internal/InputDeviceAdapterVisBox.h>
 #ifdef __linux__
 #include <Vrui/Internal/Linux/InputDeviceAdapterHID.h>
-#include <Vrui/Internal/Linux/InputDeviceAdapterPenPad.h>
 #endif
 #ifdef __APPLE__
 #include <Vrui/Internal/MacOSX/InputDeviceAdapterHID.h>
@@ -95,7 +95,7 @@ Methods of class InputDeviceManager:
 ***********************************/
 
 InputDeviceManager::InputDeviceManager(InputGraphManager* sInputGraphManager,TextEventDispatcher* sTextEventDispatcher)
-	:inputGraphManager(sInputGraphManager),textEventDispatcher(sTextEventDispatcher),
+	:inputGraphManager(sInputGraphManager),textEventDispatcher(sTextEventDispatcher),eventDispatcher(0),
 	 numInputDeviceAdapters(0),inputDeviceAdapters(0),
 	 hapticFeatureMap(17),handleTransformMap(17),
 	 predictDeviceStates(false),predictionTime(0,0)
@@ -109,6 +109,9 @@ InputDeviceManager::~InputDeviceManager(void)
 		delete inputDeviceAdapters[i];
 	delete[] inputDeviceAdapters;
 	
+	/* Delete the background event dispatcher: */
+	delete eventDispatcher;
+	
 	/* Delete all leftover input devices: */
 	for(InputDevices::iterator idIt=inputDevices.begin();idIt!=inputDevices.end();++idIt)
 		{
@@ -121,6 +124,15 @@ InputDeviceManager::~InputDeviceManager(void)
 		/* Remove the device from the input graph: */
 		inputGraphManager->removeInputDevice(device);
 		}
+	}
+
+Threads::EventDispatcher& InputDeviceManager::acquireEventDispatcher(void)
+	{
+	/* Create a new event dispatcher if there is none yet: */
+	if(eventDispatcher==0)
+		eventDispatcher=new Threads::EventDispatcherThread;
+	
+	return *eventDispatcher;
 	}
 
 void InputDeviceManager::initialize(const Misc::ConfigurationFileSection& configFileSection)
@@ -152,14 +164,13 @@ void InputDeviceManager::initialize(const Misc::ConfigurationFileSection& config
 	int multitouchAdapterIndex=-1;
 	for(int i=0;i<numInputDeviceAdapters;++i)
 		{
-		/* Go to input device adapter's section: */
-		Misc::ConfigurationFileSection inputDeviceAdapterSection=configFileSection.getSection(inputDeviceAdapterNames[i].c_str());
-		
-		/* Determine input device adapter's type: */
-		std::string inputDeviceAdapterType=inputDeviceAdapterSection.retrieveString("./inputDeviceAdapterType");
-		bool typeFound=true;
 		try
 			{
+			/* Go to input device adapter's section: */
+			Misc::ConfigurationFileSection inputDeviceAdapterSection=configFileSection.getSection(inputDeviceAdapterNames[i].c_str());
+			
+			/* Determine input device adapter's type: */
+			std::string inputDeviceAdapterType=inputDeviceAdapterSection.retrieveString("./inputDeviceAdapterType");
 			if(inputDeviceAdapterType=="Mouse")
 				{
 				/* Check if there is already a mouse input device adapter: */
@@ -214,11 +225,6 @@ void InputDeviceManager::initialize(const Misc::ConfigurationFileSection& config
 				/* Create HID input device adapter: */
 				inputDeviceAdapters[i]=new InputDeviceAdapterHID(this,inputDeviceAdapterSection);
 				}
-			else if(inputDeviceAdapterType=="PenPad")
-				{
-				/* Create pen pad input device adapter: */
-				inputDeviceAdapters[i]=new InputDeviceAdapterPenPad(this,inputDeviceAdapterSection);
-				}
 			else if(inputDeviceAdapterType=="OVRD")
 				{
 				/* Create OVRD input device adapter: */
@@ -235,7 +241,7 @@ void InputDeviceManager::initialize(const Misc::ConfigurationFileSection& config
 				inputDeviceAdapters[i]=new InputDeviceAdapterDummy(this,inputDeviceAdapterSection);
 				}
 			else
-				typeFound=false;
+				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid input device adapter type %s",inputDeviceAdapterType.c_str());
 			}
 		catch(const std::runtime_error& err)
 			{
@@ -246,9 +252,6 @@ void InputDeviceManager::initialize(const Misc::ConfigurationFileSection& config
 			inputDeviceAdapters[i]=0;
 			++numIgnoredAdapters;
 			}
-		
-		if(!typeFound)
-			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unknown input device adapter type \"%s\"",inputDeviceAdapterType.c_str());
 		}
 	
 	if(numIgnoredAdapters!=0)
@@ -258,10 +261,7 @@ void InputDeviceManager::initialize(const Misc::ConfigurationFileSection& config
 		int newNumInputDeviceAdapters=0;
 		for(int i=0;i<numInputDeviceAdapters;++i)
 			if(inputDeviceAdapters[i]!=0)
-				{
-				newInputDeviceAdapters[newNumInputDeviceAdapters]=inputDeviceAdapters[i];
-				++newNumInputDeviceAdapters;
-				}
+				newInputDeviceAdapters[newNumInputDeviceAdapters++]=inputDeviceAdapters[i];
 		delete[] inputDeviceAdapters;
 		numInputDeviceAdapters=newNumInputDeviceAdapters;
 		inputDeviceAdapters=newInputDeviceAdapters;

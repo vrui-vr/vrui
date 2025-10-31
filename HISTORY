@@ -8398,3 +8398,26 @@ Vrui-13.1-001:
   of the README file.
 - Minor fixes re installation directory in example programs and project
   template makefiles.
+
+Vrui-14.0-001:
+- Added new Vrui::StylusTool class to represent styluses or pens on
+  touchscreen-like devices, where a set of selector buttons define the
+  function of a single main button, typically the "press tip" button.
+- Added GLMotif::RadioBox::removeToggle method to dynamically remove
+  toggles from a radio box at run-time.
+- Re-implemented Vrui::PanelButtonTool to provide basic functionality.
+- Removed return value from RawHID::EventDevice::registerEventHandler
+  and added unregisterEventHandler method.
+- Renamed RawHID::EventDevice::haveSynReport to hasSynReport.
+  - Fixed usage in Calibration/CalibrateTouchscreen.cpp.
+- Added a shared Threads::EventDispatcher running in a background thread
+  to Vrui::InputDeviceManager that starts the event dispatcher on demand
+  if requested by an input device adapter by calling the new
+  acquireEventDispatcher method.
+  - Updated Vrui::InputDeviceAdapterDeviceDaemon,
+    Vrui::InputDeviceAdapterHID, and Vrui::InputDeviceAdapterPenPad to
+    use shared event dispatcher.
+- Created new Vrui::TouchscreenCalibrator class hierarchy to simplify
+  dealing with touchscreen / pen devices.
+  - Updated CalibrateTouchscreen utility in Calibration directory to use
+    new TouchscreenCalibrator classes.

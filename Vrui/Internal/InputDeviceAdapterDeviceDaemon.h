@@ -2,7 +2,7 @@
 InputDeviceAdapterDeviceDaemon - Class to convert from Vrui's own
 distributed device driver architecture to Vrui's internal device
 representation.
-Copyright (c) 2004-2023 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -28,8 +28,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <string>
 #include <vector>
 #include <Realtime/Time.h>
-#include <Threads/Thread.h>
-#include <Threads/EventDispatcherThread.h>
 #include <Vrui/Types.h>
 #include <Vrui/Internal/VRDeviceClient.h>
 #include <Vrui/Internal/InputDeviceAdapterIndexMap.h>
@@ -48,10 +46,6 @@ class InputDeviceAdapterDeviceDaemon:public InputDeviceAdapterIndexMap
 	{
 	/* Elements: */
 	private:
-	
-	/* Temporary stuff until Vrui's main loop gets fixed: */
-	Threads::EventDispatcherThread dispatcher;
-	
 	VRDeviceClient deviceClient; // Device client delivering "raw" device state
 	bool predictMotion; // Flag to enable motion prediction based on age of received tracking data and estimated frame presentation time
 	TimeVector motionPredictionDelta; // Motion prediction time interval to apply to tracked devices
@@ -66,16 +60,16 @@ class InputDeviceAdapterDeviceDaemon:public InputDeviceAdapterIndexMap
 	void errorCallback(const VRDeviceClient::ProtocolError& error);
 	void batteryStateUpdatedCallback(unsigned int deviceIndex);
 	
-	/* Protected methods from InputDeviceAdapter: */
+	/* Protected methods from class InputDeviceAdapter: */
 	protected:
-	virtual void createInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection);
+	virtual void initializeInputDevice(int deviceIndex,const Misc::ConfigurationFileSection& configFileSection);
 	
 	/* Constructors and destructors: */
 	public:
 	InputDeviceAdapterDeviceDaemon(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection); // Creates adapter by connecting to server and initializing Vrui input devices
 	virtual ~InputDeviceAdapterDeviceDaemon(void);
 	
-	/* Methods from InputDeviceAdapter: */
+	/* Methods from class InputDeviceAdapter: */
 	virtual std::string getFeatureName(const InputDeviceFeature& feature) const;
 	virtual int getFeatureIndex(InputDevice* device,const char* featureName) const;
 	virtual void updateInputDevices(void);

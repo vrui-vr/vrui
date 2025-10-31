@@ -495,35 +495,15 @@ void VruiState::pushNavigationTransformation(void)
 
 void VruiState::updateNavigationTransformation(const NavTransform& newTransform)
 	{
-	NavTransform newNavTransform=newTransform;
-	
-	/* Check if the navigation transformation was updated by a navigation tool: */
-	if(activeNavigationTool!=0)
-		{
-		/* Check whether the navigation transformation's orientation should be (partially) fixed: */
-		if(fixOrientation)
-			{
-			/* Override the orientation completely: */
-			newNavTransform.leftMultiply(NavTransform::rotateAround(environmentDefinition.center,fixedOrientation*Geometry::invert(newNavTransform.getRotation())));
-			newNavTransform.renormalize();
-			}
-		else if(fixVertical)
-			{
-			/* Keep the fixed vertical aligned with the environment's up direction: */
-			newNavTransform.leftMultiply(NavTransform::rotateAround(environmentDefinition.center,Rotation::rotateFromTo(newNavTransform.transform(fixedVertical),environmentDefinition.up)));
-			newNavTransform.renormalize();
-			}
-		}
-	
 	/* Calculate the new inverse transformation: */
-	NavTransform newInverseTransform=Geometry::invert(newNavTransform);
+	NavTransform newInverseTransform=Geometry::invert(newTransform);
 	
 	/* Call all navigation changed callbacks: */
-	NavigationTransformationChangedCallbackData cbData(navigationTransformation,inverseNavigationTransformation,newNavTransform,newInverseTransform);
+	NavigationTransformationChangedCallbackData cbData(navigationTransformation,inverseNavigationTransformation,newTransform,newInverseTransform);
 	navigationTransformationChangedCallbacks.call(&cbData);
 	
 	/* Set the navigation transformation: */
-	navigationTransformation=newNavTransform;
+	navigationTransformation=newTransform;
 	inverseNavigationTransformation=newInverseTransform;
 	
 	/* Set the navigation transformation in the scene graph manager's navigational-space scene graph: */
@@ -3587,6 +3567,40 @@ void setNavigationTransformation(const NavTransform& newNavigationTransformation
 		}
 	}
 
+void setNavigationTransformation(NavTransform& newNavigationTransformation,const Point& fixedPoint)
+	{
+	/* Check whether the navigation transformation's orientation should be (partially) fixed: */
+	if(vruiState->fixOrientation)
+		{
+		/* Override the orientation completely: */
+		newNavigationTransformation.leftMultiply(NavTransform::rotateAround(fixedPoint,vruiState->fixedOrientation*Geometry::invert(newNavigationTransformation.getRotation())));
+		newNavigationTransformation.renormalize();
+		}
+	else if(vruiState->fixVertical)
+		{
+		/* Keep the fixed vertical aligned with the environment's up direction: */
+		newNavigationTransformation.leftMultiply(NavTransform::rotateAround(fixedPoint,Rotation::rotateFromTo(newNavigationTransformation.transform(vruiState->fixedVertical),vruiState->environmentDefinition.up)));
+		newNavigationTransformation.renormalize();
+		}
+	
+	if(vruiState->delayNavigationTransformation)
+		{
+		/* Schedule a change in navigation transformation for the next frame: */
+		vruiState->newNavigationTransformation=newNavigationTransformation;
+		vruiState->newNavigationTransformation.renormalize();
+		if(vruiState->newNavigationTransformation!=vruiState->navigationTransformation)
+			{
+			vruiState->navigationTransformationChangedMask|=0x1;
+			requestUpdate();	
+			}
+		}
+	else
+		{
+		/* Change the navigation transformation right away: */
+		vruiState->updateNavigationTransformation(newNavigationTransformation);
+		}
+	}
+
 void setNavigationTransformation(const Point& center,Scalar radius)
 	{
 	/* Assemble the new navigation transformation: */
@@ -3845,6 +3859,16 @@ void addFrameCallback(FrameCallback newFrameCallback,void* newFrameCallbackUserD
 	fcs.callback=newFrameCallback;
 	fcs.userData=newFrameCallbackUserData;
 	vruiState->frameCallbacks.push_back(fcs);
+	}
+
+Misc::CallbackList& getPreRenderingCallbacks(void)
+	{
+	return vruiState->preRenderingCallbacks;
+	}
+
+Misc::CallbackList& getPostRenderingCallbacks(void)
+	{
+	return vruiState->postRenderingCallbacks;
 	}
 
 Misc::CommandDispatcher& getCommandDispatcher(void)
