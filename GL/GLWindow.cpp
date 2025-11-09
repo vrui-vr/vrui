@@ -1,7 +1,7 @@
 /***********************************************************************
 GLWindow - Class to encapsulate details of the underlying window system
 implementation from an application wishing to use OpenGL windows.
-Copyright (c) 2001-2024 Oliver Kreylos
+Copyright (c) 2001-2025 Oliver Kreylos
 
 This file is part of the OpenGL/GLX Support Library (GLXSupport).
 
@@ -187,7 +187,7 @@ void GLWindow::initWindow(const char* windowName,bool decorate)
 		if(event.type==ConfigureNotify)
 			{
 			/* Check if this is a real event: */
-			if(!event.xconfigure.send_event)
+			if(decorate&&!event.xconfigure.send_event)
 				{
 				/* The event's position is this window's offset inside its parent: */
 				parentOffset=XGetOffset(event.xconfigure);
@@ -212,32 +212,46 @@ void GLWindow::initWindow(const char* windowName,bool decorate)
 			}
 		}
 	
-	if(receivedConfigureNotify)
+	/*********************************************************************
+	Since modern window managers ignore window positions when opening
+	windows, we now need to move the window to its requested position.
+	Fix suggested by William Sherman.
+	*********************************************************************/
+	
+	Rect actualRect;
+	for(int trial=0;trial<2;++trial) // Try this at most two times
 		{
-		/*********************************************************************
-		Since modern window managers ignore window positions when opening
-		windows, we now need to move the window to its requested position.
-		Fix suggested by William Sherman.
-		*********************************************************************/
-		
 		/* As this request will go to the redirected parent window, calculate its intended position by taking this window's parent offset into account: */
 		XMoveWindow(context->getDisplay(),window,rect.offset[0]-parentOffset[0],rect.offset[1]-parentOffset[1]);
 		
 		/* Wait for the final ConfigureNotify event to determine the final window position and size: */
-		while(true)
+		XEvent event;
+		XWindowEvent(context->getDisplay(),window,StructureNotifyMask,&event);
+		if(event.type==ConfigureNotify)
 			{
-			XEvent event;
-			XWindowEvent(context->getDisplay(),window,StructureNotifyMask,&event);
-		
+			/* Retrieve the final window position and size: */
+			actualRect=XGetRect(event.xconfigure);
+			}
+		while(XCheckWindowEvent(context->getDisplay(),window,StructureNotifyMask,&event))
+			{
 			if(event.type==ConfigureNotify)
 				{
 				/* Retrieve the final window position and size: */
-				rect=XGetRect(event.xconfigure);
-				
-				break;
+				actualRect=XGetRect(event.xconfigure);
 				}
 			}
+		
+		/* Check if the window actually ended up where we wanted: */
+		if(rect.offset==actualRect.offset)
+			break;
+		
+		/* Adjust the parent offset and try again: */
+		for(int i=0;i<2;++i)
+			parentOffset[i]+=actualRect.offset[i]-rect.offset[i];
 		}
+	
+	/* Store the final window rectangle: */
+	rect=actualRect;
 	
 	if(fullscreen)
 		{
