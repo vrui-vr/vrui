@@ -2,7 +2,7 @@
 DOGTransformNode - Class for group nodes that apply a double-precision
 orthogonal transformation to their children, with a simplified field
 interface for direct control through application software.
-Copyright (c) 2020-2021 Oliver Kreylos
+Copyright (c) 2020-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -33,6 +33,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <SceneGraph/SphereCollisionQuery.h>
 #include <SceneGraph/GLRenderState.h>
 #include <SceneGraph/ALRenderState.h>
+#include <SceneGraph/ActState.h>
 
 namespace SceneGraph {
 
@@ -129,6 +130,18 @@ void DOGTransformNode::alRenderAction(ALRenderState& renderState) const
 		
 	/* Pop the transformation off the matrix stack: */
 	renderState.popTransform(previousTransform);
+	}
+
+void DOGTransformNode::act(ActState& actState)
+	{
+	/* Push the transformation onto the matrix stack: */
+	DOGTransform previousTransform=actState.pushTransform(transform.getValue());
+	
+	/* Delegate to the base class: */
+	GroupNode::act(actState);
+		
+	/* Pop the transformation off the matrix stack: */
+	actState.popTransform(previousTransform);
 	}
 
 }

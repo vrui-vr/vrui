@@ -2,7 +2,7 @@
 DOGTransformNode - Class for group nodes that apply a double-precision
 orthogonal transformation to their children, with a simplified field
 interface for direct control through application software.
-Copyright (c) 2020-2021 Oliver Kreylos
+Copyright (c) 2020-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -59,6 +59,7 @@ class DOGTransformNode:public GroupNode
 	virtual void testCollision(SphereCollisionQuery& collisionQuery) const;
 	virtual void glRenderAction(GLRenderState& renderState) const;
 	virtual void alRenderAction(ALRenderState& renderState) const;
+	virtual void act(ActState& actState);
 	
 	/* New methods: */
 	void setTransform(const DOGTransform& newTransform) // Sets the transformation and performs necessary updates
