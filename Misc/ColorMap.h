@@ -1,7 +1,7 @@
 /***********************************************************************
 ColorMap - Templatized class to map scalar values within a defined range
 to colors.
-Copyright (c) 2023 Oliver Kreylos
+Copyright (c) 2023-2024 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -35,8 +35,8 @@ class ColorMap
 	
 	/* Elements: */
 	private:
-	unsigned int numKeys; // Number of key scalar values
-	double* keys; // Array of key scalar values
+	unsigned int numKeys; // Number of key scalar values; always >=1
+	double* keys; // Array of key scalar values; always ordered
 	Color* keyColors; // Array of colors mapped to the key scalar values
 	
 	/* Constructors and destructors: */
@@ -51,6 +51,8 @@ class ColorMap
 	ColorMap& operator=(ColorMap&& source); // Move assignment operator
 	ColorMap& setNumKeys(unsigned int newNumKeys); // Sets the color map's number of keys; invalidates color map
 	ColorMap& setKey(unsigned int index,double key,const Color& keyColor); // Sets the given key/color pair
+	ColorMap& insertKey(unsigned int index,double key,const Color& keyColor); // Inserts a new key/color pair before the given index
+	ColorMap& removeKey(unsigned int index); // Removes the key/color pair at the given index
 	unsigned int getNumKeys(void) const // Returns the number of key values
 		{
 		return numKeys;
