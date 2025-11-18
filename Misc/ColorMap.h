@@ -1,7 +1,7 @@
 /***********************************************************************
 ColorMap - Templatized class to map scalar values within a defined range
 to colors.
-Copyright (c) 2023-2024 Oliver Kreylos
+Copyright (c) 2023-2025 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -24,6 +24,8 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #ifndef MISC_COLORMAP_INCLUDED
 #define MISC_COLORMAP_INCLUDED
 
+#include <vector>
+
 namespace Misc {
 
 template <class ColorParam>
@@ -33,15 +35,32 @@ class ColorMap
 	public:
 	typedef ColorParam Color; // Type of mapped colors
 	
+	struct Entry // Structure for color map entries
+		{
+		/* Elements: */
+		public:
+		double key; // The key value associated with this entry
+		Color color; // The color associated with this entry
+		
+		/* Constructors and destructors: */
+		Entry(void) // Dummy constructor
+			{
+			}
+		Entry(double sKey,const Color& sColor) // Elementwise constructor
+			:key(sKey),color(sColor)
+			{
+			}
+		};
+	
 	/* Elements: */
 	private:
-	unsigned int numKeys; // Number of key scalar values; always >=1
-	double* keys; // Array of key scalar values; always ordered
-	Color* keyColors; // Array of colors mapped to the key scalar values
+	unsigned int numEntries; // Number of color map entries; always >=1
+	Entry* entries; // Array of color map entries
 	
 	/* Constructors and destructors: */
 	public:
-	ColorMap(unsigned int sNumKeys,const double* sKeys =0,const Color* sKeyColors =0); // Creates a color map for the given number of keys; initializes color map arrays if source arrays are given
+	ColorMap(unsigned int sNumEntries,const double* sKeys,const Color* sColors); // Creates a color map for the given number of entries and source arrays
+	ColorMap(const std::vector<Entry>& sEntries); // Creates a color map from the given vector of entries
 	ColorMap(const ColorMap& source); // Copy constructor
 	ColorMap(ColorMap&& source); // Move constructor
 	~ColorMap(void);
@@ -49,45 +68,50 @@ class ColorMap
 	/* Methods: */
 	ColorMap& operator=(const ColorMap& source); // Assignment operator
 	ColorMap& operator=(ColorMap&& source); // Move assignment operator
-	ColorMap& setNumKeys(unsigned int newNumKeys); // Sets the color map's number of keys; invalidates color map
-	ColorMap& setKey(unsigned int index,double key,const Color& keyColor); // Sets the given key/color pair
-	ColorMap& insertKey(unsigned int index,double key,const Color& keyColor); // Inserts a new key/color pair before the given index
-	ColorMap& removeKey(unsigned int index); // Removes the key/color pair at the given index
-	unsigned int getNumKeys(void) const // Returns the number of key values
+	ColorMap& setEntry(unsigned int index,double key,const Color& color); // Sets the color map entry of the given index
+	ColorMap& insertEntry(unsigned int index,double key,const Color& color); // Inserts a new color map entry before the given index
+	ColorMap& removeEntry(unsigned int index); // Removes the color map entry at the given index
+	ColorMap& scaleRange(double minValue,double maxValue); // Scales the color map key range uniformly to the given interval
+	ColorMap& setRange(double minValue,double maxValue); // Sets the color map's key range to the given interval by extending and/or clipping the entry array
+	unsigned int getNumEntries(void) const // Returns the number of color map entries
 		{
-		return numKeys;
+		return numEntries;
 		}
-	double getKey(unsigned int index) const // Returns the key value of the given index
+	const Entry& getEntry(unsigned int index) const // Returns the color map entry of the given index
 		{
-		return keys[index];
+		return entries[index];
 		}
-	const Color& getKeyColor(unsigned int index) const // Returns the color associated with the key of the given index
+	double getKey(unsigned int index) const // Returns the key of the color map entry of the given index
 		{
-		return keyColors[index];
+		return entries[index].key;
+		}
+	const Color& getColor(unsigned int index) const // Returns the color of the color map entry of the given index
+		{
+		return entries[index].color;
 		}
 	Color map(double value) const // Returns the color mapped to the given scalar value
 		{
 		/* Check the given value against the color map's range: */
-		if(value<=keys[0])
-			return keyColors[0];
-		else if(value>=keys[numKeys-1])
-			return keyColors[numKeys-1];
+		if(value<=entries[0].key)
+			return entries[0].color;
+		else if(value>=entries[numEntries-1].key)
+			return entries[numEntries-1].color;
 		else
 			{
 			/* Find the index of the key interval containing the given scalar value via binary search: */
 			unsigned int l=0;
-			unsigned int r=numKeys;
+			unsigned int r=numEntries;
 			while(r-l>1)
 				{
 				unsigned int m=(l+r)/2;
-				if(keys[m]<=value)
+				if(entries[m].key<=value)
 					l=m;
 				else
 					r=m;
 				}
 			
 			/* Blend the colors associated with the ends of the found key interval: */
-			return blend(keyColors[l],keyColors[l+1],(value-keys[l])/(keys[l+1]-keys[l]));
+			return blend(entries[l].color,entries[l+1].color,(value-entries[l].key)/(entries[l+1].key-entries[l].key));
 			}
 		}
 	};

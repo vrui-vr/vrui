@@ -8427,3 +8427,4 @@ Vrui-14.0-002:
   to update the action state's current transformation.
   - TransformNode, ONTransformNode, OGTransformNode, DOGTransformNode,
     GeodeticToCartesianTransformNode, BillboardNode.
+- API change: Redesigned Misc::ColorMap from scratch.
