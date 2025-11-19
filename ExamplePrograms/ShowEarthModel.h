@@ -2,7 +2,7 @@
 ShowEarthModel - Simple Vrui application to render a model of Earth,
 with the ability to additionally display earthquake location data and
 other geology-related stuff.
-Copyright (c) 2005-2023 Oliver Kreylos
+Copyright (c) 2005-2025 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -87,6 +87,10 @@ class ShowEarthModel:public Vrui::Application,public SceneGraph::GraphNode,publi
 		virtual Vrui::Point inverseTransform(const Vrui::Point& userPoint) const;
 		
 		/* New methods: */
+		Vrui::Scalar getRotationAngle(void) const
+			{
+			return rotationAngle;
+			}
 		void setRotationAngle(Vrui::Scalar newRotationAngle);
 		};
 	
