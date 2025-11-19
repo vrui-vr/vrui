@@ -34,18 +34,37 @@ LINUXDISTRO_ID=$(sed -n "s/^ID=\(.*\)$/\1/p" /etc/os-release)
 LINUXDISTRO_ID=$(sed "s/^\(\"\)\(.*\)\1\$/\2/g" <<<"$LINUXDISTRO_ID")
 if [[ "${LINUXDISTRO_ID}" == "fedora" || "${LINUXDISTRO_ID}" == "centos" || "${LINUXDISTRO_ID}" == "rhel" ]]; then
 	LINUXDISTRO=Fedora
-	PACKAGE_INSTALL_CMD="dnf install"
+	PACKAGE_INSTALL_CMD="dnf -y install"
 elif [[ "${LINUXDISTRO_ID}" == "ubuntu" ]]; then
 	LINUXDISTRO=Ubuntu
-	PACKAGE_INSTALL_CMD="apt-get install"
+	PACKAGE_INSTALL_CMD="apt-get -y install"
 elif [[ "${LINUXDISTRO_ID}" == "linuxmint" ]]; then
 	LINUXDISTRO=Mint
-	PACKAGE_INSTALL_CMD="apt-get install"
+	PACKAGE_INSTALL_CMD="apt-get -y install"
 else
 	echo -e "\033[0;31mUnable to determine the Linux distribution type on this host, prerequisites need to be installed manually\033[0m"
 	exit 1
 fi
 LINUXDISTRO_VERSION=$(sed -n "s/^VERSION_ID=\(.*\)$/\1/p" /etc/os-release)
+
+# Function to check for a minimum OS version; returns true if OS is at
+# least as new as given version
+# Usage: if CheckOSVersion <OS version in dotted notation> ; then ... ; fi
+
+CheckOSVersion()
+	{
+	printf "${LINUXDISTRO_VERSION}\n$1\n" | sort -VC
+	}
+
+# Function to check for an OS name and a minimum OS version; returns
+# true if OS name equals the first parameter, and OS is at least as new
+# as the version given in the second parameter
+# Usage: if CheckOSVersion <OS name> <OS version in dotted notation> ; then ... ; fi
+
+CheckOS()
+	{
+	[[ "${LINUXDISTRO}" == "$1" ]] && ( printf "$2\n${LINUXDISTRO_VERSION}\n" | sort -VC )
+	}
 
 ########################################################################
 # Build lists of required, optional, and very optional system packages
@@ -122,7 +141,16 @@ elif [[ "${LINUXDISTRO}" == "Ubuntu" || "${LINUXDISTRO}" == "Mint" ]]; then
 	
 	# If SteamVR is installed, add the Vulkan libraries for the VR compositor
 	if [ -n "${STEAMVRVERSION}" ]; then
-		REQUIRED_PKGS+=(libvulkan-dev vulkan-validationlayers-dev)
+		REQUIRED_PKGS+=(libvulkan-dev)
+		
+		# The vulkan-validationlayers-dev package changed name recently
+		if CheckOS "Ubuntu" "24.10" || CheckOS "Mint" "22.0" ; then
+			# Request the new package
+			REQUIRED_PKGS+=(vulkan-utility-libraries-dev)
+		else
+			# Request the old package
+			REQUIRED_PKGS+=(vulkan-validationlayers-dev)
+		fi
 	fi
 	
 	#
@@ -155,10 +183,10 @@ elif [[ "${LINUXDISTRO}" == "Ubuntu" || "${LINUXDISTRO}" == "Mint" ]]; then
 	#
 	
 	OPTIONAL2_PKGS=()
-	if [[ "${LINUXDISTRO}" == "Ubuntu" ]]; then
+	if CheckOS "Ubuntu" "22.04" || CheckOS "Mint" "21.0" ; then
 		OPTIONAL2_PKGS+=(libcd1394-dev)
-	elif [[ "${LINUXDISTRO}" == "Mint" ]]; then
-		OPTIONAL2_PKGS+=(libcd1394-dev)
+	else
+		OPTIONAL2_PKGS+=(libcd1394-22-dev)
 	fi
 	OPTIONAL2_PKGS+=(ffmpeg libxine2-dev libxine2-plugins libxine2-ffmpeg)
 else
