@@ -2,7 +2,7 @@
 Opener - Class to encapsulate how files and other file-like objects are
 opened, to expose functionality of higher-level libraries at the base IO
 level.
-Copyright (c) 2018 Oliver Kreylos
+Copyright (c) 2018-2025 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -88,6 +88,12 @@ void Opener::resetOpener(void)
 	{
 	/* Install the static base opener: */
 	opener=&theOpener;
+	}
+
+bool Opener::isAbsolutePath(const char* path) const
+	{
+	/* Absolute paths begin with a '/': */
+	return path[0]=='/';
 	}
 
 FilePtr Opener::openFile(const char* fileName,File::AccessMode accessMode)

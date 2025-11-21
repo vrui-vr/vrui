@@ -1,7 +1,7 @@
 /***********************************************************************
 StandardDirectory - Pair of classes to access cluster-transparent
 standard filesystem directories.
-Copyright (c) 2011-2024 Oliver Kreylos
+Copyright (c) 2011-2025 Oliver Kreylos
 
 This file is part of the Cluster Abstraction Library (Cluster).
 
@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Misc/GetCurrentDirectory.h>
 #include <Misc/FileTests.h>
 #include <IO/StandardDirectory.h>
+#include <IO/OpenFile.h>
 #include <Cluster/Opener.h>
 
 namespace Cluster {
@@ -165,10 +166,10 @@ Misc::PathType StandardDirectory::getEntryType(void) const
 IO::FilePtr StandardDirectory::openFile(const char* fileName,IO::File::AccessMode accessMode) const
 	{
 	/* Check if the file name is absolute: */
-	if(fileName[0]=='/')
+	if(IO::isAbsolutePath(fileName))
 		{
 		/* Open and return the file using the absolute path: */
-		return Opener::openFile(pipe.getMultiplexer(),fileName,accessMode);
+		return IO::openFile(fileName,accessMode);
 		}
 	else
 		{
@@ -186,13 +187,10 @@ IO::FilePtr StandardDirectory::openFile(const char* fileName,IO::File::AccessMod
 IO::DirectoryPtr StandardDirectory::openDirectory(const char* directoryName) const
 	{
 	/* Check if the directory name is absolute: */
-	if(directoryName[0]=='/')
+	if(IO::isAbsolutePath(directoryName))
 		{
 		/* Open and return the directory using the absolute path: */
-		if(pipe.getMultiplexer()->isMaster())
-			return new StandardDirectoryMaster(pipe.getMultiplexer(),directoryName);
-		else
-			return new StandardDirectorySlave(pipe.getMultiplexer(),directoryName);
+		return IO::openDirectory(directoryName);
 		}
 	else
 		{

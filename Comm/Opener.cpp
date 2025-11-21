@@ -2,7 +2,7 @@
 Opener - Class derived from IO::Opener to add additional functionality
 provided by the Comm library, such as access to remote files over
 HTTP/1.1.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2025 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -75,6 +75,12 @@ Opener::~Opener(void)
 		// DEBUGGING
 		// std::cout<<"Uninstalling Comm::Opener; new opener is "<<IO::Opener::getOpener()<<std::endl;
 		}
+	}
+
+bool Opener::isAbsolutePath(const char* path) const
+	{
+	/* Absolute paths begin with an "http(s)://" prefix or a '/': */
+	return HttpFile::checkHttpPrefix(path)||path[0]=='/';
 	}
 
 IO::FilePtr Opener::openFile(const char* fileName,IO::File::AccessMode accessMode)
