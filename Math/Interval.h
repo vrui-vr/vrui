@@ -34,7 +34,7 @@ bool operator!=(const Interval<ScalarParam>&,const Interval<ScalarParam>&);
 template <class ScalarParam>
 Interval<ScalarParam> intersect(const Interval<ScalarParam>&,const Interval<ScalarParam>&);
 template <class ScalarParam>
-Interval<ScalarParam> add(const Interval<ScalarParam>&,ScalarParam);
+Interval<ScalarParam> operator+(const Interval<ScalarParam>&,ScalarParam);
 template <class ScalarParam>
 Interval<ScalarParam> operator+(ScalarParam,const Interval<ScalarParam>&);
 template <class ScalarParam>
@@ -49,6 +49,17 @@ Interval<ScalarParam> operator-(const Interval<ScalarParam>&,const Interval<Scal
 template <class ScalarParam>
 class Interval
 	{
+	/* Friend declarations: */
+	friend bool operator==<>(const Interval&,const Interval&);
+	friend bool operator!=<>(const Interval&,const Interval&);
+	friend Interval intersect<>(const Interval&,const Interval&);
+	friend Interval operator+<>(const Interval&,ScalarParam);
+	friend Interval operator+<>(ScalarParam,const Interval&);
+	friend Interval operator+<>(const Interval&,const Interval&);
+	friend Interval operator-<>(const Interval&,ScalarParam);
+	friend Interval operator-<>(ScalarParam,const Interval&);
+	friend Interval operator-<>(const Interval&,const Interval&);
+	
 	/* Embedded classes: */
 	public:
 	typedef ScalarParam Scalar; // Interval's scalar type
@@ -88,8 +99,6 @@ class Interval
 		}
 	
 	/* Methods: */
-	friend bool operator==<>(const Interval& i1,const Interval& i2); // Equality operator
-	friend bool operator!=<>(const Interval& i1,const Interval& i2); // Inequality operator
 	bool isNull(void) const // Returns true if the interval contains no values at all
 		{
 		return min>max;
@@ -121,6 +130,23 @@ class Interval
 	bool contains(Scalar s) const // Checks if interval contains a value
 		{
 		return min<=s&&s<=max; // Intervals are closed
+		}
+	Scalar clamp(Scalar s) const // Clamps the given value to the interval; result is undefined for null intervals
+		{
+		if(s<min)
+			return min;
+		else if(s>max)
+			return max;
+		else
+			return s;
+		}
+	Scalar valueToFraction(Scalar s) const // Converts the given value into a fraction where [0, 1] maps to the interval; result is undefined for null intervals
+		{
+		return (s-min)/(max-min);
+		}
+	Scalar fractionToValue(Scalar s) const // Converts the fraction where [0, 1] maps to the interval to a value; result is undefined for null intervals
+		{
+		return (Scalar(1)-s)*min+s*max;
 		}
 	bool contains(const Interval& other) const // Checks if an interval contains another interval
 		{
@@ -157,7 +183,6 @@ class Interval
 		return *this;
 		}
 	Interval& intersectInterval(const Interval& other); // Changes the interval to the intersection with the given interval
-	friend Interval intersect<>(const Interval& i1,const Interval& i2); // Intersects two intervals
 	
 	/* Methods for interval arithmetic: */
 	Interval operator+(void) const // Unary plus operator; returns copy of interval
@@ -182,9 +207,6 @@ class Interval
 		
 		return *this;
 		}
-	friend Interval add<>(const Interval& i,Scalar s); // Adds an interval and a scalar
-	//friend Interval operator+<>(Scalar s,const Interval& i); // Adds a scalar and an interval
-	//friend Interval operator+<>(const Interval& i1,const Interval& i2); // Adds two intervals
 	Interval& operator-=(Scalar s) // Subtraction assignment with scalar
 		{
 		min-=s;
@@ -199,9 +221,6 @@ class Interval
 		
 		return *this;
 		}
-	//friend Interval operator-<>(const Interval& i,Scalar s); // Subtracts a scalar from an interval
-	//friend Interval operator-<>(Scalar s,const Interval& i); // Subtracts an interval from a scalar
-	//friend Interval operator-<>(const Interval& i1,const Interval& i2); // Subtracts two intervals
 	Interval& operator*=(Scalar s); // Multiplication assignment with scalar
 	};
 
@@ -210,49 +229,49 @@ Friend functions of class Interval:
 **********************************/
 
 template <class ScalarParam>
-inline bool operator==(const Interval<ScalarParam>& i1,const Interval<ScalarParam>& i2)
+inline bool operator==(const Interval<ScalarParam>& i1,const Interval<ScalarParam>& i2) // Equality operator
 	{
 	return i1.min==i2.min&&i1.max==i2.max;
 	}
 
 template <class ScalarParam>
-inline bool operator!=(const Interval<ScalarParam>& i1,const Interval<ScalarParam>& i2)
+inline bool operator!=(const Interval<ScalarParam>& i1,const Interval<ScalarParam>& i2) // Inequality operator
 	{
 	return i1.min!=i2.min||i1.max!=i2.max;
 	}
 
 template <class ScalarParam>
-inline Interval<ScalarParam> operator+(const Interval<ScalarParam>& i,ScalarParam s)
+inline Interval<ScalarParam> operator+(const Interval<ScalarParam>& i,ScalarParam s) // Scalar addition operator; shifts interval by the given scalar
 	{
 	return Interval<ScalarParam>(i.min+s,i.max+s);
 	}
 
 template <class ScalarParam>
-inline Interval<ScalarParam> operator+(ScalarParam s,const Interval<ScalarParam>& i)
+inline Interval<ScalarParam> operator+(ScalarParam s,const Interval<ScalarParam>& i) // Scalar addition operator; shifts interval by the given scalar
 	{
 	return Interval<ScalarParam>(s+i.min,s+i.max);
 	}
 
 template <class ScalarParam>
-inline Interval<ScalarParam> operator+(const Interval<ScalarParam>& i1,const Interval<ScalarParam>& i2)
+inline Interval<ScalarParam> operator+(const Interval<ScalarParam>& i1,const Interval<ScalarParam>& i2) // Interval addition operator
 	{
 	return Interval<ScalarParam>(i1.min+i2.min,i1.max+i2.max);
 	}
 
 template <class ScalarParam>
-inline Interval<ScalarParam> operator-(const Interval<ScalarParam>& i,ScalarParam s)
+inline Interval<ScalarParam> operator-(const Interval<ScalarParam>& i,ScalarParam s) // Scalar subtraction operator; shifts interval by the given scalar
 	{
 	return Interval<ScalarParam>(i.min-s,i.max-s);
 	}
 
 template <class ScalarParam>
-inline Interval<ScalarParam> operator-(ScalarParam s,const Interval<ScalarParam>& i)
+inline Interval<ScalarParam> operator-(ScalarParam s,const Interval<ScalarParam>& i) // Scalar subtraction operator; shifts interval by the given scalar
 	{
 	return Interval<ScalarParam>(s-i.max,s-i.min);
 	}
 
 template <class ScalarParam>
-inline Interval<ScalarParam> operator-(const Interval<ScalarParam>& i1,const Interval<ScalarParam>& i2)
+inline Interval<ScalarParam> operator-(const Interval<ScalarParam>& i1,const Interval<ScalarParam>& i2) // Interval subtraction operator
 	{
 	return Interval<ScalarParam>(i1.min-i2.max,i1.max-i2.min);
 	}

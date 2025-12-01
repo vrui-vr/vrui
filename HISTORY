@@ -8433,3 +8433,5 @@ Vrui-14.1-001:
 - Fixes to Math::Interval class:
   - Renamed misnamed "add" friend function to "operator+".
   - Added isNotEmpty method, which is not the opposite of isEmpty.
+  - Added clamp, valueToFraction, and fractionToValue methods.
+  - Fixed friend declarations.
