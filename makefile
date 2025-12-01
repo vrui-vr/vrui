@@ -231,9 +231,9 @@ PROJECT_NAME = Vrui
 
 # Specify version of created dynamic shared libraries
 PROJECT_MAJOR = 14
-PROJECT_MINOR = 0
-PROJECT_BUILD = 2
-PROJECT_NUMERICVERSION = 14000002
+PROJECT_MINOR = 1
+PROJECT_BUILD = 1
+PROJECT_NUMERICVERSION = 14001001
 
 # Override the include file and library search directories:
 VRUI_INCLUDEDIR = $(PROJECT_ROOT)

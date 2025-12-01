@@ -8422,7 +8422,7 @@ Vrui-14.0-001:
   - Updated CalibrateTouchscreen utility in Calibration directory to use
     new TouchscreenCalibrator classes.
 
-Vrui-14.0-002:
+Vrui-14.1-001:
 - Implemented act methods in node types of SceneGraph library that need
   to update the action state's current transformation.
   - TransformNode, ONTransformNode, OGTransformNode, DOGTransformNode,
