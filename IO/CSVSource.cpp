@@ -1,7 +1,7 @@
 /***********************************************************************
 CSVSource - Class to read tabular data from input streams in generalized
 comma-separated value (CSV) format.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2025 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -400,30 +400,139 @@ bool CSVSource::convertNumber(int& nextChar,float& value)
 	return true;
 	}
 
+void CSVSource::setFieldCharacter(int character)
+	{
+	/* Check if the character is valid in an unquoted field: */
+	if((cc[character]&(RECORDSEP|FIELDSEP|QUOTE))==0x0)
+		cc[character]|=FIELD;
+	
+	/* Everything is valid in a quoted field until an actual quote is encountered: */
+	cc[character]|=QUOTEDFIELD;
+	}
+
+void CSVSource::updateCharacterClasses(void)
+	{
+	/* Reset all characters: */
+	for(int i=-1;i<256;++i)
+		cc[i]&=~(FIELD|QUOTEDFIELD|WHITESPACE|DIGIT);
+	
+	/* These are not in RFC 4180, but there is really no reason to forbid them: */
+	setFieldCharacter('\t');
+	setFieldCharacter('\n');
+	setFieldCharacter('\v');
+	setFieldCharacter('\f');
+	setFieldCharacter('\r');
+	
+	/* Core RFC 4180 characters: */
+	for(int i=32;i<128;++i)
+		setFieldCharacter(i);
+	
+	/* These aren't in RFC 4180, either, but again no reason to forbid them and thus break UTF-8: */
+	for(int i=128;i<256;++i)
+		setFieldCharacter(i);
+	
+	/* Mark whitespace: */
+	cc['\t']|=WHITESPACE;
+	cc['\n']|=WHITESPACE;
+	cc['\v']|=WHITESPACE;
+	cc['\f']|=WHITESPACE;
+	cc['\r']|=WHITESPACE;
+	cc[' ']|=WHITESPACE;
+	
+	/* Mark digits: */
+	for(int i='0';i<='9';++i)
+		cc[i]|=DIGIT;
+	}
+
 CSVSource::CSVSource(FilePtr sSource)
 	:source(sSource),
+	 cc(characterClasses+1),
 	 fieldSeparator(','),recordSeparator('\n'),quote('\"'),
 	 recordIndex(0),fieldIndex(0)
 	{
+	/* Set up character classes for RFC 4180-style CSV: */
+	for(int i=-1;i<256;++i)
+		cc[i]=NONE;
+	cc['\r']|=RECORDSEP;
+	cc['\n']|=RECORDSEP;
+	cc[',']|=FIELDSEP;
+	cc['"']|=QUOTE;
+	updateCharacterClasses();
+	
+	/* Read the first character from the character source: */
+	lastChar=source->getChar();
 	}
 
 CSVSource::~CSVSource(void)
 	{
-	}
-
-void CSVSource::setFieldSeparator(int newFieldSeparator)
-	{
-	fieldSeparator=newFieldSeparator;
+	/* Put the last read character back into the character source: */
+	if(lastChar>=0)
+		source->ungetChar(lastChar);
 	}
 
 void CSVSource::setRecordSeparator(int newRecordSeparator)
 	{
-	recordSeparator=newRecordSeparator;
+	/* Throw an error if the given character is invalid: */
+	if(newRecordSeparator<0||newRecordSeparator>=256)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid record separator character");
+	
+	/* Clear the record separator flag from all characters: */
+	for(int i=-1;i<256;++i)
+		cc[i]&=~RECORDSEP;
+	
+	/* Set the record separator flag for the given character: */
+	cc[newRecordSeparator]|=RECORDSEP;
+	
+	/* Update the rest of the character classes: */
+	updateCharacterClasses();
+	}
+
+void CSVSource::setRecordSeparatorCRLF(void)
+	{
+	/* Clear the record separator flag from all characters: */
+	for(int i=-1;i<256;++i)
+		cc[i]&=~RECORDSEP;
+	
+	/* Set the record separator flag for the CR/LF sequence: */
+	cc['\r']|=RECORDSEP;
+	cc['\n']|=RECORDSEP;
+	
+	/* Update the rest of the character classes: */
+	updateCharacterClasses();
+	}
+
+void CSVSource::setFieldSeparator(int newFieldSeparator)
+	{
+	/* Throw an error if the given character is invalid: */
+	if(newFieldSeparator<0||newFieldSeparator>=256)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid field separator character");
+	
+	/* Clear the field separator flag from all characters: */
+	for(int i=-1;i<256;++i)
+		cc[i]&=~FIELDSEP;
+	
+	/* Set the field separator flag for the given character: */
+	cc[newFieldSeparator]|=FIELDSEP;
+	
+	/* Update the rest of the character classes: */
+	updateCharacterClasses();
 	}
 
 void CSVSource::setQuote(int newQuote)
 	{
-	quote=newQuote;
+	/* Throw an error if the given character is invalid: */
+	if(newQuote<0||newQuote>=256)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid quote character");
+	
+	/* Clear the quote flag from all characters: */
+	for(int i=-1;i<256;++i)
+		cc[i]&=~QUOTE;
+	
+	/* Set the quote flag for the given character: */
+	cc[newQuote]|=QUOTE;
+	
+	/* Update the rest of the character classes: */
+	updateCharacterClasses();
 	}
 
 template <class ValueParam>
@@ -467,6 +576,28 @@ ValueParam CSVSource::readField(void)
 template <>
 std::string CSVSource::readField(void)
 	{
+	/* Check if the string is quoted: */
+	if(lastChar==quote)
+		{
+		}
+	else
+		{
+		}
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
+	
 	/* Read the field's first character: */
 	int nextChar=source->getChar();
 	
