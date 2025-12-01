@@ -1,6 +1,6 @@
 /***********************************************************************
 Interval - Class for closed intervals of arbitrary scalar types.
-Copyright (c) 2003-2010 Oliver Kreylos
+Copyright (c) 2003-2025 Oliver Kreylos
 
 This file is part of the Templatized Math Library (Math).
 
@@ -97,6 +97,10 @@ class Interval
 	bool isEmpty(void) const // Returns true if the interval has no interior (i.e., contains exactly one value)
 		{
 		return min==max;
+		}
+	bool isNonEmpty(void) const // Returns true if the interval has an interior
+		{
+		return min<max;
 		}
 	bool isFull(void) const // Returns true if the interval contains all values
 		{
@@ -218,7 +222,7 @@ inline bool operator!=(const Interval<ScalarParam>& i1,const Interval<ScalarPara
 	}
 
 template <class ScalarParam>
-inline Interval<ScalarParam> add(const Interval<ScalarParam>& i,ScalarParam s)
+inline Interval<ScalarParam> operator+(const Interval<ScalarParam>& i,ScalarParam s)
 	{
 	return Interval<ScalarParam>(i.min+s,i.max+s);
 	}

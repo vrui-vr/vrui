@@ -8430,3 +8430,6 @@ Vrui-14.0-002:
 - API change: Redesigned Misc::ColorMap from scratch.
 - Added isPathAbsolute method to IO::Opener class and fixed handling of
   absolute vs. relative paths when opening files or directories.
+- Fixes to Math::Interval class:
+  - Renamed misnamed "add" friend function to "operator+".
+  - Added isNotEmpty method, which is not the opposite of isEmpty.
