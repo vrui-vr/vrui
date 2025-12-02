@@ -59,6 +59,9 @@ class CSVSource
 		DIGIT=0x40 // Class for digits
 		};
 	
+	class FieldReader; // Helper class to read quoted or unquoted fields
+	friend class FieldReader;
+	
 	/* Elements: */
 	private:
 	FilePtr source; // Data source for CSV source
@@ -69,9 +72,6 @@ class CSVSource
 	int lastChar; // Last character read from character source
 	
 	/* Private methods: */
-	bool skipRestOfField(bool quoted,int nextChar); // Skips the rest of the current field starting with the given character; returns true if any characters were skipped; throws format error if the end of the field cannot be determined reliably
-	template <class ValueParam>
-	bool convertNumber(int& nextChar,ValueParam& value); // Converts characters in a field into a numeric value of the given type; returns false on conversion error
 	void setFieldCharacter(int character); // Marks the given character as potentially valid in a field
 	void updateCharacterClasses(void); // Updates character classes after a change to the parser's parameters
 	
@@ -108,24 +108,7 @@ class CSVSource
 		}
 	
 	/* Field reading methods: */
-	bool skipField(void) // Skips the current field; returns true if the field was non-empty after unquoting; throws exception if the end of the field cannot be determined reliably
-		{
-		/* Read the first character: */
-		int nextChar=source->getChar();
-		if(nextChar==quote)
-			{
-			/* Skip the opening quote: */
-			nextChar=source->getChar();
-			
-			/* Skip a quoted field: */
-			return skipRestOfField(true,nextChar);
-			}
-		else
-			{
-			/* Skip an unquoted field: */
-			return skipRestOfField(false,nextChar);
-			}
-		}
+	bool skipField(void); // Skips the current field; returns true if the field was non-empty after unquoting; throws exception if the end of the field cannot be determined reliably
 	void skipRecord(void) // Skips the rest of the current record
 		{
 		/* Simply skip fields until the field index resets to zero: */

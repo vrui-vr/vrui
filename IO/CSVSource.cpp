@@ -143,160 +143,351 @@ CSVSource::ConversionError::ConversionError(const char* source,unsigned int fiel
 	{
 	}
 
+/*******************************************
+Declaration of class CSVSource::FieldReader:
+*******************************************/
+
+class CSVSource::FieldReader // Helper class to read quoted or unquoted fields
+	{
+	/* Elements: */
+	private:
+	const char* sourceFunction; // Name of the function that created this object
+	CSVSource& csvSource; // Reference to the CSV source object
+	File& source; // Direct reference to the CSV source's character source
+	unsigned char* cc; // The array of character classes
+	int quote; // Quote character for a quoted field or -1 for unquoted fields
+	unsigned char fieldMask; // Bit mask for characters valid in the current field
+	int lastChar; // The last read character
+	
+	/* Constructors and destructors: */
+	public:
+	FieldReader(const char* sSourceFunction,CSVSource& sCsvSource)
+		:sourceFunction(sSourceFunction),
+		 csvSource(sCsvSource),
+		 source(*csvSource.source),cc(csvSource.cc),
+		 quote(-1),fieldMask(FIELD),
+		 lastChar(csvSource.lastChar)
+		{
+		/* Check if the field is quoted: */
+		if((cc[lastChar]&QUOTE)!=0x0U)
+			{
+			/* Remember the quote character and remove it from the set of valid quoted field characters: */
+			quote=lastChar;
+			cc[quote]&=~QUOTEDFIELD;
+			
+			/* Read a quoted field: */
+			fieldMask=QUOTEDFIELD;
+			
+			/* Skip the quote character: */
+			lastChar=source.getChar();
+			}
+		}
+	~FieldReader(void)
+		{
+		/* Check if this was a quoted field: */
+		if(quote>=0)
+			{
+			/* Re-insert the quote character into the set of valid quoted field characters: */
+			cc[quote]|=QUOTEDFIELD;
+			}
+		
+		/* Update the CSV source's last read character: */
+		csvSource.lastChar=lastChar;
+		}
+	
+	/* Methods: */
+	int getChar(void) // Returns the next character from the current field, or -1 at the end of the field
+		{
+		/* Remember the character to be returned: */
+		int result=lastChar;
+		
+		/* Check if the character is a valid field character or something else: */
+		if((cc[result]&fieldMask)!=0x0U)
+			{
+			/* Read the next character: */
+			lastChar=source.getChar();
+			}
+		else if(result<0)
+			{
+			/* Check if the field was quoted: */
+			if(quote>=0)
+				{
+				/* Signal a format error: */
+				throw FormatError(sourceFunction,csvSource.fieldIndex,csvSource.recordIndex);
+				}
+			else
+				{
+				/* Field is finished: */
+				result=-1;
+				}
+			}
+		else if(result==quote)
+			{
+			/* Skip the quote character and check for a double (quoted) quote: */
+			lastChar=source.getChar();
+			if(lastChar==quote)
+				{
+				/* Skip the second quote as well: */
+				lastChar=source.getChar();
+				}
+			else
+				{
+				/* Field is finished: */
+				result=-1;
+				}
+			}
+		else
+			{
+			/* Field is finished: */
+			result=-1;
+			}
+		
+		return result;
+		}
+	void skipWhitespace(void) // Skips whitespace
+		{
+		/* Skip valid characters for the current field type that are also whitespace: */
+		unsigned char wsMask=fieldMask|WHITESPACE;
+		while((cc[lastChar]&wsMask)==wsMask)
+			lastChar=source.getChar();
+		}
+	bool readValue(unsigned int& result) // Read a numeric value in unsigned int format
+		{
+		/* Check for an optional plus sign: */
+		if(lastChar=='+')
+			lastChar=source.getChar();
+		
+		/* Read the first digit: */
+		if((cc[lastChar]&DIGIT)==0x0U)
+			return false;
+		result=(unsigned int)(lastChar-'0');
+		lastChar=source.getChar();
+		
+		/* Read all following digits: */
+		while((cc[lastChar]&DIGIT)!=0x0U)
+			{
+			result=result*10U+(unsigned int)(lastChar-'0');
+			lastChar=source.getChar();
+			}
+		
+		return true;
+		}
+	bool readValue(int& result) // Read a numeric value in signed int format
+		{
+		/* Check for an optional plus or minus sign: */
+		bool negative=false;
+		if(lastChar=='+')
+			lastChar=source.getChar();
+		else if(lastChar=='-')
+			{
+			negative=true;
+			lastChar=source.getChar();
+			}
+		
+		/* Read the first digit: */
+		if((cc[lastChar]&DIGIT)==0x0U)
+			return false;
+		result=int(lastChar-'0');
+		lastChar=source.getChar();
+		
+		/* Read all following digits: */
+		while((cc[lastChar]&DIGIT)!=0x0U)
+			{
+			result=result*10+int(lastChar-'0');
+			lastChar=source.getChar();
+			}
+		
+		/* Negate the result if there was a minus sign: */
+		if(negative)
+			result=-result;
+		
+		return true;
+		}
+	bool readValue(unsigned long& result) // Read a numeric value in unsigned long format
+		{
+		/* Check for an optional plus sign: */
+		if(lastChar=='+')
+			lastChar=source.getChar();
+		
+		/* Read the first digit: */
+		if((cc[lastChar]&DIGIT)==0x0U)
+			return false;
+		result=(unsigned long)(lastChar-'0');
+		lastChar=source.getChar();
+		
+		/* Read all following digits: */
+		while((cc[lastChar]&DIGIT)!=0x0U)
+			{
+			result=result*10UL+(unsigned long)(lastChar-'0');
+			lastChar=source.getChar();
+			}
+		
+		return true;
+		}
+	bool readValue(long& result) // Read a numeric value in signed long format
+		{
+		/* Check for an optional plus or minus sign: */
+		bool negative=false;
+		if(lastChar=='+')
+			lastChar=source.getChar();
+		else if(lastChar=='-')
+			{
+			negative=true;
+			lastChar=source.getChar();
+			}
+		
+		/* Read the first digit: */
+		if((cc[lastChar]&DIGIT)==0x0U)
+			return false;
+		result=long(lastChar-'0');
+		lastChar=source.getChar();
+		
+		/* Read all following digits: */
+		while((cc[lastChar]&DIGIT)!=0x0U)
+			{
+			result=result*10L+long(lastChar-'0');
+			lastChar=source.getChar();
+			}
+		
+		/* Negate the result if there was a minus sign: */
+		if(negative)
+			result=-result;
+		
+		return true;
+		}
+	bool readValue(float& result) // Read a numeric value in float format
+		{
+		/* Simply use the double-valued method: */
+		double tempResult;
+		bool valid=readValue(tempResult);
+		result=float(tempResult);
+		return valid;
+		}
+	bool readValue(double& result) // Read a numeric value in double format
+		{
+		/* Check for an optional plus or minus sign: */
+		bool negative=false;
+		if(lastChar=='+')
+			lastChar=source.getChar();
+		else if(lastChar=='-')
+			{
+			negative=true;
+			lastChar=source.getChar();
+			}
+		
+		/* Keep track if any digits have been read: */
+		bool haveDigit=false;
+		
+		/* Read an integral number part: */
+		result=0.0;
+		while((cc[lastChar]&DIGIT)!=0x0U)
+			{
+			haveDigit=true;
+			result=result*10.0+double(lastChar-'0');
+			lastChar=source.getChar();
+			}
+		
+		/* Check for a period: */
+		if(lastChar=='.')
+			{
+			lastChar=source.getChar();
+			
+			/* Read a fractional number part: */
+			double fraction=0.0;
+			double fractionBase=1.0;
+			while((cc[lastChar]&DIGIT)!=0x0U)
+				{
+				haveDigit=true;
+				fraction=fraction*10.0+double(lastChar-'0');
+				fractionBase*=10.0;
+				lastChar=source.getChar();
+				}
+			
+			result+=fraction/fractionBase;
+			}
+		
+		/* Signal a conversion error if no digits were read in the integral or fractional part: */
+		if(!haveDigit)
+			return false;
+		
+		/* Negate the result if a minus sign was read: */
+		if(negative)
+			result=-result;
+		
+		/* Check for an exponent indicator: */
+		if(lastChar=='e'||lastChar=='E')
+			{
+			lastChar=source.getChar();
+			
+			/* Read a plus or minus sign: */
+			bool exponentNegative=false;
+			if(lastChar=='+')
+				lastChar=source.getChar();
+			else if(lastChar=='-')
+				{
+				exponentNegative=true;
+				lastChar=source.getChar();
+				}
+			
+			/* Read the first exponent digit: */
+			if((cc[lastChar]&DIGIT)==0x0U)
+				return false;
+			double exponent=double(lastChar-'0');
+			lastChar=source.getChar();
+			
+			/* Read the rest of the exponent digits: */
+			while((cc[lastChar]&DIGIT)!=0x0U)
+				{
+				exponent=exponent*10.0+double(lastChar-'0');
+				lastChar=source.getChar();
+				}
+			
+			/* Multiply the mantissa with the exponent: */
+			if(exponentNegative)
+				exponent=-exponent;
+			result*=pow(10.0,exponent);
+			}
+		
+		return true;
+		}
+	void finishField(void) // Finishes reading the current field
+		{
+		/* Check whether the next character is a record or field separator: */
+		if((cc[lastChar]&RECORDSEP)!=0x0U)
+			{
+			/* Remember and skip the separator character: */
+			int separator=lastChar;
+			lastChar=source.getChar();
+			
+			/* If this is a CR/LF pair, skip the LF character as well: */
+			if(separator=='\r'&&(cc[lastChar]&RECORDSEP)!=0x0U&&lastChar=='\n')
+				lastChar=source.getChar();
+			
+			/* Increase the record index and reset the field index: */
+			++csvSource.recordIndex;
+			csvSource.fieldIndex=0;
+			}
+		else if((cc[lastChar]&FIELDSEP)!=0x0U)
+			{
+			/* Skip the field separator: */
+			lastChar=source.getChar();
+			
+			/* Increase the field index: */
+			++csvSource.fieldIndex;
+			}
+		else
+			{
+			/* Signal a format error: */
+			throw FormatError(sourceFunction,csvSource.fieldIndex,csvSource.recordIndex);
+			}
+		}
+	};
+
 /**************************
 Methods of class CSVSource:
 **************************/
 
-bool CSVSource::skipRestOfField(bool quoted,int nextChar)
-	{
-	/* Keep track if any characters were actually skipped: */
-	bool skippedAny=false;
-	
-	if(quoted)
-		{
-		/*******************
-		Skip a quoted field:
-		*******************/
-		
-		/* Skip characters until unquote: */
-		while(true)
-			{
-			/* Skip characters until the next quote character or eof: */
-			while(nextChar!=quote&&nextChar>=0)
-				{
-				skippedAny=true;
-				nextChar=source->getChar();
-				}
-			
-			/* Eof inside quote is a format error: */
-			if(nextChar<0)
-				throw FormatError(__PRETTY_FUNCTION__,fieldIndex,recordIndex);
-			
-			/* Check for quoted quotes: */
-			nextChar=source->getChar();
-			if(nextChar==quote)
-				{
-				skippedAny=true;
-				nextChar=source->getChar();
-				}
-			else
-				break;
-			}
-		}
-	else
-		{
-		/**********************
-		Skip an unquoted field:
-		**********************/
-		
-		/* Skip characters until the next field separator, record separator, eof, or quote: */
-		while(nextChar!=fieldSeparator&&nextChar!=recordSeparator&&nextChar>=0&&nextChar!=quote)
-			{
-			skippedAny=true;
-			nextChar=source->getChar();
-			}
-		}
-	
-	/* Check the next character: */
-	if(nextChar==fieldSeparator)
-		{
-		/* Start a new field: */
-		++fieldIndex;
-		}
-	else if(nextChar==recordSeparator||nextChar<0)
-		{
-		/* Record separator or eof start a new record: */
-		fieldIndex=0;
-		++recordIndex;
-		}
-	else
-		{
-		/* Signal a format error in the CSV source: */
-		throw FormatError(__PRETTY_FUNCTION__,fieldIndex,recordIndex);
-		}
-	
-	return skippedAny;
-	}
-
-template <>
-bool CSVSource::convertNumber(int& nextChar,unsigned long& value)
-	{
-	/* Signal a conversion error if the next character is not a digit: */
-	if(nextChar<'0'||nextChar>'9')
-		return false;
-	
-	/* Read the first digit: */
-	value=(unsigned long)(nextChar-'0');
-	nextChar=source->getChar();
-	
-	/* Read all following digits: */
-	while(nextChar>='0'&&nextChar<='9')
-		{
-		value=value*10UL+(unsigned long)(nextChar-'0');
-		nextChar=source->getChar();
-		}
-	
-	return true;
-	}
-
-template <>
-bool CSVSource::convertNumber(int& nextChar,long& value)
-	{
-	/* Check for optional sign: */
-	bool negated=false;
-	if(nextChar=='-')
-		{
-		negated=true;
-		nextChar=source->getChar();
-		}
-	else if(nextChar=='+')
-		nextChar=source->getChar();
-	
-	/* Signal a conversion error if the next character is not a digit: */
-	if(nextChar<'0'||nextChar>'9')
-		return false;
-	
-	/* Read the first digit: */
-	unsigned long tempValue=(unsigned long)(nextChar-'0');
-	nextChar=source->getChar();
-	
-	/* Read all following digits: */
-	while(nextChar>='0'&&nextChar<='9')
-		{
-		tempValue=tempValue*10UL+(unsigned long)(nextChar-'0');
-		nextChar=source->getChar();
-		}
-	
-	/* Calculate the final value: */
-	if(negated)
-		value=-long(tempValue);
-	else
-		value=long(tempValue);
-	
-	return true;
-	}
-
-template <>
-bool CSVSource::convertNumber(int& nextChar,unsigned int& value)
-	{
-	/* Use the unsigned long conversion method internally: */
-	unsigned long tempValue;
-	if(!convertNumber<unsigned long>(nextChar,tempValue))
-		return false;
-	value=(unsigned int)(tempValue);
-	return true;
-	}
-
-template <>
-bool CSVSource::convertNumber(int& nextChar,int& value)
-	{
-	/* Use the long conversion method internally: */
-	long tempValue;
-	if(!convertNumber<long>(nextChar,tempValue))
-		return false;
-	value=int(tempValue);
-	return true;
-	}
+#if 0
 
 template <>
 bool CSVSource::convertNumber(int& nextChar,double& value)
@@ -400,6 +591,8 @@ bool CSVSource::convertNumber(int& nextChar,float& value)
 	return true;
 	}
 
+#endif
+
 void CSVSource::setFieldCharacter(int character)
 	{
 	/* Check if the character is valid in an unquoted field: */
@@ -447,11 +640,11 @@ void CSVSource::updateCharacterClasses(void)
 CSVSource::CSVSource(FilePtr sSource)
 	:source(sSource),
 	 cc(characterClasses+1),
-	 fieldSeparator(','),recordSeparator('\n'),quote('\"'),
 	 recordIndex(0),fieldIndex(0)
 	{
 	/* Set up character classes for RFC 4180-style CSV: */
-	for(int i=-1;i<256;++i)
+	cc[-1]=RECORDSEP; // End-of-file implicitly terminates the current record
+	for(int i=0;i<256;++i)
 		cc[i]=NONE;
 	cc['\r']|=RECORDSEP;
 	cc['\n']|=RECORDSEP;
@@ -535,38 +728,47 @@ void CSVSource::setQuote(int newQuote)
 	updateCharacterClasses();
 	}
 
+bool CSVSource::skipField(void)
+	{
+	/* Create a field reader object for the current field: */
+	FieldReader reader(__PRETTY_FUNCTION__,*this);
+	
+	/* Skip the field's contents: */
+	bool hadContent=false;
+	while(reader.getChar()>=0)
+		hadContent=true;
+	
+	/* Finish reading the field: */
+	reader.finishField();
+	
+	return hadContent;
+	}
+
 template <class ValueParam>
 ValueParam CSVSource::readField(void)
 	{
-	/* Read the field's first character: */
-	int nextChar=source->getChar();
+	/* Create a field reader object for the current field: */
+	FieldReader reader(__PRETTY_FUNCTION__,*this);
 	
-	/* Check for quote: */
-	bool quoted=false;
-	if(nextChar==quote)
-		{
-		quoted=true;
-		nextChar=source->getChar();
-		}
+	/* Skip leading whitespace: */
+	reader.skipWhitespace();
 	
-	/* Skip whitespace: */
-	while(isspace(nextChar)&&nextChar!=fieldSeparator&&nextChar!=recordSeparator&&nextChar>=0)
-		nextChar=source->getChar();
-	
-	/* Read the numeric value: */
+	/* Parse a numeric value: */
 	ValueParam result(0);
-	bool success=convertNumber(nextChar,result);
+	bool valid=reader.readValue(result);
 	
-	/* Skip whitespace: */
-	while(isspace(nextChar)&&nextChar!=fieldSeparator&&nextChar!=recordSeparator&&nextChar>=0)
-		nextChar=source->getChar();
+	/* Skip trailing whitespace: */
+	reader.skipWhitespace();
 	
-	/* Read until the end of the field, and invalidate the result if any further characters are encountered: */
-	if(skipRestOfField(quoted,nextChar))
-			success=false;
+	/* Invalidate the result if there is anything else left in the field, then skip that stuff: */
+	while(reader.getChar()>=0)
+		valid=false;
+	
+	/* Finish reading the field: */
+	reader.finishField();
 	
 	/* Check for conversion errors: */
-	if(!success)
+	if(!valid)
 		throw ConversionError(__PRETTY_FUNCTION__,fieldIndex,recordIndex,TypeName<ValueParam>::getName());
 	
 	/* Return the result: */
@@ -576,95 +778,96 @@ ValueParam CSVSource::readField(void)
 template <>
 std::string CSVSource::readField(void)
 	{
-	/* Check if the string is quoted: */
-	if(lastChar==quote)
-		{
-		}
-	else
-		{
-		}
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	/* Read the field's first character: */
-	int nextChar=source->getChar();
-	
 	std::string result;
-	if(nextChar==quote)
+	
+	/* Check if the field is quoted: */
+	if((cc[lastChar]&QUOTE)!=0x0U)
 		{
-		/* Skip the opening quote: */
-		nextChar=source->getChar();
+		/* Temporarily remove the quote character from the set of valid quoted field characters: */
+		int quote=lastChar;
+		cc[quote]&=~QUOTEDFIELD;
 		
-		/********************
-		Read a quoted string:
-		********************/
-		
-		/* Read characters until unquote: */
-		while(true)
+		try
 			{
-			/* Skip characters until the next quote character or eof: */
-			while(nextChar!=quote&&nextChar>=0)
-				{
-				result.push_back(nextChar);
-				nextChar=source->getChar();
-				}
+			/* Skip the quote character: */
+			lastChar=source->getChar();
 			
-			/* Eof inside quote is a format error: */
-			if(nextChar<0)
-				throw FormatError(__PRETTY_FUNCTION__,fieldIndex,recordIndex);
-			
-			/* Check for quoted quotes: */
-			nextChar=source->getChar();
-			if(nextChar==quote)
+			/* Read characters into the result string until the end of the field: */
+			while(true)
 				{
-				result.push_back(nextChar);
-				nextChar=source->getChar();
+				/* Check for the end of the field: */
+				if((cc[lastChar]&QUOTEDFIELD)==0x0U)
+					{
+					/* Check for a potential closing quote: */
+					if(lastChar==quote)
+						{
+						/* Skip the quote character and check for a double (quoted) quote: */
+						lastChar=source->getChar();
+						if(lastChar!=quote)
+							{
+							/* Stop reading: */
+							break;
+							}
+						}
+					else
+						{
+						/* Signal a format error: */
+						throw FormatError(__PRETTY_FUNCTION__,fieldIndex,recordIndex);
+						}
+					}
+				
+				/* Append the character to the result string and read the next one: */
+				result.push_back(lastChar);
+				lastChar=source->getChar();
 				}
-			else
-				break;
 			}
+		catch(...)
+			{
+			/* Re-add the quote character to the set of valid quoted field characters and re-throw the exception: */
+			cc[quote]|=QUOTEDFIELD;
+			throw;
+			}
+		
+		/* Re-add the quote character to the set of valid quoted field characters: */
+		cc[quote]|=QUOTEDFIELD;
 		}
 	else
 		{
-		/***********************
-		Read an unquoted string:
-		***********************/
-		
-		/* Skip characters until the next field separator, record separator, eof, or quote: */
-		while(nextChar!=fieldSeparator&&nextChar!=recordSeparator&&nextChar>=0&&nextChar!=quote)
+		/* Read characters into the result string until the end of the field: */
+		while((cc[lastChar]&FIELD)!=0x0U)
 			{
-			result.push_back(nextChar);
-			nextChar=source->getChar();
+			/* Append the character to the result string and read the next one: */
+			result.push_back(lastChar);
+			lastChar=source->getChar();
 			}
 		}
 	
-	/* Check the next character: */
-	if(nextChar==fieldSeparator)
+	/* Check whether the next character is a record or field separator: */
+	if((cc[lastChar]&RECORDSEP)!=0x0U)
 		{
-		/* Start a new field: */
+		/* Remember and skip the separator character: */
+		int separator=lastChar;
+		lastChar=source->getChar();
+		
+		/* If this is a CR/LF pair, skip the LF character as well: */
+		if(separator=='\r'&&(cc[lastChar]&RECORDSEP)!=0x0U&&lastChar=='\n')
+			lastChar=source->getChar();
+		
+		/* Increase the record index and reset the field index: */
+		++recordIndex;
+		fieldIndex=0;
+		}
+	else if((cc[lastChar]&FIELDSEP)!=0x0U)
+		{
+		/* Skip the field separator: */
+		lastChar=source->getChar();
+		
+		/* Increase the field index: */
 		++fieldIndex;
 		}
-	else if(nextChar==recordSeparator||nextChar<0)
-		{
-		/* Record separator or eof start a new record: */
-		fieldIndex=0;
-		++recordIndex;
-		}
 	else
 		{
-		/* Signal a format error in the CSV source: */
+		/* Signal a format error: */
 		throw FormatError(__PRETTY_FUNCTION__,fieldIndex,recordIndex);
 		}
 	
