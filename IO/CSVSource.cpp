@@ -274,15 +274,10 @@ class CSVSource::FieldReader // Helper class to read quoted or unquoted fields
 		}
 	bool readValue(int& result) // Read a numeric value in signed int format
 		{
-		/* Check for an optional plus or minus sign: */
-		bool negative=false;
-		if(lastChar=='+')
+		/* Check for and skip an optional plus or minus sign: */
+		bool negative=lastChar=='-';
+		if(lastChar=='-'||lastChar=='+')
 			lastChar=source.getChar();
-		else if(lastChar=='-')
-			{
-			negative=true;
-			lastChar=source.getChar();
-			}
 		
 		/* Read the first digit: */
 		if((cc[lastChar]&DIGIT)==0x0U)
@@ -305,7 +300,7 @@ class CSVSource::FieldReader // Helper class to read quoted or unquoted fields
 		}
 	bool readValue(unsigned long& result) // Read a numeric value in unsigned long format
 		{
-		/* Check for an optional plus sign: */
+		/* Check for and skip an optional plus sign: */
 		if(lastChar=='+')
 			lastChar=source.getChar();
 		
@@ -326,15 +321,10 @@ class CSVSource::FieldReader // Helper class to read quoted or unquoted fields
 		}
 	bool readValue(long& result) // Read a numeric value in signed long format
 		{
-		/* Check for an optional plus or minus sign: */
-		bool negative=false;
-		if(lastChar=='+')
+		/* Check for and skip an optional plus or minus sign: */
+		bool negative=lastChar=='-';
+		if(lastChar=='-'||lastChar=='+')
 			lastChar=source.getChar();
-		else if(lastChar=='-')
-			{
-			negative=true;
-			lastChar=source.getChar();
-			}
 		
 		/* Read the first digit: */
 		if((cc[lastChar]&DIGIT)==0x0U)
@@ -365,15 +355,10 @@ class CSVSource::FieldReader // Helper class to read quoted or unquoted fields
 		}
 	bool readValue(double& result) // Read a numeric value in double format
 		{
-		/* Check for an optional plus or minus sign: */
-		bool negative=false;
-		if(lastChar=='+')
+		/* Check for and skip an optional plus or minus sign: */
+		bool negative=lastChar=='-';
+		if(lastChar=='-'||lastChar=='+')
 			lastChar=source.getChar();
-		else if(lastChar=='-')
-			{
-			negative=true;
-			lastChar=source.getChar();
-			}
 		
 		/* Keep track if any digits have been read: */
 		bool haveDigit=false;
@@ -393,26 +378,21 @@ class CSVSource::FieldReader // Helper class to read quoted or unquoted fields
 			lastChar=source.getChar();
 			
 			/* Read a fractional number part: */
-			double fraction=0.0;
 			double fractionBase=1.0;
 			while((cc[lastChar]&DIGIT)!=0x0U)
 				{
 				haveDigit=true;
-				fraction=fraction*10.0+double(lastChar-'0');
+				result=result*10.0+double(lastChar-'0');
 				fractionBase*=10.0;
 				lastChar=source.getChar();
 				}
 			
-			result+=fraction/fractionBase;
+			result/=fractionBase;
 			}
 		
 		/* Signal a conversion error if no digits were read in the integral or fractional part: */
 		if(!haveDigit)
 			return false;
-		
-		/* Negate the result if a minus sign was read: */
-		if(negative)
-			result=-result;
 		
 		/* Check for an exponent indicator: */
 		if(lastChar=='e'||lastChar=='E')
@@ -420,14 +400,9 @@ class CSVSource::FieldReader // Helper class to read quoted or unquoted fields
 			lastChar=source.getChar();
 			
 			/* Read a plus or minus sign: */
-			bool exponentNegative=false;
-			if(lastChar=='+')
+			bool exponentNegative=lastChar=='-';
+			if(lastChar=='-'||lastChar=='+')
 				lastChar=source.getChar();
-			else if(lastChar=='-')
-				{
-				exponentNegative=true;
-				lastChar=source.getChar();
-				}
 			
 			/* Read the first exponent digit: */
 			if((cc[lastChar]&DIGIT)==0x0U)
@@ -447,6 +422,10 @@ class CSVSource::FieldReader // Helper class to read quoted or unquoted fields
 				exponent=-exponent;
 			result*=pow(10.0,exponent);
 			}
+		
+		/* Negate the result if a minus sign was read: */
+		if(negative)
+			result=-result;
 		
 		return true;
 		}
@@ -486,112 +465,6 @@ class CSVSource::FieldReader // Helper class to read quoted or unquoted fields
 /**************************
 Methods of class CSVSource:
 **************************/
-
-#if 0
-
-template <>
-bool CSVSource::convertNumber(int& nextChar,double& value)
-	{
-	/* Check for optional sign: */
-	bool negated=false;
-	if(nextChar=='-')
-		{
-		negated=true;
-		nextChar=source->getChar();
-		}
-	else if(nextChar=='+')
-		nextChar=source->getChar();
-	
-	/* Keep track if any digits have been read: */
-	bool haveDigit=false;
-	
-	/* Read an integral number part: */
-	value=0.0;
-	while(nextChar>='0'&&nextChar<='9')
-		{
-		haveDigit=true;
-		value=value*10.0+double(nextChar-'0');
-		nextChar=source->getChar();
-		}
-	
-	/* Check for a period: */
-	if(nextChar=='.')
-		{
-		nextChar=source->getChar();
-		
-		/* Read a fractional number part: */
-		double fraction=0.0;
-		double fractionBase=1.0;
-		while(nextChar>='0'&&nextChar<='9')
-			{
-			haveDigit=true;
-			fraction=fraction*10.0+double(nextChar-'0');
-			fractionBase*=10.0;
-			nextChar=source->getChar();
-			}
-		
-		value+=fraction/fractionBase;
-		}
-	
-	/* Signal a conversion error if no digits were read in the integral or fractional part: */
-	if(!haveDigit)
-		return false;
-	
-	/* Negate the result if a minus sign was read: */
-	if(negated)
-		value=-value;
-	
-	/* Check for an exponent indicator: */
-	if(nextChar=='e'||nextChar=='E')
-		{
-		nextChar=source->getChar();
-		
-		/* Read a plus or minus sign: */
-		bool exponentNegated=false;
-		if(nextChar=='-')
-			{
-			exponentNegated=true;
-			nextChar=source->getChar();
-			}
-		else if(nextChar=='+')
-			nextChar=source->getChar();
-		
-		/* Signal a conversion error if the next character is not a digit: */
-		if(nextChar<'0'||nextChar>'9')
-			return false;
-		
-		/* Read the first exponent digit: */
-		double exponent=double(nextChar-'0');
-		nextChar=source->getChar();
-		
-		/* Read the rest of the exponent digits: */
-		while(nextChar>='0'&&nextChar<='9')
-			{
-			exponent=exponent*10.0+double(nextChar-'0');
-			nextChar=source->getChar();
-			}
-		
-		/* Multiply the mantissa with the exponent: */
-		if(exponentNegated)
-			exponent=-exponent;
-		value*=pow(10.0,exponent);
-		}
-	
-	return true;
-	}
-
-template <>
-bool CSVSource::convertNumber(int& nextChar,float& value)
-	{
-	/* Use the double conversion method internally: */
-	double tempValue;
-	if(!convertNumber<double>(nextChar,tempValue))
-		return false;
-	value=float(tempValue);
-	return true;
-	}
-
-#endif
 
 void CSVSource::setFieldCharacter(int character)
 	{
