@@ -651,99 +651,19 @@ ValueParam CSVSource::readField(void)
 template <>
 std::string CSVSource::readField(void)
 	{
+	/* Create a field reader object for the current field: */
+	FieldReader reader(__PRETTY_FUNCTION__,*this);
+	
+	/* Copy characters from the field into a string: */
 	std::string result;
+	int nextChar;
+	while((nextChar=reader.getChar())>=0)
+		result.push_back(nextChar);
 	
-	/* Check if the field is quoted: */
-	if((cc[lastChar]&QUOTE)!=0x0U)
-		{
-		/* Temporarily remove the quote character from the set of valid quoted field characters: */
-		int quote=lastChar;
-		cc[quote]&=~QUOTEDFIELD;
-		
-		try
-			{
-			/* Skip the quote character: */
-			lastChar=source->getChar();
-			
-			/* Read characters into the result string until the end of the field: */
-			while(true)
-				{
-				/* Check for the end of the field: */
-				if((cc[lastChar]&QUOTEDFIELD)==0x0U)
-					{
-					/* Check for a potential closing quote: */
-					if(lastChar==quote)
-						{
-						/* Skip the quote character and check for a double (quoted) quote: */
-						lastChar=source->getChar();
-						if(lastChar!=quote)
-							{
-							/* Stop reading: */
-							break;
-							}
-						}
-					else
-						{
-						/* Signal a format error: */
-						throw FormatError(__PRETTY_FUNCTION__,fieldIndex,recordIndex);
-						}
-					}
-				
-				/* Append the character to the result string and read the next one: */
-				result.push_back(lastChar);
-				lastChar=source->getChar();
-				}
-			}
-		catch(...)
-			{
-			/* Re-add the quote character to the set of valid quoted field characters and re-throw the exception: */
-			cc[quote]|=QUOTEDFIELD;
-			throw;
-			}
-		
-		/* Re-add the quote character to the set of valid quoted field characters: */
-		cc[quote]|=QUOTEDFIELD;
-		}
-	else
-		{
-		/* Read characters into the result string until the end of the field: */
-		while((cc[lastChar]&FIELD)!=0x0U)
-			{
-			/* Append the character to the result string and read the next one: */
-			result.push_back(lastChar);
-			lastChar=source->getChar();
-			}
-		}
+	/* Finish reading the field: */
+	reader.finishField();
 	
-	/* Check whether the next character is a record or field separator: */
-	if((cc[lastChar]&RECORDSEP)!=0x0U)
-		{
-		/* Remember and skip the separator character: */
-		int separator=lastChar;
-		lastChar=source->getChar();
-		
-		/* If this is a CR/LF pair, skip the LF character as well: */
-		if(separator=='\r'&&(cc[lastChar]&RECORDSEP)!=0x0U&&lastChar=='\n')
-			lastChar=source->getChar();
-		
-		/* Increase the record index and reset the field index: */
-		++recordIndex;
-		fieldIndex=0;
-		}
-	else if((cc[lastChar]&FIELDSEP)!=0x0U)
-		{
-		/* Skip the field separator: */
-		lastChar=source->getChar();
-		
-		/* Increase the field index: */
-		++fieldIndex;
-		}
-	else
-		{
-		/* Signal a format error: */
-		throw FormatError(__PRETTY_FUNCTION__,fieldIndex,recordIndex);
-		}
-	
+	/* Return the result: */
 	return result;
 	}
 
