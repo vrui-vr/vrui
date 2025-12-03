@@ -8432,6 +8432,11 @@ Vrui-14.1-001:
   absolute vs. relative paths when opening files or directories.
 - Fixes to Math::Interval class:
   - Renamed misnamed "add" friend function to "operator+".
-  - Added isNotEmpty method, which is not the opposite of isEmpty.
+  - Added isNonEmpty method, which is *not* the opposite of isEmpty.
   - Added clamp, valueToFraction, and fractionToValue methods.
   - Fixed friend declarations.
+- Big change to IO::CSVSource class:
+  - Big speed-up via use of character classes.
+  - Simplified parser code.
+  - Proper handling of CR/LF line endings.
+  - Proper handling of empty files.
