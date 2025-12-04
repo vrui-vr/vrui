@@ -916,16 +916,22 @@ ShowEarthModel::ShowEarthModel(int& argc,char**& argv)
 					}
 				
 				case EARTHQUAKESETFILE:
-					{
-					/* Load an earthquake set: */
-					EarthquakeSet* earthquakeSet=new EarthquakeSet(IO::Directory::getCurrent(),argv[i],geoid,Geometry::Vector<double,3>::zero,magnitudeColorMap);
-					settings.showEarthquakeSets[earthquakeSets.size()]=showEarthquakes;
-					earthquakeSets.push_back(earthquakeSet);
-					
-					/* Enable layered rendering on the earthquake set: */
-					earthquakeSet->enableLayeredRendering(EarthquakeSet::Point::origin); // Earth's center is at the origin
+					try
+						{
+						/* Load an earthquake set: */
+						EarthquakeSet* earthquakeSet=new EarthquakeSet(IO::Directory::getCurrent(),argv[i],geoid,Geometry::Vector<double,3>::zero,magnitudeColorMap);
+						settings.showEarthquakeSets[earthquakeSets.size()]=showEarthquakes;
+						earthquakeSets.push_back(earthquakeSet);
+						
+						/* Enable layered rendering on the earthquake set: */
+						earthquakeSet->enableLayeredRendering(EarthquakeSet::Point::origin); // Earth's center is at the origin
+						}
+					catch(const std::runtime_error& err)
+						{
+						/* Print an error message and ignore the earthquake file: */
+						std::cerr<<"Ignoring earthquake file "<<argv[i]<<" due to exception "<<err.what()<<std::endl;
+						}
 					break;
-					}
 				
 				case SEISMICPATHFILE:
 					{
@@ -944,7 +950,6 @@ ShowEarthModel::ShowEarthModel(int& argc,char**& argv)
 					}
 				
 				case SCENEGRAPHFILE:
-					{
 					try
 						{
 						/* Load the scene graph and add it to the list: */
@@ -958,7 +963,6 @@ ShowEarthModel::ShowEarthModel(int& argc,char**& argv)
 						std::cerr<<"Ignoring scene graph file "<<argv[i]<<" due to exception "<<err.what()<<std::endl;
 						}
 					break;
-					}
 				}
 			}
 		}

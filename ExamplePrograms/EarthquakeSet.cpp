@@ -1,7 +1,7 @@
 /***********************************************************************
 EarthquakeSet - Class to represent and render sets of earthquakes with
 3D locations, magnitude and event time.
-Copyright (c) 2006-2024 Oliver Kreylos
+Copyright (c) 2006-2025 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -21,6 +21,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "EarthquakeSet.h"
 
 #include <ctype.h>
+#include <string.h>
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
@@ -28,9 +29,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <string>
 #include <iostream>
 #include <algorithm>
+#include <Misc/Utility.h>
 #include <Misc/StdError.h>
 #include <Misc/FileNameExtensions.h>
 #include <IO/ValueSource.h>
+#include <IO/CSVSource.h>
 #include <Math/Math.h>
 #include <Math/Constants.h>
 #include <Geometry/Vector.h>
@@ -56,18 +59,6 @@ namespace {
 /***********************************************************************
 Helper classes and functions to parse spreadsheet files in text format:
 ***********************************************************************/
-
-inline bool strequal(const std::string& s1,const char* s2)
-	{
-	std::string::const_iterator s1It=s1.begin();
-	const char* s2Ptr=s2;
-	while(s1It!=s1.end()&&*s2Ptr!='\0'&&tolower(*s1It)==tolower(*s2Ptr))
-		{
-		++s1It;
-		++s2Ptr;
-		}
-	return s1It==s1.end()&&*s2Ptr=='\0';
-	}
 
 inline double parseDateTime(const char* date,const char* time)
 	{
@@ -194,10 +185,10 @@ EarthquakeSet::DataItem::~DataItem(void)
 Methods of class EarthquakeSet:
 ******************************/
 
-void EarthquakeSet::loadANSSFile(IO::FilePtr earthquakeFile,const Geometry::Geoid<double>& referenceEllipsoid,const Geometry::Vector<double,3>& offset,std::vector<Event>& eventList)
+void EarthquakeSet::loadANSSFile(IO::File& earthquakeFile,const Geometry::Geoid<double>& referenceEllipsoid,const Geometry::Vector<double,3>& offset,std::vector<Event>& eventList)
 	{
 	/* Wrap a value source around the input file: */
-	IO::ValueSource source(earthquakeFile);
+	IO::ValueSource source(&earthquakeFile);
 	source.setPunctuation("\n");
 	source.skipWs();
 	
@@ -256,13 +247,10 @@ void EarthquakeSet::loadANSSFile(IO::FilePtr earthquakeFile,const Geometry::Geoi
 		}
 	}
 
-void EarthquakeSet::loadCSVFile(IO::FilePtr earthquakeFile,const Geometry::Geoid<double>& referenceEllipsoid,const Geometry::Vector<double,3>& offset,std::vector<Event>& eventList)
+void EarthquakeSet::loadCSVFile(IO::File& earthquakeFile,const Geometry::Geoid<double>& referenceEllipsoid,const Geometry::Vector<double,3>& offset,std::vector<Event>& eventList)
 	{
-	/* Wrap a value source around the input file: */
-	IO::ValueSource source(earthquakeFile);
-	source.setPunctuation(",\n");
-	source.setQuotes("\"");
-	source.skipWs();
+	/* Wrap a CSV reader around the input file: */
+	IO::CSVSource file(&earthquakeFile);
 	
 	/*********************************************************************
 	Parse the point file's header line:
@@ -280,67 +268,41 @@ void EarthquakeSet::loadCSVFile(IO::FilePtr earthquakeFile,const Geometry::Geoid
 	int timeIndex=-1;
 	int magIndex=-1;
 	
-	/* Read the header line's columns: */
+	/* Read the header record's columns: */
 	int column=0;
-	while(true)
+	do
 		{
-		/* Read the next column header: */
-		std::string header=!source.eof()&&source.peekc()!='\n'&&source.peekc()!=','?source.readString():"";
-		
-		/* Parse the column header: */
-		if(strequal(header,"Latitude")||strequal(header,"Lat"))
+		/* Read and parse the next column header: */
+		const char* header=file.readFieldIntoBuffer();
+		if(strcasecmp(header,"Latitude")==0||strcasecmp(header,"Lat")==0)
 			latIndex=column;
-		else if(strequal(header,"Longitude")||strequal(header,"Long")||strequal(header,"Lon"))
+		else if(strcasecmp(header,"Longitude")==0||strcasecmp(header,"Long")==0||strcasecmp(header,"Lon")==0)
 			lngIndex=column;
-		else if(strequal(header,"Radius"))
+		else if(strcasecmp(header,"Radius")==0)
 			{
 			radiusIndex=column;
 			radiusMode=RADIUS;
 			}
-		else if(strequal(header,"Depth"))
+		else if(strcasecmp(header,"Depth")==0)
 			{
 			radiusIndex=column;
 			radiusMode=DEPTH;
 			}
-		else if(strequal(header,"Negative Depth")||strequal(header,"Neg Depth")||strequal(header,"NegDepth"))
+		else if(strcasecmp(header,"Negative Depth")==0||strcasecmp(header,"Neg Depth")==0||strcasecmp(header,"NegDepth")==0)
 			{
 			radiusIndex=column;
 			radiusMode=NEGDEPTH;
 			}
-		else if(strequal(header,"Date"))
+		else if(strcasecmp(header,"Date")==0)
 			dateIndex=column;
-		else if(strequal(header,"Time"))
+		else if(strcasecmp(header,"Time")==0)
 			timeIndex=column;
-		else if(strequal(header,"Magnitude")||strequal(header,"Mag"))
+		else if(strcasecmp(header,"Magnitude")==0||strcasecmp(header,"Mag")==0)
 			magIndex=column;
 		
 		++column;
-		
-		/* Check for end of line: */
-		if(source.eof()||source.peekc()=='\n')
-			break;
-		
-		/* Skip an optional comma: */
-		if(source.peekc()==',')
-			source.skipString();
 		}
-	
-	/* Determine the number of fields: */
-	int maxIndex=latIndex;
-	if(maxIndex<lngIndex)
-		maxIndex=lngIndex;
-	if(maxIndex<radiusIndex)
-		maxIndex=radiusIndex;
-	if(maxIndex<dateIndex)
-		maxIndex=dateIndex;
-	if(maxIndex<timeIndex)
-		maxIndex=timeIndex;
-	if(maxIndex<magIndex)
-		maxIndex=magIndex;
-	
-	/* Skip the newline: */
-	source.skipLine();
-	source.skipWs();
+	while(!file.eor());
 	
 	/* Check if all required portions have been detected: */
 	if(latIndex<0)
@@ -356,9 +318,15 @@ void EarthquakeSet::loadCSVFile(IO::FilePtr earthquakeFile,const Geometry::Geoid
 	if(magIndex<0)
 		throw std::runtime_error("Missing magnitude field");
 	
+	/* Determine the number of fields that need to be read: */
+	int maxIndex=Misc::max(latIndex,lngIndex);
+	maxIndex=Misc::max(maxIndex,radiusIndex);
+	maxIndex=Misc::max(maxIndex,dateIndex);
+	maxIndex=Misc::max(maxIndex,timeIndex);
+	maxIndex=Misc::max(maxIndex,magIndex);
+	
 	/* Read lines from the file: */
-	int lineNumber=2;
-	while(!source.eof())
+	while(!file.eof())
 		{
 		Geometry::Geoid<double>::Point geodeticPosition=Geometry::Geoid<double>::Point::origin; // Only initializing to shut up compiler
 		std::string date,time;
@@ -366,46 +334,32 @@ void EarthquakeSet::loadCSVFile(IO::FilePtr earthquakeFile,const Geometry::Geoid
 		int column=0;
 		try
 			{
-			while(true)
+			do
 				{
-				/* Read the next field: */
-				if(!source.eof()&&source.peekc()!='\n'&&source.peekc()!=',')
-					{
-					if(column==latIndex)
-						geodeticPosition[1]=Math::rad(source.readNumber());
-					else if(column==lngIndex)
-						geodeticPosition[0]=Math::rad(source.readNumber());
-					else if(column==radiusIndex)
-						geodeticPosition[2]=source.readNumber();
-					else if(column==dateIndex)
-						date=source.readString();
-					else if(column==timeIndex)
-						time=source.readString();
-					else if(column==magIndex)
-						magnitude=float(source.readNumber());
-					else
-						source.skipString();
-					}
+				/* Read the next field if it's relevant: */
+				if(column==latIndex)
+					geodeticPosition[1]=Math::rad(file.readField<double>());
+				else if(column==lngIndex)
+					geodeticPosition[0]=Math::rad(file.readField<double>());
+				else if(column==radiusIndex)
+					geodeticPosition[2]=file.readField<double>();
+				else if(column==dateIndex)
+					date=file.readField<std::string>();
+				else if(column==timeIndex)
+					time=file.readField<std::string>();
+				else if(column==magIndex)
+					magnitude=file.readField<float>();
+				else
+					file.skipField();
 				
 				++column;
-				
-				/* Check for end of line: */
-				if(source.eof()||source.peekc()=='\n')
-					break;
-				
-				/* Skip an optional comma: */
-				if(source.peekc()==',')
-					source.skipString();
 				}
+			while(!file.eor());
 			}
-		catch(const IO::ValueSource::NumberError&)
+		catch(const IO::CSVSource::ConversionError&)
 			{
 			/* Ignore the error and the malformed event */
 			}
-		
-		/* Skip the newline: */
-		source.skipLine();
-		source.skipWs();
 		
 		/* Check if all fields were read: */
 		if(column>maxIndex)
@@ -441,8 +395,6 @@ void EarthquakeSet::loadCSVFile(IO::FilePtr earthquakeFile,const Geometry::Geoid
 			/* Append the event to the earthquake set: */
 			eventList.push_back(e);
 			}
-		
-		++lineNumber;
 		}
 	}
 
@@ -755,31 +707,23 @@ EarthquakeSet::EarthquakeSet(IO::DirectoryPtr directory,const char* earthquakeFi
 	/* Open the earthquake file: */
 	IO::FilePtr earthquakeFile=directory->openFile(earthquakeFileName);
 	
-	try
+	/* Create a temporary event list: */
+	std::vector<Event> eventList;
+	
+	/* Check the earthquake file name's extension: */
+	if(Misc::hasCaseExtension(earthquakeFileName,".anss"))
 		{
-		/* Create a temporary event list: */
-		std::vector<Event> eventList;
-		
-		/* Check the earthquake file name's extension: */
-		if(Misc::hasCaseExtension(earthquakeFileName,".anss"))
-			{
-			/* Read an earthquake database snapshot in "readable" ANSS format: */
-			loadANSSFile(earthquakeFile,referenceEllipsoid,offset,eventList);
-			}
-		else
-			{
-			/* Read an earthquake event file in space- or comma-separated format: */
-			loadCSVFile(earthquakeFile,referenceEllipsoid,offset,eventList);
-			}
-		
-		/* Sort the event list into a kd-tree: */
-		events.setPoints(int(eventList.size()),&eventList[0],8);
+		/* Read an earthquake database snapshot in "readable" ANSS format: */
+		loadANSSFile(*earthquakeFile,referenceEllipsoid,offset,eventList);
 		}
-	catch(const std::runtime_error& err)
+	else
 		{
-		/* Wrap and re-throw the exception: */
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Error \"%s\" while reading file %s",err.what(),earthquakeFileName);
+		/* Read an earthquake event file in space- or comma-separated format: */
+		loadCSVFile(*earthquakeFile,referenceEllipsoid,offset,eventList);
 		}
+	
+	/* Sort the event list into a kd-tree: */
+	events.setPoints(int(eventList.size()),&eventList[0],8);
 	
 	GLObject::init();
 	}
