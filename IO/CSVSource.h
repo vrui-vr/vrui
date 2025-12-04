@@ -70,6 +70,9 @@ class CSVSource
 	size_t recordIndex; // Zero-based index of the currently read record; increments before field read on the last field in a record returns
 	unsigned int fieldIndex; // Zero-based index of the currently read field; increments before field read returns; resets to zero before field read on the last field in a record returns
 	int lastChar; // Last character read from character source
+	char* fieldBuffer; // An internal buffer to efficiently read fields as NUL-terminated strings
+	char* fbEnd; // Pointer to the end of the current field buffer
+	size_t fieldLength; // Length of the current string in the field buffer
 	
 	/* Private methods: */
 	void setFieldCharacter(int character); // Marks the given character as potentially valid in a field
@@ -117,6 +120,15 @@ class CSVSource
 			skipField();
 			}
 		while(fieldIndex!=0);
+		}
+	const char* readFieldIntoBuffer(void); // Reads the next field as a string into an internal buffer as a NUL-terminated string; returns pointer to start of that buffer
+	const char* getFieldString(void) const // Returns the string currently in the field buffer
+		{
+		return fieldBuffer;
+		}
+	size_t getFieldLength(void) const // Returns the length of the string currently in the internal buffer
+		{
+		return fieldLength;
 		}
 	template <class ValueParam>
 	ValueParam readField(void); // Reads the next field as the given data type; throws exception if the field contents cannot be fully converted, or the end of the field cannot be determined reliably

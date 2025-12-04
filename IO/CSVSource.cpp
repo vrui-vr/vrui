@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <IO/CSVSource.h>
 
 #include <ctype.h>
+#include <string.h>
 #include <math.h>
 #include <string>
 #include <Misc/StdError.h>
@@ -513,7 +514,10 @@ void CSVSource::updateCharacterClasses(void)
 CSVSource::CSVSource(FilePtr sSource)
 	:source(sSource),
 	 cc(characterClasses+1),
-	 recordIndex(0),fieldIndex(0)
+	 recordIndex(0),fieldIndex(0),
+	 fieldBuffer(new char[33]),
+	 fbEnd(fieldBuffer+32), // fbEnd points to one before the actual end of the buffer to leave room for the terminating NUL
+	 fieldLength(0)
 	{
 	/* Set up character classes for RFC 4180-style CSV: */
 	cc[-1]=RECORDSEP; // End-of-file implicitly terminates the current record
@@ -527,6 +531,9 @@ CSVSource::CSVSource(FilePtr sSource)
 	
 	/* Read the first character from the character source: */
 	lastChar=source->getChar();
+	
+	/* Initialize the field buffer: */
+	fieldBuffer[0]='\0';
 	}
 
 CSVSource::~CSVSource(void)
@@ -534,6 +541,9 @@ CSVSource::~CSVSource(void)
 	/* Put the last read character back into the character source: */
 	if(lastChar>=0)
 		source->ungetChar(lastChar);
+	
+	/* Release allocated resources: */
+	delete[] fieldBuffer;
 	}
 
 void CSVSource::setRecordSeparator(int newRecordSeparator)
@@ -615,6 +625,49 @@ bool CSVSource::skipField(void)
 	reader.finishField();
 	
 	return hadContent;
+	}
+
+const char* CSVSource::readFieldIntoBuffer(void)
+	{
+	/* Create a field reader object for the current field: */
+	FieldReader reader(__PRETTY_FUNCTION__,*this);
+	
+	/* Copy characters from the field into the internal buffer: */
+	char* fbPtr=fieldBuffer;
+	int nextChar;
+	while((nextChar=reader.getChar())>=0)
+		{
+		/* Make room in the field buffer if it's full: */
+		if(fbPtr==fbEnd)
+			{
+			/* Copy the current field buffer into a larger one, making sure there's room for the terminating NUL: */
+			size_t bufferSize(fbEnd-fieldBuffer);
+			size_t newBufferSize=bufferSize*2;
+			char* newFieldBuffer=new char[newBufferSize+1]; // Leave extra room for terminating NUL character
+			memcpy(newFieldBuffer,fieldBuffer,bufferSize);
+			
+			/* Replace the field buffer: */
+			delete[] fieldBuffer;
+			fieldBuffer=newFieldBuffer;
+			fbEnd=fieldBuffer+newBufferSize;
+			fbPtr=fieldBuffer+bufferSize;
+			}
+		
+		/* Store the just-read character: */
+		*(fbPtr++)=char(nextChar);
+		}
+	
+	/* NUL-terminate the field buffer: */
+	*fbPtr='\0';
+	
+	/* Calculate the length of the just-read string: */
+	fieldLength=fbPtr-fieldBuffer;
+	
+	/* Finish reading the field: */
+	reader.finishField();
+	
+	/* Return the result: */
+	return fieldBuffer;
 	}
 
 template <class ValueParam>

@@ -8440,3 +8440,7 @@ Vrui-14.1-001:
   - Simplified parser code.
   - Proper handling of CR/LF line endings.
   - Proper handling of empty files.
+  - Added readFieldIntoBuffer method to efficiently read fields as NUL-
+    terminated strings.
+    - Added getFieldString and getFieldLength methods to access result
+      from most recent readFieldIntoBuffer call.
