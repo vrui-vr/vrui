@@ -8444,3 +8444,4 @@ Vrui-14.1-001:
     terminated strings.
     - Added getFieldString and getFieldLength methods to access result
       from most recent readFieldIntoBuffer call.
+- Added support for canted stereo cameras to HMDCameraViewer vislet.

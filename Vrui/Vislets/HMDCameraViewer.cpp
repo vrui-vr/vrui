@@ -1,7 +1,7 @@
 /***********************************************************************
 HMDCameraViewer - Vislet class to show a live pass-through video feed
 from a mono or stereo camera attached to a head-mounted display.
-Copyright (c) 2020-2024 Oliver Kreylos
+Copyright (c) 2020-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -178,16 +178,18 @@ HMDCameraViewerFactory::HMDCameraViewerFactory(VisletManager& visletManager)
 		{
 		subFrames[0]=cfs.retrieveValue<IRect>("./leftSubFrame");
 		intrinsicsNames[0]=cfs.retrieveString("./leftIntrinsicsName");
+		extrinsics[0]=cfs.retrieveValue("./leftExtrinsics",Rotation::identity);
 		subFrames[1]=cfs.retrieveValue<IRect>("./rightSubFrame");
 		intrinsicsNames[1]=cfs.retrieveString("./rightIntrinsicsName");
+		extrinsics[1]=cfs.retrieveValue("./rightExtrinsics",Rotation::identity);
 		}
 	else
 		{
 		subFrames[0]=IRect(videoFormat.size);
 		cfs.updateValue("./subFrame",subFrames[0]);
 		intrinsicsNames[0]=cfs.retrieveString("./intrinsicsName");
+		extrinsics[0]=cfs.retrieveValue("./extrinsics",Rotation::identity);
 		}
-	extrinsics=cfs.retrieveValue("./extrinsics",Rotation::identity);
 	sphereRadius=Video::IntrinsicParameters::Scalar(cfs.retrieveValue("./sphereRadius",getMeterFactor()));
 	
 	/* Read expected camera latency: */
@@ -527,14 +529,14 @@ void HMDCameraViewer::display(GLContextData& contextData) const
 		}
 	
 	/* Go to eye space: */
+	int eyeIndex=factory->stereo?displayState.eyeIndex:0;
 	glPushMatrix();
 	glLoadMatrix(displayState.mvpGl);
 	glTranslate(displayState.eyePosition-Vrui::Point::origin);
 	glRotate(frame.headOrientation);
-	glRotate(factory->extrinsics);
+	glRotate(factory->extrinsics[eyeIndex]);
 	
 	/* Distortion-correct and project the video frame to display space: */
-	int eyeIndex=displayState.eyeIndex;
 	const IRect& subFrame=factory->subFrames[eyeIndex];
 	unsigned int numRows=(subFrame.size[1]-1U+15U)/16U;
 	unsigned int numColumns=(subFrame.size[0]-1U+15U)/16U;
