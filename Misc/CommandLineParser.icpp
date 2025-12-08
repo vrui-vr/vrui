@@ -1,0 +1,125 @@
+/***********************************************************************
+CommandLineParser - Helper class to simplify parsing and processing
+application command lines.
+Copyright (c) 2025 Oliver Kreylos
+
+This file is part of the Miscellaneous Support Library (Misc).
+
+The Miscellaneous Support Library is free software; you can
+redistribute it and/or modify it under the terms of the GNU General
+Public License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+The Miscellaneous Support Library is distributed in the hope that it
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with the Miscellaneous Support Library; if not, write to the Free
+Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA
+***********************************************************************/
+
+#ifndef MISC_COMMANDLINEPARSER_IMPLEMENTATION
+#define MISC_COMMANDLINEPARSER_IMPLEMENTATION
+
+#include <Misc/CommandLineParser.h>
+
+#include <Misc/StdError.h>
+#include <Misc/ValueCoder.h>
+
+namespace Misc {
+
+/***************************************************
+Declaration of class CommandLineParser::ArrayOption:
+***************************************************/
+
+template <class ValueParam>
+class CommandLineParser::ArrayOption:public CommandLineParser::Option
+	{
+	/* Embedded classes: */
+	public:
+	typedef ValueParam Value; // Type of option values
+	
+	/* Elements: */
+	private:
+	std::string arguments; // String defining the value array's entries
+	unsigned int numValues; // Number of entries in the option value array
+	Value* values; // Pointer to the array of option values
+	
+	/* Constructors and destructors: */
+	public:
+	ArrayOption(const char* sDescription,const char* sArguments,unsigned int sNumValues,Value* sValues)
+		:Option(sDescription),
+		 arguments(sArguments),
+		 numValues(sNumValues),values(sValues)
+		{
+		}
+	
+	/* Methods from class Option: */
+	virtual void printArguments(std::ostream& os) const
+		{
+		os<<' '<<arguments;
+		}
+	virtual char** parse(char* arg,char** argPtr,char** argEnd)
+		{
+		/* Parse value array entries: */
+		Value* vPtr=values;
+		Value* vEnd=values+numValues;
+		while(vPtr!=vEnd&&argPtr!=argEnd)
+			{
+			/* Try converting the argument to the value type: */
+			char* valueString=*argPtr;
+			char* valueStringEnd;
+			for(valueStringEnd=valueString;*valueStringEnd!='\0';++valueStringEnd)
+				;
+			try
+				{
+				const char* endPtr;
+				Value value=Misc::ValueCoder<Value>::decode(valueString,valueStringEnd,&endPtr);
+				
+				/* Skip potential whitespace after the decoded value: */
+				while(endPtr!=valueStringEnd&&isspace(*endPtr))
+					++endPtr;
+				
+				/* Check if the entire argument was read: */
+				if(endPtr!=valueStringEnd)
+					throw Misc::DecodingError(std::string("Extra stuff after value in ")+std::string(valueString,valueStringEnd));
+				
+				/* Set the value array entry: */
+				*vPtr=value;
+				}
+			catch(const Misc::DecodingError& err)
+				{
+				/* Wrap the error message: */
+				throw Misc::makeStdErr(0,"%s: %s",arg,err.what());
+				}
+			
+			++vPtr;
+			++argPtr;
+			}
+		
+		/* Check if all value array entries were read: */
+		if(vPtr!=vEnd)
+			throw Misc::makeStdErr(0,"%s: Only %u array entries out of %u present",arg,vPtr-values,numValues);
+		
+		return argPtr;
+		}
+	};
+
+/**********************************
+Methods of class CommandLineParser:
+**********************************/
+
+template <class ValueParam>
+inline
+void CommandLineParser::addArrayOption(const char* longOption,const char* shortOption,unsigned int numValues,ValueParam* values,const char* arguments,const char* description)
+	{
+	/* Create a new option object and add it to the set: */
+	addOption(longOption,shortOption,new ArrayOption<ValueParam>(description,arguments,numValues,values));
+	}
+
+}
+
+#endif
