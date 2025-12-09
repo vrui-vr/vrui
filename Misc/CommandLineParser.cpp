@@ -254,8 +254,18 @@ class CommandLineParser::CategoryOption:public CommandLineParser::Option
 Methods of class CommandLineParser:
 **********************************/
 
-void CommandLineParser::addOption(const char* longOption,const char* shortOption,Option* option)
+void CommandLineParser::addOption(const char* source,const char* longOption,const char* shortOption,Option* option)
 	{
+	/* Bail out if no option names were provided: */
+	if(longOption==0&&shortOption==0)
+		throw Misc::makeStdErr(source,"No option tags provided");
+	
+	/* Check if the long and/or short options have already been claimed: */
+	if(longOption!=0&&longOptions.isEntry(longOption))
+		throw Misc::makeStdErr(source,"Option --%s already registered",longOption);
+	if(shortOption!=0&&shortOptions.isEntry(shortOption))
+		throw Misc::makeStdErr(source,"Option -%s already registered",shortOption);
+	
 	/* Add the option to the set of options: */
 	options.add(option);
 	
@@ -319,7 +329,7 @@ CommandLineParser::CommandLineParser(void)
 	 appName(0),helpPrinted(false)
 	{
 	/* Create a help option object and add it to the set: */
-	addOption("help","h",new HelpOption("Displays this help screen",*this));
+	addOption(__PRETTY_FUNCTION__,"help","h",new HelpOption("Displays this help screen",*this));
 	}
 
 CommandLineParser::~CommandLineParser(void)
@@ -358,37 +368,37 @@ void CommandLineParser::callArgumentCallback(CommandLineParser::ArgumentCallback
 void CommandLineParser::addEnableOption(const char* longOption,const char* shortOption,bool& value,const char* description)
 	{
 	/* Create a new option object and add it to the set: */
-	addOption(longOption,shortOption,new BoolOption(description,false,value));
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new BoolOption(description,false,value));
 	}
 
 void CommandLineParser::addDisableOption(const char* longOption,const char* shortOption,bool& value,const char* description)
 	{
 	/* Create a new option object and add it to the set: */
-	addOption(longOption,shortOption,new BoolOption(description,true,value));
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new BoolOption(description,true,value));
 	}
 
 void CommandLineParser::addStringOption(const char* longOption,const char* shortOption,std::string& value,const char* argument,const char* description)
 	{
 	/* Create a new option object and add it to the set: */
-	addOption(longOption,shortOption,new StringOption(description,argument,value));
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new StringOption(description,argument,value));
 	}
 
 void CommandLineParser::addCategoryOption(const char* longOption,const char* shortOption,unsigned int numCategories,const char* categories[],unsigned int& value,const char* description)
 	{
 	/* Create a new option object and add it to the set: */
-	addOption(longOption,shortOption,new CategoryOption(description,numCategories,categories,value));
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new CategoryOption(description,numCategories,categories,value));
 	}
 
 void CommandLineParser::addCategoryOption(const char* longOption,const char* shortOption,unsigned int numCategories,const std::string categories[],unsigned int& value,const char* description)
 	{
 	/* Create a new option object and add it to the set: */
-	addOption(longOption,shortOption,new CategoryOption(description,numCategories,categories,value));
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new CategoryOption(description,numCategories,categories,value));
 	}
 
 void CommandLineParser::addCategoryOption(const char* longOption,const char* shortOption,const std::vector<std::string>& categories,unsigned int& value,const char* description)
 	{
 	/* Create a new option object and add it to the set: */
-	addOption(longOption,shortOption,new CategoryOption(description,categories,value));
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new CategoryOption(description,categories,value));
 	}
 
 char** CommandLineParser::parse(char** argPtr,char** argEnd)
@@ -429,7 +439,10 @@ char** CommandLineParser::parse(char** argPtr,char** argEnd)
 			{
 			/* Handle a non-option argument: */
 			if(argument!=0)
+				{
+				/* Call the currently installed non-option argument handler: */
 				argument->handle(*argPtr);
+				}
 			else
 				{
 				/* Bail out to let the caller deal with the non-option argument: */
@@ -443,9 +456,19 @@ char** CommandLineParser::parse(char** argPtr,char** argEnd)
 	return argPtr;
 	}
 
-/***************************************************************
-Force instantiation of all standard Point classes and functions:
-***************************************************************/
+/***************************************************************************
+Force instantiation of all standard CommandLineParser classes and functions:
+***************************************************************************/
+
+template void CommandLineParser::addFixedValueOption<bool>(const char*,const char*,const bool&,bool&,const char*);
+template void CommandLineParser::addFixedValueOption<signed short>(const char*,const char*,const signed short&,signed short&,const char*);
+template void CommandLineParser::addFixedValueOption<unsigned short>(const char*,const char*,const unsigned short&,unsigned short&,const char*);
+template void CommandLineParser::addFixedValueOption<signed int>(const char*,const char*,const signed int&,signed int&,const char*);
+template void CommandLineParser::addFixedValueOption<unsigned int>(const char*,const char*,const unsigned int&,unsigned int&,const char*);
+template void CommandLineParser::addFixedValueOption<signed long>(const char*,const char*,const signed long&,signed long&,const char*);
+template void CommandLineParser::addFixedValueOption<unsigned long>(const char*,const char*,const unsigned long&,unsigned long&,const char*);
+template void CommandLineParser::addFixedValueOption<float>(const char*,const char*,const float&,float&,const char*);
+template void CommandLineParser::addFixedValueOption<double>(const char*,const char*,const double&,double&,const char*);
 
 template void CommandLineParser::addArrayOption<bool>(const char*,const char*,unsigned int,bool*,const char*,const char*);
 template void CommandLineParser::addArrayOption<signed short>(const char*,const char*,unsigned int,signed short*,const char*,const char*);

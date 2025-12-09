@@ -51,7 +51,7 @@ class CommandLineParser
 			}
 		
 		/* Methods: */
-		virtual void handle(const char* arg) =0;
+		virtual void handle(const char* arg) =0; // Handles the given non-option command line argument
 		};
 	
 	/* Concrete argument handler classes: */
@@ -67,6 +67,10 @@ class CommandLineParser
 		/* Elements: */
 		protected:
 		std::string description; // Option description displayed on help pages
+		
+		/* Protected methods: */
+		template <class ValueParam>
+		static ValueParam convertValue(const char* arg); // Tries converting the given argument to the given value type; throws Misc::DecodingError on failure
 		
 		/* Constructors and destructors: */
 		public:
@@ -88,7 +92,7 @@ class CommandLineParser
 			{
 			/* Do nothing: */
 			}
-		virtual char** parse(char* arg,char** argPtr,char** argEnd) =0; // Parses an option starting from the given argument; returns pointer to next argument
+		virtual char** parse(char* arg,char** argPtr,char** argEnd) =0; // Parses an option starting from the given argument; returns pointer to next argument to be parsed
 		};
 	
 	typedef Misc::SimpleObjectSet<Option> OptionSet; // Type for sets of option objects
@@ -98,10 +102,14 @@ class CommandLineParser
 	class HelpOption;
 	friend class HelpOption;
 	class BoolOption;
+	template <class ValueParam>
+	class FixedValueOption;
 	class StringOption;
 	class CategoryOption;
 	template <class ValueParam>
 	class ArrayOption;
+	template <class ValueParam>
+	class AddValueToListOption;
 	
 	/* Elements: */
 	std::string description; // Description of the application
@@ -113,7 +121,7 @@ class CommandLineParser
 	bool helpPrinted; // Flag whether help was requested during parsing
 	
 	/* Private methods: */
-	void addOption(const char* longOption,const char* shortOption,Option* option); // Adds the given option object to the parser
+	void addOption(const char* source,const char* longOption,const char* shortOption,Option* option); // Adds the given option object to the parser
 	void printHelp(void); // Prints a help screen
 	
 	/* Constructors and destructors: */
@@ -126,15 +134,19 @@ class CommandLineParser
 	void stopOnArguments(void); // parse() method returns when a non-option argument is encountered
 	void addArgumentsToList(std::vector<std::string>& arguments); // Adds encountered arguments to the given list
 	void callArgumentCallback(ArgumentCallback* newArgumentCallback); // Calls the given callback when an argument is encountered
-	void addEnableOption(const char* longOption,const char* shortOption,bool& value,const char* description);
-	void addDisableOption(const char* longOption,const char* shortOption,bool& value,const char* description);
-	void addStringOption(const char* longOption,const char* shortOption,std::string& value,const char* argument,const char* description);
-	void addCategoryOption(const char* longOption,const char* shortOption,unsigned int numCategories,const char* categories[],unsigned int& value,const char* description);
-	void addCategoryOption(const char* longOption,const char* shortOption,unsigned int numCategories,const std::string categories[],unsigned int& value,const char* description);
-	void addCategoryOption(const char* longOption,const char* shortOption,const std::vector<std::string>& categories,unsigned int& value,const char* description);
+	void addEnableOption(const char* longOption,const char* shortOption,bool& value,const char* description); // Adds an option handler that sets a boolean variable to true when the option is encountered
+	void addDisableOption(const char* longOption,const char* shortOption,bool& value,const char* description); // Adds an option handler that sets a boolean variable to false when the option is encountered
 	template <class ValueParam>
-	void addArrayOption(const char* longOption,const char* shortOption,unsigned int numValues,ValueParam* values,const char* arguments,const char* description);
-	char** parse(char** argPtr,char** argEnd);
+	void addFixedValueOption(const char* longOption,const char* shortOption,const ValueParam& fixedValue,ValueParam& value,const char* description); // Adds an option handler that sets a variable to a fixed value when the option is encountered
+	void addStringOption(const char* longOption,const char* shortOption,std::string& value,const char* argument,const char* description); // Adds an option handler that sets a string variable to the argument that follows the option argument
+	void addCategoryOption(const char* longOption,const char* shortOption,unsigned int numCategories,const char* categories[],unsigned int& value,const char* description); // Adds an option handler that sets an unsigned integer variable to the index of the following string in a list of pre-set values
+	void addCategoryOption(const char* longOption,const char* shortOption,unsigned int numCategories,const std::string categories[],unsigned int& value,const char* description); // Ditto, defining category names as a C-style array of std::strings
+	void addCategoryOption(const char* longOption,const char* shortOption,const std::vector<std::string>& categories,unsigned int& value,const char* description); // Ditto, defining category names as a std::vector of std::strings
+	template <class ValueParam>
+	void addArrayOption(const char* longOption,const char* shortOption,unsigned int numValues,ValueParam* values,const char* arguments,const char* description); // Adds an option handler that sets the components of a fixed-size array variable to the values of the arguments that follow the option argument
+	template <class ValueParam>
+	void addListOption(const char* longOption,const char* shortOption,std::vector<ValueParam>& values,const char* argument,const char* description); // Adds an option handler that appends the value of the argument following the option argument to a list
+	char** parse(char** argPtr,char** argEnd); // Parses a stretch of command line; on first invocation, extracts application name from the first argument; returns a pointer to the next argument to be parsed
 	bool hadHelp(void) const // Returns true if the parsed command line contained the -h or --help options
 		{
 		return helpPrinted;
