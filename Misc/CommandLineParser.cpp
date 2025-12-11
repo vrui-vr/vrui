@@ -109,73 +109,6 @@ class CommandLineParser::HelpOption:public CommandLineParser::Option
 		}
 	};
 
-/**************************************************
-Declaration of class CommandLineParser::BoolOption:
-**************************************************/
-
-class CommandLineParser::BoolOption:public CommandLineParser::Option
-	{
-	/* Elements: */
-	private:
-	bool inverted; // Flag if the presence of the option sets the boolean value to false
-	bool& value; // Reference to the flag indicating whether the option was present
-	
-	/* Constructors and destructors: */
-	public:
-	BoolOption(const char* sDescription,bool sInverted,bool& sValue)
-		:Option(sDescription),
-		 inverted(sInverted),value(sValue)
-		{
-		}
-	
-	/* Methods from class Option: */
-	virtual char** parse(char* arg,char** argPtr,char** argEnd)
-		{
-		/* Set the boolean value according to the inversion flag: */
-		value=!inverted;
-		
-		return argPtr;
-		}
-	};
-
-/****************************************************
-Declaration of class CommandLineParser::StringOption:
-****************************************************/
-
-class CommandLineParser::StringOption:public CommandLineParser::Option
-	{
-	/* Elements: */
-	private:
-	std::string argument; // String defining the value
-	std::string& value; // Reference to the option value
-	
-	/* Constructors and destructors: */
-	public:
-	StringOption(const char* sDescription,const char* sArgument,std::string& sValue)
-		:Option(sDescription),
-		 argument(sArgument),
-		 value(sValue)
-		{
-		}
-	
-	/* Methods from class Option: */
-	virtual void printArguments(std::ostream& os) const
-		{
-		os<<' '<<argument;
-		}
-	virtual char** parse(char* arg,char** argPtr,char** argEnd)
-		{
-		/* Check if the string value is present: */
-		if(argPtr==argEnd)
-			throw Misc::makeStdErr(0,"%s: Missing value",arg);
-		
-		/* Set the option value: */
-		value=*argPtr;
-		
-		return argPtr+1;
-		}
-	};
-
 /******************************************************
 Declaration of class CommandLineParser::CategoryOption:
 ******************************************************/
@@ -286,38 +219,49 @@ void CommandLineParser::printHelp(void)
 	if(!description.empty())
 		std::cout<<": "<<description;
 	if(appName!=0||!description.empty())
-		std::cout<<std::endl<<std::endl;
-	
-	/* Print all defined options in the order in which they were defined: */
-	std::cout<<"Command line options:"<<std::endl;
-	for(OptionSet::iterator oIt=options.begin();oIt!=options.end();++oIt)
-		{
-		/* Get a pointer to the option object: */
-		Option* option=&*oIt;
-		
-		std::cout<<"  ";
-		
-		/* Find the option object in the long and short option maps: */
-		OptionMap::Iterator loIt;
-		for(loIt=longOptions.begin();!loIt.isFinished()&&loIt->getDest()!=option;++loIt)
-			;
-		OptionMap::Iterator soIt;
-		for(soIt=shortOptions.begin();!soIt.isFinished()&&soIt->getDest()!=option;++soIt)
-			;
-		
-		if(!loIt.isFinished()&&!soIt.isFinished())
-			std::cout<<"( --"<<loIt->getSource()<<" | -"<<soIt->getSource()<<" )";
-		else if(!loIt.isFinished())
-			std::cout<<"--"<<loIt->getSource();
-		else if(!soIt.isFinished())
-			std::cout<<"-"<<soIt->getSource();
-		
-		/* Print the option's arguments: */
-		option->printArguments(std::cout);
 		std::cout<<std::endl;
-		
-		/* Print the option's description: */
-		std::cout<<"    "<<option->getDescription()<<std::endl;
+	
+	if(!arguments.empty())
+		{
+		/* Print the application's non-option command line arguments: */
+		std::cout<<std::endl;
+		std::cout<<"Command line arguments: "<<arguments<<std::endl;
+		}
+	
+	if(!options.empty())
+		{
+		/* Print all defined options in the order in which they were defined: */
+		std::cout<<std::endl;
+		std::cout<<"Command line options:"<<std::endl;
+		for(OptionSet::iterator oIt=options.begin();oIt!=options.end();++oIt)
+			{
+			/* Get a pointer to the option object: */
+			Option* option=&*oIt;
+			
+			std::cout<<"  ";
+			
+			/* Find the option object in the long and short option maps: */
+			OptionMap::Iterator loIt;
+			for(loIt=longOptions.begin();!loIt.isFinished()&&loIt->getDest()!=option;++loIt)
+				;
+			OptionMap::Iterator soIt;
+			for(soIt=shortOptions.begin();!soIt.isFinished()&&soIt->getDest()!=option;++soIt)
+				;
+			
+			if(!loIt.isFinished()&&!soIt.isFinished())
+				std::cout<<"( --"<<loIt->getSource()<<" | -"<<soIt->getSource()<<" )";
+			else if(!loIt.isFinished())
+				std::cout<<"--"<<loIt->getSource();
+			else if(!soIt.isFinished())
+				std::cout<<"-"<<soIt->getSource();
+			
+			/* Print the option's arguments: */
+			option->printArguments(std::cout);
+			std::cout<<std::endl;
+			
+			/* Print the option's description: */
+			std::cout<<"    "<<option->getDescription()<<std::endl;
+			}
 		}
 	
 	helpPrinted=true;
@@ -344,6 +288,12 @@ void CommandLineParser::setDescription(const char* newDescription)
 	description=newDescription;
 	}
 
+void CommandLineParser::setArguments(const char* newArguments)
+	{
+	/* Save the arguments string: */
+	arguments=newArguments;
+	}
+
 void CommandLineParser::stopOnArguments(void)
 	{
 	/* Remove any argument handlers: */
@@ -368,19 +318,13 @@ void CommandLineParser::callArgumentCallback(CommandLineParser::ArgumentCallback
 void CommandLineParser::addEnableOption(const char* longOption,const char* shortOption,bool& value,const char* description)
 	{
 	/* Create a new option object and add it to the set: */
-	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new BoolOption(description,false,value));
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new FixedValueOption<bool>(description,true,value));
 	}
 
 void CommandLineParser::addDisableOption(const char* longOption,const char* shortOption,bool& value,const char* description)
 	{
 	/* Create a new option object and add it to the set: */
-	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new BoolOption(description,true,value));
-	}
-
-void CommandLineParser::addStringOption(const char* longOption,const char* shortOption,std::string& value,const char* argument,const char* description)
-	{
-	/* Create a new option object and add it to the set: */
-	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new StringOption(description,argument,value));
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new FixedValueOption<bool>(description,false,value));
 	}
 
 void CommandLineParser::addCategoryOption(const char* longOption,const char* shortOption,unsigned int numCategories,const char* categories[],unsigned int& value,const char* description)
@@ -469,6 +413,18 @@ template void CommandLineParser::addFixedValueOption<signed long>(const char*,co
 template void CommandLineParser::addFixedValueOption<unsigned long>(const char*,const char*,const unsigned long&,unsigned long&,const char*);
 template void CommandLineParser::addFixedValueOption<float>(const char*,const char*,const float&,float&,const char*);
 template void CommandLineParser::addFixedValueOption<double>(const char*,const char*,const double&,double&,const char*);
+template void CommandLineParser::addFixedValueOption<std::string>(const char*,const char*,const std::string&,std::string&,const char*);
+
+template void CommandLineParser::addValueOption<bool>(const char*,const char*,bool&,const char*,const char*);
+template void CommandLineParser::addValueOption<signed short>(const char*,const char*,signed short&,const char*,const char*);
+template void CommandLineParser::addValueOption<unsigned short>(const char*,const char*,unsigned short&,const char*,const char*);
+template void CommandLineParser::addValueOption<signed int>(const char*,const char*,signed int&,const char*,const char*);
+template void CommandLineParser::addValueOption<unsigned int>(const char*,const char*,unsigned int&,const char*,const char*);
+template void CommandLineParser::addValueOption<signed long>(const char*,const char*,signed long&,const char*,const char*);
+template void CommandLineParser::addValueOption<unsigned long>(const char*,const char*,unsigned long&,const char*,const char*);
+template void CommandLineParser::addValueOption<float>(const char*,const char*,float&,const char*,const char*);
+template void CommandLineParser::addValueOption<double>(const char*,const char*,double&,const char*,const char*);
+template void CommandLineParser::addValueOption<std::string>(const char*,const char*,std::string&,const char*,const char*);
 
 template void CommandLineParser::addArrayOption<bool>(const char*,const char*,unsigned int,bool*,const char*,const char*);
 template void CommandLineParser::addArrayOption<signed short>(const char*,const char*,unsigned int,signed short*,const char*,const char*);
@@ -479,5 +435,17 @@ template void CommandLineParser::addArrayOption<signed long>(const char*,const c
 template void CommandLineParser::addArrayOption<unsigned long>(const char*,const char*,unsigned int,unsigned long*,const char*,const char*);
 template void CommandLineParser::addArrayOption<float>(const char*,const char*,unsigned int,float*,const char*,const char*);
 template void CommandLineParser::addArrayOption<double>(const char*,const char*,unsigned int,double*,const char*,const char*);
+template void CommandLineParser::addArrayOption<std::string>(const char*,const char*,unsigned int,std::string*,const char*,const char*);
+
+template void CommandLineParser::addListOption<bool>(const char*,const char*,std::vector<bool>&,const char*,const char*);
+template void CommandLineParser::addListOption<signed short>(const char*,const char*,std::vector<signed short>&,const char*,const char*);
+template void CommandLineParser::addListOption<unsigned short>(const char*,const char*,std::vector<unsigned short>&,const char*,const char*);
+template void CommandLineParser::addListOption<signed int>(const char*,const char*,std::vector<signed int>&,const char*,const char*);
+template void CommandLineParser::addListOption<unsigned int>(const char*,const char*,std::vector<unsigned int>&,const char*,const char*);
+template void CommandLineParser::addListOption<signed long>(const char*,const char*,std::vector<signed long>&,const char*,const char*);
+template void CommandLineParser::addListOption<unsigned long>(const char*,const char*,std::vector<unsigned long>&,const char*,const char*);
+template void CommandLineParser::addListOption<float>(const char*,const char*,std::vector<float>&,const char*,const char*);
+template void CommandLineParser::addListOption<double>(const char*,const char*,std::vector<double>&,const char*,const char*);
+template void CommandLineParser::addListOption<std::string>(const char*,const char*,std::vector<std::string>&,const char*,const char*);
 
 }

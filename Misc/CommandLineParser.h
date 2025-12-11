@@ -101,11 +101,12 @@ class CommandLineParser
 	/* Concrete option handler classes: */
 	class HelpOption;
 	friend class HelpOption;
-	class BoolOption;
 	template <class ValueParam>
 	class FixedValueOption;
 	class StringOption;
 	class CategoryOption;
+	template <class ValueParam>
+	class ValueOption;
 	template <class ValueParam>
 	class ArrayOption;
 	template <class ValueParam>
@@ -113,6 +114,7 @@ class CommandLineParser
 	
 	/* Elements: */
 	std::string description; // Description of the application
+	std::string arguments; // Definition of application's non-option arguments
 	OptionSet options; // List of options in the order in which they were added to the parser
 	OptionMap longOptions; // Map of defined long options
 	OptionMap shortOptions; // Map of defined short options
@@ -131,6 +133,7 @@ class CommandLineParser
 	
 	/* Methods: */
 	void setDescription(const char* newDescription); // Sets the application description
+	void setArguments(const char* newArguments); // Sets the definition of the application's non-option arguments
 	void stopOnArguments(void); // parse() method returns when a non-option argument is encountered
 	void addArgumentsToList(std::vector<std::string>& arguments); // Adds encountered arguments to the given list
 	void callArgumentCallback(ArgumentCallback* newArgumentCallback); // Calls the given callback when an argument is encountered
@@ -138,10 +141,11 @@ class CommandLineParser
 	void addDisableOption(const char* longOption,const char* shortOption,bool& value,const char* description); // Adds an option handler that sets a boolean variable to false when the option is encountered
 	template <class ValueParam>
 	void addFixedValueOption(const char* longOption,const char* shortOption,const ValueParam& fixedValue,ValueParam& value,const char* description); // Adds an option handler that sets a variable to a fixed value when the option is encountered
-	void addStringOption(const char* longOption,const char* shortOption,std::string& value,const char* argument,const char* description); // Adds an option handler that sets a string variable to the argument that follows the option argument
 	void addCategoryOption(const char* longOption,const char* shortOption,unsigned int numCategories,const char* categories[],unsigned int& value,const char* description); // Adds an option handler that sets an unsigned integer variable to the index of the following string in a list of pre-set values
 	void addCategoryOption(const char* longOption,const char* shortOption,unsigned int numCategories,const std::string categories[],unsigned int& value,const char* description); // Ditto, defining category names as a C-style array of std::strings
 	void addCategoryOption(const char* longOption,const char* shortOption,const std::vector<std::string>& categories,unsigned int& value,const char* description); // Ditto, defining category names as a std::vector of std::strings
+	template <class ValueParam>
+	void addValueOption(const char* longOption,const char* shortOption,ValueParam& value,const char* argument,const char* description); // Adds an option handler that sets a variable to the value of the argument that follows the option argument
 	template <class ValueParam>
 	void addArrayOption(const char* longOption,const char* shortOption,unsigned int numValues,ValueParam* values,const char* arguments,const char* description); // Adds an option handler that sets the components of a fixed-size array variable to the values of the arguments that follow the option argument
 	template <class ValueParam>
