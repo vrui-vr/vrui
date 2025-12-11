@@ -2273,7 +2273,7 @@ PrintInputDeviceDataFile: $(EXEDIR)/PrintInputDeviceDataFile
 # The calibration pattern generator:
 #
 
-$(EXEDIR)/XBackground: PACKAGES += X11
+$(EXEDIR)/XBackground: PACKAGES += MYMISC X11
 $(EXEDIR)/XBackground: EXTRACINCLUDEFLAGS += -ICalibration
 $(EXEDIR)/XBackground: $(OBJDIR)/Calibration/XBackground.o
 .PHONY: XBackground
