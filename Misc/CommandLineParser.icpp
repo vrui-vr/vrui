@@ -153,6 +153,50 @@ class CommandLineParser::ArrayOption:public CommandLineParser::Option
 		}
 	};
 
+template <>
+class CommandLineParser::ArrayOption<std::string>:public CommandLineParser::Option
+	{
+	/* Elements: */
+	private:
+	std::string arguments; // String defining the value array's entries
+	unsigned int numValues; // Number of entries in the option value array
+	std::string* values; // Pointer to the array of option values
+	
+	/* Constructors and destructors: */
+	public:
+	ArrayOption(const char* sDescription,const char* sArguments,unsigned int sNumValues,std::string* sValues)
+		:Option(sDescription),
+		 arguments(sArguments),
+		 numValues(sNumValues),values(sValues)
+		{
+		}
+	
+	/* Methods from class Option: */
+	virtual void printArguments(std::ostream& os) const
+		{
+		os<<' '<<arguments;
+		}
+	virtual char** parse(char* arg,char** argPtr,char** argEnd)
+		{
+		/* Parse value array entries: */
+		std::string* vPtr=values;
+		std::string* vEnd=values+numValues;
+		while(vPtr!=vEnd&&argPtr!=argEnd)
+			{
+			*vPtr=*argPtr;
+			
+			++vPtr;
+			++argPtr;
+			}
+		
+		/* Check if all value array entries were read: */
+		if(vPtr!=vEnd)
+			throw Misc::makeStdErr(0,"%s: Only %u values out of %u present",arg,vPtr-values,numValues);
+		
+		return argPtr;
+		}
+	};
+
 template <class ValueParam>
 class CommandLineParser::AddValueToListOption:public CommandLineParser::Option
 	{
@@ -181,6 +225,41 @@ class CommandLineParser::AddValueToListOption:public CommandLineParser::Option
 			{
 			/* Convert the argument to the value type and append it to the list: */
 			values.push_back(convertValue<Value>(*argPtr));
+			}
+		catch(const std::runtime_error& err)
+			{
+			/* Wrap the error message: */
+			throw Misc::makeStdErr(0,"%s: %s",arg,err.what());
+			}
+		
+		return argPtr+1;
+		}
+	};
+
+template <>
+class CommandLineParser::AddValueToListOption<std::string>:public CommandLineParser::Option
+	{
+	/* Elements: */
+	private:
+	std::string argument; // String defining the value
+	std::vector<std::string>& values; // The list of option values
+	
+	/* Constructors and destructors: */
+	public:
+	AddValueToListOption(const char* sDescription,const char* sArgument,std::vector<std::string>& sValues)
+		:Option(sDescription),
+		 argument(sArgument),
+		 values(sValues)
+		{
+		}
+	
+	/* Methods from class Option: */
+	virtual char** parse(char* arg,char** argPtr,char** argEnd)
+		{
+		try
+			{
+			/* Convert the argument to the value type and append it to the list: */
+			values.push_back(*argPtr);
 			}
 		catch(const std::runtime_error& err)
 			{
