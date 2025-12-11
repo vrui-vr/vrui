@@ -114,7 +114,8 @@ class CommandLineParser
 	
 	/* Elements: */
 	std::string description; // Description of the application
-	std::string arguments; // Definition of application's non-option arguments
+	std::string arguments; // Definition of the application's non-option arguments
+	std::string argumentsDescription; // Description of the applications non-option arguments
 	OptionSet options; // List of options in the order in which they were added to the parser
 	OptionMap longOptions; // Map of defined long options
 	OptionMap shortOptions; // Map of defined short options
@@ -133,7 +134,7 @@ class CommandLineParser
 	
 	/* Methods: */
 	void setDescription(const char* newDescription); // Sets the application description
-	void setArguments(const char* newArguments); // Sets the definition of the application's non-option arguments
+	void setArguments(const char* newArguments,const char* newArgumentsDescription); // Sets the definition and description of the application's non-option arguments
 	void stopOnArguments(void); // parse() method returns when a non-option argument is encountered
 	void addArgumentsToList(std::vector<std::string>& arguments); // Adds encountered arguments to the given list
 	void callArgumentCallback(ArgumentCallback* newArgumentCallback); // Calls the given callback when an argument is encountered

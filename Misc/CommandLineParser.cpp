@@ -221,18 +221,53 @@ void CommandLineParser::printHelp(void)
 	if(appName!=0||!description.empty())
 		std::cout<<std::endl;
 	
+	/* Print the application usage synopsis: */
+	std::cout<<std::endl<<"Usage:";
+	if(appName!=0)
+		std::cout<<' '<<appName;
+	for(OptionSet::iterator oIt=options.begin();oIt!=options.end();++oIt)
+		{
+		/* Get a pointer to the option object: */
+		Option* option=&*oIt;
+		
+		/* Find the option object in the long and short option maps: */
+		OptionMap::Iterator loIt;
+		for(loIt=longOptions.begin();!loIt.isFinished()&&loIt->getDest()!=option;++loIt)
+			;
+		OptionMap::Iterator soIt;
+		for(soIt=shortOptions.begin();!soIt.isFinished()&&soIt->getDest()!=option;++soIt)
+			;
+		
+		std::cout<<" [ ";
+		if(!loIt.isFinished()&&!soIt.isFinished())
+			std::cout<<"( --"<<loIt->getSource()<<" | -"<<soIt->getSource()<<" )";
+		else if(!loIt.isFinished())
+			std::cout<<"--"<<loIt->getSource();
+		else if(!soIt.isFinished())
+			std::cout<<"-"<<soIt->getSource();
+		
+		/* Print the option's arguments: */
+		option->printArguments(std::cout);
+		
+		std::cout<<" ]";
+		}
+	if(!arguments.empty())
+		std::cout<<' '<<arguments;
+	std::cout<<std::endl;
+	
 	if(!arguments.empty())
 		{
 		/* Print the application's non-option command line arguments: */
-		std::cout<<std::endl;
-		std::cout<<"Command line arguments: "<<arguments<<std::endl;
+		std::cout<<std::endl<<"Command line arguments:"<<std::endl;
+		std::cout<<"  "<<arguments<<std::endl;
+		if(!argumentsDescription.empty())
+			std::cout<<"    "<<argumentsDescription<<std::endl;
 		}
 	
 	if(!options.empty())
 		{
 		/* Print all defined options in the order in which they were defined: */
-		std::cout<<std::endl;
-		std::cout<<"Command line options:"<<std::endl;
+		std::cout<<std::endl<<"Command line options:"<<std::endl;
 		for(OptionSet::iterator oIt=options.begin();oIt!=options.end();++oIt)
 			{
 			/* Get a pointer to the option object: */
@@ -288,10 +323,11 @@ void CommandLineParser::setDescription(const char* newDescription)
 	description=newDescription;
 	}
 
-void CommandLineParser::setArguments(const char* newArguments)
+void CommandLineParser::setArguments(const char* newArguments,const char* newArgumentsDescription)
 	{
-	/* Save the arguments string: */
+	/* Save the arguments and description strings: */
 	arguments=newArguments;
+	argumentsDescription=newArgumentsDescription;
 	}
 
 void CommandLineParser::stopOnArguments(void)
