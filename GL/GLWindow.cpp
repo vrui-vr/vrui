@@ -178,7 +178,6 @@ void GLWindow::initWindow(const char* windowName,bool decorate)
 	XFlush(context->getDisplay());
 	
 	/* Process events up until the first Expose event to determine the initial window position and size: */
-	bool receivedConfigureNotify=false;
 	while(true)
 		{
 		XEvent event;
@@ -195,7 +194,6 @@ void GLWindow::initWindow(const char* windowName,bool decorate)
 			
 			/* Retrieve the window size: */
 			rect.size=XGetSize(event.xconfigure);
-			receivedConfigureNotify=true;
 			}
 		else if(event.type==ReparentNotify)
 			{
