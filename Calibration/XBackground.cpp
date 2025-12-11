@@ -122,7 +122,7 @@ unsigned char* loadPPMFile(const char* ppmFileName,int ppmSize[2])
 	if(ppmFile==0)
 		{
 		std::ostringstream str;
-		str<<"loadPPMFile: Could not open input file "<<ppmFileName;
+		str<<"loadPPMFile: Unable to open input file "<<ppmFileName;
 		throw std::runtime_error(str.str());
 		}
 	
@@ -302,6 +302,8 @@ struct WindowState
 		/* Create the new window: */
 		if(!geometry.hasSize())
 			geometry.setSize(640,480);
+		if(!geometry.hasPosition())
+			geometry.setPosition((int(rootAttr.width)-int(geometry.size[0]))/2,(int(rootAttr.height)-int(geometry.size[1]))/2);
 		window=XCreateSimpleWindow(display,root,geometry.position[0],geometry.position[1],geometry.size[0],geometry.size[1],0,WhitePixel(display,screen),BlackPixel(display,screen));
 		XSetStandardProperties(display,window,"XBackground","XBackground",None,0,0,0);
 		XSelectInput(display,window,ExposureMask|StructureNotifyMask|KeyPressMask);
@@ -391,32 +393,40 @@ struct WindowState
 				}
 			}
 		
-		if(geometry.hasPosition()&&receivedConfigureNotify)
+		XWindowGeometry actualGeometry;
+		for(int trial=0;trial<2;++trial) // Try this at most two times
 			{
-			/*********************************************************************
-			Since modern window managers ignore window positions when opening
-			windows, we now need to move the window to its requested position.
-			*********************************************************************/
-			
-			/* In case this request goes to a redirected parent window, calculate its intended position by taking this window's parent offset into account: */
+			/* As this request will go to the redirected parent window, calculate its intended position by taking this window's parent offset into account: */
 			XMoveWindow(display,window,geometry.position[0]-parentOffset[0],geometry.position[1]-parentOffset[1]);
 			
 			/* Wait for the final ConfigureNotify event to determine the final window position and size: */
-			while(true)
+			XEvent event;
+			XWindowEvent(display,window,StructureNotifyMask,&event);
+			if(event.type==ConfigureNotify)
 				{
-				XEvent event;
-				XWindowEvent(display,window,StructureNotifyMask,&event);
-			
+				/* Retrieve the final window position and size: */
+				actualGeometry=XWindowGeometry(event.xconfigure.width,event.xconfigure.height,event.xconfigure.x,event.xconfigure.y);
+				}
+			while(XCheckWindowEvent(display,window,StructureNotifyMask,&event))
+				{
 				if(event.type==ConfigureNotify)
 					{
 					/* Retrieve the final window position and size: */
-					geometry.setSize(event.xconfigure.width,event.xconfigure.height);
-					geometry.setPosition(event.xconfigure.x,event.xconfigure.y);
-					
-					break;
+					actualGeometry=XWindowGeometry(event.xconfigure.width,event.xconfigure.height,event.xconfigure.x,event.xconfigure.y);
 					}
 				}
+			
+			/* Check if the window actually ended up where we wanted: */
+			if(actualGeometry.position[0]==geometry.position[0]&&actualGeometry.position[1]==geometry.position[1])
+				break;
+			
+			/* Adjust the parent offset and try again: */
+			for(int i=0;i<2;++i)
+				parentOffset[i]+=actualGeometry.position[i]-geometry.position[i];
 			}
+		
+		/* Store the final window rectangle: */
+		geometry=actualGeometry;
 		
 		if(makeFullscreen)
 			{
@@ -765,221 +775,229 @@ class ValueCoder<XWindowGeometry>
 
 int main(int argc,char* argv[])
 	{
-	/* Build a command line parser: */
-	Misc::CommandLineParser cmdLine;
-	cmdLine.setDescription("Utility to display a variety of calibration patterns or images.");
-	cmdLine.setArguments("[ <image file name> [ <channel mask string> ] ]");
-	char* displayNameEnv=getenv("DISPLAY");
-	std::string displayName=displayNameEnv!=0?displayNameEnv:":0";
-	cmdLine.addValueOption("display","display",displayName,"X display connection name","Sets the name of the X display on which to display the calibration image.");
-	XWindowGeometry geometry;
-	cmdLine.addValueOption("geometry","geometry",geometry,"[<width>x<height>][(+|-)<x>(+|-)<y>]","Sets the size and/or position of the calibration window.");
-	bool fullscreen=false;
-	cmdLine.addEnableOption("fullscreen","f",fullscreen,"Ask the window manager to make the calibration window full-screen.");
-	bool decorate=true;
-	cmdLine.addDisableOption("noDecorate","nd",decorate,"Do not add window manager decorations around the calibration window.");
-	const char* patternTypeNames[]=
+	try
 		{
-		"TV","Phase","Grid","Checkerboard","Blank"
-		};
-	unsigned int patternType=0;
-	cmdLine.addCategoryOption("patternType","pt",5,patternTypeNames,patternType,"Selects the calibration pattern type.");
-	cmdLine.addValueOption("type","type",patternType,"<calibration type index>","Selects the calibration pattern type: 0=TV, 1=Phase, 2=Grid, 3=Checkerboard, 4=Blank.");
-	int squareSize=300;
-	cmdLine.addValueOption("size","s",squareSize,"<calibration grid size>","Sets the size of a square calibration grid.");
-	std::string patternChannels="rgb";
-	cmdLine.addValueOption("color","c",patternChannels,"<channel mask string>","Sets the channel mask for the calibration pattern to a subset of RGB.");
-	bool splitStereo=false;
-	cmdLine.addEnableOption("stereo","stereo",splitStereo,"Displays the calibration pattern in side-by-side stereo.");
-	const char* imageFileName=0;
-	const char* imageChannels=0;
-	
-	/* Parse the command line: */
-	char** argPtr=argv;
-	char** argEnd=argv+argc;
-	while(true)
-		{
-		/* Parse the next chunk of options: */
-		argPtr=cmdLine.parse(argPtr,argEnd);
-		if(argPtr==argEnd)
-			break;
-		
-		/* Parse a non-option argument: */
-		if(imageFileName==0)
-			imageFileName=*argPtr;
-		else if(imageChannels==0)
-			imageChannels=*argPtr;
-		else
-			throw Misc::makeStdErr(0,"Extra argument %s",*argPtr);
-		
-		++argPtr;
-		}
-	
-	/* Bail out if help was given: */
-	if(cmdLine.hadHelp())
-		return 0;
-	
-	/* Assign default image channel components if none were given: */
-	if(imageFileName!=0&&imageChannels==0)
-		imageChannels="rgb";
-	
-	/* Open a connection to the X server: */
-	Display* display=XOpenDisplay(displayName.c_str());
-	if(display==0)
-		throw Misc::makeStdErr(0,"Cannot open connection to display %s",displayName.c_str());
-	
-	/* Check if the display name contains a screen name: */
-	bool haveColon=false;
-	const char* periodPtr=0;
-	for(const char* dnPtr=displayName.c_str();*dnPtr!='\0';++dnPtr)
-		{
-		if(*dnPtr==':')
-			haveColon=true;
-		else if(haveColon&&*dnPtr=='.')
-			periodPtr=dnPtr;
-		}
-	
-	/* Open one or more windows: */
-	int numWindows;
-	WindowState* ws=0;
-	if(periodPtr!=0)
-		{
-		/* Create a window for the given screen: */
-		numWindows=1;
-		ws=new WindowState[numWindows];
-		ws[0].geometry=geometry;
-		int screen=atoi(periodPtr+1);
-		ws[0].init(display,screen,fullscreen,decorate);
-		
-		/* Load an image, if given: */
-		if(imageFileName!=0&&strcasecmp(imageFileName,"Grid")!=0)
-			ws[0].loadImage(imageFileName,imageChannels);
-		}
-	else
-		{
-		/* Create a window for each screen: */
-		numWindows=ScreenCount(display);
-		ws=new WindowState[numWindows];
-		for(int screen=0;screen<numWindows;++screen)
+		/* Build a command line parser: */
+		Misc::CommandLineParser cmdLine;
+		cmdLine.setDescription("Utility to display a variety of calibration patterns or images.");
+		cmdLine.setArguments("[ <image file name> [ [r|R][g|G][b|B] ] ]","Loads an image file of the given name in PPM format and applies the optional color mask as a subset of RGB.");
+		char* displayNameEnv=getenv("DISPLAY");
+		std::string displayName=displayNameEnv!=0?displayNameEnv:":0";
+		cmdLine.addValueOption("display","display",displayName,"<X display connection name>","Sets the name of the X display on which to display the calibration image.");
+		XWindowGeometry geometry;
+		cmdLine.addValueOption("geometry","geometry",geometry,"[<width>x<height>][(+|-)<x>(+|-)<y>]","Sets the size and/or position of the calibration window.");
+		bool fullscreen=false;
+		cmdLine.addEnableOption("fullscreen","f",fullscreen,"Ask the window manager to make the calibration window full-screen.");
+		bool decorate=true;
+		cmdLine.addDisableOption("noDecorate","nd",decorate,"Do not add window manager decorations around the calibration window.");
+		const char* patternTypeNames[]=
 			{
-			ws[screen].geometry=geometry;
-			ws[screen].init(display,screen,fullscreen,decorate);
+			"TV","Phase","Grid","Checkerboard","Blank"
+			};
+		unsigned int patternType=0;
+		cmdLine.addCategoryOption("patternType","pt",5,patternTypeNames,patternType,"Selects the calibration pattern type.");
+		cmdLine.addValueOption("type","type",patternType,"<calibration type index>","Selects the calibration pattern type: 0=TV, 1=Phase, 2=Grid, 3=Checkerboard, 4=Blank.");
+		int squareSize=300;
+		cmdLine.addValueOption("size","s",squareSize,"<calibration grid size>","Sets the size of a square calibration grid cell in pixels.");
+		std::string patternChannels="rgb";
+		cmdLine.addValueOption("color","c",patternChannels,"[r|R][g|G][b|B]","Sets the channel mask for the calibration pattern to a subset of RGB.");
+		bool splitStereo=false;
+		cmdLine.addEnableOption("stereo","stereo",splitStereo,"Displays the calibration pattern in side-by-side stereo.");
+		const char* imageFileName=0;
+		const char* imageChannels=0;
+		
+		/* Parse the command line: */
+		char** argPtr=argv;
+		char** argEnd=argv+argc;
+		while(true)
+			{
+			/* Parse the next chunk of options: */
+			argPtr=cmdLine.parse(argPtr,argEnd);
+			if(argPtr==argEnd)
+				break;
+			
+			/* Parse a non-option argument: */
+			if(imageFileName==0)
+				imageFileName=*argPtr;
+			else if(imageChannels==0)
+				imageChannels=*argPtr;
+			else
+				throw Misc::makeStdErr(0,"Extra argument %s",*argPtr);
+			
+			++argPtr;
+			}
+		
+		/* Bail out if help was given: */
+		if(cmdLine.hadHelp())
+			return 0;
+		
+		/* Assign default image channel components if none were given: */
+		if(imageFileName!=0&&imageChannels==0)
+			imageChannels="rgb";
+		
+		/* Open a connection to the X server: */
+		Display* display=XOpenDisplay(displayName.c_str());
+		if(display==0)
+			throw Misc::makeStdErr(0,"Cannot open connection to display %s",displayName.c_str());
+		
+		/* Check if the display name contains a screen name: */
+		bool haveColon=false;
+		const char* periodPtr=0;
+		for(const char* dnPtr=displayName.c_str();*dnPtr!='\0';++dnPtr)
+			{
+			if(*dnPtr==':')
+				haveColon=true;
+			else if(haveColon&&*dnPtr=='.')
+				periodPtr=dnPtr;
+			}
+		
+		/* Open one or more windows: */
+		int numWindows;
+		WindowState* ws=0;
+		if(periodPtr!=0)
+			{
+			/* Create a window for the given screen: */
+			numWindows=1;
+			ws=new WindowState[numWindows];
+			ws[0].geometry=geometry;
+			int screen=atoi(periodPtr+1);
+			ws[0].init(display,screen,fullscreen,decorate);
 			
 			/* Load an image, if given: */
 			if(imageFileName!=0&&strcasecmp(imageFileName,"Grid")!=0)
-				ws[screen].loadImage(imageFileName,imageChannels);
+				ws[0].loadImage(imageFileName,imageChannels);
 			}
-		}
-	
-	/* Set the stereo pattern rendering colors: */
-	unsigned char stereoColors[2][3]={{0x00,0xdf,0x00},{0xff,0x20,0xff}};
-	
-	/* Calculate the mono pattern rendering color: */
-	unsigned char monoColor[3]={0,0,0};
-	for(const char* pcPtr=patternChannels.c_str();*pcPtr!='\0';++pcPtr)
-		{
-		switch(*pcPtr)
+		else
 			{
-			case 'r':
-			case 'R':
-				monoColor[0]=255;
-				break;
-			
-			case 'g':
-			case 'G':
-				monoColor[1]=255;
-				break;
-			
-			case 'b':
-			case 'B':
-				monoColor[2]=255;
-				break;
-			}
-		}
-	
-	/* Process X events: */
-	bool goOn=true;
-	while(goOn)
-		{
-		XEvent event;
-		XNextEvent(display,&event);
-		
-		/* Find the target window of this event: */
-		int i;
-		for(i=0;i<numWindows&&event.xany.window!=ws[i].window;++i)
-			;
-		if(i<numWindows)
-			switch(event.type)
+			/* Create a window for each screen: */
+			numWindows=ScreenCount(display);
+			ws=new WindowState[numWindows];
+			for(int screen=0;screen<numWindows;++screen)
 				{
-				case ConfigureNotify:
-					{
-					/* Check whether this is a real (parent-relative coordinates) or synthetic (root-relative coordinates) event: */
-					if(event.xconfigure.send_event) // Synthetic event
-						{
-						/* Update the window position and size: */
-						ws[i].geometry.setSize(event.xconfigure.width,event.xconfigure.height);
-						ws[i].geometry.setPosition(event.xconfigure.x,event.xconfigure.y);
-						}
-					else // Real event
-						{
-						/* Update this window's parent offset, just in case: */
-						ws[i].parentOffset[0]=event.xconfigure.x;
-						ws[i].parentOffset[1]=event.xconfigure.y;
-						
-						/* Update the window size: */
-						ws[i].geometry.setSize(event.xconfigure.width,event.xconfigure.height);
-						
-						/* Query the parent's geometry to find the absolute window position: */
-						Window root;
-						int x,y;
-						unsigned int width,height,borderWidth,depth;
-						XGetGeometry(ws[i].display,ws[i].parent,&root,&x,&y,&width,&height,&borderWidth,&depth);
-						
-						/* Calculate the window position: */
-						ws[i].geometry.setPosition(x+ws[i].parentOffset[0],y+ws[i].parentOffset[1]);
-						}
-					
-					break;
-					}
+				ws[screen].geometry=geometry;
+				ws[screen].init(display,screen,fullscreen,decorate);
 				
-				case KeyPress:
-					{
-					XKeyEvent keyEvent=event.xkey;
-					KeySym keySym=XLookupKeysym(&keyEvent,0);
-					if(keySym==XK_F11)
-						ws[i].toggleFullscreen();
-					
-					goOn=keySym!=XK_Escape;
+				/* Load an image, if given: */
+				if(imageFileName!=0&&strcasecmp(imageFileName,"Grid")!=0)
+					ws[screen].loadImage(imageFileName,imageChannels);
+				}
+			}
+		
+		/* Set the stereo pattern rendering colors: */
+		unsigned char stereoColors[2][3]={{0x00,0xdf,0x00},{0xff,0x20,0xff}};
+		
+		/* Calculate the mono pattern rendering color: */
+		unsigned char monoColor[3]={0,0,0};
+		for(const char* pcPtr=patternChannels.c_str();*pcPtr!='\0';++pcPtr)
+			{
+			switch(*pcPtr)
+				{
+				case 'r':
+				case 'R':
+					monoColor[0]=255;
 					break;
-					}
 				
-				case Expose:
-					if(splitStereo)
-						{
-						/* Render test pattern for double-wide split-stereo screen: */
-						ws->setForeground(stereoColors[0]);
-						redraw(ws[i],0,0,ws[i].geometry.size[0]/2,ws[i].geometry.size[1],patternType,squareSize);
-						ws->setForeground(stereoColors[1]);
-						redraw(ws[i],ws[i].geometry.size[0]/2,0,ws[i].geometry.size[0]/2,ws[i].geometry.size[1],patternType,squareSize);
-						}
-					else
-						{
-						/* Render test pattern for regular-size screen: */
-						ws->setForeground(monoColor);
-						redraw(ws[i],0,0,ws[i].geometry.size[0],ws[i].geometry.size[1],patternType,squareSize);
-						}
+				case 'g':
+				case 'G':
+					monoColor[1]=255;
 					break;
-					
-				case ClientMessage:
-					if(event.xclient.message_type==ws[i].wmProtocolsAtom&&event.xclient.format==32&&(Atom)(event.xclient.data.l[0])==ws[i].wmDeleteWindowAtom)
-						goOn=false;
+				
+				case 'b':
+				case 'B':
+					monoColor[2]=255;
 					break;
 				}
+			}
+		
+		/* Process X events: */
+		bool goOn=true;
+		while(goOn)
+			{
+			XEvent event;
+			XNextEvent(display,&event);
+			
+			/* Find the target window of this event: */
+			int i;
+			for(i=0;i<numWindows&&event.xany.window!=ws[i].window;++i)
+				;
+			if(i<numWindows)
+				switch(event.type)
+					{
+					case ConfigureNotify:
+						{
+						/* Check whether this is a real (parent-relative coordinates) or synthetic (root-relative coordinates) event: */
+						if(event.xconfigure.send_event) // Synthetic event
+							{
+							/* Update the window position and size: */
+							ws[i].geometry.setSize(event.xconfigure.width,event.xconfigure.height);
+							ws[i].geometry.setPosition(event.xconfigure.x,event.xconfigure.y);
+							}
+						else // Real event
+							{
+							/* Update this window's parent offset, just in case: */
+							ws[i].parentOffset[0]=event.xconfigure.x;
+							ws[i].parentOffset[1]=event.xconfigure.y;
+							
+							/* Update the window size: */
+							ws[i].geometry.setSize(event.xconfigure.width,event.xconfigure.height);
+							
+							/* Query the parent's geometry to find the absolute window position: */
+							Window root;
+							int x,y;
+							unsigned int width,height,borderWidth,depth;
+							XGetGeometry(ws[i].display,ws[i].parent,&root,&x,&y,&width,&height,&borderWidth,&depth);
+							
+							/* Calculate the window position: */
+							ws[i].geometry.setPosition(x+ws[i].parentOffset[0],y+ws[i].parentOffset[1]);
+							}
+						
+						break;
+						}
+					
+					case KeyPress:
+						{
+						XKeyEvent keyEvent=event.xkey;
+						KeySym keySym=XLookupKeysym(&keyEvent,0);
+						if(keySym==XK_F11)
+							ws[i].toggleFullscreen();
+						
+						goOn=keySym!=XK_Escape;
+						break;
+						}
+					
+					case Expose:
+						if(splitStereo)
+							{
+							/* Render test pattern for double-wide split-stereo screen: */
+							ws->setForeground(stereoColors[0]);
+							redraw(ws[i],0,0,ws[i].geometry.size[0]/2,ws[i].geometry.size[1],patternType,squareSize);
+							ws->setForeground(stereoColors[1]);
+							redraw(ws[i],ws[i].geometry.size[0]/2,0,ws[i].geometry.size[0]/2,ws[i].geometry.size[1],patternType,squareSize);
+							}
+						else
+							{
+							/* Render test pattern for regular-size screen: */
+							ws->setForeground(monoColor);
+							redraw(ws[i],0,0,ws[i].geometry.size[0],ws[i].geometry.size[1],patternType,squareSize);
+							}
+						break;
+						
+					case ClientMessage:
+						if(event.xclient.message_type==ws[i].wmProtocolsAtom&&event.xclient.format==32&&(Atom)(event.xclient.data.l[0])==ws[i].wmDeleteWindowAtom)
+							goOn=false;
+						break;
+					}
+			}
+		
+		/* Clean up: */
+		delete[] ws;
+		XCloseDisplay(display);
 		}
-	
-	/* Clean up: */
-	delete[] ws;
-	XCloseDisplay(display);
+	catch(const std::runtime_error& err)
+		{
+		std::cerr<<"Terminating with error "<<err.what()<<std::endl;
+		return 1;
+		}
 	
 	return 0;
 	}
