@@ -351,6 +351,13 @@ void CommandLineParser::callArgumentCallback(CommandLineParser::ArgumentCallback
 	argument=new CallbackArgument(newArgumentCallback);
 	}
 
+void CommandLineParser::setArgumentHandler(CommandLineParser::Argument* newArgument)
+	{
+	/* Replace the current argument handler: */
+	delete argument;
+	argument=newArgument;
+	}
+
 void CommandLineParser::addEnableOption(const char* longOption,const char* shortOption,bool& value,const char* description)
 	{
 	/* Create a new option object and add it to the set: */
@@ -381,7 +388,13 @@ void CommandLineParser::addCategoryOption(const char* longOption,const char* sho
 	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new CategoryOption(description,categories,value));
 	}
 
-char** CommandLineParser::parse(char** argPtr,char** argEnd)
+void CommandLineParser::addOptionHandler(const char* longOption,const char* shortOption,CommandLineParser::Option* newOption)
+	{
+	/* Add the option object to the set: */
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,newOption);
+	}
+
+bool CommandLineParser::parse(char**& argPtr,char** argEnd)
 	{
 	/* If this is the first time parse() is called, save the application name: */
 	if(appName==0)
@@ -433,12 +446,22 @@ char** CommandLineParser::parse(char** argPtr,char** argEnd)
 			}
 		}
 	
-	return argPtr;
+	return argPtr!=argEnd;
 	}
 
 /***************************************************************************
 Force instantiation of all standard CommandLineParser classes and functions:
 ***************************************************************************/
+
+template bool CommandLineParser::convertValue<bool>(const char*);
+template signed short CommandLineParser::convertValue<signed short>(const char*);
+template unsigned short CommandLineParser::convertValue<unsigned short>(const char*);
+template signed int CommandLineParser::convertValue<signed int>(const char*);
+template unsigned int CommandLineParser::convertValue<unsigned int>(const char*);
+template signed long CommandLineParser::convertValue<signed long>(const char*);
+template unsigned long CommandLineParser::convertValue<unsigned long>(const char*);
+template float CommandLineParser::convertValue<float>(const char*);
+template double CommandLineParser::convertValue<double>(const char*);
 
 template void CommandLineParser::addFixedValueOption<bool>(const char*,const char*,const bool&,bool&,const char*);
 template void CommandLineParser::addFixedValueOption<signed short>(const char*,const char*,const signed short&,signed short&,const char*);

@@ -28,6 +28,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Misc/FunctionCalls.h>
 #include <Misc/Timer.h>
 #include <Misc/MessageLogger.h>
+#include <Misc/CommandLineParser.h>
 #include <Math/Math.h>
 #include <Geometry/Point.h>
 #include <Geometry/Vector.h>
@@ -43,7 +44,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <GLMotif/ToggleButton.h>
 #include <GLMotif/FileSelectionDialog.h>
 #include <GLMotif/FileSelectionHelper.h>
-#include <Video/VideoDataFormat.h>
+#include <Video/VideoDataFormatSelector.h>
 #include <Video/ViewerComponent.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/Application.h>
@@ -330,46 +331,44 @@ VideoViewer::VideoViewer(int& argc,char**& argv)
 	 paused(false),
 	 mainMenu(0)
 	{
-	/* Parse an initial video format request from the command line: */
-	std::pair<Video::VideoDataFormat,int> formatRequest=Video::ViewerComponent::parseVideoFormat(argc,argv);
-	
-	/* Parse the remaining command line: */
+	/* Parse the command line: */
+	Misc::CommandLineParser cmdLine;
+	cmdLine.setDescription("Utility to view live video from a video device such as a frame grabber or webcam.");
+	cmdLine.setArguments("[ <video device name> [ <video device index> ] ]","Selects a video device based on the given name and optional index within devices of the same name.");
+	Video::VideoDataFormatSelector vdfs;
+	vdfs.addToParser(cmdLine);
+	cmdLine.addValueOption("saveName","sn",saveVideoFrameNameTemplate,"<file name template>","Sets a template for frame image file names when saving video frames; template must contain exactly one %u conversion specifier.");
 	const char* videoDeviceName=0;
 	unsigned int videoDeviceNameIndex=0;
-	for(int i=1;i<argc;++i)
+	bool haveVideoDeviceNameIndex=false;
+	char** argPtr=argv;
+	while(cmdLine.parse(argPtr,argv+argc))
 		{
-		if(argv[i][0]=='-')
-			{
-			/* Parse a command line option: */
-			if(strcasecmp(argv[i]+1,"saveName")==0||strcasecmp(argv[i]+1,"SN")==0)
-				{
-				++i;
-				if(i<argc)
-					saveVideoFrameNameTemplate=argv[i];
-				else
-					std::cerr<<"VideoViewer: Ignoring dangling -saveName option"<<std::endl;
-				}
-			else
-				std::cerr<<"VideoViewer: Ignoring unknown command line option "<<argv[i]<<std::endl;
-			}
-		else if(videoDeviceName==0)
-			{
-			/* Treat the argument as the name of a video device: */
-			videoDeviceName=argv[i];
-			}
-		else if(isIndex(argv[i]))
+		/* Parse a non-option argument: */
+		if(videoDeviceName==0)
+			videoDeviceName=*argPtr;
+		else if(!haveVideoDeviceNameIndex)
 			{
 			/* Treat the argument as the index of a video device among devices with the same name: */
-			videoDeviceNameIndex=(unsigned int)(atoi(argv[i]));
+			videoDeviceNameIndex=Misc::CommandLineParser::convertValue<unsigned int>(*argPtr);
+			haveVideoDeviceNameIndex=true;
 			}
 		else
-			std::cerr<<"VideoViewer: Ignoring extra device name argument "<<argv[i]<<std::endl;
+			throw Misc::makeStdErr(0,"Extra command line argument %s",*argPtr);
+		
+		++argPtr;
+		}
+	if(cmdLine.hadHelp())
+		{
+		Vrui::shutdown();
+		return;
 		}
 	
 	#if SYSTEM_HAVE_VIBE
 	
 	/* Initialize ViBe background removal: */
 	vibeProcFrameSize=Video::Size(0,0);
+	
 	#endif
 	
 	/* Initialize frame mirroring: */
@@ -378,9 +377,9 @@ VideoViewer::VideoViewer(int& argc,char**& argv)
 	
 	/* Create a viewer component for the selected video device: */
 	if(videoDeviceName!=0)
-		viewer=new Video::ViewerComponent(videoDeviceName,videoDeviceNameIndex,formatRequest.first,formatRequest.second,Vrui::getWidgetManager());
+		viewer=new Video::ViewerComponent(videoDeviceName,videoDeviceNameIndex,vdfs,Vrui::getWidgetManager());
 	else
-		viewer=new Video::ViewerComponent(0,formatRequest.first,formatRequest.second,Vrui::getWidgetManager());
+		viewer=new Video::ViewerComponent(0,vdfs,Vrui::getWidgetManager());
 	
 	/* Install callbacks: */
 	viewer->setVideoFrameCallback(Misc::createFunctionCall(this,&VideoViewer::videoFrameCallback),false);

@@ -25,6 +25,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Misc/FileNameExtensions.h>
 #include <Misc/FunctionCalls.h>
 #include <Misc/MessageLogger.h>
+#include <Misc/CommandLineParser.icpp>
 #include <IO/File.h>
 #include <IO/OpenFile.h>
 #include <Math/Math.h>
@@ -246,44 +247,46 @@ SceneGraphViewer::SceneGraphViewer(int& argc,char**& argv)
 	 navigationalSceneGraphs(Vrui::getSceneGraphManager()->getNavigationalRoot(),*IO::Directory::getCurrent()),
 	 mainMenu(0)
 	{
+	/* Parse the command line: */
+	Misc::CommandLineParser cmdLine;
+	cmdLine.setDescription("Utility to view a set of scene graphs in navigational and/or physical space.");
+	cmdLine.setArguments("<scene graph file name>*","Names of scene graph files to load.");
+	SceneGraph::SceneGraphList* currentList=&navigationalSceneGraphs;
+	cmdLine.addFixedValueOption("navigational","n",&navigationalSceneGraphs,currentList,"Anchors all following scene graphs to navigational space.");
+	cmdLine.addFixedValueOption("physical","p",&physicalSceneGraphs,currentList,"Anchors all following scene graphs to physical space.");
+	bool enable=true;
+	cmdLine.addEnableOption("enable","e",enable,"Initially enable all following scene graphs.");
+	cmdLine.addDisableOption("disable","d",enable,"Initially disable all following scene graphs.");
+	
 	// DEBUGGING
 	// Realtime::TimePointMonotonic loadTimer;
 	
 	/* Keep track if any of the loaded scene graphs require an audio processing pass: */
 	bool requireAudio=false;
 	
-	/* Parse the command line: */
-	SceneGraph::SceneGraphList* currentList=&navigationalSceneGraphs;
-	bool enable=true;
-	for(int i=1;i<argc;++i)
+	char** argPtr=argv;
+	while(cmdLine.parse(argPtr,argv+argc))
 		{
-		if(argv[i][0]=='-')
+		/* Try loading the scene graph: */
+		try
 			{
-			if(strcasecmp(argv[i]+1,"navigational")==0||strcasecmp(argv[i]+1,"n")==0)
-				currentList=&navigationalSceneGraphs;
-			else if(strcasecmp(argv[i]+1,"physical")==0||strcasecmp(argv[i]+1,"p")==0)
-				currentList=&physicalSceneGraphs;
-			else if(strcasecmp(argv[i]+1,"enable")==0||strcasecmp(argv[i]+1,"e")==0)
-				enable=true;
-			else if(strcasecmp(argv[i]+1,"disable")==0||strcasecmp(argv[i]+1,"d")==0)
-				enable=false;
+			SceneGraph::GraphNodePointer sceneGraph=currentList->addSceneGraph(*argPtr,enable);
+			
+			/* Check if the scene graph requires an audio pass: */
+			requireAudio=requireAudio||(sceneGraph->getPassMask()&SceneGraph::GraphNode::ALRenderPass)!=0x0U;
 			}
-		else
+		catch(const std::runtime_error& err)
 			{
-			/* Try loading the scene graph: */
-			try
-				{
-				SceneGraph::GraphNodePointer sceneGraph=currentList->addSceneGraph(argv[i],enable);
-				
-				/* Check if the scene graph requires an audio pass: */
-				requireAudio=requireAudio||(sceneGraph->getPassMask()&SceneGraph::GraphNode::ALRenderPass)!=0x0U;
-				}
-			catch(const std::runtime_error& err)
-				{
-				/* Print an error message and keep going: */
-				Misc::formattedUserWarning("Scene Graph Viewer: Ignoring file %s due to exception %s",argv[i],err.what());
-				}
+			/* Print an error message and keep going: */
+			Misc::formattedUserWarning("Scene Graph Viewer: Ignoring file %s due to exception %s",*argPtr,err.what());
 			}
+		
+		++argPtr;
+		}
+	if(cmdLine.hadHelp())
+		{
+		Vrui::shutdown();
+		return;
 		}
 	
 	// DEBUGGING

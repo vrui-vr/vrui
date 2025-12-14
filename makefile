@@ -1471,6 +1471,7 @@ endif
 VIDEO_HEADERS = Video/Config.h \
                 Video/Types.h \
                 Video/VideoDataFormat.h \
+                Video/VideoDataFormatSelector.h \
                 Video/FrameBuffer.h \
                 Video/ImageExtractor.h \
                 Video/VideoDevice.h \
@@ -1494,6 +1495,7 @@ endif
 VIDEO_HEADERS += Video/ViewerComponent.h
 
 VIDEO_SOURCES = Video/VideoDataFormat.cpp \
+                Video/VideoDataFormatSelector.cpp \
                 Video/VideoDevice.cpp \
                 Video/ImageSequenceVideoDevice.cpp \
                 Video/ImageExtractor.cpp \

@@ -41,7 +41,7 @@ namespace Misc {
 class CommandLineParser
 	{
 	/* Embedded classes: */
-	private:
+	public:
 	class Argument // Base class for argument handlers
 		{
 		/* Constructors and destructors: */
@@ -55,22 +55,18 @@ class CommandLineParser
 		};
 	
 	/* Concrete argument handler classes: */
+	private:
 	class AddToListArgument;
 	class CallbackArgument;
 	
 	public:
 	typedef Misc::FunctionCall<const char*> ArgumentCallback; // Type for argument handling callbacks
 	
-	private:
 	class Option // Base class for option handlers
 		{
 		/* Elements: */
 		protected:
 		std::string description; // Option description displayed on help pages
-		
-		/* Protected methods: */
-		template <class ValueParam>
-		static ValueParam convertValue(const char* arg); // Tries converting the given argument to the given value type; throws Misc::DecodingError on failure
 		
 		/* Constructors and destructors: */
 		public:
@@ -95,6 +91,7 @@ class CommandLineParser
 		virtual char** parse(char* arg,char** argPtr,char** argEnd) =0; // Parses an option starting from the given argument; returns pointer to next argument to be parsed
 		};
 	
+	private:
 	typedef Misc::SimpleObjectSet<Option> OptionSet; // Type for sets of option objects
 	typedef Misc::HashTable<std::string,Option*> OptionMap; // Type for hash tables mapping long or short option codes to option objects
 	
@@ -134,10 +131,19 @@ class CommandLineParser
 	
 	/* Methods: */
 	void setDescription(const char* newDescription); // Sets the application description
+	
+	/* Parsing helper methods: */
+	template <class ValueParam>
+	static ValueParam convertValue(const char* arg); // Tries converting the given argument to the given value type; throws Misc::DecodingError on failure
+	
+	/* Methods to handle non-option arguments: */
 	void setArguments(const char* newArguments,const char* newArgumentsDescription); // Sets the definition and description of the application's non-option arguments
 	void stopOnArguments(void); // parse() method returns when a non-option argument is encountered
 	void addArgumentsToList(std::vector<std::string>& arguments); // Adds encountered arguments to the given list
 	void callArgumentCallback(ArgumentCallback* newArgumentCallback); // Calls the given callback when an argument is encountered
+	void setArgumentHandler(Argument* newArgument); // Sets a custom argument handler; command line parser will take ownership of handler object
+	
+	/* Methods to handle options: */
 	void addEnableOption(const char* longOption,const char* shortOption,bool& value,const char* description); // Adds an option handler that sets a boolean variable to true when the option is encountered
 	void addDisableOption(const char* longOption,const char* shortOption,bool& value,const char* description); // Adds an option handler that sets a boolean variable to false when the option is encountered
 	template <class ValueParam>
@@ -151,7 +157,10 @@ class CommandLineParser
 	void addArrayOption(const char* longOption,const char* shortOption,unsigned int numValues,ValueParam* values,const char* arguments,const char* description); // Adds an option handler that sets the components of a fixed-size array variable to the values of the arguments that follow the option argument
 	template <class ValueParam>
 	void addListOption(const char* longOption,const char* shortOption,std::vector<ValueParam>& values,const char* argument,const char* description); // Adds an option handler that appends the value of the argument following the option argument to a list
-	char** parse(char** argPtr,char** argEnd); // Parses a stretch of command line; on first invocation, extracts application name from the first argument; returns a pointer to the next argument to be parsed
+	void addOptionHandler(const char* longOption,const char* shortOption,Option* newOption); // Adds a custom option handler; command line parser will take ownership of the handler object
+	
+	/* Methods to parse a command line: */
+	bool parse(char**& argPtr,char** argEnd); // Parses a stretch of command line; on first invocation, extracts application name from the first argument; changes argPtr to point to the first unprocessed argument; returns true if there are more arguments to be parsed
 	bool hadHelp(void) const // Returns true if the parsed command line contained the -h or --help options
 		{
 		return helpPrinted;

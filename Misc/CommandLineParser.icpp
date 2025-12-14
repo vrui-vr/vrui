@@ -32,33 +32,6 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 namespace Misc {
 
-/******************************************
-Methods of class CommandLineParser::Option:
-******************************************/
-
-template <class ValueParam>
-inline
-ValueParam CommandLineParser::Option::convertValue(const char* arg)
-	{
-	/* Remove leading and trailing whitespace from the argument: */
-	for(;*arg!='\0'&&isspace(*arg);++arg)
-		;
-	const char* argEnd=arg;
-	for(const char* aPtr=arg;*aPtr!='\0';++aPtr)
-		if(!isspace(*aPtr))
-			argEnd=aPtr+1;
-	
-	/* Decode the value string: */
-	const char* decodeEnd;
-	ValueParam value=Misc::ValueCoder<ValueParam>::decode(arg,argEnd,&decodeEnd);
-	
-	/* Check if the entire argument was read: */
-	if(decodeEnd!=argEnd)
-		throw Misc::DecodingError(std::string("Invalid suffix ")+std::string(decodeEnd,argEnd)+std::string(" in value ")+std::string(arg,argEnd));
-	
-	return value;
-	}
-
 /********************************************************
 Declaration of class CommandLineParser::FixedValueOption:
 ********************************************************/
@@ -132,7 +105,7 @@ class CommandLineParser::ValueOption:public CommandLineParser::Option
 		try
 			{
 			/* Convert the argument to the value type: */
-			value=convertValue<Value>(*argPtr);
+			value=CommandLineParser::convertValue<Value>(*argPtr);
 			}
 		catch(const std::runtime_error& err)
 			{
@@ -224,7 +197,7 @@ class CommandLineParser::ArrayOption:public CommandLineParser::Option
 			try
 				{
 				/* Convert the argument to the value type: */
-				*vPtr=convertValue<Value>(*argPtr);
+				*vPtr=CommandLineParser::convertValue<Value>(*argPtr);
 				}
 			catch(const std::runtime_error& err)
 				{
@@ -323,7 +296,7 @@ class CommandLineParser::AddValueToListOption:public CommandLineParser::Option
 		try
 			{
 			/* Convert the argument to the value type and append it to the list: */
-			values.push_back(convertValue<Value>(*argPtr));
+			values.push_back(CommandLineParser::convertValue<Value>(*argPtr));
 			}
 		catch(const std::runtime_error& err)
 			{
@@ -377,6 +350,29 @@ class CommandLineParser::AddValueToListOption<std::string>:public CommandLinePar
 /**********************************
 Methods of class CommandLineParser:
 **********************************/
+
+template <class ValueParam>
+inline
+ValueParam CommandLineParser::convertValue(const char* arg)
+	{
+	/* Remove leading and trailing whitespace from the argument: */
+	for(;*arg!='\0'&&isspace(*arg);++arg)
+		;
+	const char* argEnd=arg;
+	for(const char* aPtr=arg;*aPtr!='\0';++aPtr)
+		if(!isspace(*aPtr))
+			argEnd=aPtr+1;
+	
+	/* Decode the value string: */
+	const char* decodeEnd;
+	ValueParam value=Misc::ValueCoder<ValueParam>::decode(arg,argEnd,&decodeEnd);
+	
+	/* Check if the entire argument was read: */
+	if(decodeEnd!=argEnd)
+		throw Misc::DecodingError(std::string("Invalid suffix ")+std::string(decodeEnd,argEnd)+std::string(" in value ")+std::string(arg,argEnd));
+	
+	return value;
+	}
 
 template <class ValueParam>
 inline

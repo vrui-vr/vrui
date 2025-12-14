@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <unistd.h>
 #include <iostream>
+#include <Misc/StdError.h>
 #include <Misc/CommandLineParser.h>
 #include <Threads/Thread.h>
 #include <Threads/TripleBuffer.h>
@@ -138,13 +139,8 @@ Animation::Animation(int& argc,char**& argv)
 	cmd.addArrayOption<GLfloat>("frontColor","fc",3,meshMaterialFront.diffuse.getRgba(),"<red> <green> <blue>","Defines the diffuse color to draw the back of the animated mesh with RGB components in [0, 1]");
 	cmd.addArrayOption<GLfloat>("backColor","bc",3,meshMaterialBack.diffuse.getRgba(),"<red> <green> <blue>","Defines the diffuse color to draw the front of the animated mesh with RGB components in [0, 1]");
 	char** argPtr=argv;
-	char** argEnd=argv+argc;
-	while(true)
-		{
-		if((argPtr=cmd.parse(argPtr,argEnd))==argEnd)
-			break;
-		++argPtr;
-		}
+	if(cmd.parse(argPtr,argv+argc))
+		throw Misc::makeStdErr(0,"Extra command line argument %s",*argPtr);
 	if(cmd.hadHelp())
 		{
 		Vrui::shutdown();

@@ -8447,3 +8447,10 @@ Vrui-14.1-001:
 - Added support for canted stereo cameras to HMDCameraViewer vislet.
 - Added Misc::CommandLineParser class to simplify processing application
   command lines.
+  - Use new class in several Vrui utilities and example applications.
+- Created new Video::VideoDataFormatSelector class that keeps track of
+  which components of a video data format are explicitly requested.
+  - Added code to hook an object of this type into a command line
+    parser.
+  - Changed interface of Video::ViewerComponent to accept a
+    Video::VideoDataFormatSelector.

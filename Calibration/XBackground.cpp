@@ -808,14 +808,8 @@ int main(int argc,char* argv[])
 		
 		/* Parse the command line: */
 		char** argPtr=argv;
-		char** argEnd=argv+argc;
-		while(true)
+		while(cmdLine.parse(argPtr,argv+argc))
 			{
-			/* Parse the next chunk of options: */
-			argPtr=cmdLine.parse(argPtr,argEnd);
-			if(argPtr==argEnd)
-				break;
-			
 			/* Parse a non-option argument: */
 			if(imageFileName==0)
 				imageFileName=*argPtr;
