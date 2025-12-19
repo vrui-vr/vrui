@@ -50,10 +50,12 @@ typedef void (APIENTRY * PFNGLVDPAUMAPSURFACESNVPROC)(GLsizei,const GLvdpauSurfa
 typedef void (APIENTRY * PFNGLVDPAUUNMAPSURFACESNVPROC)(GLsizei,const GLvdpauSurfaceNV*);
 
 /* Extension-specific constants: */
-#define GL_SURFACE_STATE_NV      0x86EB;
-#define GL_SURFACE_REGISTERED_NV 0x86FD;
-#define SURFACE_MAPPED_NV        0x8700;
-#define WRITE_DISCARD_NV         0x88BE;
+#define GL_SURFACE_STATE_NV      0x86EB
+#define GL_SURFACE_REGISTERED_NV 0x86FD
+#define SURFACE_MAPPED_NV        0x8700
+#define WRITE_DISCARD_NV         0x88BE
+
+#endif
 
 /* Forward declarations of friend functions: */
 void glVDPAUInitNV(const void* vdpDevice,const void* getProcAddress);
@@ -66,8 +68,6 @@ void glVDPAUGetSurfaceivNV(GLvdpauSurfaceNV surface,GLenum pname,GLsizei bufSize
 void glVDPAUSurfaceAccessNV(GLvdpauSurfaceNV surface,GLenum access);
 void glVDPAUMapSurfacesNV(GLsizei numSurfaces,const GLvdpauSurfaceNV* surfaces);
 void glVDPAUUnmapSurfacesNV(GLsizei numSurface,const GLvdpauSurfaceNV* surfaces);
-
-#endif
 
 class GLNVVdpauInterop:public GLExtension
 	{
