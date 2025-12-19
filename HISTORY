@@ -8445,6 +8445,7 @@ Vrui-14.1-001:
     - Added getFieldString and getFieldLength methods to access result
       from most recent readFieldIntoBuffer call.
 - Added support for canted stereo cameras to HMDCameraViewer vislet.
+- Added OpenGL extension class for GL_NV_vdpau_interop.
 - Added Misc::CommandLineParser class to simplify processing application
   command lines.
   - Use new class in several Vrui utilities and example applications.
