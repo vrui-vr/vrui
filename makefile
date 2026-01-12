@@ -109,11 +109,16 @@ endif
 # Select support for commodity VR headsets via the OpenVR API
 ########################################################################
 
-# Root directory of the SteamVR run-time.
-STEAMVRDIR = 
+# Root directory of the SteamVR run-time. Set this to the directory
+# containing the /drivers and /resources subdirectories, typically named
+# "SteamVR". If this variable is neither defined here nor in the
+# environment nor given on make's command line, the following code will
+# try to find a SteamVR installation on the local system.
+# STEAMVRDIR = 
 
-# If no SteamVR directory is defined above, or given on make's command
-# line, search the file system for an installation:
+# If no SteamVR directory is defined above or in the environment, or
+# given on make's command line, search the file system for a SteamVR
+# installation:
 ifeq ($(strip $(STEAMVRDIR)),)
   STEAMVRDIR = $(realpath $(firstword $(wildcard $(HOME)/.[Ss]team/[Ss]team/[Ss]team[Aa]pps/[Cc]ommon/[Ss]team[Vv][Rr] $(HOME)/.local/share/[Ss]team/[Ss]team[Aa]pps/[Cc]ommon/[Ss]team[Vv][Rr])))
   ifeq ($(strip $(STEAMVRDIR)),)
