@@ -2,7 +2,7 @@
 ########################################################################
 # Script to run a Vrui application on a head-mounted display supported
 # by VRDeviceDaemon tracking.
-# Copyright (c) 2018-2024 Oliver Kreylos
+# Copyright (c) 2018-2026 Oliver Kreylos
 # 
 # This file is part of the Virtual Reality User Interface Library
 # (Vrui).
@@ -28,7 +28,8 @@ VRUIAPPNAME=$1
 shift
 
 # Check if a VR compositor is running:
-if /usr/sbin/ss -O -n -f unix -l | grep -qF VRCompositingServer.socket ; then
+SS=/usr/bin/ss
+if "${SS}" -O -n -f unix -l | grep -qF VRCompositingServer.socket ; then
 	# Configure library environment:
 	VRUIBINDIR=/usr/local/bin
 	VRUIETCDIR=/usr/local/etc

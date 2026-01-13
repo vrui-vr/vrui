@@ -1,6 +1,6 @@
 ########################################################################
 # Makefile for Vrui toolkit and its underlying libraries.
-# Copyright (c) 1998-2025 Oliver Kreylos
+# Copyright (c) 1998-2026 Oliver Kreylos
 #
 # This file is part of the WhyTools Build Environment.
 # 
@@ -2248,6 +2248,7 @@ $(EXEDIR)/OnHMD: | $(DEPDIR)/config
 $(EXEDIR)/OnHMD: $(VRUI_SCRIPTDIR)/OnHMD $(DEPDIR)/Configure-Vrui
 	@echo Creating helper script to run Vrui applications on OpenVR-supported head mounted displays...
 	@cp $(VRUI_SCRIPTDIR)/OnHMD $(EXEDIR)/OnHMD
+	@sed -i -e 's@SS=.*@SS=$(wildcard /usr/bin/ss /usr/sbin/ss)@' $(EXEDIR)/OnHMD
 	@sed -i -e 's@VRUIBINDIR=.*@VRUIBINDIR=$(EXECUTABLEINSTALLDIR)@' $(EXEDIR)/OnHMD
 	@sed -i -e 's@VRUIETCDIR=.*@VRUIETCDIR=$(ETCINSTALLDIR)@' $(EXEDIR)/OnHMD
 	@sed -i -e 's@USERETCDIR=.*@USERETCDIR=$$HOME/$(VRUI_USERCONFIGDIR)@' $(EXEDIR)/OnHMD
