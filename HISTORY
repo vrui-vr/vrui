@@ -8421,3 +8421,10 @@ Vrui-14.0-001:
   dealing with touchscreen / pen devices.
   - Updated CalibrateTouchscreen utility in Calibration directory to use
     new TouchscreenCalibrator classes.
+
+Vrui-14.0-002:
+- Bypass auto-detection of SteamVR installation in makefile if a
+  STEAMVRDIR environment variable is set.
+- Check whether the ss utility is in /usr/bin or /usr/sbin when creating
+  the OnHMD script.
+- Fixed typo in etc/ControlWindow.cfg.

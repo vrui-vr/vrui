@@ -1,6 +1,6 @@
 ########################################################################
 # Makefile for Vrui toolkit and its underlying libraries.
-# Copyright (c) 1998-2025 Oliver Kreylos
+# Copyright (c) 1998-2026 Oliver Kreylos
 #
 # This file is part of the WhyTools Build Environment.
 # 
@@ -109,8 +109,10 @@ endif
 # Select support for commodity VR headsets via the OpenVR API
 ########################################################################
 
-# Root directory of the SteamVR run-time.
-STEAMVRDIR = 
+# Root directory of the SteamVR run-time. Set this to the path of the
+# directory containing the /drivers and /resources subdirectories,
+# usually called SteamVR, to bypass the automatic detection procedure.
+# STEAMVRDIR = 
 
 # If no SteamVR directory is defined above, or given on make's command
 # line, search the file system for an installation:
@@ -2241,6 +2243,7 @@ $(EXEDIR)/OnHMD: | $(DEPDIR)/config
 $(EXEDIR)/OnHMD: $(VRUI_SCRIPTDIR)/OnHMD $(DEPDIR)/Configure-Vrui
 	@echo Creating helper script to run Vrui applications on OpenVR-supported head mounted displays...
 	@cp $(VRUI_SCRIPTDIR)/OnHMD $(EXEDIR)/OnHMD
+	@sed -i -e 's@SS=.*@SS=$(wildcard /usr/bin/ss /usr/sbin/ss)@' $(EXEDIR)/OnHMD
 	@sed -i -e 's@VRUIBINDIR=.*@VRUIBINDIR=$(EXECUTABLEINSTALLDIR)@' $(EXEDIR)/OnHMD
 	@sed -i -e 's@VRUIETCDIR=.*@VRUIETCDIR=$(ETCINSTALLDIR)@' $(EXEDIR)/OnHMD
 	@sed -i -e 's@USERETCDIR=.*@USERETCDIR=$$HOME/$(VRUI_USERCONFIGDIR)@' $(EXEDIR)/OnHMD
