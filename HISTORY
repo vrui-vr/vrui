@@ -8462,3 +8462,6 @@ Vrui-14.1-001:
     parser.
   - Changed interface of Video::ViewerComponent to accept a
     Video::VideoDataFormatSelector.
+- Re-enabled tool creation unwinding on exception in
+  Vrui::ToolManager::createTool.
+- Catch and handle exceptions in Vrui::ToolManager::update.
