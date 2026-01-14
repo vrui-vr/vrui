@@ -1,7 +1,7 @@
 /***********************************************************************
 ToolManager - Class to manage tool classes, and dynamic assignment of
 tools to input devices.
-Copyright (c) 2004-2025 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -1131,7 +1131,7 @@ Tool* ToolManager::createTool(ToolFactory* factory,const ToolInputAssignment& ti
 	std::cout<<"TM: Created tool "<<newTool<<" of class "<<newTool->getFactory()->getName()<<std::endl;
 	#endif
 	int state=0;
-	// try
+	try
 		{
 		if(cfg!=0)
 			{
@@ -1171,7 +1171,6 @@ Tool* ToolManager::createTool(ToolFactory* factory,const ToolInputAssignment& ti
 		if(callCreatedToolFrame)
 			newTool->frame();
 		}
-	#if 0
 	catch(...)
 		{
 		/* Unravel tool creation if shit got fucked up: */
@@ -1208,7 +1207,6 @@ Tool* ToolManager::createTool(ToolFactory* factory,const ToolInputAssignment& ti
 		/* Re-throw the exception: */
 		throw;
 		}
-	#endif
 	
 	return newTool;
 	}
@@ -1278,12 +1276,20 @@ void ToolManager::update(void)
 			{
 			case ToolManagementQueueItem::CREATE_TOOL:
 				{
-				#if DEBUGGING
-				std::cout<<"TM: Creating new tool of class "<<tmqIt->createToolFactory->getName()<<std::endl;
-				#endif
-				
-				/* Create the new tool: */
-				createTool(tmqIt->createToolFactory,*tmqIt->tia);
+				try
+					{
+					#if DEBUGGING
+					std::cout<<"TM: Creating new tool of class "<<tmqIt->createToolFactory->getName()<<std::endl;
+					#endif
+					
+					/* Create the new tool: */
+					createTool(tmqIt->createToolFactory,*tmqIt->tia);
+					}
+				catch(const std::runtime_error& err)
+					{
+					/* Show an error message and continue: */
+					Misc::formattedUserError("ToolManager: Unable to create tool of class %s due to exception %s",tmqIt->createToolFactory->getName(),err.what());
+					}
 				
 				/* Clean up: */
 				delete tmqIt->tia;
