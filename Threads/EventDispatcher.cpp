@@ -658,7 +658,7 @@ bool EventDispatcher::dispatchNextEvent(bool wait)
 			Misc::sourcedLogWarning(__PRETTY_FUNCTION__,"Exception %s in timer callback",err.what());
 			
 			/* Remove the event listener that caused the exception: */
-			timerEvent.remove=true;
+			timerEvent.removeListener();
 			}
 		
 		/* Check if the event listener wants to be suspended or removed: */
@@ -947,11 +947,22 @@ bool EventDispatcher::dispatchNextEvent(bool wait)
 						
 						/* Call the signal callback: */
 						SignalEventImpl signalEvent(dispatchTime,*this);
-						signalEvent.key=sl.key;
-						signalEvent.userData=sl.callbackUserData;
-						signalEvent.signalData=pmPtr->signal.signalData;
-						signalEvent.lIt=slIt;
-						sl.callback(signalEvent);
+						try
+							{
+							signalEvent.key=sl.key;
+							signalEvent.userData=sl.callbackUserData;
+							signalEvent.signalData=pmPtr->signal.signalData;
+							signalEvent.lIt=slIt;
+							sl.callback(signalEvent);
+							}
+						catch(const std::runtime_error& err)
+							{
+							// DEBUGGING
+							Misc::sourcedLogWarning(__PRETTY_FUNCTION__,"Exception %s in signal callback",err.what());
+							
+							/* Remove the event listener that caused the exception: */
+							signalEvent.removeListener();
+							}
 						
 						break;
 						}
@@ -1015,7 +1026,7 @@ bool EventDispatcher::dispatchNextEvent(bool wait)
 				catch(const std::runtime_error& err)
 					{
 					// DEBUGGING
-					Misc::sourcedLogWarning(__PRETTY_FUNCTION__,"Exception %s in IO callback",err.what());
+					Misc::sourcedLogWarning(__PRETTY_FUNCTION__,"Exception %s in I/O callback",err.what());
 					
 					/* Remove the event listener that caused the exception: */
 					ioEvent.removeListener();
