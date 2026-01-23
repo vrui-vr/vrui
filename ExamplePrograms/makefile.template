@@ -1,6 +1,6 @@
 ########################################################################
 # Makefile for the Vrui example programs.
-# Copyright (c) 2003-2025 Oliver Kreylos
+# Copyright (c) 2003-2026 Oliver Kreylos
 # 
 # This program is free software; you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -22,7 +22,7 @@
 # matches the default Vrui installation; if Vrui's installation
 # directory was changed during Vrui's installation, the directory below
 # must be adapted.
-VRUI_MAKEDIR = 
+VRUI_MAKEDIR ?= 
 
 # Base installation directory for the example programs. If this is set
 # to the default of $(PROJECT_ROOT), the example programs do not have to
@@ -46,7 +46,7 @@ PROJECT_DISPLAYNAME = Vrui Example Programs
 # clobbering each other. The value should be identical to the
 # major.minor version number found in VERSION in the root package
 # directory.
-PROJECT_MAJOR = 13
+PROJECT_MAJOR = 14
 PROJECT_MINOR = 1
 
 # Include definitions for the system environment and system-provided

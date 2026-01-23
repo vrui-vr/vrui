@@ -8465,3 +8465,6 @@ Vrui-14.1-001:
 - Re-enabled tool creation unwinding on exception in
   Vrui::ToolManager::createTool.
 - Catch and handle exceptions in Vrui::ToolManager::update.
+- Use optional assignment to set VRUI_MAKEDIR in makefiles to enable
+  setup through the environment.
+- Fix wrong version number in ExamplePrograms makefile.

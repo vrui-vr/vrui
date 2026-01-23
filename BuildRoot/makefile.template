@@ -1,7 +1,7 @@
 ########################################################################
 # Makefile template for inter-platform development with automatic
 # source dependency maintenance.
-# Copyright (c) 1999-2025 Oliver Kreylos
+# Copyright (c) 1999-2026 Oliver Kreylos
 #
 # This file is part of the WhyTools Build Environment.
 # 
@@ -25,7 +25,7 @@
 # matches the default Vrui installation; if Vrui's installation
 # directory was changed during Vrui's installation, the directory below
 # must be adapted.
-VRUI_MAKEDIR = /usr/local/share/Vrui-13.0/make
+VRUI_MAKEDIR ?= /usr/local/share/Vrui-14.0/make
 
 # Base installation directory for this project. If set to the default of
 # $(PROJECT_ROOT), the project does not need to be installed.
