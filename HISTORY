@@ -8468,3 +8468,6 @@ Vrui-14.1-001:
 - Use optional assignment to set VRUI_MAKEDIR in makefiles to enable
   setup through the environment.
 - Fix wrong version number in ExamplePrograms makefile.
+- Add class names to exceptions thrown in Plugins::FactoryManager.
+- Catch and handle exceptions from event callbacks in
+  Threads::EventDispatcher.
