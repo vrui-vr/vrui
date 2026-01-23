@@ -2,7 +2,7 @@
 FactoryManager - Generic base class for managers of factory classes
 derived from a common base class. Intended to manage loading of dynamic
 shared objects.
-Copyright (c) 2003-2025 Oliver Kreylos
+Copyright (c) 2003-2026 Oliver Kreylos
 
 This file is part of the Plugin Handling Library (Plugins).
 
@@ -34,8 +34,8 @@ namespace Plugins {
 Methods of class FactoryManagerBase::DsoError:
 *********************************************/
 
-FactoryManagerBase::DsoError::DsoError(const char* source)
-	:Error(Misc::makeStdErrMsg(source,"DSO error %s",dlerror()))
+FactoryManagerBase::DsoError::DsoError(const char* source,const char* className)
+	:Error(Misc::makeStdErrMsg(source,"Cannot load class %s due to DSO error %s",className,dlerror()))
 	{
 	}
 
@@ -157,7 +157,7 @@ FactoryManagerBase::LoadDsoResults FactoryManagerBase::loadDso(const char* class
 	/* Open the located DSO and check for errors: */
 	result.dsoHandle=dlopen(fullDsoName.c_str(),RTLD_LAZY|RTLD_GLOBAL);
 	if(result.dsoHandle==0)
-		throw DsoError(__PRETTY_FUNCTION__);
+		throw DsoError(__PRETTY_FUNCTION__,className);
 	
 	/* Get the address of the optional dependency resolution function (if it exists): */
 	result.resolveDependencies=result.resolveFunction("resolve%sDependencies",shortClassName);
@@ -165,12 +165,12 @@ FactoryManagerBase::LoadDsoResults FactoryManagerBase::loadDso(const char* class
 	/* Get the address of the factory creation function: */
 	result.createFactory=result.resolveFunction("create%sFactory",shortClassName);
 	if(result.createFactory==0)
-		throw DsoError(__PRETTY_FUNCTION__);
+		throw DsoError(__PRETTY_FUNCTION__,className);
 	
 	/* Get the address of the factory destruction function: */
 	result.destroyFactory=result.resolveFunction("destroy%sFactory",shortClassName);
 	if(result.destroyFactory==0)
-		throw DsoError(__PRETTY_FUNCTION__);
+		throw DsoError(__PRETTY_FUNCTION__,className);
 	
 	return result;
 	}

@@ -2,7 +2,7 @@
 FactoryManager - Generic base class for managers of factory classes
 derived from a common base class. Intended to manage loading of dynamic
 shared objects.
-Copyright (c) 2003-2025 Oliver Kreylos
+Copyright (c) 2003-2026 Oliver Kreylos
 
 This file is part of the Plugin Handling Library (Plugins).
 
@@ -57,7 +57,7 @@ class FactoryManagerBase // Non-templatized base class for type-specific factory
 		{
 		/* Constructors and destructors: */
 		public:
-		DsoError(const char* source); // Creates DsoError object from error string returned by dl_* calls
+		DsoError(const char* source,const char* className); // Creates DsoError object from error string returned by dl_* calls
 		};
 	
 	protected:
