@@ -1,7 +1,7 @@
 /***********************************************************************
 EventDispatcher - Class to dispatch events from a central listener to
 any number of interested clients.
-Copyright (c) 2016-2024 Oliver Kreylos
+Copyright (c) 2016-2026 Oliver Kreylos
 
 This file is part of the Portable Threading Library (Threads).
 
@@ -133,19 +133,25 @@ class EventDispatcher::IOEventImpl:public EventDispatcher::IOEvent
 	EventDispatcher& dispatcher; // Reference to the event dispatcher object
 	std::vector<IOEventListener>::iterator lIt; // Iterator to traverse the listener list
 	std::vector<IOEventListener>::iterator nextLIt; // Iterator to next element in list
+	bool removed; // Flag if the removeListener method has been called
 	
 	/* Constructors and destructors: */
 	public:
 	IOEventImpl(const Time& sDispatchTime,EventDispatcher& sDispatcher)
 		:IOEvent(sDispatchTime),
 		 dispatcher(sDispatcher),
-		 lIt(dispatcher.ioEventListeners.begin())
+		 lIt(dispatcher.ioEventListeners.begin()),
+		 removed(false)
 		{
 		}
 	
 	/* Methods from class Event: */
 	virtual void removeListener(void)
 		{
+		/* Bail out if the listener has already been removed: */
+		if(removed)
+			return;
+		
 		/* Update the dispatcher's file descriptor sets: */
 		dispatcher.updateFdSets(lIt->fd,lIt->typeMask,0x0);
 		
@@ -155,6 +161,9 @@ class EventDispatcher::IOEventImpl:public EventDispatcher::IOEvent
 		
 		/* Continue with the listener that replaced the current one: */
 		nextLIt=lIt;
+		
+		/* Mark the listener as removed: */
+		removed=true;
 		}
 	
 	/* Methods from class IOEvent: */
@@ -240,25 +249,34 @@ class EventDispatcher::ProcessEventImpl:public EventDispatcher::ProcessEvent
 	EventDispatcher& dispatcher; // Reference to the event dispatcher object
 	std::vector<ProcessListener>::iterator lIt; // Iterator to traverse the listener list
 	std::vector<ProcessListener>::iterator nextLIt; // Iterator to next element in list
+	bool removed; // Flag if the removeListener method has been called
 	
 	/* Constructors and destructors: */
 	public:
 	ProcessEventImpl(const Time& sDispatchTime,EventDispatcher& sDispatcher)
 		:ProcessEvent(sDispatchTime),
 		 dispatcher(sDispatcher),
-		 lIt(dispatcher.processListeners.begin())
+		 lIt(dispatcher.processListeners.begin()),
+		 removed(false)
 		{
 		}
 	
 	/* Methods from class Event: */
 	virtual void removeListener(void)
 		{
+		/* Bail out if the listener has already been removed: */
+		if(removed)
+			return;
+		
 		/* Remove the current listener from the list: */
 		*lIt=dispatcher.processListeners.back();
 		dispatcher.processListeners.pop_back();
 		
 		/* Continue with the listener that replaced the current one: */
 		nextLIt=lIt;
+		
+		/* Mark the listener as removed: */
+		removed=true;
 		}
 	
 	/* Methods from class ProcessEvent: */
@@ -461,7 +479,7 @@ size_t EventDispatcher::readPipeMessages(void)
 	if(readResult<=0)
 		{
 		if(readResult<0&&(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR))
-			Misc::logWarning(Misc::makeStdErrMsg(__PRETTY_FUNCTION__,"No data to read on event pipe").c_str());
+			Misc::sourcedLogWarning(__PRETTY_FUNCTION__,"No data to read on event pipe");
 		else
 			throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot read commands from event pipe");
 		}
@@ -487,7 +505,7 @@ void EventDispatcher::writePipeMessage(const EventDispatcher::PipeMessage& pm,co
 			writePtr+=writeResult;
 			writeSize-=size_t(writeResult);
 			if(writeSize>0U)
-				Misc::logWarning(Misc::makeStdErrMsg(methodName,"Incomplete write to event pipe").c_str());
+				Misc::sourcedLogWarning(methodName,"Incomplete write to event pipe");
 			}
 		else if(errno==EAGAIN||errno==EWOULDBLOCK||errno==EINTR)
 			{
@@ -628,9 +646,20 @@ bool EventDispatcher::dispatchNextEvent(bool wait)
 		tel->time+=tel->interval;
 		
 		/* Call the event callback: */
-		timerEvent.suspend=false;
-		timerEvent.remove=false;
-		tel->callback(timerEvent);
+		try
+			{
+			timerEvent.suspend=false;
+			timerEvent.remove=false;
+			tel->callback(timerEvent);
+			}
+		catch(const std::runtime_error& err)
+			{
+			// DEBUGGING
+			Misc::sourcedLogWarning(__PRETTY_FUNCTION__,"Exception %s in timer callback",err.what());
+			
+			/* Remove the event listener that caused the exception: */
+			timerEvent.remove=true;
+			}
 		
 		/* Check if the event listener wants to be suspended or removed: */
 		if(timerEvent.suspend)
@@ -931,7 +960,7 @@ bool EventDispatcher::dispatchNextEvent(bool wait)
 						/* Do nothing: */
 						
 						// DEBUGGING
-						Misc::logWarning(Misc::makeStdErrMsg(__PRETTY_FUNCTION__,"Unknown pipe message %d",pmPtr->messageType).c_str() );
+						Misc::sourcedLogWarning(__PRETTY_FUNCTION__,"Unknown pipe message %d",pmPtr->messageType);
 					}
 				}
 			
@@ -971,14 +1000,26 @@ bool EventDispatcher::dispatchNextEvent(bool wait)
 			
 			/* Check for spurious events, i.e., events in which the listener was not actually interested: */
 			if(ioEvent.eventTypeMask!=eventTypeMask)
-				Misc::logWarning(Misc::makeStdErrMsg(__PRETTY_FUNCTION__,"Spurious event").c_str());
+				Misc::sourcedLogWarning(__PRETTY_FUNCTION__,"Spurious event");
 			
 			/* Call the listener's event callback if any relevant events occurred: */
 			if(ioEvent.eventTypeMask!=0x0)
 				{
-				ioEvent.key=ioEvent.lIt->key;
-				ioEvent.userData=ioEvent.lIt->callbackUserData;
-				ioEvent.lIt->callback(ioEvent);
+				try
+					{
+					ioEvent.key=ioEvent.lIt->key;
+					ioEvent.userData=ioEvent.lIt->callbackUserData;
+					ioEvent.removed=false;
+					ioEvent.lIt->callback(ioEvent);
+					}
+				catch(const std::runtime_error& err)
+					{
+					// DEBUGGING
+					Misc::sourcedLogWarning(__PRETTY_FUNCTION__,"Exception %s in IO callback",err.what());
+					
+					/* Remove the event listener that caused the exception: */
+					ioEvent.removeListener();
+					}
 				}
 			}
 		}
@@ -987,7 +1028,7 @@ bool EventDispatcher::dispatchNextEvent(bool wait)
 		if(errno==EBADF)
 			{
 			// DEBUGGING
-			Misc::logWarning(Misc::makeStdErrMsg(__PRETTY_FUNCTION__,"Bad file descriptor in select").c_str());
+			Misc::sourcedLogWarning(__PRETTY_FUNCTION__,"Bad file descriptor in select");
 			
 			/* Set error flag; only wait on self-pipe on next iteration to hopefully receive a "remove listener" message for the bad descriptor: */
 			hadBadFd=true;
@@ -1004,9 +1045,21 @@ bool EventDispatcher::dispatchNextEvent(bool wait)
 		++processEvent.nextLIt;
 		
 		/* Call the listener's callback: */
-		processEvent.key=processEvent.lIt->key;
-		processEvent.userData=processEvent.lIt->callbackUserData;
-		processEvent.lIt->callback(processEvent);
+		try
+			{
+			processEvent.key=processEvent.lIt->key;
+			processEvent.userData=processEvent.lIt->callbackUserData;
+			processEvent.removed=false;
+			processEvent.lIt->callback(processEvent);
+			}
+		catch(const std::runtime_error& err)
+			{
+			// DEBUGGING
+			Misc::sourcedLogWarning(__PRETTY_FUNCTION__,"Exception %s in process callback",err.what());
+			
+			/* Remove the event listener that caused the exception: */
+			processEvent.removeListener();
+			}
 		}
 	
 	return true;
