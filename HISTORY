@@ -8471,3 +8471,5 @@ Vrui-14.1-001:
 - Add class names to exceptions thrown in Plugins::FactoryManager.
 - Catch and handle exceptions from event callbacks in
   Threads::EventDispatcher.
+- Fixed tool deletion in Vrui::InputGraphManager to work properly with
+  essential tools.
