@@ -188,9 +188,34 @@ bool InputGraphManager::ToolSlot::activate(void)
 			/* Show the selected feature's tool stack: */
 			getInputGraphManager()->showToolStack(feature);
 			
-			/* If the tool is non-essential, remember it as the current tool deletion candidate: */
-			if(!getToolManager()->isToolEssential(tool->tool))
-				getInputGraphManager()->toolDeletionCandidate=feature;
+			/* Find the last tool in a chain of device forwarders: */
+			ToolSlot* destroyTs=this;
+			while(true)
+				{
+				/* Check if the tool is a device forwarder: */
+				DeviceForwarder* df=dynamic_cast<DeviceForwarder*>(destroyTs->tool->tool);
+				if(df==0)
+					break;
+				
+				/* Get the list of forwarded features: */
+				InputDeviceFeatureSet forwardedFeatures=df->getForwardedFeatures(destroyTs->feature);
+				
+				/* Follow the first forwarded feature that has a tool attached: */
+				ToolSlot* nextDestroyTs=0;
+				for(InputDeviceFeatureSet::iterator ffIt=forwardedFeatures.begin();nextDestroyTs==0&&ffIt!=forwardedFeatures.end();++ffIt)
+					{
+					ToolSlot& forwardedTs=getInputGraphManager()->deviceMap.getEntry(ffIt->getDevice()).getDest()->toolSlots[ffIt->getFeatureIndex()];
+					if(forwardedTs.tool!=0)
+						nextDestroyTs=&forwardedTs;
+					}
+				if(nextDestroyTs==0)
+					break;
+				destroyTs=nextDestroyTs;
+				}
+			
+			/* If the last found tool is non-essential, remember it as the current tool deletion candidate: */
+			if(!getToolManager()->isToolEssential(destroyTs->tool->tool))
+				getInputGraphManager()->toolDeletionCandidate=destroyTs;
 			}
 		
 		/* Preempt this event: */
@@ -228,43 +253,17 @@ bool InputGraphManager::ToolSlot::deactivate(void)
 		else
 			{
 			/* Hide the feature's tool stack if it is currently showing: */
-			if(feature==getInputGraphManager()->toolStackBaseFeature)
+			InputGraphManager* igm=getInputGraphManager();
+			if(feature==igm->toolStackBaseFeature)
 				{
 				/* Detach the tool stack from the device's scene graph: */
-				getInputGraphManager()->sceneGraphManager->removePhysicalNode(*getInputGraphManager()->toolStackNode);
-				getInputGraphManager()->toolStackNode=0;
-				}
-			
-			/* Delete the feature's tool if it is marked for deletion and the input device is still inside the tool kill zone: */
-			if(tool!=0&&feature==getInputGraphManager()->toolDeletionCandidate&&tm->getToolKillZone()->isDeviceIn(feature.getDevice()))
-				{
-				/* Find the last tool in a chain of device forwarders: */
-				ToolSlot* destroyTs=this;
-				while(true)
-					{
-					/* Check if the tool is a device forwarder: */
-					DeviceForwarder* df=dynamic_cast<DeviceForwarder*>(destroyTs->tool->tool);
-					if(df==0)
-						break;
-					
-					/* Get the list of forwarded features: */
-					InputDeviceFeatureSet forwardedFeatures=df->getForwardedFeatures(destroyTs->feature);
-					
-					/* Follow the first forwarded feature that has a tool attached: */
-					ToolSlot* nextDestroyTs=0;
-					for(InputDeviceFeatureSet::iterator ffIt=forwardedFeatures.begin();nextDestroyTs==0&&ffIt!=forwardedFeatures.end();++ffIt)
-						{
-						ToolSlot& forwardedTs=getInputGraphManager()->deviceMap.getEntry(ffIt->getDevice()).getDest()->toolSlots[ffIt->getFeatureIndex()];
-						if(forwardedTs.tool!=0)
-							nextDestroyTs=&forwardedTs;
-						}
-					if(nextDestroyTs==0)
-						break;
-					destroyTs=nextDestroyTs;
-					}
+				igm->sceneGraphManager->removePhysicalNode(*igm->toolStackNode);
+				igm->toolStackNode=0;
 				
-				/* Destroy the tool: */
-				tm->destroyTool(destroyTs->tool->tool,false);
+				/* Destroy the selected tool deletion candidate if the input device is still inside the tool kill zone: */
+				if(igm->toolDeletionCandidate!=0&&tm->getToolKillZone()->isDeviceIn(feature.getDevice()))
+					tm->destroyTool(igm->toolDeletionCandidate->tool->tool,false);
+				igm->toolDeletionCandidate=0;
 				}
 			}
 		
@@ -665,7 +664,8 @@ InputGraphManager::InputGraphManager(SceneGraphManager* sSceneGraphManager)
 	 inputDeviceManager(0,-1),
 	 deviceMap(17),
 	 toolMap(17),
-	 maxGraphLevel(-1)
+	 maxGraphLevel(-1),
+	 toolDeletionCandidate(0)
 	{
 	}
 

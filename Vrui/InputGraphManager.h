@@ -176,7 +176,7 @@ class InputGraphManager
 	std::vector<GraphTool*> toolLevels; // Vector of pointers to the first tool in each graph level
 	SceneGraph::ONTransformNodePointer toolStackNode; // Scene graph node displaying an input device feature's tool stack
 	InputDeviceFeature toolStackBaseFeature; // Base input device feature for the currently displayed tool stack
-	InputDeviceFeature toolDeletionCandidate; // Input device feature currently flagged for tool deletion via the tool kill zone
+	ToolSlot* toolDeletionCandidate; // Tool slot currently flagged for tool deletion via the tool kill zone
 	
 	/* Private methods: */
 	void linkInputDevice(GraphInputDevice* gid); // Links a graph input device to its current graph level
