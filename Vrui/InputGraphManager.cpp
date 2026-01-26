@@ -185,8 +185,10 @@ bool InputGraphManager::ToolSlot::activate(void)
 		{
 		if(tool!=0)
 			{
+			InputGraphManager* igm=getInputGraphManager();
+			
 			/* Show the selected feature's tool stack: */
-			getInputGraphManager()->showToolStack(feature);
+			igm->showToolStack(feature);
 			
 			/* Find the last tool in a chain of device forwarders: */
 			ToolSlot* destroyTs=this;
@@ -204,7 +206,7 @@ bool InputGraphManager::ToolSlot::activate(void)
 				ToolSlot* nextDestroyTs=0;
 				for(InputDeviceFeatureSet::iterator ffIt=forwardedFeatures.begin();nextDestroyTs==0&&ffIt!=forwardedFeatures.end();++ffIt)
 					{
-					ToolSlot& forwardedTs=getInputGraphManager()->deviceMap.getEntry(ffIt->getDevice()).getDest()->toolSlots[ffIt->getFeatureIndex()];
+					ToolSlot& forwardedTs=igm->deviceMap.getEntry(ffIt->getDevice()).getDest()->toolSlots[ffIt->getFeatureIndex()];
 					if(forwardedTs.tool!=0)
 						nextDestroyTs=&forwardedTs;
 					}
@@ -215,7 +217,10 @@ bool InputGraphManager::ToolSlot::activate(void)
 			
 			/* If the last found tool is non-essential, remember it as the current tool deletion candidate: */
 			if(!getToolManager()->isToolEssential(destroyTs->tool->tool))
-				getInputGraphManager()->toolDeletionCandidate=destroyTs;
+				{
+				igm->toolDeletionCandidateFeature=feature;
+				igm->toolDeletionCandidate=destroyTs;
+				}
 			}
 		
 		/* Preempt this event: */
@@ -252,17 +257,20 @@ bool InputGraphManager::ToolSlot::deactivate(void)
 			}
 		else
 			{
-			/* Hide the feature's tool stack if it is currently showing: */
 			InputGraphManager* igm=getInputGraphManager();
+			
+			/* Hide the feature's tool stack if it is currently showing: */
 			if(feature==igm->toolStackBaseFeature)
 				{
 				/* Detach the tool stack from the device's scene graph: */
 				igm->sceneGraphManager->removePhysicalNode(*igm->toolStackNode);
 				igm->toolStackNode=0;
-				
-				/* Destroy the selected tool deletion candidate if the input device is still inside the tool kill zone: */
-				if(igm->toolDeletionCandidate!=0&&tm->getToolKillZone()->isDeviceIn(feature.getDevice()))
-					tm->destroyTool(igm->toolDeletionCandidate->tool->tool,false);
+				}
+			
+			/* Delete the tool deletion candidate if this was the feature that selected it and the input device is still in the tool kill zone: */
+			if(feature==igm->toolDeletionCandidateFeature&&igm->toolDeletionCandidate!=0&&tm->getToolKillZone()->isDeviceIn(feature.getDevice()))
+				{
+				tm->destroyTool(igm->toolDeletionCandidate->tool->tool,false);
 				igm->toolDeletionCandidate=0;
 				}
 			}

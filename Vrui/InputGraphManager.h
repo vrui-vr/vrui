@@ -2,7 +2,7 @@
 InputGraphManager - Class to maintain the bipartite input device / tool
 graph formed by tools being assigned to input devices, and input devices
 in turn being grabbed by tools.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -176,6 +176,7 @@ class InputGraphManager
 	std::vector<GraphTool*> toolLevels; // Vector of pointers to the first tool in each graph level
 	SceneGraph::ONTransformNodePointer toolStackNode; // Scene graph node displaying an input device feature's tool stack
 	InputDeviceFeature toolStackBaseFeature; // Base input device feature for the currently displayed tool stack
+	InputDeviceFeature toolDeletionCandidateFeature; // Base input device feature that selected the current tool deletion candidate
 	ToolSlot* toolDeletionCandidate; // Tool slot currently flagged for tool deletion via the tool kill zone
 	
 	/* Private methods: */
