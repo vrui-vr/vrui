@@ -491,6 +491,12 @@ ifneq ($(SYSTEM_HAVE_VULKAN),0)
 endif
 
 #
+# A meta-server to run the VR tracking server and the VR compositing server:
+#
+
+EXECUTABLES += $(EXEDIR)/VRServerLauncher
+
+#
 # The Vrui device driver test programs (textual and visual):
 #
 
@@ -2180,6 +2186,19 @@ $(EXEDIR)/TransformCalculator: PACKAGES += MYGEOMETRY MYMISC
 $(EXEDIR)/TransformCalculator: $(OBJDIR)/Vrui/Utilities/TransformCalculator.o
 .PHONY: TransformCalculator
 TransformCalculator: $(EXEDIR)/TransformCalculator
+
+#
+# The VR server launcher
+#
+
+VRSERVERLAUNCHER_SOURCES = Vrui/Utilities/VRServerLauncher.cpp
+
+$(VRSERVERLAUNCHER_SOURCES:%.cpp=$(OBJDIR)/%.o): | $(DEPDIR)/config
+
+$(EXEDIR)/VRServerLauncher: PACKAGES += MYCOMM MYIO MYTHREADS MYMISC
+$(EXEDIR)/VRServerLauncher: $(VRSERVERLAUNCHER_SOURCES:%.cpp=$(OBJDIR)/%.o)
+.PHONY: VRServerLauncher
+VRServerLauncher: $(EXEDIR)/VRServerLauncher
 
 #
 # The VR Device Daemon test programs:

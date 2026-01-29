@@ -1,7 +1,7 @@
 /***********************************************************************
 VRDeviceServer - Class encapsulating the VR device protocol's server
 side.
-Copyright (c) 2002-2024 Oliver Kreylos
+Copyright (c) 2002-2025 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -23,8 +23,9 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <VRDeviceDaemon/VRDeviceServer.h>
 
+#include <stdlib.h>
+#include <string.h>
 #include <stdio.h>
-#include <utility>
 #include <stdexcept>
 #include <Misc/SizedTypes.h>
 #include <Misc/PrintInteger.h>
@@ -33,10 +34,15 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Threads/EventDispatcher.h>
+#include <IO/ValueSource.h>
+#include <IO/JsonEntityTypes.h>
+#include <IO/OStream.h>
 #include <Comm/TCPPipe.h>
 #include <Comm/UNIXPipe.h>
 #include <Comm/ListeningTCPSocket.h>
 #include <Comm/ListeningUNIXSocket.h>
+#include <Comm/HttpPostRequest.h>
+#include <Math/Math.h>
 #include <Vrui/Internal/Config.h>
 #include <Vrui/Internal/VRDeviceDescriptor.h>
 #include <Vrui/Internal/HMDConfiguration.h>
@@ -137,6 +143,264 @@ void VRDeviceServer::newUnixConnectionCallback(Threads::EventDispatcher::IOEvent
 	{
 	VRDeviceServer* thisPtr=static_cast<VRDeviceServer*>(event.getUserData());
 	thisPtr->connectNewClient(*thisPtr->unixListeningSocket);
+	}
+
+void VRDeviceServer::getServerStatus(IO::JsonObject& replyRoot)
+	{
+	/* Lock affected server state: */
+	Threads::Mutex::Lock stateLock(stateMutex);
+	Threads::Mutex::Lock batteryStateLock(batteryStateMutex);
+	Threads::Mutex::Lock baseStationLock(baseStationMutex);
+	
+	/* Compose the list of devices: */
+	IO::JsonArrayPointer devices=new IO::JsonArray;
+	replyRoot.setProperty("devices",*devices);
+	
+	int powerFeatureIndex=0;
+	int numVirtualDevices=deviceManager->getNumVirtualDevices();
+	for(int deviceIndex=0;deviceIndex<numVirtualDevices;++deviceIndex)
+		{
+		const Vrui::VRDeviceDescriptor& vrd=deviceManager->getVirtualDevice(deviceIndex);
+		IO::JsonObjectPointer device=new IO::JsonObject;
+		devices->addItem(*device);
+		
+		device->setProperty("name",vrd.name);
+		device->setProperty("hasTracker",vrd.trackType!=Vrui::VRDeviceDescriptor::TRACK_NONE);
+		if(vrd.trackType!=Vrui::VRDeviceDescriptor::TRACK_NONE)
+			{
+			device->setProperty("trackerIndex",vrd.trackerIndex);
+			device->setProperty("isConnected",deviceManager->isVirtualDeviceConnected(deviceIndex));
+			device->setProperty("isTracked",state.getTrackerValid(vrd.trackerIndex));
+			if(state.getTrackerValid(vrd.trackerIndex))
+				{
+				IO::JsonObjectPointer trackerState=new IO::JsonObject;
+				device->setProperty("trackerState",*trackerState);
+				
+				const Vrui::VRDeviceState::TrackerState& ts=state.getTrackerState(vrd.trackerIndex);
+				const Vrui::VRDeviceState::TrackerState::PositionOrientation&po=ts.positionOrientation;
+				
+				IO::JsonArrayPointer translation=new IO::JsonArray;
+				trackerState->setProperty("translation",*translation);
+				for(int i=0;i<3;++i)
+					translation->addItem(po.getTranslation()[i]);
+				
+				IO::JsonArrayPointer rotation=new IO::JsonArray;
+				trackerState->setProperty("rotation",*rotation);
+				for(int i=0;i<4;++i)
+					rotation->addItem(po.getRotation().getQuaternion()[i]);
+				
+				IO::JsonArrayPointer linearVelocity=new IO::JsonArray;
+				trackerState->setProperty("linearVelocity",*linearVelocity);
+				for(int i=0;i<3;++i)
+					linearVelocity->addItem(ts.linearVelocity[i]);
+				
+				IO::JsonArrayPointer angularVelocity=new IO::JsonArray;
+				trackerState->setProperty("angularVelocity",*angularVelocity);
+				for(int i=0;i<3;++i)
+					angularVelocity->addItem(ts.angularVelocity[i]);
+				}
+			}
+		device->setProperty("hasBattery",vrd.hasBattery);
+		if(vrd.hasBattery)
+			{
+			device->setProperty("batteryLevel",batteryStates[deviceIndex].batteryLevel);
+			device->setProperty("isCharging",batteryStates[deviceIndex].charging);
+			}
+		device->setProperty("canPowerOff",vrd.canPowerOff);
+		if(vrd.canPowerOff)
+			{
+			device->setProperty("powerFeatureIndex",powerFeatureIndex);
+			++powerFeatureIndex;
+			}
+		
+		if(vrd.numButtons>0)
+			{
+			IO::JsonArrayPointer buttons=new IO::JsonArray;
+			device->setProperty("buttons",*buttons);
+			
+			for(int buttonIndex=0;buttonIndex<vrd.numButtons;++buttonIndex)
+				{
+				IO::JsonObjectPointer button=new IO::JsonObject;
+				buttons->addItem(*button);
+				
+				button->setProperty("name",vrd.buttonNames[buttonIndex]);
+				button->setProperty("index",vrd.buttonIndices[buttonIndex]);
+				button->setProperty("value",state.getButtonState(vrd.buttonIndices[buttonIndex]));
+				}
+			}
+		
+		if(vrd.numValuators>0)
+			{
+			IO::JsonArrayPointer valuators=new IO::JsonArray;
+			device->setProperty("valuators",*valuators);
+			
+			for(int valuatorIndex=0;valuatorIndex<vrd.numButtons;++valuatorIndex)
+				{
+				IO::JsonObjectPointer valuator=new IO::JsonObject;
+				valuators->addItem(*valuator);
+				
+				valuator->setProperty("name",vrd.valuatorNames[valuatorIndex]);
+				valuator->setProperty("index",vrd.valuatorIndices[valuatorIndex]);
+				valuator->setProperty("value",state.getValuatorState(vrd.valuatorIndices[valuatorIndex]));
+				}
+			}
+		
+		if(vrd.numHapticFeatures>0)
+			{
+			IO::JsonArrayPointer hapticFeatures=new IO::JsonArray;
+			device->setProperty("hapticFeatures",*hapticFeatures);
+			
+			for(int hapticFeatureIndex=0;hapticFeatureIndex<vrd.numHapticFeatures;++hapticFeatureIndex)
+				{
+				IO::JsonObjectPointer hapticFeature=new IO::JsonObject;
+				hapticFeatures->addItem(*hapticFeature);
+				
+				hapticFeature->setProperty("name",vrd.hapticFeatureNames[hapticFeatureIndex]);
+				hapticFeature->setProperty("index",vrd.hapticFeatureIndices[hapticFeatureIndex]);
+				}
+			}
+		}
+	
+	/* Compose the list of base stations: */
+	if(!baseStations.empty())
+		{
+		IO::JsonArrayPointer stations=new IO::JsonArray;
+		replyRoot.setProperty("baseStations",*stations);
+		
+		for(std::vector<Vrui::VRBaseStation>::const_iterator bsIt=baseStations.begin();bsIt!=baseStations.end();++bsIt)
+			{
+			IO::JsonObjectPointer baseStation=new IO::JsonObject;
+			stations->addItem(*baseStation);
+			
+			baseStation->setProperty("serialNumber",bsIt->getSerialNumber());
+			
+			IO::JsonArrayPointer fov=new IO::JsonArray;
+			baseStation->setProperty("fov",*fov);
+			for(int i=0;i<4;++i)
+				fov->addItem(bsIt->getFov()[i]);
+			
+			IO::JsonArrayPointer range=new IO::JsonArray;
+			baseStation->setProperty("range",*range);
+			for(int i=0;i<2;++i)
+				range->addItem(bsIt->getRange()[i]);
+			
+			baseStation->setProperty("isTracking",bsIt->getTracking());
+			
+			if(bsIt->getTracking())
+				{
+				IO::JsonObjectPointer positionOrientation=new IO::JsonObject;
+				baseStation->setProperty("positionOrientation",*positionOrientation);
+				
+				const Vrui::VRBaseStation::PositionOrientation& po=bsIt->getPositionOrientation();
+				
+				IO::JsonArrayPointer translation=new IO::JsonArray;
+				positionOrientation->setProperty("translation",*translation);
+				for(int i=0;i<3;++i)
+					translation->addItem(po.getTranslation()[i]);
+				
+				IO::JsonArrayPointer rotation=new IO::JsonArray;
+				positionOrientation->setProperty("rotation",*rotation);
+				for(int i=0;i<4;++i)
+					rotation->addItem(po.getRotation().getQuaternion()[i]);
+				}
+			}
+		}
+	}
+
+void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent& event)
+	{
+	VRDeviceServer* thisPtr=static_cast<VRDeviceServer*>(event.getUserData());
+	
+	try
+		{
+		/* Open a new TCP connection to the HTTP client: */
+		Comm::PipePtr pipe(thisPtr->httpListeningSocket->accept());
+		
+		/* Parse an HTTP POST request: */
+		Comm::HttpPostRequest request(*pipe);
+		const Comm::HttpPostRequest::NameValueList& nvl=request.getNameValueList();
+		
+		/* Check that there is a command in the POST request: */
+		if(request.getActionUrl()=="/VRDeviceServer.cgi"&&nvl.size()>=1&&nvl.front().name=="command")
+			{
+			/* Compose the server's reply as a JSON-encoded object: */
+			IO::JsonObjectPointer replyRoot=new IO::JsonObject;
+			replyRoot->setProperty("command",nvl.front().value);
+			
+			/* Process the command: */
+			if(nvl.front().value=="getServerStatus")
+				{
+				/* Compose the JSON object representing the current server state: */
+				thisPtr->getServerStatus(*replyRoot);
+				replyRoot->setProperty("status","Success");
+				}
+			else if(nvl.front().value=="getDeviceStates")
+				{
+				}
+			else if(nvl.front().value=="hapticTick"&&nvl.size()>1&&nvl[1].name=="hapticFeatureIndex")
+				{
+				/* Extract the haptic feature index: */
+				unsigned int hapticFeatureIndex(strtoul(nvl[1].value.c_str(),0,10));
+				
+				/* Extract optional haptic tick duration, frequency, and amplitude: */
+				unsigned int duration=100;
+				unsigned int frequency=100;
+				unsigned int amplitude=255;
+				for(unsigned int i=2;i<nvl.size();++i)
+					{
+					if(nvl[i].name=="duration")
+						duration=(unsigned int)(strtoul(nvl[i].value.c_str(),0,10));
+					else if(nvl[i].name=="frequency")
+						frequency=(unsigned int)(strtoul(nvl[i].value.c_str(),0,10));
+					else if(nvl[i].name=="amplitude")
+						amplitude=Math::clamp((unsigned int)(strtoul(nvl[i].value.c_str(),0,10)),0U,255U);
+					}
+				
+				/* Request a haptic tick: */
+				if(hapticFeatureIndex<thisPtr->deviceManager->getNumHapticFeatures())
+					{
+					thisPtr->deviceManager->hapticTick(hapticFeatureIndex,duration,frequency,amplitude);
+					replyRoot->setProperty("status","Success");
+					}
+				else
+					replyRoot->setProperty("status","Invalid hapticFeatureIndex");
+				}
+			else if(nvl.front().value=="powerOff"&&nvl.size()>=2&&nvl[1].name=="powerFeatureIndex")
+				{
+				/* Extract the power feature index: */
+				unsigned int powerFeatureIndex(strtoul(nvl[1].value.c_str(),0,10));
+				
+				/* Power off the device: */
+				if(powerFeatureIndex<thisPtr->deviceManager->getNumPowerFeatures())
+					{
+					thisPtr->deviceManager->powerOff(powerFeatureIndex);
+					replyRoot->setProperty("status","Success");
+					}
+				else
+					replyRoot->setProperty("status","Invalid powerFeatureIndex");
+				}
+			else
+				replyRoot->setProperty("status","Invalid command");
+			
+			/* Send the server's reply as a json file embedded in an HTTP reply: */
+			IO::OStream reply(pipe);
+			reply<<"HTTP/1.1 200 OK\n";
+			reply<<"Content-Type: application/json\n";
+			reply<<"Access-Control-Allow-Origin: *\n";
+			reply<<"\n";
+			reply<<*replyRoot<<std::endl;
+			
+			/* Send the reply: */
+			pipe->flush();
+			}
+		}
+	catch(const std::runtime_error& err)
+		{
+		#ifdef VERBOSE
+		// printf("VRDeviceServer: Ignoring HTTP request due to exception %s\n",err.what());
+		// fflush(stdout);
+		#endif
+		}
 	}
 
 void VRDeviceServer::suspendTimerCallback(Threads::EventDispatcher::TimerEvent& event)
@@ -726,7 +990,7 @@ VRDeviceServer::VRDeviceServer(Threads::EventDispatcher& sDispatcher,VRDeviceMan
 	:VRDeviceManager::VRStreamer(sDeviceManager),
 	 dispatcher(sDispatcher),
 	 environmentDefinitionUpdatedSignalKey(0),
-	 tcpListeningSocketKey(0),unixListeningSocketKey(0),deviceStateMemoryFd(-1),
+	 tcpListeningSocketKey(0),unixListeningSocketKey(0),deviceStateMemoryFd(-1),httpListeningSocketKey(0),
 	 numActiveClients(0),numStreamingClients(0),
 	 suspendTime(0,0),suspendTimerKey(0),
 	 haveUpdates(false),trackerUpdateFlags(0),buttonUpdateFlags(0),valuatorUpdateFlags(0),
@@ -794,6 +1058,14 @@ VRDeviceServer::VRDeviceServer(Threads::EventDispatcher& sDispatcher,VRDeviceMan
 		deviceStateMemoryFd=deviceManager->useSharedMemory(configFile.retrieveString("deviceStateMemoryName","/VRDeviceManagerDeviceState.shmem").c_str());
 		}
 	
+	/* Check if the server should listen for HTTP requests and commands on a TCP socket: */
+	if(configFile.hasTag("./httpPort"))
+		{
+		/* Create a listening TCP socket for HTTP requests and add an event listener for it: */
+		httpListeningSocket=new Comm::ListeningTCPSocket(configFile.retrieveValue<int>("httpPort"),5);
+		httpListeningSocketKey=dispatcher.addIOEventListener(httpListeningSocket->getFd(),Threads::EventDispatcher::Read,newHttpConnectionCallback,this);
+		}
+	
 	/* Create a timer event listener to suspend VR devices after a certain period of inactivity: */
 	suspendTime=Threads::EventDispatcher::Time(configFile.retrieveValue<int>("suspendTimeout",0),0);
 	if(suspendTime.tv_sec!=0)
@@ -844,6 +1116,8 @@ VRDeviceServer::~VRDeviceServer(void)
 		dispatcher.removeIOEventListener(tcpListeningSocketKey);
 	if(unixListeningSocket!=0)
 		dispatcher.removeIOEventListener(unixListeningSocketKey);
+	if(httpListeningSocket!=0)
+		dispatcher.removeIOEventListener(httpListeningSocketKey);
 	dispatcher.removeTimerEventListener(suspendTimerKey);
 	
 	/* Clean up: */
@@ -919,6 +1193,8 @@ void VRDeviceServer::run(void)
 		printf("VRDeviceServer: Listening for incoming connections on TCP port %d\n",static_cast<Comm::ListeningTCPSocket*>(tcpListeningSocket.getPointer())->getPortId());
 	if(unixListeningSocket!=0)
 		printf("VRDeviceServer: Listening for incoming connections on UNIX domain socket %s\n",static_cast<Comm::ListeningUNIXSocket*>(unixListeningSocket.getPointer())->getAddress().c_str());
+	if(httpListeningSocket!=0)
+		printf("VRDeviceServer: Listening for HTTP requests on TCP port %d\n",static_cast<Comm::ListeningTCPSocket*>(httpListeningSocket.getPointer())->getPortId());
 	fflush(stdout);
 	#endif
 	

@@ -8473,3 +8473,23 @@ Vrui-14.1-001:
   Threads::EventDispatcher.
 - Fixed tool deletion in Vrui::InputGraphManager to work properly with
   essential tools.
+- Added addItem and setProperty convenience methods to IO::JsonArray and
+  IO::JsonObject classes in IO/JsonEntityTypes.h.
+- Fixed printing of power off capability in DeviceTest utility.
+- Added Comm::HttpPostRequest class to parse HTTP POST requests.
+- Added HTTP interface to VRDeviceServer that listens to HTTP POST
+  requests on a TCP socket and executes commands or returns information
+  as JSON files.
+- Fixed virtual device intialization in OpenVRHost device driver module.
+- Added VRServerLauncher to Vrui/Utilities; meta-server to listen to
+  commands as HTTP POST requests on a TCP socket and run VRDeviceDaemon
+  and VRCompositingServer sub-processes in an orderly fashion.
+- Added array keeping track of virtual devices' connected states to
+  VRDeviceManager, with new methods setVirtualDeviceConnected and
+  isVirtualDeviceConnected.
+  - Added code to update devices' connected states to OpenVRHost class.
+- Added hapticTick and powerOff commands to VRDeviceServer's HTTP
+  interface.
+  - Moved getServerStatus code into separate method of same name.
+- Catch errors when connecting a client over the UNIX socket in
+  VRCompositingServer's VRServer class.

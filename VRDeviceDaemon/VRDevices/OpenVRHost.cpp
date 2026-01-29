@@ -1,7 +1,7 @@
 /***********************************************************************
 OpenVRHost - Class to wrap a low-level OpenVR tracking and display
 device driver in a VRDevice.
-Copyright (c) 2016-2024 Oliver Kreylos
+Copyright (c) 2016-2025 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -1010,6 +1010,12 @@ OpenVRHost::OpenVRHost(VRDevice::Factory* sFactory,VRDeviceManager* sDeviceManag
 				vd->rayDirection=Vrui::VRDeviceDescriptor::Vector(0,0,-1);
 				vd->rayStart=0.0f;
 				
+				/* Set if the device has a battery: */
+				vd->hasBattery=deviceType==Controller||deviceType==Tracker;
+				
+				/* Set if the device can be powered off: */
+				vd->canPowerOff=dc.numPowerFeatures>0;
+				
 				/* Assign a tracker index: */
 				vd->trackerIndex=getTrackerIndex(nextTrackerIndex++);
 				
@@ -1039,6 +1045,9 @@ OpenVRHost::OpenVRHost(VRDevice::Factory* sFactory,VRDeviceManager* sDeviceManag
 				
 				/* Register the virtual device: */
 				virtualDeviceIndices[deviceType][deviceIndex]=addVirtualDevice(vd);
+				
+				/* Mark the device as unconnected: */
+				deviceManager->setVirtualDeviceConnected(virtualDeviceIndices[deviceType][deviceIndex],false);
 				}
 			}
 		else
@@ -2142,6 +2151,9 @@ bool OpenVRHost::TrackedDeviceAdded(const char* pchDeviceSerialNumber,vr::ETrack
 		{
 		/* Register the new base station with the device manager: */
 		ds.deviceIndex=deviceManager->addBaseStation(ds.serialNumber);
+		
+		/* Assign an invalid virtual device index: */
+		ds.virtualDeviceIndex=~0U;
 		}
 	else
 		{
@@ -2200,6 +2212,8 @@ void OpenVRHost::TrackedDevicePoseUpdated(uint32_t unWhichDevice,const vr::Drive
 		{
 		/* Change the device's connected state: */
 		ds.connected=newPose.deviceIsConnected;
+		if(ds.virtualDeviceIndex!=~0U)
+			deviceManager->setVirtualDeviceConnected(ds.virtualDeviceIndex,ds.connected);
 		
 		log(1,"Tracked device with serial number %s is now %s\n",ds.serialNumber.c_str(),ds.connected?"connected":"disconnected");
 		}

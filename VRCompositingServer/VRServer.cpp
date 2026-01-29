@@ -1,7 +1,7 @@
 /***********************************************************************
 VRServer - Prototype for a VR server offering compositing services to VR
 application clients.
-Copyright (c) 2022-2024 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Compositing Server (VRCompositor).
 
@@ -31,9 +31,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Misc/SelfDestructPointer.h>
 #include <Threads/Thread.h>
 #include <Threads/EventDispatcher.h>
+#include <IO/JsonEntityTypes.h>
+#include <IO/OStream.h>
 #include <Comm/Pipe.h>
 #include <Comm/ListeningUNIXSocket.h>
 #include <Comm/UNIXPipe.h>
+#include <Comm/ListeningTCPSocket.h>
+#include <Comm/TCPPipe.h>
+#include <Comm/HttpPostRequest.h>
 #include <vulkan/vulkan.h>
 #include <Vulkan/Common.h>
 #include <Vulkan/ApplicationInfo.h>
@@ -59,21 +64,24 @@ class VRServer
 	/* A UNIX socket and pipe to communicate with VR application clients: */
 	Comm::ListeningUNIXSocket listenSocket; // UNIX socket listening for incoming client connections
 	Comm::UNIXPipe* clientPipe; // UNIX pipe connected to the current client
+	Comm::ListeningTCPSocket httpListenSocket; // TCP socket listening for incoming HTTP requests
 	Threads::EventDispatcher::ListenerKey stdioListener; // Key for listener for standard input
 	Threads::EventDispatcher::ListenerKey listenSocketListener; // Key for listener for listening UNIX socket
+	Threads::EventDispatcher::ListenerKey httpListenSocketListener; // Key for listener for listening TCP socket
 	Threads::EventDispatcher::ListenerKey clientPipeListener; // Key for listener for the current client pipe
 	Threads::EventDispatcher::ListenerKey vsyncSignalListener; // Key for listener for vsync events from the compositor
 	
 	/* Private methods: */
 	void stdioCallback(Threads::EventDispatcher::IOEvent& event);
 	void listenSocketCallback(Threads::EventDispatcher::IOEvent& event);
+	void httpListenSocketCallback(Threads::EventDispatcher::IOEvent& event);
 	void clientPipeCallback(Threads::EventDispatcher::IOEvent& event);
 	void vsyncSignalCallback(Threads::EventDispatcher::SignalEvent& event);
 	void* compositorThreadMethod(void);
 	
 	/* Constructors and destructors: */
 	public:
-	VRServer(const std::string& vrDeviceServerSocketName,bool vrDeviceServerSocketAbstract,Vulkan::Instance& instance,const std::string& hmdName,double hmdFrameRate); // Creates a VR server for the HMD of the given name running at the given frame rate
+	VRServer(const std::string& vrDeviceServerSocketName,bool vrDeviceServerSocketAbstract,int httpListenPortId,Vulkan::Instance& instance,const std::string& hmdName,double hmdFrameRate); // Creates a VR server for the HMD of the given name running at the given frame rate
 	~VRServer(void); // Shuts down the server and releases all resources
 	
 	/* Methods: */
@@ -90,7 +98,7 @@ void VRServer::stdioCallback(Threads::EventDispatcher::IOEvent& event)
 	/* Read everything available on stdin: */
 	char buffer[1024];
 	ssize_t readResult=read(STDIN_FILENO,buffer,sizeof(buffer));
-	if(readResult>=0)
+	if(readResult>0)
 		{
 		/* Handle all read keypresses: */
 		char* bufEnd=buffer+readResult;
@@ -127,39 +135,110 @@ void VRServer::stdioCallback(Threads::EventDispatcher::IOEvent& event)
 				}
 			}
 		}
+	else if(readResult==0)
+		{
+		/* Stop listening on stdin: */
+		event.removeListener();
+		}
 	}
 
 void VRServer::listenSocketCallback(Threads::EventDispatcher::IOEvent& event)
 	{
-	/* Check that there isn't already a connected client: */
-	if(clientPipe==0)
+	Comm::UNIXPipe* tempPipe=0;
+	try
 		{
-		/* Accept the connection: */
-		std::cout<<"Accepting new client connection"<<std::endl;
-		clientPipe=new Comm::UNIXPipe(listenSocket);
+		/* Temporarily accept the connection: */
+		tempPipe=new Comm::UNIXPipe(listenSocket);
 		
-		/* Send compositing information to the client: */
-		clientPipe->writeFd(compositor.getSharedMemoryBlockFd());
-		clientPipe->writeFd(compositor.getInputImageBlockFd());
-		clientPipe->write(Vrui::VRCompositorProtocol::protocolVersion);
-		clientPipe->write(size_t(compositor.getInputImageBlockSize()));
-		for(unsigned int i=0;i<3;++i)
-			clientPipe->write(size_t(compositor.getInputImageMemSize(i)));
-		for(unsigned int i=0;i<3;++i)
-			clientPipe->write(size_t(compositor.getInputImageMemOffset(i)));
-		clientPipe->flush();
-		
-		/* Start dispatching events from the client: */
-		clientPipeListener=dispatcher.addIOEventListener(clientPipe->getFd(),Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::clientPipeCallback>,this);
-		
-		/* Notify the compositor: */
-		compositor.activate();
+		/* Check that there isn't already a connected client: */
+		if(clientPipe==0)
+			{
+			/* Accept the connection: */
+			std::cout<<"Accepting new client connection"<<std::endl;
+			
+			/* Send compositing information to the client: */
+			tempPipe->writeFd(compositor.getSharedMemoryBlockFd());
+			tempPipe->writeFd(compositor.getInputImageBlockFd());
+			tempPipe->write(Vrui::VRCompositorProtocol::protocolVersion);
+			tempPipe->write(size_t(compositor.getInputImageBlockSize()));
+			for(unsigned int i=0;i<3;++i)
+				tempPipe->write(size_t(compositor.getInputImageMemSize(i)));
+			for(unsigned int i=0;i<3;++i)
+				tempPipe->write(size_t(compositor.getInputImageMemOffset(i)));
+			tempPipe->flush();
+			
+			/* Notify the compositor: */
+			compositor.activate();
+			
+			/* Finalize the connection: */
+			clientPipe=tempPipe;
+			tempPipe=0;
+			
+			/* Start dispatching events from the client: */
+			clientPipeListener=dispatcher.addIOEventListener(clientPipe->getFd(),Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::clientPipeCallback>,this);
+			}
+		else
+			{
+			/* Reject the connection to tell the client we're busy: */
+			std::cout<<"Rejecting incoming client connection"<<std::endl;
+			delete tempPipe;
+			}
 		}
-	else
+	catch(const std::runtime_error& err)
 		{
-		/* Accept the connection and immediately close it again to tell the client we're busy: */
-		std::cout<<"Rejecting incoming client connection"<<std::endl;
-		Comm::UNIXPipe tempClientPipe(listenSocket);
+		/* Close the temporary connection and print an error message: */
+		delete tempPipe;
+		std::cout<<"Rejecting incoming client connection due to exception "<<err.what()<<std::endl;
+		}
+	}
+
+void VRServer::httpListenSocketCallback(Threads::EventDispatcher::IOEvent& event)
+	{
+	try
+		{
+		/* Open a new TCP connection to the HTTP client: */
+		Comm::PipePtr pipe(httpListenSocket.accept());
+		
+		/* Parse an HTTP POST request: */
+		Comm::HttpPostRequest request(*pipe);
+		const Comm::HttpPostRequest::NameValueList& nvl=request.getNameValueList();
+		
+		/* Check that there is a command in the POST request: */
+		if(request.getActionUrl()=="/VRCompositingServer.cgi"&&nvl.size()>=1&&nvl.front().name=="command")
+			{
+			/* Compose the server's reply as a JSON-encoded object: */
+			IO::JsonObjectPointer replyRoot=new IO::JsonObject;
+			replyRoot->setProperty("command",nvl.front().value);
+			
+			/* Process the command: */
+			if(nvl.front().value=="getServerStatus")
+				{
+				/* Compose the JSON object representing the current server state: */
+				// Let's do that later
+				
+				replyRoot->setProperty("status","Success");
+				}
+			else
+				replyRoot->setProperty("status","Invalid command");
+			
+			/* Send the server's reply as a json file embedded in an HTTP reply: */
+			IO::OStream reply(pipe);
+			reply<<"HTTP/1.1 200 OK\n";
+			reply<<"Content-Type: application/json\n";
+			reply<<"Access-Control-Allow-Origin: *\n";
+			reply<<"\n";
+			reply<<*replyRoot<<std::endl;
+			
+			/* Send the reply: */
+			pipe->flush();
+			}
+		}
+	catch(const std::runtime_error& err)
+		{
+		#if 0 // No, actually, don't :)
+		/* Print an error message and carry on: */
+		std::cout<<"Ignoring HTTP request due to exception "<<err.what()<<std::endl;
+		#endif
 		}
 	}
 
@@ -230,15 +309,17 @@ void* VRServer::compositorThreadMethod(void)
 	return 0;
 	}
 
-VRServer::VRServer(const std::string& vrDeviceServerSocketName,bool vrDeviceServerSocketAbstract,Vulkan::Instance& instance,const std::string& hmdName,double hmdFrameRate)
+VRServer::VRServer(const std::string& vrDeviceServerSocketName,bool vrDeviceServerSocketAbstract,int httpListenPortId,Vulkan::Instance& instance,const std::string& hmdName,double hmdFrameRate)
 	:vrDeviceClient(dispatcher,vrDeviceServerSocketName.c_str(),vrDeviceServerSocketAbstract),
 	 compositor(dispatcher,vrDeviceClient,instance,hmdName,hmdFrameRate),
 	 listenSocket(VRSERVER_SOCKET_NAME,5,VRSERVER_SOCKET_ABSTRACT),
+	 httpListenSocket(httpListenPortId,5),
 	 clientPipe(0)
 	{
 	/* Set up the event dispatcher: */
 	stdioListener=dispatcher.addIOEventListener(STDIN_FILENO,Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::stdioCallback>,this);
 	listenSocketListener=dispatcher.addIOEventListener(listenSocket.getFd(),Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::listenSocketCallback>,this);
+	httpListenSocketListener=dispatcher.addIOEventListener(httpListenSocket.getFd(),Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::httpListenSocketCallback>,this);
 	vsyncSignalListener=dispatcher.addSignalListener(Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::vsyncSignalCallback>,this);
 	
 	/* Start running the VR compositor in a background thread: */
@@ -297,6 +378,7 @@ int main(int argc,char* argv[])
 	bool listDisplays=false;
 	const char* deviceDaemonSocketName=VRDEVICEDAEMON_SOCKET_NAME;
 	bool deviceDaemonSocketAbstract=VRDEVICEDAEMON_SOCKET_ABSTRACT;
+	int httpListenPortId=8082;
 	const char* hmdName=VRSERVER_DEFAULT_HMD;
 	double hmdFrameRate=VRSERVER_DEFAULT_HZ;
 	for(int argi=1;argi<argc;++argi)
@@ -316,6 +398,11 @@ int main(int argc,char* argv[])
 				deviceDaemonSocketAbstract=true;
 			else if(strcasecmp(argv[argi]+1,"concrete")==0)
 				deviceDaemonSocketAbstract=false;
+			else if(strcasecmp(argv[argi]+1,"httpPort")==0)
+				{
+				++argi;
+				httpListenPortId=atoi(argv[argi]);
+				}
 			else if(strcasecmp(argv[argi]+1,"hmd")==0)
 				{
 				++argi;
@@ -407,7 +494,7 @@ int main(int argc,char* argv[])
 		else
 			{
 			/* Create a VR server object: */
-			VRServer server(deviceDaemonSocketName,deviceDaemonSocketAbstract,instance,hmdName,hmdFrameRate);
+			VRServer server(deviceDaemonSocketName,deviceDaemonSocketAbstract,httpListenPortId,instance,hmdName,hmdFrameRate);
 			serverPtr=&server;
 			
 			/* Run the server's main loop until interrupted: */

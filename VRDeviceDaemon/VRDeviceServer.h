@@ -1,7 +1,7 @@
 /***********************************************************************
 VRDeviceServer - Class encapsulating the VR device protocol's server
 side.
-Copyright (c) 2002-2024 Oliver Kreylos
+Copyright (c) 2002-2025 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -34,6 +34,9 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 /* Forward declarations: */
 namespace Misc {
 class ConfigurationFile;
+}
+namespace IO {
+class JsonObject;
 }
 namespace Vrui {
 class BatteryState;
@@ -109,6 +112,8 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	Comm::ListeningSocketPtr unixListeningSocket; // Optional UNIX domain socket on which the server accepts incoming client connections
 	Threads::EventDispatcher::ListenerKey unixListeningSocketKey; // Key for IO events on the listening UNIX domain socket
 	int deviceStateMemoryFd; // File descriptor to access the device manager's shared-memory device state
+	Comm::ListeningSocketPtr httpListeningSocket; // Optional TCP socket on which the server accepts requests and commands in HTML format
+	Threads::EventDispatcher::ListenerKey httpListeningSocketKey; // Key for IO events on the listening HTTP socket
 	
 	ClientStateList clientStates; // List of currently connected clients
 	unsigned int numActiveClients; // Number of clients that are currently active
@@ -137,6 +142,8 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	void connectNewClient(Comm::ListeningSocket& listeningSocket); // Connects a new client over the given listening socket
 	static void newTcpConnectionCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when an incoming connection is waiting at the TCP listening socket
 	static void newUnixConnectionCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when an incoming connection is waiting at the UNIX domain listening socket
+	void getServerStatus(IO::JsonObject& replyRoot); // Encodes the server's current state in the given JSON object
+	static void newHttpConnectionCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when an incoming connection is waiting at the TCP listening socket serving HTTP requests
 	static void suspendTimerCallback(Threads::EventDispatcher::TimerEvent& event); // Callback called after a period of inactivity
 	static void environmentDefinitionUpdatedCallback(Threads::EventDispatcher::SignalEvent& event); // Callback called when a client updates the environment definition
 	void goInactive(void); // Sets the server to inactive mode when the last client leaves active state
