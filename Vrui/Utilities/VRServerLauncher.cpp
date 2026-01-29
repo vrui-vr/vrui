@@ -3,8 +3,26 @@ VRServerLauncher - A small daemon to launch and monitor the servers
 needed to operate a VR environment with a head-mounted display, using
 VRDeviceDaemon for tracking and VRCompositingServer for rendering.
 Copyright (c) 2025-2026 Oliver Kreylos
+
+This file is part of the Virtual Reality User Interface Library (Vrui).
+
+The Virtual Reality User Interface Library is free software; you can
+redistribute it and/or modify it under the terms of the GNU General
+Public License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+The Virtual Reality User Interface Library is distributed in the hope
+that it will be useful, but WITHOUT ANY WARRANTY; without even the
+implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE.  See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with the Virtual Reality User Interface Library; if not, write to the
+Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA
 ***********************************************************************/
 
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
@@ -25,9 +43,25 @@ Copyright (c) 2025-2026 Oliver Kreylos
 #include <Comm/TCPPipe.h>
 #include <Comm/ListeningTCPSocket.h>
 #include <Comm/HttpPostRequest.h>
+#include <Vrui/Internal/Config.h>
 
 class VRServerLauncher
 	{
+	/* Embedded classes: */
+	private:
+	struct Server // Structure keeping track of a launched server
+		{
+		/* Elements: */
+		public:
+		std::string name; // Short server name, used for pid and log files
+		std::string displayName; // Display name for the server
+		std::string executableName; // Path to the server's executable
+		pid_t pid; // Process ID for a running server, or 0
+		std::string socketName; // Name of the server's UNIX domain socket
+		bool socketAbstract; // Flag whether the server's UNIX domain socket is in the abstract namespace
+		int httpPort; // Port number on which the server listens for HTTP requests
+		};
+	
 	/* Elements: */
 	private:
 	Threads::EventDispatcher eventDispatcher; // Dispatcher to handle I/O events
@@ -35,17 +69,13 @@ class VRServerLauncher
 	Threads::EventDispatcher::ListenerKey listenSocketKey;
 	static VRServerLauncher* sigThis; // Pointer to active server launcher object for signal processing
 	Threads::EventDispatcher::ListenerKey sigChldKey; // Signal to notify the front-end that any of the sub-processes has terminated
-	std::string serverNames[2]; // Names of the server processes to start
-	std::string serverDisplayNames[2]; // Display names of the server processes to start
-	std::string serverLogFileNames[2]; // Names of log files to which to redirect server output
-	pid_t serverPids[2]; // Process IDs of the VRDeviceDaemon and VRCompositingServer sub-processes, respectively, or 0 if the process is not started
-	std::string serverSocketNames[2]; // Names of the UNIX sockets on which the server processes listen for connections
-	bool serverSocketAbstracts[2]; // Flags if the server processes' UNIX sockets are in the abstract namespace
+	std::string pidFileDir,logFileDir; // Directories to store the servers' pid and log files
+	Server servers[2]; // Array of server tracking structures
 	
 	/* Private methods: */
 	static void signalHandler(int sig); // Signal handler for SIGCHLD
-	bool startServer(int serverIndex,Comm::TCPPipe& pipe);
-	void collectServer(int serverIndex,bool noWait);
+	bool startServer(Server& server,Comm::TCPPipe& pipe);
+	void collectServer(Server& server,bool noWait);
 	static void newConnectionCallback(Threads::EventDispatcher::IOEvent& event);
 	static void childTerminatedCallback(Threads::EventDispatcher::SignalEvent& event);
 	
@@ -77,11 +107,11 @@ void VRServerLauncher::signalHandler(int sig)
 		}
 	}
 
-bool VRServerLauncher::startServer(int serverIndex,Comm::TCPPipe& pipe)
+bool VRServerLauncher::startServer(VRServerLauncher::Server& server,Comm::TCPPipe& pipe)
 	{
 	bool result=false;
 	
-	std::cout<<"VRServerLauncher::startServer: Starting "<<serverDisplayNames[serverIndex]<<std::endl;
+	std::cout<<"VRServerLauncher::startServer: Starting "<<server.displayName<<std::endl;
 	
 	/* Fork: */
 	pid_t childPid=fork();
@@ -96,7 +126,8 @@ bool VRServerLauncher::startServer(int serverIndex,Comm::TCPPipe& pipe)
 		
 		/* Redirect stdin to /dev/null and stdout and stderr to log file (this is ugly, but works because descriptors are assigned sequentially): */
 		int nullFd=open("/dev/null",O_RDONLY);
-		int logFd=open(serverLogFileNames[serverIndex].c_str(),O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
+		std::string logFileName=logFileDir+"/"+server.name+".log";
+		int logFd=open(logFileName.c_str(),O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
 		if(nullFd!=0||logFd!=1||dup(logFd)!=2)
 			{
 			/* Kill this process and let the parent handle it: */
@@ -106,7 +137,7 @@ bool VRServerLauncher::startServer(int serverIndex,Comm::TCPPipe& pipe)
 		/* Run the server executable: */
 		char* argv[20];
 		int argc=0;
-		argv[argc++]=const_cast<char*>(serverNames[serverIndex].c_str());
+		argv[argc++]=const_cast<char*>(server.executableName.c_str());
 		argv[argc]=0;
 		if(execv(argv[0],argv)<0)
 			{
@@ -117,12 +148,28 @@ bool VRServerLauncher::startServer(int serverIndex,Comm::TCPPipe& pipe)
 	else if(childPid==pid_t(-1))
 		{
 		/* 'Tis an error: */
-		std::cout<<"VRServerLauncher::startServer: Cannot fork "<<serverDisplayNames[serverIndex]<<std::endl;
+		std::cout<<"VRServerLauncher::startServer: Cannot fork "<<server.displayName<<std::endl;
 		}
 	else
 		{
 		/* Remember the child's process ID: */
-		serverPids[serverIndex]=childPid;
+		server.pid=childPid;
+		
+		/* Save daemon's process ID to its pid file: */
+		std::string pidFileName=pidFileDir+"/"+server.name+".pid";
+		int pidFd=open(pidFileName.c_str(),O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
+		if(pidFd>=0)
+			{
+			/* Write process ID: */
+			char pidBuffer[20];
+			snprintf(pidBuffer,sizeof(pidBuffer),"%d\n",server.pid);
+			size_t pidLen=strlen(pidBuffer);
+			if(write(pidFd,pidBuffer,pidLen)!=ssize_t(pidLen))
+				std::cerr<<"VRServerLauncher::startServer: Cannot write "<<server.displayName<<"'s PID to PID file"<<std::endl;
+			close(pidFd);
+			}
+		else
+			std::cerr<<"VRServerLauncher::startServer: Cannot create "<<server.displayName<<"'s PID file"<<std::endl;
 		
 		/* Try connecting to the just-started server's HTTP command socket until it succeeds or times out: */
 		unsigned int attempts=10;
@@ -134,13 +181,13 @@ bool VRServerLauncher::startServer(int serverIndex,Comm::TCPPipe& pipe)
 				usleep(500000);
 				
 				/* Open a connection to the server's HTTP port: */
-				Comm::TCPPipe httpPipe("localhost",8081+serverIndex);
+				Comm::TCPPipe httpPipe("localhost",server.httpPort);
 				httpPipe.ref();
 				
 				/* Send a malformed HTTP request: */
 				IO::OStream request(&httpPipe);
 				request<<"POST /Foo.cgi HTTP/1.1\n";
-				request<<"Host: localhost:"<<8081+serverIndex<<"\n";
+				request<<"Host: localhost:"<<server.httpPort<<"\n";
 				request<<"Content-Type: application/x-www-form-urlencoded\n";
 				request<<"Content-Length: 0\n";
 				request<<"\n";
@@ -166,42 +213,42 @@ bool VRServerLauncher::startServer(int serverIndex,Comm::TCPPipe& pipe)
 		/* Check if the connection worked: */
 		if(attempts>0)
 			{
-			std::cout<<"VRServerLauncher::startServer: "<<serverDisplayNames[serverIndex]<<" started successfully on PID "<<childPid<<std::endl;
+			std::cout<<"VRServerLauncher::startServer: "<<server.displayName<<" started successfully on PID "<<childPid<<std::endl;
 			result=true;
 			}
 		else
 			{
 			/* Kill the server brutally, because something serious went wrong: */
-			std::cout<<"VRServerLauncher::startServer: Cannot establish connection to "<<serverDisplayNames[serverIndex]<<std::endl;
-			kill(serverPids[serverIndex],SIGKILL);
+			std::cout<<"VRServerLauncher::startServer: Cannot establish connection to "<<server.displayName<<std::endl;
+			kill(server.pid,SIGKILL);
 			}
 		}
 	
 	return result;
 	}
 
-void VRServerLauncher::collectServer(int serverIndex,bool noWait)
+void VRServerLauncher::collectServer(VRServerLauncher::Server& server,bool noWait)
 	{
 	/* Collect the server's exit status: */
 	int waitStatus(0);
-	pid_t termPid=waitpid(serverPids[serverIndex],&waitStatus,noWait?WNOHANG:0x0);
-	if(termPid==serverPids[serverIndex])
+	pid_t termPid=waitpid(server.pid,&waitStatus,noWait?WNOHANG:0x0);
+	if(termPid==server.pid)
 		{
 		/* Print a friendly status message: */
 		if(WIFEXITED(waitStatus))
-			std::cout<<"VRServerLauncher: "<<serverDisplayNames[serverIndex]<<" shut down cleanly with exit status "<<WEXITSTATUS(waitStatus)<<std::endl;
+			std::cout<<"VRServerLauncher: "<<server.displayName<<" shut down cleanly with exit status "<<WEXITSTATUS(waitStatus)<<std::endl;
 		else if(WIFSIGNALED(waitStatus))
-			std::cout<<"VRServerLauncher: "<<serverDisplayNames[serverIndex]<<" shat the bed with signal "<<WTERMSIG(waitStatus)<<(WCOREDUMP(waitStatus)?" and dumped core":" but did not dump core")<<std::endl;
+			std::cout<<"VRServerLauncher: "<<server.displayName<<" shat the bed with signal "<<WTERMSIG(waitStatus)<<(WCOREDUMP(waitStatus)?" and dumped core":" but did not dump core")<<std::endl;
 		
 		/* Mark the sub-process as terminated: */
-		serverPids[serverIndex]=pid_t(0);
+		server.pid=pid_t(0);
 		}
-	else if(termPid==-1)
+	else if(termPid==pid_t(-1))
 		{
 		/* Print an error message and continue: */
 		char strerrorBuffer[1024]; // Long enough according to spec
 		char* errorString=strerror_r(errno,strerrorBuffer,sizeof(strerrorBuffer));
-		std::cout<<"VRServerLauncher: Error "<<errno<<" ("<<errorString<<") while collecting "<<serverDisplayNames[serverIndex]<<std::endl;
+		std::cout<<"VRServerLauncher: Error "<<errno<<" ("<<errorString<<") while collecting "<<server.displayName<<std::endl;
 		}
 	}
 
@@ -246,17 +293,19 @@ void VRServerLauncher::newConnectionCallback(Threads::EventDispatcher::IOEvent& 
 				replyRoot->setProperty("servers",*servers);
 				
 				/* Start the two server sub-processes: */
-				for(int i=0;i<2&&success;++i)
+				for(int serverIndex=0;serverIndex<2&&success;++serverIndex)
 					{
-					/* Start the server if it isn't already running: */
-					if(thisPtr->serverPids[i]==pid_t(0))
-						success=thisPtr->startServer(i,pipe);
+					Server& server=thisPtr->servers[serverIndex];
 					
-					/* Add an entry for this server to the reply structure: */
-					IO::JsonObjectPointer server=new IO::JsonObject;
-					servers->addItem(*server);
-					server->setProperty("name",thisPtr->serverDisplayNames[i]);
-					server->setProperty("isRunning",success);
+					/* Start the server if it isn't already running: */
+					if(server.pid==pid_t(0))
+						success=thisPtr->startServer(server,pipe);
+					
+					/* Add an entry for this server's state to the reply structure: */
+					IO::JsonObjectPointer serverState=new IO::JsonObject;
+					servers->addItem(*serverState);
+					serverState->setProperty("name",server.displayName);
+					serverState->setProperty("isRunning",success);
 					}
 				
 				replyRoot->setProperty("status",success?"Success":"Failed");
@@ -264,13 +313,17 @@ void VRServerLauncher::newConnectionCallback(Threads::EventDispatcher::IOEvent& 
 			else if(nvl.front().value=="stopServers")
 				{
 				/* Stop the two server sub-processes: */
-				for(int i=1;i>=0;--i)
-					if(thisPtr->serverPids[i]!=pid_t(0))
+				for(int serverIndex=1;serverIndex>=0;--serverIndex)
+					{
+					Server& server=thisPtr->servers[serverIndex];
+					
+					if(server.pid!=pid_t(0))
 						{
-						std::cout<<"VRServerLauncher: Stopping "<<thisPtr->serverDisplayNames[i]<<std::endl;
-						kill(thisPtr->serverPids[i],SIGTERM);
-						thisPtr->collectServer(i,false);
+						std::cout<<"VRServerLauncher: Stopping "<<server.displayName<<std::endl;
+						kill(server.pid,SIGTERM);
+						thisPtr->collectServer(server,false);
 						}
+					}
 				
 				replyRoot->setProperty("status","Success");
 				}
@@ -281,17 +334,19 @@ void VRServerLauncher::newConnectionCallback(Threads::EventDispatcher::IOEvent& 
 				IO::JsonArrayPointer servers=new IO::JsonArray;
 				replyRoot->setProperty("servers",*servers);
 				
-				for(int i=0;i<2;++i)
+				for(int serverIndex=0;serverIndex<2;++serverIndex)
 					{
-					/* Add an entry for this server to the reply structure: */
-					IO::JsonObjectPointer server=new IO::JsonObject;
-					servers->addItem(*server);
-					server->setProperty("name",thisPtr->serverDisplayNames[i]);
-					server->setProperty("isRunning",thisPtr->serverPids[i]!=pid_t(0));
-					if(thisPtr->serverPids[i]!=pid_t(0))
+					Server& server=thisPtr->servers[serverIndex];
+					
+					/* Add an entry for this server's state to the reply structure: */
+					IO::JsonObjectPointer serverState=new IO::JsonObject;
+					servers->addItem(*serverState);
+					serverState->setProperty("name",server.displayName);
+					serverState->setProperty("isRunning",server.pid!=pid_t(0));
+					if(server.pid!=pid_t(0))
 						{
-						server->setProperty("pid",int(thisPtr->serverPids[i]));
-						server->setProperty("httpPort",8081+i);
+						serverState->setProperty("pid",int(server.pid));
+						serverState->setProperty("httpPort",server.httpPort);
 						}
 					}
 				
@@ -334,38 +389,62 @@ void VRServerLauncher::childTerminatedCallback(Threads::EventDispatcher::SignalE
 	VRServerLauncher* thisPtr=static_cast<VRServerLauncher*>(event.getUserData());
 	
 	/* Reap any terminated child processes: */
-	for(int i=0;i<2;++i)
-		if(thisPtr->serverPids[i]!=pid_t(0))
-			thisPtr->collectServer(i,true);
+	for(int serverIndex=0;serverIndex<2;++serverIndex)
+		{
+		Server& server=thisPtr->servers[serverIndex];
+		
+		if(server.pid!=pid_t(0))
+			thisPtr->collectServer(server,true);
+		}
 	}
 
 VRServerLauncher::VRServerLauncher(int listenPortId)
 	:listenSocket(listenPortId,5)
 	{
-	/* Set the names of the server executables: */
-	serverNames[0]="/opt/Vrui-dev/bin/RunOpenVRTracker.sh";
-	serverNames[1]="/opt/Vrui-dev/bin/RunVRCompositor.sh";
+	/* Determine the directories where to write pid and log files: */
+	uid_t userId=geteuid();
+	if(userId==uid_t(0))
+		{
+		/* Store the files in the appropriate system directories if the server is run as root: */
+		pidFileDir="/var/run";
+		logFileDir="/var/log";
+		}
+	else
+		{
+		/* Store the files in the user's home directory: */
+		char* home=getenv("HOME");
+		if(home!=0)
+			pidFileDir=home;
+		else
+			{
+			/* Fall back to the tmp directory if no home directory is set: */
+			pidFileDir="/tmp";
+			}
+		
+		logFileDir=pidFileDir;
+		}
 	
-	serverDisplayNames[0]="VR tracking driver";
-	serverDisplayNames[1]="VR compositing server";
+	/*********************************************************************
+	Initialize the server tracking structures:
+	*********************************************************************/
 	
-	/* Set the names of the log files to which to direct server output: */
-	#if 0
-	serverLogFileNames[0]="/var/log/VRDeviceDaemon.log";
-	serverLogFileNames[1]="/var/log/VRCompositingServer.log";
-	#else
-	serverLogFileNames[0]="/home/okreylos/VRDeviceDaemon.log";
-	serverLogFileNames[1]="/home/okreylos/VRCompositingServer.log";
-	#endif
+	/* Server 0: VRDeviceDaemon: */
+	servers[0].name="VRDeviceDaemon";
+	servers[0].displayName="VR tracking driver";
+	servers[0].executableName=VRUI_INTERNAL_CONFIG_EXECUTABLEDIR "/RunOpenVRTracker.sh";
+	servers[0].pid=pid_t(0);
+	servers[0].socketName="VRDeviceDaemon.socket";
+	servers[0].socketAbstract=true;
+	servers[0].httpPort=8081;
 	
-	/* Set the names of the UNIX sockets on which the servers listen for connections: */
-	serverSocketNames[0]="VRDeviceDaemon.socket";
-	serverSocketAbstracts[0]=true;
-	serverSocketNames[1]="VRCompositingServer.socket";
-	serverSocketAbstracts[1]=true;
-	
-	/* Initialize the child process IDs: */
-	serverPids[1]=serverPids[0]=pid_t(0);
+	/* Server 1: VRCompositingServer: */
+	servers[1].name="VRCompositingServer";
+	servers[1].displayName="VR compositing server";
+	servers[1].executableName=VRUI_INTERNAL_CONFIG_EXECUTABLEDIR "/RunVRCompositor.sh";
+	servers[1].pid=pid_t(0);
+	servers[1].socketName="VRCompositingServer.socket";
+	servers[1].socketAbstract=true;
+	servers[1].httpPort=8082;
 	
 	/* Ignore SIGPIPE and leave handling of pipe errors to TCP sockets: */
 	Comm::ignorePipeSignals();
@@ -406,13 +485,17 @@ void VRServerLauncher::run(void)
 	eventDispatcher.dispatchEvents();
 	
 	/* Shut down the sub-processes: */
-	for(int i=1;i>=0;--i)
-		if(serverPids[i]!=pid_t(0))
+	for(int serverIndex=1;serverIndex>=0;--serverIndex)
+		{
+		Server& server=servers[serverIndex];
+		if(server.pid!=pid_t(0))
 			{
-			std::cout<<"VRServerLauncher: Shutting down "<<serverDisplayNames[i]<<std::endl;
-			kill(serverPids[i],SIGTERM);
-			collectServer(i,false);
+			std::cout<<"VRServerLauncher: Shutting down "<<server.displayName<<std::endl;
+			kill(server.pid,SIGTERM);
+			collectServer(server,false);
+			server.pid=pid_t(0);
 			}
+		}
 	
 	std::cout<<"VRServerLauncher: Shutting down server launcher"<<std::endl;
 	}
@@ -463,9 +546,10 @@ int main(int argc,char* argv[])
 		for(int i=getdtablesize()-1;i>=0;--i)
 			close(i);
 		
-		/* Redirect stdin, stdout and stderr to log file (this is ugly, but works because descriptors are assigned sequentially): */
+		/* Redirect stdin to /dev/null and stdout and stderr to log file (this is ugly, but works because descriptors are assigned sequentially): */
+		int nullFd=open("/dev/null",O_RDONLY);
 		int logFd=open("/var/log/VRServerLauncher.log",O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
-		if(logFd!=0||dup(logFd)!=1||dup(logFd)!=2)
+		if(nullFd!=0||logFd!=1||dup(logFd)!=2)
 			{
 			/* We can't write an error message at this point, but we can quit: */
 			return 1;
@@ -479,7 +563,8 @@ int main(int argc,char* argv[])
 		serverLauncher.run();
 		
 		/* If the server was daemonized, remove the pid file: */
-		unlink("/var/run/VRServerLauncher.pid");
+		if(daemonize)
+			unlink("/var/run/VRServerLauncher.pid");
 		}
 	catch(const std::runtime_error& err)
 		{
