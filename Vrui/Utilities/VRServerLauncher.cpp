@@ -309,6 +309,7 @@ void VRServerLauncher::newConnectionCallback(Threads::EventDispatcher::IOEvent& 
 					if(success)
 						{
 						serverState->setProperty("pid",int(server.pid));
+						serverState->setProperty("logFileName",thisPtr->logFileDir+"/"+server.name+".log");
 						serverState->setProperty("httpPort",server.httpPort);
 						}
 					}
@@ -351,6 +352,7 @@ void VRServerLauncher::newConnectionCallback(Threads::EventDispatcher::IOEvent& 
 					if(server.pid!=pid_t(0))
 						{
 						serverState->setProperty("pid",int(server.pid));
+						serverState->setProperty("logFileName",thisPtr->logFileDir+"/"+server.name+".log");
 						serverState->setProperty("httpPort",server.httpPort);
 						}
 					}
