@@ -8428,7 +8428,7 @@ Vrui-14.0-001:
   requests on a TCP socket and executes commands or returns information
   as JSON files.
 - Fixed virtual device intialization in OpenVRHost device driver module.
-- Added ServerLauncher to Vrui/Utilities; meta-server to listen to
+- Added VRServerLauncher to Vrui/Utilities; meta-server to listen to
   commands as HTTP POST requests on a TCP socket and run VRDeviceDaemon
   and VRCompositingServer sub-processes in an orderly fashion.
 - Added array keeping track of virtual devices' connected states to
@@ -8438,3 +8438,5 @@ Vrui-14.0-001:
 - Added hapticTick and powerOff commands to VRDeviceServer's HTTP
   interface.
   - Moved getServerStatus code into separate method of same name.
+- Catch errors when connecting a client over the UNIX socket in
+  VRCompositingServer's VRServer class.

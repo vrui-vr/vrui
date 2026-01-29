@@ -489,7 +489,7 @@ endif
 # A meta-server to run the VR tracking server and the VR compositing server:
 #
 
-EXECUTABLES += $(EXEDIR)/ServerLauncher
+EXECUTABLES += $(EXEDIR)/VRServerLauncher
 
 #
 # The Vrui device driver test programs (textual and visual):
@@ -2184,14 +2184,14 @@ TransformCalculator: $(EXEDIR)/TransformCalculator
 # The VR server launcher
 #
 
-SERVERLAUNCHER_SOURCES = Vrui/Utilities/ServerLauncher.cpp
+VRSERVERLAUNCHER_SOURCES = Vrui/Utilities/VRServerLauncher.cpp
 
-$(SERVERLAUNCHER_SOURCES:%.cpp=$(OBJDIR)/%.o): | $(DEPDIR)/config
+$(VRSERVERLAUNCHER_SOURCES:%.cpp=$(OBJDIR)/%.o): | $(DEPDIR)/config
 
-$(EXEDIR)/ServerLauncher: PACKAGES += MYCOMM MYIO MYTHREADS MYMISC
-$(EXEDIR)/ServerLauncher: $(SERVERLAUNCHER_SOURCES:%.cpp=$(OBJDIR)/%.o)
-.PHONY: ServerLauncher
-DeviceTest: $(EXEDIR)/ServerLauncher
+$(EXEDIR)/VRServerLauncher: PACKAGES += MYCOMM MYIO MYTHREADS MYMISC
+$(EXEDIR)/VRServerLauncher: $(VRSERVERLAUNCHER_SOURCES:%.cpp=$(OBJDIR)/%.o)
+.PHONY: VRServerLauncher
+VRServerLauncher: $(EXEDIR)/VRServerLauncher
 
 #
 # The VR Device Daemon test programs:
