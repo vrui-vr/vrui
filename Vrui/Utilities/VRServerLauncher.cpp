@@ -81,7 +81,7 @@ class VRServerLauncher
 	
 	/* Constructors and destructors: */
 	public:
-	VRServerLauncher(int listenPortId);
+	VRServerLauncher(int listenPortId,const std::string& sPidFileDir,const std::string& sLogFileDir);
 	~VRServerLauncher(void);
 	
 	/* Methods: */
@@ -405,32 +405,10 @@ void VRServerLauncher::childTerminatedCallback(Threads::EventDispatcher::SignalE
 		}
 	}
 
-VRServerLauncher::VRServerLauncher(int listenPortId)
-	:listenSocket(listenPortId,5)
+VRServerLauncher::VRServerLauncher(int listenPortId,const std::string& sPidFileDir,const std::string& sLogFileDir)
+	:listenSocket(listenPortId,5),
+	 pidFileDir(sPidFileDir),logFileDir(sLogFileDir)
 	{
-	/* Determine the directories where to write pid and log files: */
-	uid_t userId=geteuid();
-	if(userId==uid_t(0))
-		{
-		/* Store the files in the appropriate system directories if the server is run as root: */
-		pidFileDir="/var/run";
-		logFileDir="/var/log";
-		}
-	else
-		{
-		/* Store the files in the user's home directory: */
-		char* home=getenv("HOME");
-		if(home!=0)
-			pidFileDir=home;
-		else
-			{
-			/* Fall back to the tmp directory if no home directory is set: */
-			pidFileDir="/tmp";
-			}
-		
-		logFileDir=pidFileDir;
-		}
-	
 	/*********************************************************************
 	Initialize the server tracking structures:
 	*********************************************************************/
@@ -513,7 +491,31 @@ int main(int argc,char* argv[])
 	bool daemonize=argc>1&&strcmp(argv[1],"-D")==0;
 	int listenPortId=8080;
 	
+	/* Determine the directories where to write pid and log files: */
+	std::string pidFileDir,logFileDir;
+	if(geteuid()==uid_t(0))
+		{
+		/* Store the files in the appropriate system directories if the server is run as root: */
+		pidFileDir="/var/run";
+		logFileDir="/var/log";
+		}
+	else
+		{
+		/* Store the files in the user's home directory: */
+		char* home=getenv("HOME");
+		if(home!=0)
+			pidFileDir=home;
+		else
+			{
+			/* Fall back to the tmp directory if no home directory is set: */
+			pidFileDir="/tmp";
+			}
+		
+		logFileDir=pidFileDir;
+		}
+
 	/* Turn the server into a daemon if requested: */
+	std::string pidFileName=pidFileDir+"/VRServerLauncher.pid";
 	if(daemonize)
 		{
 		/* Fork once (and exit) to notify shell or caller that the program is done: */
@@ -529,7 +531,7 @@ int main(int argc,char* argv[])
 			std::cout<<"VRServerLauncher: Started daemon with PID "<<childPid<<std::endl;
 			
 			/* Save daemon's process ID to pid file: */
-			int pidFd=open("/var/run/VRServerLauncher.pid",O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
+			int pidFd=open(pidFileName.c_str(),O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
 			if(pidFd>=0)
 				{
 				/* Write process ID: */
@@ -555,7 +557,8 @@ int main(int argc,char* argv[])
 		
 		/* Redirect stdin to /dev/null and stdout and stderr to log file (this is ugly, but works because descriptors are assigned sequentially): */
 		int nullFd=open("/dev/null",O_RDONLY);
-		int logFd=open("/var/log/VRServerLauncher.log",O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
+		std::string logFileName=logFileDir+"/VRServerLauncher.log";
+		int logFd=open(logFileName.c_str(),O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
 		if(nullFd!=0||logFd!=1||dup(logFd)!=2)
 			{
 			/* We can't write an error message at this point, but we can quit: */
@@ -566,17 +569,17 @@ int main(int argc,char* argv[])
 	try
 		{
 		/* Create a server launcher and run it until it shuts down: */
-		VRServerLauncher serverLauncher(listenPortId);
+		VRServerLauncher serverLauncher(listenPortId,pidFileDir,logFileDir);
 		serverLauncher.run();
-		
-		/* If the server was daemonized, remove the pid file: */
-		if(daemonize)
-			unlink("/var/run/VRServerLauncher.pid");
 		}
 	catch(const std::runtime_error& err)
 		{
 		std::cerr<<"VRServerLauncher: Shutting down with exception "<<err.what()<<std::endl;
 		}
+	
+	/* If the server was daemonized, remove the pid file: */
+	if(daemonize)
+		unlink(pidFileName.c_str());
 	
 	return 0;
 	}
