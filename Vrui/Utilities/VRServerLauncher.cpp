@@ -306,6 +306,11 @@ void VRServerLauncher::newConnectionCallback(Threads::EventDispatcher::IOEvent& 
 					servers->addItem(*serverState);
 					serverState->setProperty("name",server.displayName);
 					serverState->setProperty("isRunning",success);
+					if(success)
+						{
+						serverState->setProperty("pid",int(server.pid));
+						serverState->setProperty("httpPort",server.httpPort);
+						}
 					}
 				
 				replyRoot->setProperty("status",success?"Success":"Failed");
