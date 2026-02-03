@@ -60,6 +60,7 @@ class VRServerLauncher
 		std::string socketName; // Name of the server's UNIX domain socket
 		bool socketAbstract; // Flag whether the server's UNIX domain socket is in the abstract namespace
 		int httpPort; // Port number on which the server listens for HTTP requests
+		std::vector<std::string> cleanupFiles; // Files that have to be removed explicitly when a server shits the bed
 		};
 	
 	/* Elements: */
@@ -74,8 +75,10 @@ class VRServerLauncher
 	
 	/* Private methods: */
 	static void signalHandler(int sig); // Signal handler for SIGCHLD
+	bool collectServer(Server& server,bool noWait);
 	bool startServer(Server& server,Comm::TCPPipe& pipe);
-	void collectServer(Server& server,bool noWait);
+	void sendServerStatus(IO::JsonObject& replyRoot);
+	void stopServers(void);
 	static void newConnectionCallback(Threads::EventDispatcher::IOEvent& event);
 	static void childTerminatedCallback(Threads::EventDispatcher::SignalEvent& event);
 	
@@ -105,6 +108,68 @@ void VRServerLauncher::signalHandler(int sig)
 		/* Notify the server launcher that a child terminated: */
 		sigThis->eventDispatcher.signal(sigThis->sigChldKey,0);
 		}
+	}
+
+bool VRServerLauncher::collectServer(VRServerLauncher::Server& server,bool noWait)
+	{
+	bool result=false;
+	
+	/* Collect the server's exit status: */
+	pid_t termPid(0);
+	int waitStatus(0);
+	if(noWait)
+		{
+		/* Collect the server's exit status immediately, in response to receiving a SIGCHLD signal: */
+		termPid=waitpid(server.pid,&waitStatus,WNOHANG);
+		}
+	else
+		{
+		/* Wait for the server to terminate after a kill request, but don't wait for too long: */
+		int numTries=10;
+		while(numTries>0&&(termPid=waitpid(server.pid,&waitStatus,WNOHANG))==0)
+			{
+			/* Wait for a bit, then try again: */
+			usleep(500000);
+			--numTries;
+			}
+		}
+	
+	if(termPid==server.pid)
+		{
+		/* Remove the server's pid file: */
+		std::string pidFileName=pidFileDir+"/"+server.name+".pid";
+		unlink(pidFileName.c_str());
+		
+		/* Print a friendly status message: */
+		if(WIFEXITED(waitStatus))
+			std::cout<<"VRServerLauncher: "<<server.displayName<<" shut down cleanly with exit status "<<WEXITSTATUS(waitStatus)<<std::endl;
+		else if(WIFSIGNALED(waitStatus))
+			{
+			std::cout<<"VRServerLauncher: "<<server.displayName<<" shat the bed with signal "<<WTERMSIG(waitStatus)<<(WCOREDUMP(waitStatus)?" and dumped core":" but did not dump core")<<std::endl;
+			
+			/* Remove files that the server may have left behind: */
+			for(std::vector<std::string>::iterator cfIt=server.cleanupFiles.begin();cfIt!=server.cleanupFiles.end();++cfIt)
+				{
+				if(unlink(cfIt->c_str())==0)
+					std::cout<<"VRServerLauncher: Removed dangling file "<<*cfIt<<std::endl;
+				else if(errno!=ENOENT)
+					std::cout<<"VRServerLauncher: Cannot remove dangling file "<<*cfIt<<"; manual clean-up required"<<std::endl;
+				}
+			}
+		
+		/* Mark the sub-process as terminated: */
+		server.pid=pid_t(0);
+		result=true;
+		}
+	else if(termPid==pid_t(-1))
+		{
+		/* Print an error message and continue: */
+		char strerrorBuffer[1024]; // Long enough according to spec
+		char* errorString=strerror_r(errno,strerrorBuffer,sizeof(strerrorBuffer));
+		std::cout<<"VRServerLauncher: Error "<<errno<<" ("<<errorString<<") while collecting "<<server.displayName<<std::endl;
+		}
+	
+	return result;
 	}
 
 bool VRServerLauncher::startServer(VRServerLauncher::Server& server,Comm::TCPPipe& pipe)
@@ -221,34 +286,62 @@ bool VRServerLauncher::startServer(VRServerLauncher::Server& server,Comm::TCPPip
 			/* Kill the server brutally, because something serious went wrong: */
 			std::cout<<"VRServerLauncher::startServer: Cannot establish connection to "<<server.displayName<<std::endl;
 			kill(server.pid,SIGKILL);
+			collectServer(server,false);
 			}
 		}
 	
 	return result;
 	}
 
-void VRServerLauncher::collectServer(VRServerLauncher::Server& server,bool noWait)
+void VRServerLauncher::sendServerStatus(IO::JsonObject& replyRoot)
 	{
-	/* Collect the server's exit status: */
-	int waitStatus(0);
-	pid_t termPid=waitpid(server.pid,&waitStatus,noWait?WNOHANG:0x0);
-	if(termPid==server.pid)
+	/* Add an array with server running flags and PIDs to the reply structure: */
+	IO::JsonArrayPointer serverStates=new IO::JsonArray;
+	replyRoot.setProperty("servers",*serverStates);
+	
+	for(int serverIndex=0;serverIndex<2;++serverIndex)
 		{
-		/* Print a friendly status message: */
-		if(WIFEXITED(waitStatus))
-			std::cout<<"VRServerLauncher: "<<server.displayName<<" shut down cleanly with exit status "<<WEXITSTATUS(waitStatus)<<std::endl;
-		else if(WIFSIGNALED(waitStatus))
-			std::cout<<"VRServerLauncher: "<<server.displayName<<" shat the bed with signal "<<WTERMSIG(waitStatus)<<(WCOREDUMP(waitStatus)?" and dumped core":" but did not dump core")<<std::endl;
+		Server& server=servers[serverIndex];
 		
-		/* Mark the sub-process as terminated: */
-		server.pid=pid_t(0);
+		/* Add an entry for this server's state to the reply structure: */
+		IO::JsonObjectPointer serverState=new IO::JsonObject;
+		serverStates->addItem(*serverState);
+		serverState->setProperty("name",server.displayName);
+		serverState->setProperty("isRunning",server.pid!=pid_t(0));
+		if(server.pid!=pid_t(0))
+			{
+			serverState->setProperty("pid",int(server.pid));
+			serverState->setProperty("logFileName",logFileDir+"/"+server.name+".log");
+			serverState->setProperty("httpPort",server.httpPort);
+			}
 		}
-	else if(termPid==pid_t(-1))
+	}
+
+void VRServerLauncher::stopServers(void)
+	{
+	/* Stop the two server sub-processes: */
+	bool waitABit=false;
+	for(int serverIndex=1;serverIndex>=0;--serverIndex)
 		{
-		/* Print an error message and continue: */
-		char strerrorBuffer[1024]; // Long enough according to spec
-		char* errorString=strerror_r(errno,strerrorBuffer,sizeof(strerrorBuffer));
-		std::cout<<"VRServerLauncher: Error "<<errno<<" ("<<errorString<<") while collecting "<<server.displayName<<std::endl;
+		Server& server=servers[serverIndex];
+		
+		if(server.pid!=pid_t(0))
+			{
+			std::cout<<"VRServerLauncher: Stopping "<<server.displayName<<std::endl;
+			if(waitABit)
+				usleep(500000);
+			kill(server.pid,SIGTERM);
+			if(!collectServer(server,false))
+				{
+				/* The server did not shut down cleanly; kill it: */
+				std::cout<<"VRServerLauncher: "<<server.displayName<<" did not shut down; killing process"<<std::endl;
+				kill(server.pid,SIGKILL);
+				collectServer(server,false);
+				}
+			
+			/* Wait a bit between shutting down servers: */
+			waitABit=true;
+			}
 		}
 	}
 
@@ -287,11 +380,6 @@ void VRServerLauncher::newConnectionCallback(Threads::EventDispatcher::IOEvent& 
 				{
 				bool success=true;
 				
-				/* Add an array with server running flags to the reply structure: */
-				replyRoot=new IO::JsonObject;
-				IO::JsonArrayPointer servers=new IO::JsonArray;
-				replyRoot->setProperty("servers",*servers);
-				
 				/* Start the two server sub-processes: */
 				for(int serverIndex=0;serverIndex<2&&success;++serverIndex)
 					{
@@ -300,62 +388,24 @@ void VRServerLauncher::newConnectionCallback(Threads::EventDispatcher::IOEvent& 
 					/* Start the server if it isn't already running: */
 					if(server.pid==pid_t(0))
 						success=thisPtr->startServer(server,pipe);
-					
-					/* Add an entry for this server's state to the reply structure: */
-					IO::JsonObjectPointer serverState=new IO::JsonObject;
-					servers->addItem(*serverState);
-					serverState->setProperty("name",server.displayName);
-					serverState->setProperty("isRunning",success);
-					if(success)
-						{
-						serverState->setProperty("pid",int(server.pid));
-						serverState->setProperty("logFileName",thisPtr->logFileDir+"/"+server.name+".log");
-						serverState->setProperty("httpPort",server.httpPort);
-						}
 					}
+				
+				/* Send the resulting server status: */
+				thisPtr->sendServerStatus(*replyRoot);
 				
 				replyRoot->setProperty("status",success?"Success":"Failed");
 				}
 			else if(nvl.front().value=="stopServers")
 				{
-				/* Stop the two server sub-processes: */
-				for(int serverIndex=1;serverIndex>=0;--serverIndex)
-					{
-					Server& server=thisPtr->servers[serverIndex];
-					
-					if(server.pid!=pid_t(0))
-						{
-						std::cout<<"VRServerLauncher: Stopping "<<server.displayName<<std::endl;
-						kill(server.pid,SIGTERM);
-						thisPtr->collectServer(server,false);
-						}
-					}
+				/* Shut down the server sub-processes: */
+				thisPtr->stopServers();
 				
 				replyRoot->setProperty("status","Success");
 				}
 			else if(nvl.front().value=="getServerStatus")
 				{
-				/* Add an array with server running flags and PIDs to the reply structure: */
-				replyRoot=new IO::JsonObject;
-				IO::JsonArrayPointer servers=new IO::JsonArray;
-				replyRoot->setProperty("servers",*servers);
-				
-				for(int serverIndex=0;serverIndex<2;++serverIndex)
-					{
-					Server& server=thisPtr->servers[serverIndex];
-					
-					/* Add an entry for this server's state to the reply structure: */
-					IO::JsonObjectPointer serverState=new IO::JsonObject;
-					servers->addItem(*serverState);
-					serverState->setProperty("name",server.displayName);
-					serverState->setProperty("isRunning",server.pid!=pid_t(0));
-					if(server.pid!=pid_t(0))
-						{
-						serverState->setProperty("pid",int(server.pid));
-						serverState->setProperty("logFileName",thisPtr->logFileDir+"/"+server.name+".log");
-						serverState->setProperty("httpPort",server.httpPort);
-						}
-					}
+				/* Send the current server status: */
+				thisPtr->sendServerStatus(*replyRoot);
 				
 				replyRoot->setProperty("status","Success");
 				}
@@ -421,6 +471,7 @@ VRServerLauncher::VRServerLauncher(int listenPortId,const std::string& sPidFileD
 	servers[0].socketName="VRDeviceDaemon.socket";
 	servers[0].socketAbstract=true;
 	servers[0].httpPort=8081;
+	servers[0].cleanupFiles.push_back("/dev/shm/VRDeviceManagerDeviceState.shmem");
 	
 	/* Server 1: VRCompositingServer: */
 	servers[1].name="VRCompositingServer";
@@ -430,6 +481,7 @@ VRServerLauncher::VRServerLauncher(int listenPortId,const std::string& sPidFileD
 	servers[1].socketName="VRCompositingServer.socket";
 	servers[1].socketAbstract=true;
 	servers[1].httpPort=8082;
+	servers[1].cleanupFiles.push_back("/dev/shm/VRCompositingServer.shmem");
 	
 	/* Ignore SIGPIPE and leave handling of pipe errors to TCP sockets: */
 	Comm::ignorePipeSignals();
@@ -469,18 +521,8 @@ void VRServerLauncher::run(void)
 	std::cout<<"VRServerLauncher: Servicing HTTP POST requests on TCP port 8080"<<std::endl;
 	eventDispatcher.dispatchEvents();
 	
-	/* Shut down the sub-processes: */
-	for(int serverIndex=1;serverIndex>=0;--serverIndex)
-		{
-		Server& server=servers[serverIndex];
-		if(server.pid!=pid_t(0))
-			{
-			std::cout<<"VRServerLauncher: Shutting down "<<server.displayName<<std::endl;
-			kill(server.pid,SIGTERM);
-			collectServer(server,false);
-			server.pid=pid_t(0);
-			}
-		}
+	/* Shut down the server sub-processes: */
+	stopServers();
 	
 	std::cout<<"VRServerLauncher: Shutting down server launcher"<<std::endl;
 	}
