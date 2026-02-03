@@ -8493,3 +8493,5 @@ Vrui-14.1-001:
   - Moved getServerStatus code into separate method of same name.
 - Catch errors when connecting a client over the UNIX socket in
   VRCompositingServer's VRServer class.
+- Catch exceptions in the main compositor thread to cleanly exit when,
+  for example, the VR display gets disconnected.

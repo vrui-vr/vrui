@@ -60,6 +60,7 @@ class VRServer
 	/* The VR compositor: */
 	VRCompositor compositor; // The VR compositor object
 	Threads::Thread compositorThread; // Thread running the compositor's main loop
+	volatile bool compositorCrashed; // Flag if the compositor crashed due to an unhandled exception
 	
 	/* A UNIX socket and pipe to communicate with VR application clients: */
 	Comm::ListeningUNIXSocket listenSocket; // UNIX socket listening for incoming client connections
@@ -87,6 +88,10 @@ class VRServer
 	/* Methods: */
 	void run(void); // Runs the server until interrupted
 	void stop(void); // Stops the server
+	bool didCrash(void) const // Returns true if the compositor crashed due to an unhandled exception
+		{
+		return compositorCrashed;
+		}
 	};
 
 /*************************
@@ -303,15 +308,24 @@ void VRServer::vsyncSignalCallback(Threads::EventDispatcher::SignalEvent& event)
 
 void* VRServer::compositorThreadMethod(void)
 	{
-	/* Run the compositor's main loop: */
-	compositor.run(vsyncSignalListener);
+	try
+		{
+		/* Run the compositor's main loop: */
+		compositor.run(vsyncSignalListener);
+		}
+	catch(const std::runtime_error& err)
+		{
+		std::cout<<"Shutting down compositor due to exception "<<err.what()<<std::endl;
+		compositorCrashed=true;
+		dispatcher.stop();
+		}
 	
 	return 0;
 	}
 
 VRServer::VRServer(const std::string& vrDeviceServerSocketName,bool vrDeviceServerSocketAbstract,int httpListenPortId,Vulkan::Instance& instance,const std::string& hmdName,double hmdFrameRate)
 	:vrDeviceClient(dispatcher,vrDeviceServerSocketName.c_str(),vrDeviceServerSocketAbstract),
-	 compositor(dispatcher,vrDeviceClient,instance,hmdName,hmdFrameRate),
+	 compositor(dispatcher,vrDeviceClient,instance,hmdName,hmdFrameRate),compositorCrashed(false),
 	 listenSocket(VRSERVER_SOCKET_NAME,5,VRSERVER_SOCKET_ABSTRACT),
 	 httpListenSocket(httpListenPortId,5),
 	 clientPipe(0)
@@ -501,6 +515,7 @@ int main(int argc,char* argv[])
 			std::cout<<"Running server main loop"<<std::endl;
 			server.run();
 			std::cout<<"Server main loop exited"<<std::endl;
+			result=server.didCrash()?1:0;
 			
 			serverPtr=0;
 			}
