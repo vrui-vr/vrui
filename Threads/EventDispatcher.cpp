@@ -41,12 +41,12 @@ namespace {
 Helper functions:
 ****************/
 
-EventDispatcher* stopDispatcher=0; // Event dispatcher to be stopped when a SIGINT or SIGTERM occur
+EventDispatcher* stopDispatcher=0; // Event dispatcher to be stopped when a SIGHUP, SIGINT, or SIGTERM occur
 
 void stopSignalHandler(int signum)
 	{
 	/* Stop the dispatcher: */
-	if(stopDispatcher!=0&&(signum==SIGINT||signum==SIGTERM))
+	if(stopDispatcher!=0&&(signum==SIGHUP||signum==SIGINT||signum==SIGTERM))
 		stopDispatcher->stop();
 	}
 
@@ -1110,12 +1110,19 @@ void EventDispatcher::stopOnSignals(void)
 	/* Register this dispatcher: */
 	stopDispatcher=this;
 	
-	/* Intercept SIGINT and SIGTERM: */
+	/* Intercept SIGHUP, SIGINT, and SIGTERM: */
+	struct sigaction sigHupAction;
+	memset(&sigHupAction,0,sizeof(struct sigaction));
+	sigHupAction.sa_handler=stopSignalHandler;
+	if(sigaction(SIGHUP,&sigHupAction,0)<0)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot intercept SIGHUP");
+	
 	struct sigaction sigIntAction;
 	memset(&sigIntAction,0,sizeof(struct sigaction));
 	sigIntAction.sa_handler=stopSignalHandler;
 	if(sigaction(SIGINT,&sigIntAction,0)<0)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot intercept SIGINT");
+	
 	struct sigaction sigTermAction;
 	memset(&sigTermAction,0,sizeof(struct sigaction));
 	sigTermAction.sa_handler=stopSignalHandler;

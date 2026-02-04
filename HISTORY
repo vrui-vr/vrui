@@ -8495,3 +8495,5 @@ Vrui-14.1-001:
   VRCompositingServer's VRServer class.
 - Catch exceptions in the main compositor thread to cleanly exit when,
   for example, the VR display gets disconnected.
+- Intercept SIGHUP in addition to SIGINT and SIGTERM to cleanly shut
+  down a Threads::EventDispatcher.
