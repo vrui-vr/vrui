@@ -1,7 +1,7 @@
 /***********************************************************************
 CommandLineParser - Helper class to simplify parsing and processing
 application command lines.
-Copyright (c) 2025 Oliver Kreylos
+Copyright (c) 2025-2026 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -56,6 +56,7 @@ class CommandLineParser
 	
 	/* Concrete argument handler classes: */
 	private:
+	class InvalidArgument;
 	class AddToListArgument;
 	class CallbackArgument;
 	

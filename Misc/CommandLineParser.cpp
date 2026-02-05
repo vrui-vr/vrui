@@ -31,6 +31,21 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 namespace Misc {
 
+/*******************************************************
+Declaration of class CommandLineParser::InvalidArgument:
+*******************************************************/
+
+class CommandLineParser::InvalidArgument:public CommandLineParser::Argument
+	{
+	/* Methods from class Argument: */
+	public:
+	virtual void handle(const char* arg)
+		{
+		/* Throw an exception: */
+		throw Misc::makeStdErr(0,"Invalid argument %s",arg);
+		}
+	};
+
 /*********************************************************
 Declaration of class CommandLineParser::AddToListArgument:
 *********************************************************/
@@ -304,7 +319,7 @@ void CommandLineParser::printHelp(void)
 
 CommandLineParser::CommandLineParser(void)
 	:longOptions(17),shortOptions(17),
-	 argument(0),
+	 argument(new InvalidArgument),
 	 appName(0),helpPrinted(false)
 	{
 	/* Create a help option object and add it to the set: */
