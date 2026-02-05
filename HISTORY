@@ -8497,3 +8497,25 @@ Vrui-14.1-001:
   for example, the VR display gets disconnected.
 - Intercept SIGHUP in addition to SIGINT and SIGTERM to cleanly shut
   down a Threads::EventDispatcher.
+- Fixed help text formatting in Misc::CommandLineParser.
+- Behavior change in Misc::CommandLineParser:
+  - By default, or when failOnArguments() is called, throw an exception
+    on unhandled non-option command line arguments.
+  - When stopOnArguments() is called, stop parsing on non-option command
+    line arguments to let caller handle them (old default behavior).
+- RunOpenVRTracker.sh and RunVRCompositor.sh scripts use exec to run the
+  actual server process and pass the script's command line to the
+  process.
+  - Fix makefile dependencies for RunOpenVRTracker.sh.
+- Major rewrites to VRServerLauncher.
+- Changes to VRCompositingServer:
+  - Add command line option to select a TCP port on which to listen for
+    HTTP POST requests.
+  - Use Misc::CommandLineParser.
+  - Move signal handling to Threads::EventDispatcher class.
+- Changes to VRDeviceDaemon:
+  - Add command line option to override httpPort setting in
+    configuration file.
+  - Add command line options to select PID and log file names when
+    daemonized.
+  - Use Misc::CommandLineParser.

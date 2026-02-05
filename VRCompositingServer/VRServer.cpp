@@ -24,11 +24,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <string.h>
 #include <unistd.h>
 #include <termios.h>
-#include <signal.h>
 #include <string>
 #include <iostream>
 #include <Misc/SizedTypes.h>
 #include <Misc/SelfDestructPointer.h>
+#include <Misc/CommandLineParser.h>
 #include <Threads/Thread.h>
 #include <Threads/EventDispatcher.h>
 #include <IO/JsonEntityTypes.h>
@@ -65,7 +65,7 @@ class VRServer
 	/* A UNIX socket and pipe to communicate with VR application clients: */
 	Comm::ListeningUNIXSocket listenSocket; // UNIX socket listening for incoming client connections
 	Comm::UNIXPipe* clientPipe; // UNIX pipe connected to the current client
-	Comm::ListeningTCPSocket httpListenSocket; // TCP socket listening for incoming HTTP requests
+	Comm::ListeningSocketPtr httpListenSocket; // Optional TCP socket listening for incoming HTTP requests
 	Threads::EventDispatcher::ListenerKey stdioListener; // Key for listener for standard input
 	Threads::EventDispatcher::ListenerKey listenSocketListener; // Key for listener for listening UNIX socket
 	Threads::EventDispatcher::ListenerKey httpListenSocketListener; // Key for listener for listening TCP socket
@@ -202,7 +202,7 @@ void VRServer::httpListenSocketCallback(Threads::EventDispatcher::IOEvent& event
 	try
 		{
 		/* Open a new TCP connection to the HTTP client: */
-		Comm::PipePtr pipe(httpListenSocket.accept());
+		Comm::PipePtr pipe(httpListenSocket->accept());
 		
 		/* Parse an HTTP POST request: */
 		Comm::HttpPostRequest request(*pipe);
@@ -327,14 +327,26 @@ VRServer::VRServer(const std::string& vrDeviceServerSocketName,bool vrDeviceServ
 	:vrDeviceClient(dispatcher,vrDeviceServerSocketName.c_str(),vrDeviceServerSocketAbstract),
 	 compositor(dispatcher,vrDeviceClient,instance,hmdName,hmdFrameRate),compositorCrashed(false),
 	 listenSocket(VRSERVER_SOCKET_NAME,5,VRSERVER_SOCKET_ABSTRACT),
-	 httpListenSocket(httpListenPortId,5),
 	 clientPipe(0)
 	{
 	/* Set up the event dispatcher: */
 	stdioListener=dispatcher.addIOEventListener(STDIN_FILENO,Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::stdioCallback>,this);
 	listenSocketListener=dispatcher.addIOEventListener(listenSocket.getFd(),Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::listenSocketCallback>,this);
-	httpListenSocketListener=dispatcher.addIOEventListener(httpListenSocket.getFd(),Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::httpListenSocketCallback>,this);
 	vsyncSignalListener=dispatcher.addSignalListener(Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::vsyncSignalCallback>,this);
+	
+	/* Check if we should listen for HTTP POST requests: */
+	if(httpListenPortId>=0)
+		{
+		/* Create the HTTP socket and start listening on it: */
+		httpListenSocket=new Comm::ListeningTCPSocket(httpListenPortId,5);
+		httpListenSocketListener=dispatcher.addIOEventListener(httpListenSocket->getFd(),Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::httpListenSocketCallback>,this);
+		}
+	
+	/* Ignore SIGPIPE and leave handling of pipe errors to TCP sockets: */
+	Comm::ignorePipeSignals();
+	
+	/* Stop the launcher when a signal is received: */
+	dispatcher.stopOnSignals();
 	
 	/* Start running the VR compositor in a background thread: */
 	compositorThread.start(this,&VRServer::compositorThreadMethod);
@@ -366,89 +378,37 @@ void VRServer::stop(void)
 Main entry point:
 ****************/
 
-VRServer* serverPtr=0; // Pointer to the VR compositing server
-
-void signalHandler(int signalId)
-	{
-	switch(signalId)
-		{
-		case SIGHUP:
-		case SIGINT:
-		case SIGTERM:
-			/* Shut down the VR compositing server: */
-			if(serverPtr!=0)
-				serverPtr->stop();
-			
-			break;
-		}
-	
-	return;
-	}
-
 int main(int argc,char* argv[])
 	{
 	/* Parse the command line: */
+	Misc::CommandLineParser cmdLine;
+	cmdLine.setDescription("Server to control the display of a VR head-mounted display and compose and reproject views rendered by client VR applications.");
 	bool debug=false;
+	cmdLine.addEnableOption("debug","d",debug,"Enables debugging mode on the Vulkan 3D graphics API.");
 	bool listDisplays=false;
-	const char* deviceDaemonSocketName=VRDEVICEDAEMON_SOCKET_NAME;
+	cmdLine.addEnableOption("listDisplays","ld",listDisplays,"Lists all Vulkan displays and their video modes.");
+	std::string deviceDaemonSocketName(VRDEVICEDAEMON_SOCKET_NAME);
+	cmdLine.addValueOption("socket","s",deviceDaemonSocketName,"<UNIX socket name>","Sets the name of the VRDeviceDaemon's UNIX socket.");
 	bool deviceDaemonSocketAbstract=VRDEVICEDAEMON_SOCKET_ABSTRACT;
-	int httpListenPortId=8082;
-	const char* hmdName=VRSERVER_DEFAULT_HMD;
+	cmdLine.addEnableOption("abstract","a",deviceDaemonSocketAbstract,"Puts the VRDeviceDaemon's socket name in the abstract namespace.");
+	cmdLine.addDisableOption("concrete","c",deviceDaemonSocketAbstract,"Puts the VRDeviceDaemon's socket name in the concrete namespace.");
+	int httpListenPortId=-1;
+	cmdLine.addValueOption("httpPort","p",httpListenPortId,"<TCP port number>","Sets the port of the TCP socket on which the VR compositor listens for HTTP POST requests.");
+	std::string hmdName(VRSERVER_DEFAULT_HMD);
+	cmdLine.addValueOption("hmd","hmd",hmdName,"<Vulkan display name>","Sets the name of the VR HMD / direct-mode display to be controlled.");
 	double hmdFrameRate=VRSERVER_DEFAULT_HZ;
-	for(int argi=1;argi<argc;++argi)
+	cmdLine.addValueOption("frameRate","f",hmdFrameRate,"<frame rate in Hz>","Sets the frame rate of the VR HMD / direct-mode display.");
+	try
 		{
-		if(argv[argi][0]=='-')
-			{
-			if(strcasecmp(argv[argi]+1,"debug")==0)
-				debug=true;
-			else if(strcasecmp(argv[argi]+1,"listDisplays")==0||strcasecmp(argv[argi]+1,"ld")==0)
-				listDisplays=true;
-			else if(strcasecmp(argv[argi]+1,"socket")==0)
-				{
-				++argi;
-				deviceDaemonSocketName=argv[argi];
-				}
-			else if(strcasecmp(argv[argi]+1,"abstract")==0)
-				deviceDaemonSocketAbstract=true;
-			else if(strcasecmp(argv[argi]+1,"concrete")==0)
-				deviceDaemonSocketAbstract=false;
-			else if(strcasecmp(argv[argi]+1,"httpPort")==0)
-				{
-				++argi;
-				httpListenPortId=atoi(argv[argi]);
-				}
-			else if(strcasecmp(argv[argi]+1,"hmd")==0)
-				{
-				++argi;
-				hmdName=argv[argi];
-				}
-			else if(strcasecmp(argv[argi]+1,"frameRate")==0)
-				{
-				++argi;
-				hmdFrameRate=atof(argv[argi]);
-				}
-			}
+		cmdLine.parse(argv,argv+argc);
 		}
-	
-	/* Install signal handlers for SIGHUP, SIGINT, and SIGTERM to exit cleanly: */
-	struct sigaction sigHupAction;
-	sigHupAction.sa_handler=signalHandler;
-	sigemptyset(&sigHupAction.sa_mask);
-	sigHupAction.sa_flags=0x0;
-	sigaction(SIGHUP,&sigHupAction,0);
-	struct sigaction sigIntAction;
-	sigIntAction.sa_handler=signalHandler;
-	sigemptyset(&sigIntAction.sa_mask);
-	sigIntAction.sa_flags=0x0;
-	sigaction(SIGINT,&sigIntAction,0);
-	struct sigaction sigTermAction;
-	sigTermAction.sa_handler=signalHandler;
-	sigemptyset(&sigTermAction.sa_mask);
-	sigTermAction.sa_flags=0x0;
-	sigaction(SIGTERM,&sigTermAction,0);
-	
-	/* Ignore SIGPIPE and leave handling of pipe errors to TCP sockets: */
-	Comm::ignorePipeSignals();
+	catch(const std::runtime_error& err)
+		{
+		std::cerr<<"VRCompositingServer: "<<err.what()<<std::endl;
+		return 1;
+		}
+	if(cmdLine.hadHelp())
+		return 0;
 	
 	/* Disable line buffering on stdin: */
 	struct termios originalTerm;
@@ -509,15 +469,12 @@ int main(int argc,char* argv[])
 			{
 			/* Create a VR server object: */
 			VRServer server(deviceDaemonSocketName,deviceDaemonSocketAbstract,httpListenPortId,instance,hmdName,hmdFrameRate);
-			serverPtr=&server;
 			
 			/* Run the server's main loop until interrupted: */
 			std::cout<<"Running server main loop"<<std::endl;
 			server.run();
 			std::cout<<"Server main loop exited"<<std::endl;
 			result=server.didCrash()?1:0;
-			
-			serverPtr=0;
 			}
 		}
 	catch(const std::runtime_error& err)

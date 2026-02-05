@@ -35,6 +35,8 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <stdexcept>
 #include <iostream>
 #include <Misc/StdError.h>
+#include <Misc/PrintInteger.h>
+#include <Misc/CommandLineParser.h>
 #include <Threads/EventDispatcher.h>
 #include <IO/ValueSource.h>
 #include <IO/OStream.h>
@@ -56,6 +58,7 @@ class VRServerLauncher
 		std::string name; // Short server name, used for pid and log files
 		std::string displayName; // Display name for the server
 		std::string executableName; // Path to the server's executable
+		std::vector<std::string> arguments; // Arguments to be passed on the server's command line
 		pid_t pid; // Process ID for a running server, or 0
 		std::string socketName; // Name of the server's UNIX domain socket
 		bool socketAbstract; // Flag whether the server's UNIX domain socket is in the abstract namespace
@@ -203,6 +206,8 @@ bool VRServerLauncher::startServer(VRServerLauncher::Server& server,Comm::TCPPip
 		char* argv[20];
 		int argc=0;
 		argv[argc++]=const_cast<char*>(server.executableName.c_str());
+		for(std::vector<std::string>::iterator argIt=server.arguments.begin();argIt!=server.arguments.end();++argIt)
+			argv[argc++]=const_cast<char*>(argIt->c_str());
 		argv[argc]=0;
 		if(execv(argv[0],argv)<0)
 			{
@@ -459,9 +464,13 @@ VRServerLauncher::VRServerLauncher(int listenPortId,const std::string& sPidFileD
 	:listenSocket(listenPortId,5),
 	 pidFileDir(sPidFileDir),logFileDir(sLogFileDir)
 	{
+	std::cout<<"VRServerLauncher: Starting server launcher"<<std::endl;
+	
 	/*********************************************************************
 	Initialize the server tracking structures:
 	*********************************************************************/
+	
+	char httpPortBuffer[9];
 	
 	/* Server 0: VRDeviceDaemon: */
 	servers[0].name="VRDeviceDaemon";
@@ -470,7 +479,9 @@ VRServerLauncher::VRServerLauncher(int listenPortId,const std::string& sPidFileD
 	servers[0].pid=pid_t(0);
 	servers[0].socketName="VRDeviceDaemon.socket";
 	servers[0].socketAbstract=true;
-	servers[0].httpPort=8081;
+	servers[0].httpPort=listenPortId+1;
+	servers[0].arguments.push_back("--httpPort");
+	servers[0].arguments.push_back(Misc::print(servers[0].httpPort,httpPortBuffer+8));
 	servers[0].cleanupFiles.push_back("/dev/shm/VRDeviceManagerDeviceState.shmem");
 	
 	/* Server 1: VRCompositingServer: */
@@ -480,7 +491,9 @@ VRServerLauncher::VRServerLauncher(int listenPortId,const std::string& sPidFileD
 	servers[1].pid=pid_t(0);
 	servers[1].socketName="VRCompositingServer.socket";
 	servers[1].socketAbstract=true;
-	servers[1].httpPort=8082;
+	servers[1].httpPort=listenPortId+2;
+	servers[1].arguments.push_back("--httpPort");
+	servers[1].arguments.push_back(Misc::print(servers[1].httpPort,httpPortBuffer+8));
 	servers[1].cleanupFiles.push_back("/dev/shm/VRCompositingServer.shmem");
 	
 	/* Ignore SIGPIPE and leave handling of pipe errors to TCP sockets: */
@@ -494,6 +507,8 @@ VRServerLauncher::VRServerLauncher(int listenPortId,const std::string& sPidFileD
 	
 	/* Create a signal to receive notifications when one of the sub-processes terminates: */
 	sigChldKey=eventDispatcher.addSignalListener(childTerminatedCallback,this);
+	
+	std::cout<<"VRServerLauncher: Servicing HTTP POST requests on TCP port "<<listenPortId<<std::endl;
 	}
 
 VRServerLauncher::~VRServerLauncher(void)
@@ -503,12 +518,12 @@ VRServerLauncher::~VRServerLauncher(void)
 	
 	/* Delete the sub-process termination signals: */
 	eventDispatcher.removeSignalListener(sigChldKey);
+	
+	std::cout<<"VRServerLauncher: Shutting down server launcher"<<std::endl;
 	}
 
 void VRServerLauncher::run(void)
 	{
-	std::cout<<"VRServerLauncher: Starting server launcher"<<std::endl;
-	
 	/* Catch SIGCHLD signals: */
 	sigThis=this;
 	struct sigaction sigChldAction;
@@ -518,20 +533,32 @@ void VRServerLauncher::run(void)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot intercept SIGCHLD");
 	
 	/* Dispatch I/O events until the dispatcher is shut down: */
-	std::cout<<"VRServerLauncher: Servicing HTTP POST requests on TCP port 8080"<<std::endl;
 	eventDispatcher.dispatchEvents();
 	
 	/* Shut down the server sub-processes: */
 	stopServers();
-	
-	std::cout<<"VRServerLauncher: Shutting down server launcher"<<std::endl;
 	}
 
 int main(int argc,char* argv[])
 	{
 	/* Parse the command line: */
-	bool daemonize=argc>1&&strcmp(argv[1],"-D")==0;
+	Misc::CommandLineParser cmdLine;
+	cmdLine.setDescription("Server to start and monitor VRDeviceDaemon (Vrui VR tracking driver) and VRCompositingServer (Vrui HMD display driver) servers.");
 	int listenPortId=8080;
+	cmdLine.addValueOption("httpPort","p",listenPortId,"<TCP port number>","Number of TCP port on which to listen for HTTP POST requests.");
+	bool daemonize=false;
+	cmdLine.addEnableOption("daemonize","D",daemonize,"Turn the server into a daemon after start-up.");
+	try
+		{
+		cmdLine.parse(argv,argv+argc);
+		}
+	catch(const std::runtime_error& err)
+		{
+		std::cerr<<"VRServerLauncher: "<<err.what()<<std::endl;
+		return 1;
+		}
+	if(cmdLine.hadHelp())
+		return 0;
 	
 	/* Determine the directories where to write pid and log files: */
 	std::string pidFileDir,logFileDir;
