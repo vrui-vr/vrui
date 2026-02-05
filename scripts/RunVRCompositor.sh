@@ -1,7 +1,7 @@
 #!/bin/bash
 ########################################################################
 # Script to run Vrui's VR compositing server.
-# Copyright (c) 2023-2024 Oliver Kreylos
+# Copyright (c) 2023-2026 Oliver Kreylos
 # 
 # This file is part of the Vrui VR Compositing Server (VRCompositor).
 # 
@@ -33,4 +33,4 @@ CMDLINE=(-hmd "${HMD_TYPE}")
 CMDLINE+=(-frameRate "${HMD_REFRESH}")
 
 # Run VRCompositingServer:
-"$VRUIBINDIR/VRCompositingServer" "${CMDLINE[@]}"
+exec "$VRUIBINDIR/VRCompositingServer" "${CMDLINE[@]}" "${@}"

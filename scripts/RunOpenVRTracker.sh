@@ -3,7 +3,7 @@
 # Script to set up an environment to run VRDeviceDaemon's OpenVRHost
 # device driver module, to receive tracking data for OpenVR / Lighthouse
 # tracked devices.
-# Copyright (c) 2016-2023 Oliver Kreylos
+# Copyright (c) 2016-2026 Oliver Kreylos
 #
 # This file is part of the Vrui VR Device Driver Daemon
 # (VRDeviceDaemon).
@@ -44,8 +44,9 @@ CMDLINE+=(-mergeConfig "VRDevices-${HMD_TYPE}")
 CMDLINE+=(-mergeConfig "VRDevices-${CONTROLLER_TYPE}")
 
 # Run VRDeviceDaemon:
-( LD_LIBRARY_PATH=${STEAMLDPATH} "${VRUIBINDIR}/VRDeviceDaemon" "${CMDLINE[@]}" )
+export LD_LIBRARY_PATH=${STEAMLDPATH}
+exec "${VRUIBINDIR}/VRDeviceDaemon" "${CMDLINE[@]}" "${@}"
 
-# Use the following command if things are working, and you don't want to
-# see all those "Broken pipe" messages:
-# ( LD_LIBRARY_PATH=${STEAMLDPATH} "${VRUIBINDIR}/VRDeviceDaemon" "${CMDLINE[@]}" 2>&1 | fgrep -v ": Broken pipe" )
+# Replace the above with the following command if things are working,
+# and you don't want to see all those "Broken pipe" messages:
+# exec "${VRUIBINDIR}/VRDeviceDaemon" "${CMDLINE[@]}" "${@}" 2>&1 | fgrep -v ": Broken pipe" )

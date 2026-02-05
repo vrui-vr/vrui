@@ -2075,13 +2075,13 @@ VRCalibrators: $(VRCALIBRATORS)
 
 ifneq ($(SYSTEM_HAVE_OPENVR),0)
 $(EXEDIR)/RunOpenVRTracker.sh: | $(DEPDIR)/config
-$(EXEDIR)/RunOpenVRTracker.sh: VRDeviceDaemon/VRDevices/OpenVRHost-Config.h
+$(EXEDIR)/RunOpenVRTracker.sh: $(VRUI_SCRIPTDIR)/RunVRCompositor.sh $(DEPDIR)/Configure-Vrui
 	@echo Creating helper script to run OpenVRHost tracking device driver...
 	@cp $(VRUI_SCRIPTDIR)/RunOpenVRTracker.sh $(EXEDIR)/RunOpenVRTracker.sh
 	@sed -i -e 's@STEAMDIR=.*@STEAMDIR=$(subst $(HOME),$$HOME,$(STEAMDIR))@' $(EXEDIR)/RunOpenVRTracker.sh
-	@sed -i -e 's@RUNTIMEDIR1=.*@RUNTIMEDIR1=$(subst $(STEAMDIR),$$STEAMDIR,$(STEAMRUNTIMEDIR1))@' $(EXEDIR)/RunOpenVRTracker.sh
-	@sed -i -e 's@RUNTIMEDIR2=.*@RUNTIMEDIR2=$(subst $(STEAMDIR),$$STEAMDIR,$(STEAMRUNTIMEDIR2))@' $(EXEDIR)/RunOpenVRTracker.sh
-	@sed -i -e 's@STEAMVRDIR=.*@STEAMVRDIR=$(subst $(STEAMDIR),$$STEAMDIR,$(STEAMVRDIR))@' $(EXEDIR)/RunOpenVRTracker.sh
+	@sed -i -e 's@RUNTIMEDIR1=.*@RUNTIMEDIR1=$(subst $(STEAMDIR),$${STEAMDIR},$(STEAMRUNTIMEDIR1))@' $(EXEDIR)/RunOpenVRTracker.sh
+	@sed -i -e 's@RUNTIMEDIR2=.*@RUNTIMEDIR2=$(subst $(STEAMDIR),$${STEAMDIR},$(STEAMRUNTIMEDIR2))@' $(EXEDIR)/RunOpenVRTracker.sh
+	@sed -i -e 's@STEAMVRDIR=.*@STEAMVRDIR=$(subst $(STEAMDIR),$${STEAMDIR},$(STEAMVRDIR))@' $(EXEDIR)/RunOpenVRTracker.sh
 	@sed -i -e 's@VRUIBINDIR=.*@VRUIBINDIR=$(EXECUTABLEINSTALLDIR)@' $(EXEDIR)/RunOpenVRTracker.sh
 	@sed -i -e 's@VRUIETCDIR=.*@VRUIETCDIR=$(ETCINSTALLDIR)@' $(EXEDIR)/RunOpenVRTracker.sh
 	@chmod a+x $(EXEDIR)/RunOpenVRTracker.sh
