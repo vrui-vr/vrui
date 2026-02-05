@@ -139,6 +139,7 @@ class CommandLineParser
 	
 	/* Methods to handle non-option arguments: */
 	void setArguments(const char* newArguments,const char* newArgumentsDescription); // Sets the definition and description of the application's non-option arguments
+	void failOnArguments(void); // Throw an exception when a non-option argument is encountered (default behavior)
 	void stopOnArguments(void); // parse() method returns when a non-option argument is encountered
 	void addArgumentsToList(std::vector<std::string>& arguments); // Adds encountered arguments to the given list
 	void callArgumentCallback(ArgumentCallback* newArgumentCallback); // Calls the given callback when an argument is encountered

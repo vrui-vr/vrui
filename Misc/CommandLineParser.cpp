@@ -345,6 +345,13 @@ void CommandLineParser::setArguments(const char* newArguments,const char* newArg
 	argumentsDescription=newArgumentsDescription;
 	}
 
+void CommandLineParser::failOnArguments(void)
+	{
+	/* Install the invalid argument handler: */
+	delete argument;
+	argument=new InvalidArgument;
+	}
+
 void CommandLineParser::stopOnArguments(void)
 	{
 	/* Remove any argument handlers: */
