@@ -1,7 +1,7 @@
 /***********************************************************************
 CommandLineParser - Helper class to simplify parsing and processing
 application command lines.
-Copyright (c) 2025 Oliver Kreylos
+Copyright (c) 2025-2026 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -217,7 +217,7 @@ void CommandLineParser::printHelp(void)
 	if(appName!=0&&!description.empty())
 		std::cout<<": ";
 	if(!description.empty())
-		std::cout<<": "<<description;
+		std::cout<<description;
 	if(appName!=0||!description.empty())
 		std::cout<<std::endl;
 	
