@@ -397,7 +397,7 @@ int main(int argc,char* argv[])
 	std::string hmdName(VRSERVER_DEFAULT_HMD);
 	cmdLine.addValueOption("hmd","hmd",hmdName,"<Vulkan display name>","Sets the name of the VR HMD / direct-mode display to be controlled.");
 	double hmdFrameRate=VRSERVER_DEFAULT_HZ;
-	cmdLine.addValueOption("frameRate","f",hmdFrameRate,"<frame rate in Hz>","Sets the frame rate of the VR HMD / direct-mode display.");
+	cmdLine.addValueOption("frameRate","frameRate",hmdFrameRate,"<frame rate in Hz>","Sets the frame rate of the VR HMD / direct-mode display.");
 	try
 		{
 		cmdLine.parse(argv,argv+argc);
