@@ -2039,7 +2039,7 @@ $(call VRDEVICENAMES,RazerHydraDevice): PACKAGES += MYUSB LIBUSB1
 $(call VRDEVICENAMES,RazerHydraDevice): $(call PLUGINOBJNAMES,VRDeviceDaemon/VRDevices/RazerHydra.cpp \
                                                               VRDeviceDaemon/VRDevices/RazerHydraDevice.cpp)
 $(call VRDEVICENAMES,OculusRift): PACKAGES += MYUSB MYIO LIBUSB1
-$(call VRDEVICENAMES,OpenVRHost): PACKAGES += OPENVR
+$(call VRDEVICENAMES,OpenVRHost): PACKAGES += MYPLUGINS OPENVR
 $(call VRDEVICENAMES,OpenVRHost): EXTRACINCLUDEFLAGS += -I$(OPENVR_BASEDIR)/headers
 # $(call VRDEVICENAMES,OpenVRHost): CFLAGS += -DVERYVERBOSE
 

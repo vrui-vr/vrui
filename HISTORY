@@ -8519,3 +8519,12 @@ Vrui-14.1-001:
   - Add command line options to select PID and log file names when
     daemonized.
   - Use Misc::CommandLineParser.
+- Added new Plugins::DsoHandle class to manage DSO handles received from
+  dlopen() using RAII.
+  - Also hide dlfcn.h behind the interface by providing open and resolve
+    methods.
+- Pre-load the SteamVR lighthouse tracking driver's dependency on non-
+  standard libudev by explicitly loading that DSO before loading the
+  driver DSO.
+  - Add location of libudev relative to Steam root directory to
+    OpenVRHost-Config.h.

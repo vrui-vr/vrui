@@ -1,7 +1,7 @@
 /***********************************************************************
 OpenVRHost - Class to wrap a low-level OpenVR tracking and display
 device driver in a VRDevice.
-Copyright (c) 2016-2022 Oliver Kreylos
+Copyright (c) 2016-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -35,6 +35,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/ConfigurationFile.h>
 #include <Threads/Mutex.h>
 #include <Threads/EventDispatcher.h>
+#include <Plugins/DsoHandle.h>
 #include <Vrui/Internal/BatteryState.h>
 #include <VRDeviceDaemon/VRDevice.h>
 
@@ -314,7 +315,8 @@ class OpenVRHost:public VRDevice,public vr::IVRSettings,public vr::IVRDriverCont
 	vr::PropertyContainerHandle_t nextBlockQueueHandle; // Handle to be assigned to the next block queue
 	PathHandleMap pathHandles; // Map from path names to path handles
 	vr::PathHandle_t nextPathHandle; // Handle to be assigned to the next path
-	void* openvrDriverDsoHandle; // Handle for the dynamic shared object containing the OpenVR tracking driver
+	Plugins::DsoHandle libudev; // Handle for the dynamic shared object containing the libudev library used by the OpenVR tracking driver
+	Plugins::DsoHandle openvrDriver; // Handle for the dynamic shared object containing the OpenVR tracking driver
 	vr::IServerTrackedDeviceProvider* openvrTrackedDeviceProvider; // Pointer to the tracked device provider, i.e., the tracking driver object
 	IOBufferMap ioBufferMap; // Map of opened I/O buffers
 	vr::IOBufferHandle_t lastIOBufferHandle; // Last assigned I/O buffer handle
