@@ -8532,3 +8532,5 @@ Vrui-14.1-001:
   - Add move constructor and move assignment operator.
   - Add assignment operator from standard pointer, obsoleting setTarget
     method.
+- Added Threads::createFunctionCall wrappers for functions/methods
+  accepting (const) references as arguments.
