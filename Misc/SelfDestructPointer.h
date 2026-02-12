@@ -4,7 +4,7 @@ automatically deletes the object when the pointer goes out of scope.
 Does not support multiple references to the same object or anything
 fancy like that (use Misc::Autopointer instead), but does not require
 any help from the target class, either.
-Copyright (c) 2008-2011 Oliver Kreylos
+Copyright (c) 2008-2026 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -38,7 +38,7 @@ class SelfDestructPointer
 	
 	/* Elements: */
 	private:
-	Target* target; // Standard pointer to target
+	Target* target; // Pointer to the owned target
 	
 	/* Constructors and destructors: */
 	public:
@@ -46,23 +46,54 @@ class SelfDestructPointer
 		:target(0)
 		{
 		}
-	SelfDestructPointer(Target* sTarget) // Creates self-destructor for given target
+	SelfDestructPointer(Target* sTarget) // Takes ownership of the given target
 		:target(sTarget)
 		{
 		}
 	private:
 	SelfDestructPointer(const SelfDestructPointer& source); // Prohibit copy constructor
-	SelfDestructPointer& operator=(const SelfDestructPointer& source); // Prohibit assignment operator
 	public:
+	SelfDestructPointer(SelfDestructPointer&& source) // Move constructor
+		:target(source.target)
+		{
+		/* Invalidate the source: */
+		source.target=0;
+		}
 	~SelfDestructPointer(void) // Destroys the pointer target
 		{
-		/* Only delete target if it's an actual object (somewhat redundant): */
-		if(target!=0)
-			delete target;
+		/* Destroy the target: */
+		delete target;
 		}
 	
 	/* Methods: */
-	bool isValid(void) const // Returns true if the pointer points to a valid object
+	SelfDestructPointer& operator=(Target* newTarget) // Assignment operator for standard pointer; destroys current target and takes ownership of the given target
+		{
+		/* Destroy the current target: */
+		delete target;
+		
+		/* Take ownership of the new target: */
+		target=newTarget;
+		
+		return *this;
+		}
+	private:
+	SelfDestructPointer& operator=(const SelfDestructPointer& source); // Prohibit copy assignment operator
+	public:
+	SelfDestructPointer& operator=(SelfDestructPointer&& source) // Move assignment operator; destroys current target and transfers ownership of the source's target
+		{
+		if(target!=source.target)
+			{
+			/* Destroy the current target: */
+			delete target;
+			
+			/* Take ownership of the source's target and invalidate the source: */
+			target=source.target;
+			source.target=0;
+			}
+		
+		return *this;
+		}
+	bool isValid(void) const // Returns true if the target is valid
 		{
 		return target!=0;
 		}
@@ -78,16 +109,15 @@ class SelfDestructPointer
 		{
 		return target;
 		}
-	void setTarget(Target* newTarget) // Sets the pointer's target and destroys previous target
+	void setTarget(Target* newTarget) // Legacy version of the equivalent operator= method
 		{
-		/* Delete the previous target: */
-		if(target!=0)
-			delete target;
+		/* Destroy the current target: */
+		delete target;
 		
 		/* Take ownership of the new target: */
 		target=newTarget;
 		}
-	Target* releaseTarget(void) // Returns a standard pointer to the target and releases it from self-destruction
+	Target* releaseTarget(void) // Releases ownership of the current target and returns a standard pointer to it
 		{
 		Target* result=target;
 		target=0;

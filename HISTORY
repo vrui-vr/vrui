@@ -8528,3 +8528,7 @@ Vrui-14.1-001:
   driver DSO.
   - Add location of libudev relative to Steam root directory to
     OpenVRHost-Config.h.
+- Complete Misc::SelfDestructPointer interface:
+  - Add move constructor and move assignment operator.
+  - Add assignment operator from standard pointer, obsoleting setTarget
+    method.
