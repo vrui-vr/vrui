@@ -1,7 +1,7 @@
 /***********************************************************************
 FunctionCalls - Set of functor objects implementing function (or method)
 calls as first-class objects.
-Copyright (c) 2009-2024 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Portable Threading Library (Threads).
 
@@ -301,9 +301,29 @@ inline
 FunctionCall<ParameterParam>*
 createFunctionCall(
 	void (*function)(ParameterParam,ArgumentParam),
-	ArgumentParam argument)
+	const ArgumentParam& argument)
 	{
 	return new SingleArgumentFunctionCall<ParameterParam,ArgumentParam>(function,argument);
+	}
+
+template <class ParameterParam,class ArgumentParam>
+inline
+FunctionCall<ParameterParam>*
+createFunctionCall(
+	void (*function)(ParameterParam,ArgumentParam&),
+	ArgumentParam& argument)
+	{
+	return new SingleArgumentFunctionCall<ParameterParam,ArgumentParam&>(function,argument);
+	}
+
+template <class ParameterParam,class ArgumentParam>
+inline
+FunctionCall<ParameterParam>*
+createFunctionCall(
+	void (*function)(ParameterParam,const ArgumentParam&),
+	const ArgumentParam& argument)
+	{
+	return new SingleArgumentFunctionCall<ParameterParam,const ArgumentParam&>(function,argument);
 	}
 
 template <class ParameterParam,class CalleeParam>
@@ -332,7 +352,7 @@ FunctionCall<ParameterParam>*
 createFunctionCall(
 	CalleeParam* callee,
 	void (CalleeParam::*method)(ParameterParam,ArgumentParam),
-	ArgumentParam argument)
+	const ArgumentParam& argument)
 	{
 	return new SingleArgumentMethodCall<ParameterParam,CalleeParam,ArgumentParam>(callee,method,argument);
 	}
@@ -341,9 +361,53 @@ template <class ParameterParam,class CalleeParam,class ArgumentParam>
 inline
 FunctionCall<ParameterParam>*
 createFunctionCall(
+	CalleeParam* callee,
+	void (CalleeParam::*method)(ParameterParam,ArgumentParam&),
+	ArgumentParam& argument)
+	{
+	return new SingleArgumentMethodCall<ParameterParam,CalleeParam,ArgumentParam&>(callee,method,argument);
+	}
+
+template <class ParameterParam,class CalleeParam,class ArgumentParam>
+inline
+FunctionCall<ParameterParam>*
+createFunctionCall(
+	CalleeParam* callee,
+	void (CalleeParam::*method)(ParameterParam,const ArgumentParam&),
+	const ArgumentParam& argument)
+	{
+	return new SingleArgumentMethodCall<ParameterParam,CalleeParam,const ArgumentParam&>(callee,method,argument);
+	}
+
+template <class ParameterParam,class CalleeParam,class ArgumentParam>
+inline
+FunctionCall<ParameterParam>*
+createFunctionCall(
+	const CalleeParam* callee,
+	void (CalleeParam::*method)(ParameterParam,ArgumentParam) const,
+	const ArgumentParam& argument)
+	{
+	return new SingleArgumentConstMethodCall<ParameterParam,CalleeParam,ArgumentParam>(callee,method,argument);
+	}
+
+template <class ParameterParam,class CalleeParam,class ArgumentParam>
+inline
+FunctionCall<ParameterParam>*
+createFunctionCall(
+	const CalleeParam* callee,
+	void (CalleeParam::*method)(ParameterParam,ArgumentParam&) const,
+	ArgumentParam& argument)
+	{
+	return new SingleArgumentConstMethodCall<ParameterParam,CalleeParam,ArgumentParam&>(callee,method,argument);
+	}
+
+template <class ParameterParam,class CalleeParam,class ArgumentParam>
+inline
+FunctionCall<ParameterParam>*
+createFunctionCall(
 	const CalleeParam* callee,
 	void (CalleeParam::*method)(ParameterParam,const ArgumentParam&) const,
-	ArgumentParam argument)
+	const ArgumentParam& argument)
 	{
 	return new SingleArgumentConstMethodCall<ParameterParam,CalleeParam,const ArgumentParam&>(callee,method,argument);
 	}
