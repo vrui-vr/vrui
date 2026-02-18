@@ -8534,3 +8534,5 @@ Vrui-14.1-001:
     method.
 - Added Threads::createFunctionCall wrappers for functions/methods
   accepting (const) references as arguments.
+- Don't pass empty options (HMD_TYPE, HMD_REFRESH) to VRCompositor in
+  RunVRCompositor.sh

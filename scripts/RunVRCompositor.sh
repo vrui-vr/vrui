@@ -29,8 +29,13 @@ VRUIETCDIR=/usr/local/etc
 source "${VRUIETCDIR}/OpenVRDevices.conf"
 
 # Create the command line to run VRCompositingServer:
-CMDLINE=(-hmd "${HMD_TYPE}")
-CMDLINE+=(-frameRate "${HMD_REFRESH}")
+CMDLINE=()
+if [ -n "${HMD_TYPE}" ]; then
+	CMDLINE+=(-hmd "${HMD_TYPE}")
+fi
+if [ -n "${HMD_REFRESH}" ]; then
+	CMDLINE+=(-frameRate "${HMD_REFRESH}")
+fi
 
 # Run VRCompositingServer:
 exec "$VRUIBINDIR/VRCompositingServer" "${CMDLINE[@]}" "${@}"
