@@ -117,7 +117,7 @@ make
 
 You can modify the install location of Vrui by passing the VRUI_MAKEDIR=<Vrui build system location> argument to `make`: `make VRUI_MAKEDIR=<Vrui build system location>`, replacing `<Vrui build system location>` with the location you want to install Vrui's build system to.
 
-```sh
+
 
 ???+ tip
     You can **speed up the build process** if your host has multiple CPUs or CPU cores. Instead of the above, enter into the same terminal:
@@ -220,7 +220,7 @@ where you replace `<Vrui build system location>` with the location of Vrui's bui
 ???+ tip
     You can **speed up the build process** if your host has multiple CPUs or CPU cores. Instead of the above, enter into the same terminal:
 
-    ```
+    ```sh
     make VRUI_MAKEDIR=<Vrui build system location> -j<number of cpus>
     ```
 
