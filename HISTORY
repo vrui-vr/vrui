@@ -8545,3 +8545,9 @@ Vrui-14.1-001:
   - Added VRServerLauncher.cfg configuration file to configure
     VRServerLauncher's configuration as well as a list of pre-defined
     spatial environments.
+- Added new Misc::DynamicArray class for dynamically growing and
+  shrinking arrays, intended to be used internally by higher-level data
+  structures.
+- Added new Threads::RunLoop and Threads::RunLoopThread classes to
+  replace the fundamentally broken Threads::EventDispatcher and
+  Threads::EventDispatcherThread classes.
