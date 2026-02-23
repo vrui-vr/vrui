@@ -365,7 +365,7 @@ void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent
 				else
 					replyRoot->setProperty("status","Invalid hapticFeatureIndex");
 				}
-			else if(nvl.front().value=="powerOff"&&nvl.size()>=2&&nvl[1].name=="powerFeatureIndex")
+			else if(nvl.front().value=="powerOff"&&nvl.size()>1&&nvl[1].name=="powerFeatureIndex")
 				{
 				/* Extract the power feature index: */
 				unsigned int powerFeatureIndex(strtoul(nvl[1].value.c_str(),0,10));
@@ -378,6 +378,28 @@ void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent
 					}
 				else
 					replyRoot->setProperty("status","Invalid powerFeatureIndex");
+				}
+			else if(nvl.front().value=="uploadEnvironment"&&nvl.size()>1&&nvl[1].name=="environmentFilePath")
+				{
+				try
+					{
+					/* Open the environment definition configuration file: */
+					Misc::ConfigurationFile environmentFile(nvl[1].value.c_str());
+					
+					/* Read an environment definition from the file's root section: */
+					Vrui::EnvironmentDefinition newEnvironmentDefinition;
+					newEnvironmentDefinition.configure(environmentFile.getCurrentSection());
+					
+					/* Replace the previous environment definition and signal that the environment definition has been updated: */
+					thisPtr->environmentDefinition=newEnvironmentDefinition;
+					thisPtr->dispatcher.signal(thisPtr->environmentDefinitionUpdatedSignalKey,0);
+					
+					replyRoot->setProperty("status","Success");
+					}
+				catch(const std::runtime_error& err)
+					{
+					replyRoot->setProperty("status","Invalid environmentFilePath");
+					}
 				}
 			else
 				replyRoot->setProperty("status","Invalid command");

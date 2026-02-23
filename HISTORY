@@ -8536,3 +8536,12 @@ Vrui-14.1-001:
   accepting (const) references as arguments.
 - Don't pass empty options (HMD_TYPE, HMD_REFRESH) to VRCompositor in
   RunVRCompositor.sh
+- Added command to upload spatial environment definitions at run-time to
+  VRDeviceDaemon's HTTP command protocol.
+- Added a list of pre-defined spatial environments to VRServerLauncher
+  that can be queried by clients and be used to populate a drop-down box
+  or somesuch to let users upload spatial environments into
+  VRDeviceDaemon using a simple GUI.
+  - Added VRServerLauncher.cfg configuration file to configure
+    VRServerLauncher's configuration as well as a list of pre-defined
+    spatial environments.
