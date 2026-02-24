@@ -25,9 +25,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Threads/FunctionCalls.h>
 #include <DBus/Message.h>
 
-// DEBUGGING
-#include <iostream>
-
 namespace DBus {
 
 /****************************
@@ -60,10 +57,9 @@ namespace {
 Helper functions:
 ****************/
 
-void unrefReplyHandler(void* memory) // Unreferences a reply handler if the pending call it's associated with drops
+void unrefReplyHandler(void* memory) // Unreferences a reply handler if the pending call it's associated with is destroyed
 	{
 	/* Drop the reference held by the pending call: */
-	// std::cout<<"DBus::PendingCall: Dropping reference to reply handler"<<std::endl;
 	static_cast<PendingCall::ReplyHandler*>(memory)->unref();
 	}
 
