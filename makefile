@@ -344,6 +344,9 @@ BUILDUTILS += $(VRUI_MAKEDIR)/StripPackages
 LIBRARY_NAMES    = libMisc \
                    libRealtime \
                    libThreads
+ifneq ($(SYSTEM_HAVE_LIBDBUS),0)
+  LIBRARY_NAMES += libDBus
+endif
 ifneq ($(SYSTEM_HAVE_LIBUSB1),0)
   LIBRARY_NAMES += libUSB
 endif
@@ -820,6 +823,12 @@ $(call LIBRARYNAME,libThreads): | $(call DEPENDENCIES,$(THREADS_PACKAGES))
 $(call LIBRARYNAME,libThreads): $(call LIBOBJNAMES,$(THREADS_SOURCES))
 .PHONY: libThreads
 libThreads: $(call LIBRARYNAME,libThreads)
+
+#
+# The DBus C++ wrapper library (DBus):
+#
+
+....
 
 #
 # The USB Support Library (USB):
