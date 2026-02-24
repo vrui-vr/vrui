@@ -34,6 +34,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <vector>
 #include <stdexcept>
 #include <iostream>
+#include <Misc/Autopointer.h>
 #include <Misc/StdError.h>
 #include <Misc/PrintInteger.h>
 #include <Misc/FileTests.h>
@@ -41,8 +42,8 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
-#include <Threads/EventDispatcher.h>
-#include <IO/ValueSource.h>
+#include <Threads/FunctionCalls.h>
+#include <Threads/RunLoop.h>
 #include <IO/OStream.h>
 #include <IO/JsonEntityTypes.h>
 #include <Comm/UNIXPipe.h>
@@ -108,6 +109,8 @@ class VRServerLauncher
 		std::string executableName; // Path to the server's executable
 		std::vector<std::string> arguments; // Arguments to be passed on the server's command line
 		pid_t pid; // Process ID for a running server, or 0
+		std::string pidFileName; // The name of the server's PID file
+		std::string logFileName; // The name of the server's log file
 		std::string socketName; // Name of the server's UNIX domain socket
 		bool socketAbstract; // Flag whether the server's UNIX domain socket is in the abstract namespace
 		int httpPort; // Port number on which the server listens for HTTP requests
@@ -130,52 +133,27 @@ class VRServerLauncher
 	
 	/* Elements: */
 	private:
-	Threads::EventDispatcher eventDispatcher; // Dispatcher to handle I/O events
-	Comm::ListeningTCPSocket listenSocket; // Socket listening for incoming TCP connections
-	Threads::EventDispatcher::ListenerKey listenSocketKey;
-	static VRServerLauncher* sigThis; // Pointer to active server launcher object for signal processing
-	Threads::EventDispatcher::ListenerKey sigChldKey; // Signal to notify the front-end that any of the sub-processes has terminated
-	std::string pidFileDir,logFileDir; // Directories to store the servers' pid and log files
+	Threads::RunLoop& runLoop; // Reference to the main thread's run loop
+	Misc::Autopointer<Comm::ListeningTCPSocket> httpListenSocket; // Socket listening for incoming HTTP connections
+	Threads::RunLoop::IOWatcherPtr httpListenSocketWatcher; // I/O watcher for the HTTP listening socket
+	Threads::RunLoop::SignalHandlerPtr sigChldHandler; // Signal handler for SIGCHLD signals
 	Server servers[2]; // Array of server tracking structures
 	std::vector<Environment> environments; // A list of pre-defined spatial environments that can be loaded into VRDeviceDaemon at run-time
 	
 	/* Private methods: */
-	static void signalHandler(int sig); // Signal handler for SIGCHLD
 	bool collectServer(Server& server,bool noWait);
 	bool startServer(Server& server);
 	void sendServerStatus(IO::JsonObject& replyRoot);
 	void sendEnvironments(IO::JsonObject& replyRoot);
 	void stopServers(void);
-	static void newConnectionCallback(Threads::EventDispatcher::IOEvent& event);
-	static void childTerminatedCallback(Threads::EventDispatcher::SignalEvent& event);
+	void newConnectionCallback(Threads::RunLoop::IOWatcher::Event& event); // Callback called when a new connection is available on the HTTP listening socket
+	void childTerminatedCallback(Threads::RunLoop::SignalHandler::Event& event); // Callback called when a child process terminates
 	
 	/* Constructors and destructors: */
 	public:
-	VRServerLauncher(int listenPortId,const std::string& sPidFileDir,const std::string& sLogFileDir,Misc::ConfigurationFileSection& cfg);
+	VRServerLauncher(Threads::RunLoop& sRunLoop,int httpPort,const std::string& homeDir,const std::string& defaultPidFileDir,const std::string& defaultLogFileDir);
 	~VRServerLauncher(void);
-	
-	/* Methods: */
-	void run(void);
 	};
-
-/***************************************
-Static elements of class VRServerLauncher:
-***************************************/
-
-VRServerLauncher* VRServerLauncher::sigThis(0);
-
-/*******************************
-Methods of class VRServerLauncher:
-*******************************/
-
-void VRServerLauncher::signalHandler(int sig)
-	{
-	if(sigThis!=0&&sig==SIGCHLD)
-		{
-		/* Notify the server launcher that a child terminated: */
-		sigThis->eventDispatcher.signal(sigThis->sigChldKey,0);
-		}
-	}
 
 bool VRServerLauncher::collectServer(VRServerLauncher::Server& server,bool noWait)
 	{
@@ -204,8 +182,7 @@ bool VRServerLauncher::collectServer(VRServerLauncher::Server& server,bool noWai
 	if(termPid==server.pid)
 		{
 		/* Remove the server's pid file: */
-		std::string pidFileName=pidFileDir+"/"+server.name+".pid";
-		unlink(pidFileName.c_str());
+		unlink(server.pidFileName.c_str());
 		
 		/* Print a friendly status message: */
 		if(WIFEXITED(waitStatus))
@@ -250,7 +227,7 @@ bool VRServerLauncher::startServer(VRServerLauncher::Server& server)
 		try
 			{
 			/* Redirect stdin to /dev/null and stdout and stderr to the appropriate log file and mark all other file descriptors to be closed on execv: */
-			redirectIO(logFileDir+"/"+server.name+".log",false);
+			redirectIO(server.logFileName,false);
 			}
 		catch(const std::runtime_error& err)
 			{
@@ -284,8 +261,7 @@ bool VRServerLauncher::startServer(VRServerLauncher::Server& server)
 		server.pid=childPid;
 		
 		/* Save daemon's process ID to its pid file: */
-		std::string pidFileName=pidFileDir+"/"+server.name+".pid";
-		int pidFd=open(pidFileName.c_str(),O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
+		int pidFd=open(server.pidFileName.c_str(),O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
 		if(pidFd>=0)
 			{
 			/* Write process ID: */
@@ -293,11 +269,11 @@ bool VRServerLauncher::startServer(VRServerLauncher::Server& server)
 			snprintf(pidBuffer,sizeof(pidBuffer),"%d\n",server.pid);
 			size_t pidLen=strlen(pidBuffer);
 			if(write(pidFd,pidBuffer,pidLen)!=ssize_t(pidLen))
-				std::cerr<<Misc::makeLibcErrMsg(__PRETTY_FUNCTION__,errno,"Cannot write %s's PID to file %s",server.displayName.c_str(),pidFileName.c_str())<<std::endl;
+				std::cerr<<Misc::makeLibcErrMsg(__PRETTY_FUNCTION__,errno,"Cannot write %s's PID to file %s",server.displayName.c_str(),server.pidFileName.c_str())<<std::endl;
 			close(pidFd);
 			}
 		else
-			std::cerr<<Misc::makeLibcErrMsg(__PRETTY_FUNCTION__,errno,"Cannot create %s's PID file %s",server.displayName.c_str(),pidFileName.c_str())<<std::endl;
+			std::cerr<<Misc::makeLibcErrMsg(__PRETTY_FUNCTION__,errno,"Cannot create %s's PID file %s",server.displayName.c_str(),server.pidFileName.c_str())<<std::endl;
 		
 		/* Try connecting to the just-started server's HTTP command socket until it succeeds or times out: */
 		unsigned int attempts=10;
@@ -374,7 +350,7 @@ void VRServerLauncher::sendServerStatus(IO::JsonObject& replyRoot)
 		if(server.pid!=pid_t(0))
 			{
 			serverState->setProperty("pid",int(server.pid));
-			serverState->setProperty("logFileName",logFileDir+"/"+server.name+".log");
+			serverState->setProperty("logFileName",server.logFileName);
 			serverState->setProperty("httpPort",server.httpPort);
 			}
 		}
@@ -408,7 +384,7 @@ void VRServerLauncher::stopServers(void)
 			{
 			std::cout<<"VRServerLauncher::stopServers: Stopping "<<server.displayName<<std::endl;
 			if(waitABit)
-				usleep(500000);
+				usleep(250000);
 			kill(server.pid,SIGTERM);
 			if(!collectServer(server,false))
 				{
@@ -424,17 +400,15 @@ void VRServerLauncher::stopServers(void)
 		}
 	}
 
-void VRServerLauncher::newConnectionCallback(Threads::EventDispatcher::IOEvent& event)
+void VRServerLauncher::newConnectionCallback(Threads::RunLoop::IOWatcher::Event& event)
 	{
-	VRServerLauncher* thisPtr=static_cast<VRServerLauncher*>(event.getUserData());
-	
 	try
 		{
 		/* Don't print this; it seems the browser sends many invalid requests for every valid one: */
 		// std::cout<<"VRServerLauncher: Handling new HTTP request"<<std::endl;
 		
 		/* Accept the next pending connection: */
-		Comm::TCPPipe pipe(thisPtr->listenSocket);
+		Comm::TCPPipe pipe(*httpListenSocket);
 		pipe.ref();
 		
 		/* Parse an incoming HTTP POST request: */
@@ -463,36 +437,34 @@ void VRServerLauncher::newConnectionCallback(Threads::EventDispatcher::IOEvent& 
 				/* Start the two server sub-processes: */
 				for(int serverIndex=0;serverIndex<2&&success;++serverIndex)
 					{
-					Server& server=thisPtr->servers[serverIndex];
-					
 					/* Start the server if it isn't already running: */
-					if(server.pid==pid_t(0))
-						success=thisPtr->startServer(server);
+					if(servers[serverIndex].pid==pid_t(0))
+						success=startServer(servers[serverIndex]);
 					}
 				
 				/* Send the resulting server status: */
-				thisPtr->sendServerStatus(*replyRoot);
+				sendServerStatus(*replyRoot);
 				
 				replyRoot->setProperty("status",success?"Success":"Failed");
 				}
 			else if(nvl.front().value=="stopServers")
 				{
 				/* Shut down the server sub-processes: */
-				thisPtr->stopServers();
+				stopServers();
 				
 				replyRoot->setProperty("status","Success");
 				}
 			else if(nvl.front().value=="getServerStatus")
 				{
 				/* Send the current server status: */
-				thisPtr->sendServerStatus(*replyRoot);
+				sendServerStatus(*replyRoot);
 				
 				replyRoot->setProperty("status","Success");
 				}
 			else if(nvl.front().value=="getEnvironments")
 				{
 				/* Send the list of loadable named spatial environments: */
-				thisPtr->sendEnvironments(*replyRoot);
+				sendEnvironments(*replyRoot);
 				
 				replyRoot->setProperty("status","Success");
 				}
@@ -526,25 +498,50 @@ void VRServerLauncher::newConnectionCallback(Threads::EventDispatcher::IOEvent& 
 		}
 	}
 
-void VRServerLauncher::childTerminatedCallback(Threads::EventDispatcher::SignalEvent& event)
+void VRServerLauncher::childTerminatedCallback(Threads::RunLoop::SignalHandler::Event& event)
 	{
-	VRServerLauncher* thisPtr=static_cast<VRServerLauncher*>(event.getUserData());
-	
 	/* Reap any terminated child processes: */
 	for(int serverIndex=0;serverIndex<2;++serverIndex)
 		{
-		Server& server=thisPtr->servers[serverIndex];
-		
-		if(server.pid!=pid_t(0))
-			thisPtr->collectServer(server,true);
+		if(servers[serverIndex].pid!=pid_t(0))
+			collectServer(servers[serverIndex],true);
 		}
 	}
 
-VRServerLauncher::VRServerLauncher(int listenPortId,const std::string& sPidFileDir,const std::string& sLogFileDir,Misc::ConfigurationFileSection& cfg)
-	:listenSocket(listenPortId,5),
-	 pidFileDir(sPidFileDir),logFileDir(sLogFileDir)
+VRServerLauncher::VRServerLauncher(Threads::RunLoop& sRunLoop,int httpPort,const std::string& homeDir,const std::string& defaultPidFileDir,const std::string& defaultLogFileDir)
+	:runLoop(sRunLoop)
 	{
-	std::cout<<"VRServerLauncher: Starting server launcher"<<std::endl;
+	/* Load the VRServerLauncher configuration file: */
+	Misc::ConfigurationFile configFile(VRUI_INTERNAL_CONFIG_SYSCONFIGDIR "/VRServerLauncher" VRUI_INTERNAL_CONFIG_CONFIGFILESUFFIX);
+	Misc::ConfigurationFileSection cfg=configFile.getSection("/VRServerLauncher");
+	
+	/* If the HTTP port has not been given on the command line, retrieve it from the configuration file: */
+	if(httpPort<0)
+		httpPort=cfg.retrieveValue<int>("./httpPort",8080);
+	
+	/* Override the PID and log file directories from the configuration file: */
+	std::string pidFileDir=defaultPidFileDir;
+	if(cfg.hasTag("./pidFileDir"))
+		{
+		/* Retrieve the string from the configuration file and replace a potential beginning "~" with the determined home directory: */
+		pidFileDir=cfg.retrieveString("./pidFileDir");
+		if(!pidFileDir.empty()&&pidFileDir[0]=='~')
+			{
+			pidFileDir.erase(pidFileDir.begin());
+			pidFileDir.insert(pidFileDir.begin(),homeDir.begin(),homeDir.end());
+			}
+		}
+	std::string logFileDir=defaultLogFileDir;
+	if(cfg.hasTag("./logFileDir"))
+		{
+		/* Retrieve the string from the configuration file and replace a potential beginning "~" with the determined home directory: */
+		logFileDir=cfg.retrieveString("./logFileDir");
+		if(!logFileDir.empty()&&logFileDir[0]=='~')
+			{
+			logFileDir.erase(logFileDir.begin());
+			logFileDir.insert(logFileDir.begin(),homeDir.begin(),homeDir.end());
+			}
+		}
 	
 	/*********************************************************************
 	Initialize the server tracking structures:
@@ -557,9 +554,11 @@ VRServerLauncher::VRServerLauncher(int listenPortId,const std::string& sPidFileD
 	servers[0].displayName="VR tracking driver";
 	servers[0].executableName=VRUI_INTERNAL_CONFIG_EXECUTABLEDIR "/RunOpenVRTracker.sh";
 	servers[0].pid=pid_t(0);
+	servers[0].pidFileName=pidFileDir+"/"+servers[0].name+".pid";
+	servers[0].logFileName=logFileDir+"/"+servers[0].name+".log";
 	servers[0].socketName="VRDeviceDaemon.socket";
 	servers[0].socketAbstract=true;
-	servers[0].httpPort=cfg.retrieveValue<int>("./deviceDaemonHttpPort",listenPortId+1);
+	servers[0].httpPort=cfg.retrieveValue<int>("./deviceDaemonHttpPort",httpPort+1);
 	servers[0].arguments.push_back("--httpPort");
 	servers[0].arguments.push_back(Misc::print(servers[0].httpPort,httpPortBuffer+8));
 	servers[0].cleanupFiles.push_back("/dev/shm/VRDeviceManagerDeviceState.shmem");
@@ -569,6 +568,8 @@ VRServerLauncher::VRServerLauncher(int listenPortId,const std::string& sPidFileD
 	servers[1].displayName="VR compositing server";
 	servers[1].executableName=VRUI_INTERNAL_CONFIG_EXECUTABLEDIR "/RunVRCompositor.sh";
 	servers[1].pid=pid_t(0);
+	servers[1].pidFileName=pidFileDir+"/"+servers[1].name+".pid";
+	servers[1].logFileName=logFileDir+"/"+servers[1].name+".log";
 	servers[1].socketName="VRCompositingServer.socket";
 	servers[1].socketAbstract=true;
 	servers[1].httpPort=cfg.retrieveValue<int>("./compositingServerHttpPort",servers[0].httpPort+1);
@@ -609,60 +610,40 @@ VRServerLauncher::VRServerLauncher(int listenPortId,const std::string& sPidFileD
 			std::cerr<<"VRServerLauncher: Format error in spatial environment configuration"<<std::endl;
 		}
 	
-	/* Ignore SIGPIPE and leave handling of pipe errors to TCP sockets: */
-	Comm::ignorePipeSignals();
+	/* Open the HTTP listening socket: */
+	httpListenSocket=new Comm::ListeningTCPSocket(httpPort,5);
 	
-	/* Stop the launcher when a signal is received: */
-	eventDispatcher.stopOnSignals();
+	/* Register an I/O watcher for the HTTP listening socket: */
+	httpListenSocketWatcher=runLoop.createIOWatcher(httpListenSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServerLauncher::newConnectionCallback));
 	
-	/* Handle events on the TCP listening socket: */
-	listenSocketKey=eventDispatcher.addIOEventListener(listenSocket.getFd(),Threads::EventDispatcher::Read,VRServerLauncher::newConnectionCallback,this);
+	std::cout<<"VRServerLauncher: Servicing HTTP POST requests on TCP port "<<httpPort<<std::endl;
 	
-	/* Create a signal to receive notifications when one of the sub-processes terminates: */
-	sigChldKey=eventDispatcher.addSignalListener(childTerminatedCallback,this);
-	
-	std::cout<<"VRServerLauncher: Servicing HTTP POST requests on TCP port "<<listenPortId<<std::endl;
+	/* Install a handler for SIGCHLD to receive a notification when one of the sub-processes dies: */
+	sigChldHandler=runLoop.createSignalHandler(SIGCHLD,true,*Threads::createFunctionCall(this,&VRServerLauncher::childTerminatedCallback));
 	}
 
 VRServerLauncher::~VRServerLauncher(void)
 	{
-	/* Stop handling events on the TCP listening socket: */
-	eventDispatcher.removeIOEventListener(listenSocketKey);
-	
-	/* Delete the sub-process termination signals: */
-	eventDispatcher.removeSignalListener(sigChldKey);
-	
-	std::cout<<"VRServerLauncher: Shutting down server launcher"<<std::endl;
+	/* Stop the servers in case they are still running: */
+	stopServers();
 	}
 
-void VRServerLauncher::run(void)
+void sigHandlerFunction(Threads::RunLoop::SignalHandler::Event& event,bool& flag)
 	{
-	/* Catch SIGCHLD signals: */
-	sigThis=this;
-	struct sigaction sigChldAction;
-	memset(&sigChldAction,0,sizeof(struct sigaction));
-	sigChldAction.sa_handler=signalHandler;
-	if(sigaction(SIGCHLD,&sigChldAction,0)<0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot intercept SIGCHLD");
+	/* Mark that we received the signal: */
+	flag=false;
 	
-	/* Dispatch I/O events until the dispatcher is shut down: */
-	eventDispatcher.dispatchEvents();
-	
-	/* Shut down the server sub-processes: */
-	stopServers();
+	/* Stop the run loop: */
+	event.getRunLoop().stop();
 	}
 
 int main(int argc,char* argv[])
 	{
-	/* Load the VRServerLauncher configuration file: */
-	Misc::ConfigurationFile configFile(VRUI_INTERNAL_CONFIG_SYSCONFIGDIR "/VRServerLauncher" VRUI_INTERNAL_CONFIG_CONFIGFILESUFFIX);
-	Misc::ConfigurationFileSection cfg=configFile.getSection("/VRServerLauncher");
-	
 	/* Parse the command line: */
 	Misc::CommandLineParser cmdLine;
 	cmdLine.setDescription("Server to start and monitor VRDeviceDaemon (Vrui VR tracking driver) and VRCompositingServer (Vrui HMD display driver) servers.");
-	int listenPortId=cfg.retrieveValue<int>("./httpPort",8080);
-	cmdLine.addValueOption("httpPort","p",listenPortId,"<TCP port number>","Number of TCP port on which to listen for HTTP POST requests.");
+	int httpPort=-1; // Don't force an HTTP port unless asked
+	cmdLine.addValueOption("httpPort","p",httpPort,"<TCP port number>","Number of TCP port on which to listen for HTTP POST requests.");
 	bool daemonize=false;
 	cmdLine.addEnableOption("daemonize","D",daemonize,"Turn the server into a daemon after start-up.");
 	try
@@ -689,35 +670,13 @@ int main(int argc,char* argv[])
 		}
 	else
 		{
-		/* Store the files in the user's home directory: */
+		/* Store the files in the user's home directory, or in /tmp if that fails: */
 		pidFileDir=homeDir;
 		logFileDir=homeDir;
 		}
 	
-	/* Override the PID and log file directories from the configuration file: */
-	if(cfg.hasTag("./pidFileDir"))
-		{
-		/* Retrieve the string from the configuration file and replace a potential beginning "~" with the determined home directory: */
-		pidFileDir=cfg.retrieveString("./pidFileDir");
-		if(!pidFileDir.empty()&&pidFileDir[0]=='~')
-			{
-			pidFileDir.erase(pidFileDir.begin());
-			pidFileDir.insert(pidFileDir.begin(),homeDir.begin(),homeDir.end());
-			}
-		}
-	if(cfg.hasTag("./logFileDir"))
-		{
-		/* Retrieve the string from the configuration file and replace a potential beginning "~" with the determined home directory: */
-		logFileDir=cfg.retrieveString("./logFileDir");
-		if(!logFileDir.empty()&&logFileDir[0]=='~')
-			{
-			logFileDir.erase(logFileDir.begin());
-			logFileDir.insert(logFileDir.begin(),homeDir.begin(),homeDir.end());
-			}
-		}
-	
 	/* Turn the server into a daemon if requested: */
-	std::string pidFileName=pidFileDir+"/VRServerLauncher.pid";
+	std::string pidFileName;
 	if(daemonize)
 		{
 		/* Fork once (and exit) to notify shell or caller that the program is done: */
@@ -733,6 +692,7 @@ int main(int argc,char* argv[])
 			std::cout<<"VRServerLauncher: Started daemon with PID "<<childPid<<std::endl;
 			
 			/* Save daemon's process ID to pid file: */
+			pidFileName=pidFileDir+"/VRServerLauncher.pid";
 			int pidFd=open(pidFileName.c_str(),O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
 			if(pidFd>=0)
 				{
@@ -766,12 +726,44 @@ int main(int argc,char* argv[])
 			}
 		}
 	
+	/* Ignore SIGPIPE and leave handling of pipe errors to TCP sockets: */
+	Comm::ignorePipeSignals();
+	
+	/* Create a run loop to dispatch events: */
+	Threads::RunLoop runLoop;
+	
+	/* Install a handler for SIGHUP that restarts the server launcher (and reloads its configuration file), but keeps running: */
+	bool dummy=false; // A dummy flag for the SIGHUP handler
+	Threads::RunLoop::SignalHandlerPtr sigHupHandler=runLoop.createSignalHandler(SIGHUP,true,*Threads::createFunctionCall(sigHandlerFunction,dummy));
+	
+	/* Install handlers for SIGINT and SIGTERM that shut down the daemon: */
+	bool keepRunning=true;
+	Misc::Autopointer<Threads::RunLoop::SignalHandler::EventHandler> intTermHandler=Threads::createFunctionCall(sigHandlerFunction,keepRunning);
+	Threads::RunLoop::SignalHandlerPtr sigIntHandler=runLoop.createSignalHandler(SIGINT,true,*intTermHandler);
+	Threads::RunLoop::SignalHandlerPtr sigTermHandler=runLoop.createSignalHandler(SIGTERM,true,*intTermHandler);
+	
 	int exitCode=0;
+	
 	try
 		{
-		/* Create a server launcher and run it until it shuts down: */
-		VRServerLauncher serverLauncher(listenPortId,pidFileDir,logFileDir,cfg);
-		serverLauncher.run();
+		/* Run until shut down: */
+		while(keepRunning)
+			{
+			/* Create a server launcher: */
+			std::cout<<"VRServerLauncher: Creating server launcher object"<<std::endl;
+			VRServerLauncher* serverLauncher=new VRServerLauncher(runLoop,httpPort,homeDir,pidFileDir,logFileDir);
+			
+			/* Handle events until shut down: */
+			runLoop.run();
+			
+			/* Destroy the server launcher: */
+			std::cout<<"VRServerLauncher: Destroying server launcher object"<<std::endl;
+			delete serverLauncher;
+			
+			/* If we're about to restart, wait for a bit to let the server launcher's HTTP socket close down: */
+			if(keepRunning)
+				usleep(1000000);
+			}
 		}
 	catch(const std::runtime_error& err)
 		{
