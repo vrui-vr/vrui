@@ -1428,9 +1428,8 @@ bool RunLoop::handlePipeMessages(void)
 				break;
 			
 			case PipeMessage::Stop:
-				/* Set the shutdown flag and make sure the dispatchNextEvents method doesn't block: */
+				/* Set the shutdown flag: */
 				shutdownRequested=true;
-				dontBlock=true;
 				
 				break;
 			
@@ -1699,9 +1698,8 @@ bool RunLoop::handlePipeMessages(void)
 						}
 					else
 						{
-						/* Set the shutdown flag and make sure the dispatchNextEvents method doesn't block: */
+						/* Set the shutdown flag: */
 						shutdownRequested=true;
-						dontBlock=true;
 						}
 					}
 				
@@ -1863,7 +1861,7 @@ RunLoop::RunLoop(void)
 	 messageBuffer(new PipeMessage[messageBufferSize]),
 	 numActiveIOWatchers(0),
 	 numSpinningProcessFunctions(0),
-	 shutdownRequested(false),dontBlock(false),
+	 shutdownRequested(false),
 	 handlingIOWatchers(false),
 	 handlingProcessFunctions(false)
 	{
@@ -2029,12 +2027,7 @@ void RunLoop::stopOnSignal(int signum)
 void RunLoop::wakeUp(void)
 	{
 	/* Check if this call was made from outside the run loop's thread: */
-	if(Threads::Thread::isSelfEqual(threadId))
-		{
-		/* Don't block on the next call to dispatchNextEvents: */
-		dontBlock=true;
-		}
-	else
+	if(!Threads::Thread::isSelfEqual(threadId))
 		{
 		/* Make an asynchronous request by writing to the self-pipe: */
 		PipeMessage pm(PipeMessage::WakeUp);
@@ -2047,9 +2040,8 @@ void RunLoop::stop(void)
 	/* Check if this call was made from inside the run loop's thread: */
 	if(Threads::Thread::isSelfEqual(threadId))
 		{
-		/* Set the shutdown flag and make sure the dispatchNextEvents method doesn't block: */
+		/* Set the shutdown flag: */
 		shutdownRequested=true;
-		dontBlock=true;
 		}
 	else
 		{
@@ -2100,12 +2092,16 @@ bool RunLoop::dispatchNextEvents(void)
 			}
 		}
 	
+	/* Bail out right before blocking if shutdown was requested: */
+	if(shutdownRequested)
+		return false;
+	
 	#if 1 // On Linux, we have ppoll()
 	
 	/* Calculate a time-out for the poll() call: */
 	Interval pollTimeout(0,0); // In case we don't want to block, only poll
 	Interval* pt=0; // Assume that we'll block forever
-	if(dontBlock||numSpinningProcessFunctions>0)
+	if(numSpinningProcessFunctions>0)
 		{
 		/* Don't block for I/O events; only poll: */
 		pt=&pollTimeout;

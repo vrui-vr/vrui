@@ -621,7 +621,6 @@ class RunLoop
 	unsigned int numSpinningProcessFunctions; // Number of currently active process functions that want to spin
 	Time lastDispatchTime; // The last point in time for which any events were dispatched
 	bool shutdownRequested; // Flag to request a running run loop to shut down
-	bool dontBlock; // Flag to request that the next call to dispatchNextEvents does not block on I/O
 	bool handlingIOWatchers; // Flag if the dispatchNextEvents method is currently handling I/O watchers
 	unsigned int handledIOWatcherIndex; // Index of the active I/O watcher whose event is currently being handled
 	bool handlingProcessFunctions; // Flag if the dispatchNextEvents method is currently handling process functions
