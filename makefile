@@ -828,13 +828,38 @@ libThreads: $(call LIBRARYNAME,libThreads)
 # The DBus C++ wrapper library (DBus):
 #
 
-....
+$(DEPDIR)/Configure-DBus: $(DEPDIR)/Configure-Threads
+ifneq ($(SYSTEM_HAVE_LIBDBUS),0)
+	@echo Libdbus library exists on host system
+else
+	@echo Libdbus library does not exist on host system
+endif
+	@cp DBus/Config.h.template DBus/Config.h.temp
+	@$(call CONFIG_SETVAR,DBus/Config.h.temp,DBUS_CONFIG_HAVE_LIBDBUS,$(SYSTEM_HAVE_LIBDBUS))
+	@if ! diff -qN DBus/Config.h.temp DBus/Config.h > /dev/null ; then cp DBus/Config.h.temp DBus/Config.h ; fi
+	@rm DBus/Config.h.temp
+	@touch $(DEPDIR)/Configure-DBus
+
+DBUS_HEADERS = $(wildcard DBus/*.h) \
+               $(wildcard DBus/*.icpp)
+
+DBUS_SOURCES = $(wildcard DBus/*.cpp)
+
+$(call LIBOBJNAMES,$(DBUS_SOURCES)): | $(DEPDIR)/config
+
+DBUS_PACKAGES = MYTHREADS MYMISC LIBDBUS
+$(call LIBRARYNAME,libDBus): PACKAGES = $(DBUS_PACKAGES)
+$(call LIBRARYNAME,libDBus): EXTRACINCLUDEFLAGS += $(MYDBUS_INCLUDE)
+$(call LIBRARYNAME,libDBus): | $(call DEPENDENCIES,$(DBUS_PACKAGES))
+$(call LIBRARYNAME,libDBus): $(call LIBOBJNAMES,$(DBUS_SOURCES))
+.PHONY: libDBus
+libDBus: $(call LIBRARYNAME,libDBus)
 
 #
 # The USB Support Library (USB):
 #
 
-$(DEPDIR)/Configure-USB: $(DEPDIR)/Configure-Threads
+$(DEPDIR)/Configure-USB: $(DEPDIR)/Configure-DBus
 ifneq ($(SYSTEM_HAVE_LIBUSB1),0)
 	@echo Libusb library version 1.0 exists on host system
   ifneq ($(LIBUSB1_HAS_TOPOLOGY_CALLS),0)
@@ -2613,6 +2638,10 @@ install:
 	@install -m u=rw,go=r $(REALTIME_HEADERS) $(HEADERINSTALLDIR)/Realtime
 	@install -d $(HEADERINSTALLDIR)/Threads
 	@install -m u=rw,go=r $(THREADS_HEADERS) $(HEADERINSTALLDIR)/Threads
+ifneq ($(SYSTEM_HAVE_LIBDBUS),0)
+	@install -d $(HEADERINSTALLDIR)/DBus
+	@install -m u=rw,go=r $(DBUS_HEADERS) $(HEADERINSTALLDIR)/DBus
+endif
 ifneq ($(SYSTEM_HAVE_LIBUSB1),0)
 	@install -d $(HEADERINSTALLDIR)/USB
 	@install -m u=rw,go=r $(USB_HEADERS) $(HEADERINSTALLDIR)/USB
@@ -2808,6 +2837,7 @@ endif
 	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/Misc $(MISC_HEADERS)
 	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/Realtime $(REALTIME_HEADERS)
 	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/Threads $(THREADS_HEADERS)
+	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/DBus $(DBUS_HEADERS)
 	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/USB $(USB_HEADERS)
 	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/RawHID $(RAWHID_HEADERS)
 	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/IO $(IO_HEADERS)
@@ -2853,6 +2883,10 @@ devinstall:
 	@ln -sf $(REALTIME_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Realtime
 	@mkdir -p $(HEADERINSTALLDIR)/Threads
 	@ln -sf $(THREADS_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Threads
+ifneq ($(SYSTEM_HAVE_LIBDBUS),0)
+	@mkdir -p $(HEADERINSTALLDIR)/DBus
+	@ln -sf $(DBUS_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/DBus
+endif
 ifneq ($(SYSTEM_HAVE_LIBUSB1),0)
 	@mkdir -p $(HEADERINSTALLDIR)/USB
 	@ln -sf $(USB_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/USB

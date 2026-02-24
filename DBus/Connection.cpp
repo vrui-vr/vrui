@@ -430,7 +430,8 @@ void Connection::watchConnection(Threads::RunLoop& runLoop)
 	dbus_connection_set_wakeup_main_function(connection,wakeupMainFunction,&runLoop,0);
 	
 	/* Create a process function to dispatch messages: */
-	Threads::RunLoop::ProcessFunction* processFunction=runLoop.createProcessFunction(false,true,*Threads::createFunctionCall(dispatchFunction,connection));
+	bool mustDispatch=dbus_connection_get_dispatch_status(connection)==DBUS_DISPATCH_DATA_REMAINS;
+	Threads::RunLoop::ProcessFunction* processFunction=runLoop.createProcessFunction(true,mustDispatch,*Threads::createFunctionCall(dispatchFunction,connection));
 	processFunction->ref();
 	
 	/* Register a dispatch status function: */

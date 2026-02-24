@@ -8551,3 +8551,7 @@ Vrui-14.1-001:
 - Added new Threads::RunLoop and Threads::RunLoopThread classes to
   replace the fundamentally broken Threads::EventDispatcher and
   Threads::EventDispatcherThread classes.
+- Added DBus, a small C++ wrapper library for the Desktop Bus (DBus) IPC
+  mechanism's C API.
+  - Headers/sources are in DBus subdirectory.
+  - Builds libDBus shared library.

@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define DBUS_CONNECTION_INCLUDED
 
 #include <string>
-#include <Threads"RunLoop.h>
+#include <Threads/RunLoop.h>
 #include <dbus/dbus.h>
 #include <DBus/Message.h>
 
