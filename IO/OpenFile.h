@@ -1,7 +1,7 @@
 /***********************************************************************
 OpenFile - Convenience functions to open files of several types using
 the File abstraction.
-Copyright (c) 2011-2018 Oliver Kreylos
+Copyright (c) 2011-2025 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -26,6 +26,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <IO/Opener.h>
 
 namespace IO {
+
+inline bool isAbsolutePath(const char* path) // Returns true if the given path is absolute
+	{
+	return Opener::getOpener()->isAbsolutePath(path);
+	}
 
 inline FilePtr openFile(const char* fileName,File::AccessMode accessMode =File::ReadOnly) // Opens a file of the given name
 	{

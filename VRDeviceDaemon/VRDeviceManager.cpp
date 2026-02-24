@@ -271,6 +271,9 @@ unsigned int VRDeviceManager::addVirtualDevice(Vrui::VRDeviceDescriptor* newVirt
 	unsigned int result=virtualDevices.size();
 	virtualDevices.push_back(newVirtualDevice);
 	
+	/* New devices are connected by default to keep legacy intact: */
+	deviceConnecteds.push_back(true);
+	
 	/* Create a battery state for the new virtual device: */
 	batteryStates.push_back(Vrui::BatteryState());
 	
@@ -308,6 +311,11 @@ int VRDeviceManager::addHapticFeature(VRDevice* device,int deviceFeatureIndex)
 	hapticFeatures.push_back(newHapticFeature);
 	
 	return result;
+	}
+
+void VRDeviceManager::setVirtualDeviceConnected(int deviceIndex,bool newConnected)
+	{
+	deviceConnecteds[deviceIndex]=newConnected;
 	}
 
 void VRDeviceManager::disableTracker(int trackerIndex)

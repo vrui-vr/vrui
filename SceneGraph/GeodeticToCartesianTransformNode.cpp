@@ -2,7 +2,7 @@
 GeodeticToCartesianTransformNode - Point transformation class to convert
 geodetic coordinates (longitude/latitude/altitude on a reference
 ellipsoid) to Cartesian coordinates.
-Copyright (c) 2009-2023 Oliver Kreylos
+Copyright (c) 2009-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -33,6 +33,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <SceneGraph/SphereCollisionQuery.h>
 #include <SceneGraph/GLRenderState.h>
 #include <SceneGraph/ALRenderState.h>
+#include <SceneGraph/ActState.h>
 
 namespace SceneGraph {
 
@@ -216,6 +217,18 @@ void GeodeticToCartesianTransformNode::alRenderAction(ALRenderState& renderState
 		
 	/* Pop the transformation off the matrix stack: */
 	renderState.popTransform(previousTransform);
+	}
+
+void GeodeticToCartesianTransformNode::act(ActState& actState)
+	{
+	/* Push the transformation onto the matrix stack: */
+	DOGTransform previousTransform=actState.pushTransform(transform);
+	
+	/* Delegate to the base class: */
+	GroupNode::act(actState);
+		
+	/* Pop the transformation off the matrix stack: */
+	actState.popTransform(previousTransform);
 	}
 
 }

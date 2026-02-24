@@ -3,6 +3,7 @@ BuildRoot/makefile
 BuildRoot/Configuration.Vrui
 Realtime/Config.h
 Threads/Config.h
+DBus/Config.h
 USB/Config.h
 Comm/Config.h
 GL/Config.h

@@ -1,7 +1,7 @@
 /***********************************************************************
 AlignPoints - Utility to align two sets of measurements of the same set
 of points using one of several types of transformations.
-Copyright (c) 2009-2020 Oliver Kreylos
+Copyright (c) 2009-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -24,8 +24,11 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <string.h>
 #include <vector>
 #include <iostream>
+#include <Misc/StdError.h>
 #include <Misc/FunctionCalls.h>
 #include <Misc/ValueCoder.h>
+#include <Misc/StandardValueCoders.h>
+#include <Misc/CommandLineParser.icpp>
 #include <IO/ValueSource.h>
 #include <IO/OpenFile.h>
 #include <Math/Math.h>
@@ -495,94 +498,61 @@ AlignPoints::AlignPoints(int& argc,char**& argv)
 	 aligner(0)
 	{
 	/* Parse the command line: */
-	const char* fileNames[2]={0,0};
+	Misc::CommandLineParser cmdLine;
+	cmdLine.setDescription("Utility to calculate an alignment transformation between two sets of matching points.");
+	cmdLine.setArguments("<from point set file name> <to point set file name>","Names of the files from which to read the \"from\" point set and the \"to\" point set, respectively. The resulting transformation will transform the \"from\" set to the \"to\" set.");
+	const char* transformModeNames[]=
+		{
+		"ON","OG","A","P"
+		};
+	unsigned int transformMode=0;
+	cmdLine.addCategoryOption("transformMode","tm",4,transformModeNames,transformMode,"Selects the type of alignment transformation between orthonormal, orthogonal, affine, or projective.");
+	cmdLine.addFixedValueOption(0,"on",0U,transformMode,"Selects an orthonormal alignment transformation.");
+	cmdLine.addFixedValueOption(0,"og",1U,transformMode,"Selects an orthogonal alignment transformation.");
+	cmdLine.addFixedValueOption(0,"a",2U,transformMode,"Selects an affine alignment transformation.");
+	cmdLine.addFixedValueOption(0,"p",3U,transformMode,"Selects a projective alignment transformation.");
 	AlignerBase::Transformation fromTransform,toTransform;
-	int transformMode=0;
-	unsigned int ransacNumIterations=0;
-	AlignerBase::Scalar ransacMaxInlierDist(0);
-	for(int argi=1;argi<argc;++argi)
+	cmdLine.addValueOption("fromTransform","fromt",fromTransform,"<transformation string>","Sets a pre-alignment transformation to apply to the \"from\" point set.");
+	cmdLine.addValueOption("toTransform","tot",toTransform,"<transformation string>","Sets a pre-alignment transformation to apply to the \"to\" point set.");
+	double ransacParams[2]={0.0,0.0};
+	cmdLine.addArrayOption("ransac","ransac",2,ransacParams,"<num iterations> <max inlier dist>","Selects RANSAC optimization with the given number of iterators and maximum inlier distance.");
+	std::vector<std::string> fileNames;
+	cmdLine.addArgumentsToList(fileNames);
+	cmdLine.parse(argv,argv+argc);
+	if(cmdLine.hadHelp())
 		{
-		const char* arg=argv[argi];
-		if(arg[0]=='-')
-			{
-			if(strcasecmp(arg+1,"ON")==0)
-				transformMode=0;
-			else if(strcasecmp(arg+1,"OG")==0)
-				transformMode=1;
-			else if(strcasecmp(arg+1,"A")==0)
-				transformMode=2;
-			else if(strcasecmp(arg+1,"P")==0)
-				transformMode=3;
-			else if(strcasecmp(arg+1,"RANSAC")==0)
-				{
-				argi+=2;
-				if(argi<argc)
-					{
-					ransacNumIterations=(unsigned int)atoi(argv[argi-1]);
-					ransacMaxInlierDist=AlignerBase::Scalar(atof(argv[argi]));
-					}
-				else
-					std::cerr<<"AlignPoints: Ignoring dangling "<<arg<<" parameter"<<std::endl;
-				}
-			else if(strcasecmp(arg+1,"FROMT")==0)
-				{
-				++argi;
-				if(argi<argc)
-					{
-					/* Read a transformation for the "from" points: */
-					fromTransform=Misc::ValueCoder<AlignerBase::Transformation>::decode(argv[argi],argv[argi]+strlen(argv[argi]));
-					}
-				else
-					std::cerr<<"AlignPoints: Ignoring dangling "<<arg<<" parameter"<<std::endl;
-				}
-			else if(strcasecmp(arg+1,"TOT")==0)
-				{
-				++argi;
-				if(argi<argc)
-					{
-					/* Read a transformation for the "to" points: */
-					toTransform=Misc::ValueCoder<AlignerBase::Transformation>::decode(argv[argi],argv[argi]+strlen(argv[argi]));
-					}
-				else
-					std::cerr<<"AlignPoints: Ignoring dangling "<<arg<<" parameter"<<std::endl;
-				}
-			else
-				std::cerr<<"AlignPoints: Ignoring unrecognized "<<arg<<" parameter"<<std::endl;
-			}
-		else if(fileNames[0]==0)
-			fileNames[0]=arg;
-		else if(fileNames[1]==0)
-			fileNames[1]=arg;
-		else
-			std::cerr<<"AlignPoints: Ignoring extra "<<arg<<" argument"<<std::endl;
-		}
-	if(fileNames[0]==0||fileNames[1]==0)
-		{
-		std::cerr<<"AlignPoints: No point file name(s) provided; exiting"<<std::endl;
-		std::cerr<<"Usage: "<<argv[0]<<" [ -ON | -OG | -A | -P ] [ -RANSAC <max number of iterations> <max inlier distance> ] [ -fromT <source point transformation> ] <source point file name> [ -toT <target point transformation> ] <target point file name>"<<std::endl;
 		Vrui::shutdown();
 		return;
 		}
 	
+	/* Check if exactly two point set file names were provided: */
+	if(fileNames.size()==0)
+		throw Misc::makeStdErr(0,"No point set file names provided");
+	else if(fileNames.size()==1)
+		throw Misc::makeStdErr(0,"No \"to\" point set file name provided");
+	else if(fileNames.size()>2)
+		throw Misc::makeStdErr(0,"Too many point set file names provided");
+	
 	/* Create a point set aligner of the requested type: */
+	unsigned int ransacNumIterations=Math::floor(ransacParams[0]+0.5);
 	if(ransacNumIterations>0)
 		{
 		switch(transformMode)
 			{
 			case 0:
-				aligner=new RanSaCAligner<Geometry::PointAlignerONTransform<double,3> >(ransacNumIterations,ransacMaxInlierDist);
+				aligner=new RanSaCAligner<Geometry::PointAlignerONTransform<double,3> >(ransacNumIterations,ransacParams[1]);
 				break;
 			
 			case 1:
-				aligner=new RanSaCAligner<Geometry::PointAlignerOGTransform<double,3> >(ransacNumIterations,ransacMaxInlierDist);
+				aligner=new RanSaCAligner<Geometry::PointAlignerOGTransform<double,3> >(ransacNumIterations,ransacParams[1]);
 				break;
 			
 			case 2:
-				aligner=new RanSaCAligner<Geometry::PointAlignerATransform<double,3> >(ransacNumIterations,ransacMaxInlierDist);
+				aligner=new RanSaCAligner<Geometry::PointAlignerATransform<double,3> >(ransacNumIterations,ransacParams[1]);
 				break;
 			
 			case 3:
-				aligner=new RanSaCAligner<Geometry::PointAlignerPTransform<double,3> >(ransacNumIterations,ransacMaxInlierDist);
+				aligner=new RanSaCAligner<Geometry::PointAlignerPTransform<double,3> >(ransacNumIterations,ransacParams[1]);
 				break;
 			}
 		}
@@ -609,7 +579,7 @@ AlignPoints::AlignPoints(int& argc,char**& argv)
 		}
 	
 	/* Load the point set files: */
-	aligner->readPointSets(fileNames[0],fileNames[1]);
+	aligner->readPointSets(fileNames[0].c_str(),fileNames[1].c_str());
 	
 	/* Pre-transform the point sets if requested: */
 	if(fromTransform!=AlignerBase::Transformation::identity)

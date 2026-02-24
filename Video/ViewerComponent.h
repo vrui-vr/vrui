@@ -2,7 +2,7 @@
 ViewerComponent - An application component to stream video from a camera
 to an OpenGL texture for rendering, including user interfaces to select
 cameras and video modes and control camera settings.
-Copyright (c) 2018-2023 Oliver Kreylos
+Copyright (c) 2018-2025 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -47,6 +47,9 @@ namespace GLMotif {
 class Widget;
 class WidgetManager;
 class PopupWindow;
+}
+namespace Video {
+class VideoDataFormatSelector;
 }
 
 namespace Video {
@@ -135,6 +138,8 @@ class ViewerComponent:public GLObject
 	public:
 	ViewerComponent(unsigned int sVideoDeviceIndex,const VideoDataFormat& initialFormat,int initialFormatComponentMask,GLMotif::WidgetManager* sWidgetManager); // Creates a video viewer component for the video device of the given index and optionally selects a video format
 	ViewerComponent(const char* videoDeviceName,unsigned int videoDeviceNameIndex,const VideoDataFormat& initialFormat,int initialFormatComponentMask,GLMotif::WidgetManager* sWidgetManager); // Creates a video viewer component for the video device of the given name and optionally selects a video format
+	ViewerComponent(unsigned int sVideoDeviceIndex,const VideoDataFormatSelector& initialFormat,GLMotif::WidgetManager* sWidgetManager); // Creates a video viewer component for the video device of the given index and optionally selects a video format
+	ViewerComponent(const char* videoDeviceName,unsigned int videoDeviceNameIndex,const VideoDataFormatSelector& initialFormat,GLMotif::WidgetManager* sWidgetManager); // Creates a video viewer component for the video device of the given name and optionally selects a video format
 	virtual ~ViewerComponent(void); // Destroys the viewer component
 	
 	/* Methods from GLObject: */

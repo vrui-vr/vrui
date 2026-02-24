@@ -2,7 +2,7 @@
 Opener - Class to encapsulate how files and other file-like objects are
 opened, to expose functionality of higher-level libraries at the base IO
 level.
-Copyright (c) 2018 Oliver Kreylos
+Copyright (c) 2018-2025 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -51,6 +51,7 @@ class Opener
 	static void resetOpener(void); // Installs the basic opener as the current opener
 	
 	/* File opening methods: */
+	virtual bool isAbsolutePath(const char* path) const; // Returns true if the given path is an absolute path
 	virtual FilePtr openFile(const char* fileName,File::AccessMode accessMode); // Opens a file of the given name
 	virtual SeekableFilePtr openSeekableFile(const char* fileName,File::AccessMode accessMode); // Opens a seekable file of the given name
 	virtual DirectoryPtr openDirectory(const char* directoryName); // Opens a directory of the given name

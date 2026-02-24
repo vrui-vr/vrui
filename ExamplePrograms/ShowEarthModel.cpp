@@ -2,7 +2,7 @@
 ShowEarthModel - Simple Vrui application to render a model of Earth,
 with the ability to additionally display earthquake location data and
 other geology-related stuff.
-Copyright (c) 2005-2024 Oliver Kreylos
+Copyright (c) 2005-2025 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -272,6 +272,13 @@ void ShowEarthModel::applySettings(void)
 			}
 		}
 	
+	/* Update the Earth rotation angle: */
+	if(userTransform->getRotationAngle()!=Vrui::Scalar(settings.rotationAngle))
+		{
+		userTransform->setRotationAngle(Vrui::Scalar(settings.rotationAngle));
+		rotationNode->setTransform(SceneGraph::ONTransformNode::ONTransform(SceneGraph::Vector::zero,SceneGraph::ONTransformNode::ONTransform::Rotation::rotateZ(Math::rad(Vrui::Scalar(settings.rotationAngle)))));
+		}
+	
 	/* Update the UI: */
 	mainMenu->updateVariables();
 	renderDialog->updateVariables();
@@ -435,8 +442,8 @@ void ShowEarthModel::resetRotationCallback(Misc::CallbackData* cbData)
 	{
 	/* Reset the Earth's rotation angle: */
 	settings.rotationAngle=0.0f;
-	userTransform->setRotationAngle(Vrui::Scalar(settings.rotationAngle));
-	rotationNode->setTransform(SceneGraph::ONTransformNode::ONTransform(SceneGraph::Vector::zero,SceneGraph::ONTransformNode::ONTransform::Rotation::rotateZ(Math::rad(settings.rotationAngle))));
+	
+	/* Call the settings changed callback, which will update the actual rotation: */
 	settingsChangedCallback(0);
 	}
 
@@ -909,16 +916,22 @@ ShowEarthModel::ShowEarthModel(int& argc,char**& argv)
 					}
 				
 				case EARTHQUAKESETFILE:
-					{
-					/* Load an earthquake set: */
-					EarthquakeSet* earthquakeSet=new EarthquakeSet(IO::Directory::getCurrent(),argv[i],geoid,Geometry::Vector<double,3>::zero,magnitudeColorMap);
-					settings.showEarthquakeSets[earthquakeSets.size()]=showEarthquakes;
-					earthquakeSets.push_back(earthquakeSet);
-					
-					/* Enable layered rendering on the earthquake set: */
-					earthquakeSet->enableLayeredRendering(EarthquakeSet::Point::origin); // Earth's center is at the origin
+					try
+						{
+						/* Load an earthquake set: */
+						EarthquakeSet* earthquakeSet=new EarthquakeSet(IO::Directory::getCurrent(),argv[i],geoid,Geometry::Vector<double,3>::zero,magnitudeColorMap);
+						settings.showEarthquakeSets[earthquakeSets.size()]=showEarthquakes;
+						earthquakeSets.push_back(earthquakeSet);
+						
+						/* Enable layered rendering on the earthquake set: */
+						earthquakeSet->enableLayeredRendering(EarthquakeSet::Point::origin); // Earth's center is at the origin
+						}
+					catch(const std::runtime_error& err)
+						{
+						/* Print an error message and ignore the earthquake file: */
+						std::cerr<<"Ignoring earthquake file "<<argv[i]<<" due to exception "<<err.what()<<std::endl;
+						}
 					break;
-					}
 				
 				case SEISMICPATHFILE:
 					{
@@ -937,7 +950,6 @@ ShowEarthModel::ShowEarthModel(int& argc,char**& argv)
 					}
 				
 				case SCENEGRAPHFILE:
-					{
 					try
 						{
 						/* Load the scene graph and add it to the list: */
@@ -951,7 +963,6 @@ ShowEarthModel::ShowEarthModel(int& argc,char**& argv)
 						std::cerr<<"Ignoring scene graph file "<<argv[i]<<" due to exception "<<err.what()<<std::endl;
 						}
 					break;
-					}
 				}
 			}
 		}

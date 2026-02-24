@@ -1,7 +1,7 @@
 /***********************************************************************
 DeviceTest - Program to test the connection to a Vrui VR Device Daemon
 and to dump device positions/orientations and button states.
-Copyright (c) 2002-2024 Oliver Kreylos
+Copyright (c) 2002-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -71,7 +71,7 @@ void printDeviceConfiguration(const Vrui::VRDeviceDescriptor& vd)
 	std::cout<<"  Device is "<<(vd.hasBattery?"battery-powered":"connected to power source")<<std::endl;
 	
 	std::cout<<"  Device can ";
-	if(vd.canPowerOff)
+	if(!vd.canPowerOff)
 		std::cout<<"not ";
 	std::cout<<"be powered off on request"<<std::endl;
 	

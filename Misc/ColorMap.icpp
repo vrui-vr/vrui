@@ -1,7 +1,7 @@
 /***********************************************************************
 ColorMap - Templatized class to map scalar values within a defined range
 to colors.
-Copyright (c) 2023 Oliver Kreylos
+Copyright (c) 2023-2025 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -26,57 +26,78 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Misc/ColorMap.h>
 
+#include <Misc/StdError.h>
+
 namespace Misc {
 
 template <class ColorParam>
 inline
 ColorMap<ColorParam>::ColorMap(
-	unsigned int sNumKeys,
+	unsigned int sNumEntries,
 	const double* sKeys,
-	const typename ColorMap<ColorParam>::Color* sKeyColors)
-	:numKeys(sNumKeys),
-	 keys(new double[numKeys]),keyColors(new Color[numKeys])
+	const typename ColorMap<ColorParam>::Color* sColors)
+	:numEntries(sNumEntries),entries(0)
 	{
-	/* Copy the key array if given: */
-	if(sKeys!=0)
-		{
-		for(unsigned int i=0;i<numKeys;++i)
-			keys[i]=sKeys[i];
-		}
+	/* Check if the given map is valid: */
+	if(numEntries==0)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Color map must have at least one entry");
 	
-	/* Copy the key color array if given: */
-	if(sKeyColors!=0)
+	/* Check if the key list is ordered: */
+	for(unsigned int i=1;i<numEntries;++i)
+		if(sKeys[i-1]>sKeys[i])
+			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Key list is not ordered");
+	
+	/* Copy the key and color arrays: */
+	entries=new Entry[numEntries];
+	for(unsigned int i=0;i<numEntries;++i)
 		{
-		for(unsigned int i=0;i<numKeys;++i)
-			keyColors[i]=sKeyColors[i];
+		entries[i].key=sKeys[i];
+		entries[i].color=sColors[i];
 		}
+	}
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>::ColorMap(
+	const std::vector<typename ColorMap<ColorParam>::Entry>& sEntries)
+	:numEntries(sEntries.size()),entries(0)
+	{
+	/* Check if the given map is valid: */
+	if(numEntries==0)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Color map must have at least one entry");
+	
+	/* Check if the key list is ordered: */
+	for(unsigned int i=1;i<numEntries;++i)
+		if(sEntries[i-1].key>sEntries[i].key)
+			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Key list is not ordered");
+	
+	/* Copy the entry array: */
+	entries=new Entry[numEntries];
+	for(unsigned int i=0;i<numEntries;++i)
+		entries[i]=sEntries[i];
 	}
 
 template <class ColorParam>
 inline
 ColorMap<ColorParam>::ColorMap(
 	const ColorMap<ColorParam>& source)
-	:numKeys(source.numKeys),
-	 keys(new double[numKeys]),keyColors(new Color[numKeys])
+	:numEntries(source.numEntries),
+	 entries(new Entry[numEntries])
 	{
 	/* Copy the source object's color map: */
-	for(unsigned int i=0;i<numKeys;++i)
-		keys[i]=source.keys[i];
-	for(unsigned int i=0;i<numKeys;++i)
-		keyColors[i]=source.keyColors[i];
+	for(unsigned int i=0;i<numEntries;++i)
+		entries[i]=source.entries[i];
 	}
 
 template <class ColorParam>
 inline
 ColorMap<ColorParam>::ColorMap(
 	ColorMap<ColorParam>&& source)
-	:numKeys(source.numKeys),
-	 keys(source.keys),keyColors(source.keyColors)
+	:numEntries(source.numEntries),entries(source.entries)
 	{
 	/* Invalidate the source object: */
-	source.numKeys=0;
-	source.keys=0;
-	source.keyColors=0;
+	source.numEntries=0;
+	source.entries=0;
 	}
 
 template <class ColorParam>
@@ -84,8 +105,7 @@ inline
 ColorMap<ColorParam>::~ColorMap(
 	void)
 	{
-	delete[] keys;
-	delete[] keyColors;
+	delete[] entries;
 	}
 
 template <class ColorParam>
@@ -96,21 +116,17 @@ ColorMap<ColorParam>::operator=(
 	{
 	if(this!=&source)
 		{
-		if(numKeys!=source.numKeys)
+		if(numEntries!=source.numEntries)
 			{
 			/* Re-allocate the color map arrays: */
-			delete[] keys;
-			delete[] keyColors;
-			numKeys=source.numKeys;
-			keys=new double[numKeys];
-			keyColors=new Color[numKeys];
+			delete[] entries;
+			numEntries=source.numEntries;
+			entries=new Entry[numEntries];
 			}
 		
-		/* Copy the source color map: */
-		for(unsigned int i=0;i<numKeys;++i)
-			keys[i]=source.keys[i];
-		for(unsigned int i=0;i<numKeys;++i)
-			keyColors[i]=source.keyColors[i];
+		/* Copy the source object's color map: */
+		for(unsigned int i=0;i<numEntries;++i)
+			entries[i]=source.entries[i];
 		}
 	
 	return *this;
@@ -125,14 +141,10 @@ ColorMap<ColorParam>::operator=(
 	if(this!=&source)
 		{
 		/* Grab the source object's assets: */
-		numKeys=source.numKeys;
-		source.numKeys=0;
-		delete[] keys;
-		keys=source.keys;
-		source.keys=0;
-		delete[] keyColors;
-		keyColors=source.keyColors;
-		source.keyColors=0;
+		numEntries=source.numEntries;
+		entries=source.entries;
+		source.numEntries=0;
+		source.entries=0;
 		}
 	
 	return *this;
@@ -141,33 +153,146 @@ ColorMap<ColorParam>::operator=(
 template <class ColorParam>
 inline
 ColorMap<ColorParam>&
-ColorMap<ColorParam>::setNumKeys(
-	unsigned int newNumKeys)
-	{
-	if(numKeys!=newNumKeys)
-		{
-		/* Re-allocate the color map arrays: */
-		delete[] keys;
-		delete[] keyColors;
-		numKeys=newNumKeys;
-		keys=new double[numKeys];
-		keyColors=new Color[numKeys];
-		}
-	
-	return *this;
-	}
-
-template <class ColorParam>
-inline
-ColorMap<ColorParam>&
-ColorMap<ColorParam>::setKey(
+ColorMap<ColorParam>::setEntry(
 	unsigned int index,
-	double key,
-	const typename ColorMap<ColorParam>::Color& keyColor)
+	double newKey,
+	const typename ColorMap<ColorParam>::Color& newColor)
 	{
+	/* Check if the key array remains ordered: */
+	if((index>0&&entries[index-1].key>newKey)||(index+1<numEntries&&entries[index+1].key<newKey))
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Key list is not ordered");
+	
 	/* Override the current color map entry: */
-	keys[index]=key;
-	keyColors[index]=keyColor;
+	entries[index].key=newKey;
+	entries[index].color=newColor;
+	
+	return *this;
+	}
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>&
+ColorMap<ColorParam>::insertEntry(
+	unsigned int index,
+	double newKey,
+	const typename ColorMap<ColorParam>::Color& newColor)
+	{
+	/* Check if the key array remains ordered: */
+	if((index>0&&entries[index-1].key>newKey)||(index<numEntries&&entries[index].key<newKey))
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Key list is not ordered");
+	
+	/* Allocate a new entry array: */
+	Entry* newEntries=new Entry[numEntries+1];
+	
+	/* Copy the old entry array and insert the new entry: */
+	for(unsigned int i=0;i<index;++i)
+		newEntries[i]=entries[i];
+	newEntries[index].key=newKey;
+	newEntries[index].color=newColor;
+	for(unsigned int i=index;i<numEntries;++i)
+		newEntries[i+1]=entries[i];
+	
+	/* Replace the entry array: */
+	delete[] entries;
+	++numEntries;
+	entries=newEntries;
+	
+	return *this;
+	}
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>&
+ColorMap<ColorParam>::removeEntry(
+	unsigned int index)
+	{
+	/* Check and allocate new color map arrays: */
+	if(numEntries==1)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Color map must have at least one key/color pair");
+	Entry* newEntries=new Entry[numEntries-1];
+	
+	/* Copy the old entry array and remove the given entry: */
+	for(unsigned int i=0;i<index;++i)
+		newEntries[i]=entries[i];
+	for(unsigned int i=index+1;i<numEntries;++i)
+		newEntries[i-1]=entries[i];
+	
+	/* Replace the entry array: */
+	delete[] entries;
+	--numEntries;
+	entries=newEntries;
+	
+	return *this;
+	}
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>&
+ColorMap<ColorParam>::scaleRange(
+	double minValue,
+	double maxValue)
+	{
+	/* Check the color map: */
+	if(numEntries<2)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Color map must have at least two key/color pairs");
+	if(minValue>maxValue)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid new value range");
+	
+	/* Calculate a linear transformation from the old to the new value range: */
+	double scale=(maxValue-minValue)/(entries[numEntries-1].key-entries[0].key);
+	double offset=minValue-entries[0].key*scale;
+	
+	/* Set the first key to the minimum value: */
+	entries[0].key=minValue;
+	
+	/* Apply the transformation to all interior control points: */
+	for(unsigned int i=1;i<numEntries-1;++i)
+		entries[i].key=entries[i].key*scale+offset;
+	
+	/* Set the last key to the maximum value: */
+	entries[numEntries-1].key=maxValue;
+	
+	return *this;
+	}
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>&
+ColorMap<ColorParam>::setRange(
+	double minValue,
+	double maxValue)
+	{
+	if(minValue>maxValue)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid new value range");
+	
+	/* Find the interval of entries properly inside the new value range: */
+	unsigned int left;
+	for(left=0;left<numEntries&&entries[left].key<=minValue;++left)
+		;
+	unsigned int right;
+	for(right=left;right<numEntries&&entries[right].key<maxValue;++right)
+		;
+	
+	/* Prepare a new entry array: */
+	unsigned int newNumEntries=right-left+2;
+	Entry* newEntries=new Entry[newNumEntries];
+	
+	/* Create the leftmost entry by evaluation: */
+	newEntries[0].key=minValue;
+	newEntries[0].color=map(minValue);
+	
+	/* Copy the inner entries: */
+	for(unsigned int i=left;i<right;++i)
+		newEntries[i-left+1]=entries[i];
+	
+	/* Create the rightmost entry by evaluation: */
+	newEntries[newNumEntries-1].key=maxValue;
+	newEntries[newNumEntries-1].color=map(maxValue);
+	
+	/* Replace the entry array: */
+	numEntries=newNumEntries;
+	delete[] entries;
+	entries=newEntries;
 	
 	return *this;
 	}

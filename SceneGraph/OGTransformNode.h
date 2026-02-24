@@ -2,7 +2,7 @@
 OGTransformNode - Class for group nodes that apply an orthogonal
 transformation to their children, with a simplified field interface for
 direct control through application software.
-Copyright (c) 2021 Oliver Kreylos
+Copyright (c) 2021-2025 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -56,6 +56,7 @@ class OGTransformNode:public GroupNode
 	virtual void testCollision(SphereCollisionQuery& collisionQuery) const;
 	virtual void glRenderAction(GLRenderState& renderState) const;
 	virtual void alRenderAction(ALRenderState& renderState) const;
+	virtual void act(ActState& actState);
 	
 	/* New methods: */
 	void setTransform(const OGTransform& newTransform) // Sets the transformation and performs necessary updates

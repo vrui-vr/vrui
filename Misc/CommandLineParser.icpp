@@ -1,0 +1,411 @@
+/***********************************************************************
+CommandLineParser - Helper class to simplify parsing and processing
+application command lines.
+Copyright (c) 2025 Oliver Kreylos
+
+This file is part of the Miscellaneous Support Library (Misc).
+
+The Miscellaneous Support Library is free software; you can
+redistribute it and/or modify it under the terms of the GNU General
+Public License as published by the Free Software Foundation; either
+version 2 of the License, or (at your option) any later version.
+
+The Miscellaneous Support Library is distributed in the hope that it
+will be useful, but WITHOUT ANY WARRANTY; without even the implied
+warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See
+the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along
+with the Miscellaneous Support Library; if not, write to the Free
+Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
+02111-1307 USA
+***********************************************************************/
+
+#ifndef MISC_COMMANDLINEPARSER_IMPLEMENTATION
+#define MISC_COMMANDLINEPARSER_IMPLEMENTATION
+
+#include <Misc/CommandLineParser.h>
+
+#include <ctype.h>
+#include <Misc/StdError.h>
+#include <Misc/ValueCoder.h>
+
+namespace Misc {
+
+/********************************************************
+Declaration of class CommandLineParser::FixedValueOption:
+********************************************************/
+
+template <class ValueParam>
+class CommandLineParser::FixedValueOption:public CommandLineParser::Option
+	{
+	/* Embedded classes: */
+	public:
+	typedef ValueParam Value; // Type of option values
+	
+	/* Elements: */
+	private:
+	Value fixedValue; // The fixed value to which to set the variable when this option is encountered
+	Value& value; // Pointer to the option value
+	
+	/* Constructors and destructors: */
+	public:
+	FixedValueOption(const char* sDescription,const Value& sFixedValue,Value& sValue)
+		:Option(sDescription),
+		 fixedValue(sFixedValue),value(sValue)
+		{
+		}
+	
+	/* Methods from class Option: */
+	virtual char** parse(char* arg,char** argPtr,char** argEnd)
+		{
+		/* Set the variable to the fixed value: */
+		value=fixedValue;
+		
+		return argPtr;
+		}
+	};
+
+/***************************************************
+Declaration of class CommandLineParser::ValueOption:
+***************************************************/
+
+template <class ValueParam>
+class CommandLineParser::ValueOption:public CommandLineParser::Option
+	{
+	/* Embedded classes: */
+	public:
+	typedef ValueParam Value; // Type of option values
+	
+	/* Elements: */
+	private:
+	std::string argument; // String defining the value
+	Value& value; // Reference to the option value
+	
+	/* Constructors and destructors: */
+	public:
+	ValueOption(const char* sDescription,const char* sArgument,Value& sValue)
+		:Option(sDescription),
+		 argument(sArgument),
+		 value(sValue)
+		{
+		}
+	
+	/* Methods from class Option: */
+	virtual void printArguments(std::ostream& os) const
+		{
+		os<<' '<<argument;
+		}
+	virtual char** parse(char* arg,char** argPtr,char** argEnd)
+		{
+		/* Check if an option value is present: */
+		if(argPtr==argEnd)
+			throw Misc::makeStdErr(0,"%s: Missing option value",arg);
+		
+		try
+			{
+			/* Convert the argument to the value type: */
+			value=CommandLineParser::convertValue<Value>(*argPtr);
+			}
+		catch(const std::runtime_error& err)
+			{
+			/* Wrap the error message: */
+			throw Misc::makeStdErr(0,"%s: %s",arg,err.what());
+			}
+			
+		return argPtr+1;
+		}
+	};
+
+/****************************************************************
+Declaration of class CommandLineParser::ValueOption<std::string>:
+****************************************************************/
+
+template <>
+class CommandLineParser::ValueOption<std::string>:public CommandLineParser::Option
+	{
+	/* Elements: */
+	private:
+	std::string argument; // String defining the value
+	std::string& value; // Reference to the option value
+	
+	/* Constructors and destructors: */
+	public:
+	ValueOption(const char* sDescription,const char* sArgument,std::string& sValue)
+		:Option(sDescription),
+		 argument(sArgument),
+		 value(sValue)
+		{
+		}
+	
+	/* Methods from class Option: */
+	virtual void printArguments(std::ostream& os) const
+		{
+		os<<' '<<argument;
+		}
+	virtual char** parse(char* arg,char** argPtr,char** argEnd)
+		{
+		/* Check if an option value is present: */
+		if(argPtr==argEnd)
+			throw Misc::makeStdErr(0,"%s: Missing option value",arg);
+		
+		/* Store the argument: */
+		value=*argPtr;
+			
+		return argPtr+1;
+		}
+	};
+
+/***************************************************
+Declaration of class CommandLineParser::ArrayOption:
+***************************************************/
+
+template <class ValueParam>
+class CommandLineParser::ArrayOption:public CommandLineParser::Option
+	{
+	/* Embedded classes: */
+	public:
+	typedef ValueParam Value; // Type of option values
+	
+	/* Elements: */
+	private:
+	std::string arguments; // String defining the value array's entries
+	unsigned int numValues; // Number of entries in the option value array
+	Value* values; // Pointer to the array of option values
+	
+	/* Constructors and destructors: */
+	public:
+	ArrayOption(const char* sDescription,const char* sArguments,unsigned int sNumValues,Value* sValues)
+		:Option(sDescription),
+		 arguments(sArguments),
+		 numValues(sNumValues),values(sValues)
+		{
+		}
+	
+	/* Methods from class Option: */
+	virtual void printArguments(std::ostream& os) const
+		{
+		os<<' '<<arguments;
+		}
+	virtual char** parse(char* arg,char** argPtr,char** argEnd)
+		{
+		/* Parse value array entries: */
+		Value* vPtr=values;
+		Value* vEnd=values+numValues;
+		while(vPtr!=vEnd&&argPtr!=argEnd)
+			{
+			try
+				{
+				/* Convert the argument to the value type: */
+				*vPtr=CommandLineParser::convertValue<Value>(*argPtr);
+				}
+			catch(const std::runtime_error& err)
+				{
+				/* Wrap the error message: */
+				throw Misc::makeStdErr(0,"%s: %s",arg,err.what());
+				}
+			
+			++vPtr;
+			++argPtr;
+			}
+		
+		/* Check if all value array entries were read: */
+		if(vPtr!=vEnd)
+			throw Misc::makeStdErr(0,"%s: Only %u values out of %u present",arg,vPtr-values,numValues);
+		
+		return argPtr;
+		}
+	};
+
+/****************************************************************
+Declaration of class CommandLineParser::ArrayOption<std::string>:
+****************************************************************/
+
+template <>
+class CommandLineParser::ArrayOption<std::string>:public CommandLineParser::Option
+	{
+	/* Elements: */
+	private:
+	std::string arguments; // String defining the value array's entries
+	unsigned int numValues; // Number of entries in the option value array
+	std::string* values; // Pointer to the array of option values
+	
+	/* Constructors and destructors: */
+	public:
+	ArrayOption(const char* sDescription,const char* sArguments,unsigned int sNumValues,std::string* sValues)
+		:Option(sDescription),
+		 arguments(sArguments),
+		 numValues(sNumValues),values(sValues)
+		{
+		}
+	
+	/* Methods from class Option: */
+	virtual void printArguments(std::ostream& os) const
+		{
+		os<<' '<<arguments;
+		}
+	virtual char** parse(char* arg,char** argPtr,char** argEnd)
+		{
+		/* Parse value array entries: */
+		std::string* vPtr=values;
+		std::string* vEnd=values+numValues;
+		while(vPtr!=vEnd&&argPtr!=argEnd)
+			{
+			*vPtr=*argPtr;
+			
+			++vPtr;
+			++argPtr;
+			}
+		
+		/* Check if all value array entries were read: */
+		if(vPtr!=vEnd)
+			throw Misc::makeStdErr(0,"%s: Only %u values out of %u present",arg,vPtr-values,numValues);
+		
+		return argPtr;
+		}
+	};
+
+/************************************************************
+Declaration of class CommandLineParser::AddValueToListOption:
+************************************************************/
+
+template <class ValueParam>
+class CommandLineParser::AddValueToListOption:public CommandLineParser::Option
+	{
+	/* Embedded classes: */
+	public:
+	typedef ValueParam Value; // Type of option values
+	
+	/* Elements: */
+	private:
+	std::string argument; // String defining the value
+	std::vector<Value>& values; // The list of option values
+	
+	/* Constructors and destructors: */
+	public:
+	AddValueToListOption(const char* sDescription,const char* sArgument,std::vector<Value>& sValues)
+		:Option(sDescription),
+		 argument(sArgument),
+		 values(sValues)
+		{
+		}
+	
+	/* Methods from class Option: */
+	virtual char** parse(char* arg,char** argPtr,char** argEnd)
+		{
+		try
+			{
+			/* Convert the argument to the value type and append it to the list: */
+			values.push_back(CommandLineParser::convertValue<Value>(*argPtr));
+			}
+		catch(const std::runtime_error& err)
+			{
+			/* Wrap the error message: */
+			throw Misc::makeStdErr(0,"%s: %s",arg,err.what());
+			}
+		
+		return argPtr+1;
+		}
+	};
+
+/*************************************************************************
+Declaration of class CommandLineParser::AddValueToListOption<std::string>:
+*************************************************************************/
+
+template <>
+class CommandLineParser::AddValueToListOption<std::string>:public CommandLineParser::Option
+	{
+	/* Elements: */
+	private:
+	std::string argument; // String defining the value
+	std::vector<std::string>& values; // The list of option values
+	
+	/* Constructors and destructors: */
+	public:
+	AddValueToListOption(const char* sDescription,const char* sArgument,std::vector<std::string>& sValues)
+		:Option(sDescription),
+		 argument(sArgument),
+		 values(sValues)
+		{
+		}
+	
+	/* Methods from class Option: */
+	virtual char** parse(char* arg,char** argPtr,char** argEnd)
+		{
+		try
+			{
+			/* Convert the argument to the value type and append it to the list: */
+			values.push_back(*argPtr);
+			}
+		catch(const std::runtime_error& err)
+			{
+			/* Wrap the error message: */
+			throw Misc::makeStdErr(0,"%s: %s",arg,err.what());
+			}
+		
+		return argPtr+1;
+		}
+	};
+
+/**********************************
+Methods of class CommandLineParser:
+**********************************/
+
+template <class ValueParam>
+inline
+ValueParam CommandLineParser::convertValue(const char* arg)
+	{
+	/* Remove leading and trailing whitespace from the argument: */
+	for(;*arg!='\0'&&isspace(*arg);++arg)
+		;
+	const char* argEnd=arg;
+	for(const char* aPtr=arg;*aPtr!='\0';++aPtr)
+		if(!isspace(*aPtr))
+			argEnd=aPtr+1;
+	
+	/* Decode the value string: */
+	const char* decodeEnd;
+	ValueParam value=Misc::ValueCoder<ValueParam>::decode(arg,argEnd,&decodeEnd);
+	
+	/* Check if the entire argument was read: */
+	if(decodeEnd!=argEnd)
+		throw Misc::DecodingError(std::string("Invalid suffix ")+std::string(decodeEnd,argEnd)+std::string(" in value ")+std::string(arg,argEnd));
+	
+	return value;
+	}
+
+template <class ValueParam>
+inline
+void CommandLineParser::addFixedValueOption(const char* longOption,const char* shortOption,const ValueParam& fixedValue,ValueParam& value,const char* description)
+	{
+	/* Create a new option object and add it to the set: */
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new FixedValueOption<ValueParam>(description,fixedValue,value));
+	}
+
+template <class ValueParam>
+inline
+void CommandLineParser::addValueOption(const char* longOption,const char* shortOption,ValueParam& value,const char* argument,const char* description)
+	{
+	/* Create a new option object and add it to the set: */
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new ValueOption<ValueParam>(description,argument,value));
+	}
+
+template <class ValueParam>
+inline
+void CommandLineParser::addArrayOption(const char* longOption,const char* shortOption,unsigned int numValues,ValueParam* values,const char* arguments,const char* description)
+	{
+	/* Create a new option object and add it to the set: */
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new ArrayOption<ValueParam>(description,arguments,numValues,values));
+	}
+
+template <class ValueParam>
+inline
+void CommandLineParser::addListOption(const char* longOption,const char* shortOption,std::vector<ValueParam>& values,const char* argument,const char* description)
+	{
+	/* Create a new option object and add it to the set: */
+	addOption(__PRETTY_FUNCTION__,longOption,shortOption,new AddValueToListOption<ValueParam>(description,argument,values));
+	}
+
+}
+
+#endif

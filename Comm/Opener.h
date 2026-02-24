@@ -2,7 +2,7 @@
 Opener - Class derived from IO::Opener to add additional functionality
 provided by the Comm library, such as access to remote files over
 HTTP/1.1.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2025 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -42,6 +42,7 @@ class Opener:public IO::Opener
 	virtual ~Opener(void); // Uninstalls the opener from the IO library
 	
 	/* Methods from IO::Opener: */
+	virtual bool isAbsolutePath(const char* path) const;
 	virtual IO::FilePtr openFile(const char* fileName,IO::File::AccessMode accessMode);
 	virtual IO::DirectoryPtr openDirectory(const char* directoryName);
 	virtual IO::DirectoryPtr openDirectory(const char* directoryNameBegin,const char* directoryNameEnd);

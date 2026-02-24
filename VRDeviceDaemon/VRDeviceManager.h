@@ -148,6 +148,7 @@ class VRDeviceManager
 	Vrui::VRDeviceState state; // Current state of all managed devices
 	Realtime::SharedMemory* stateMemory; // Pointer to an optional shared memory segment from which clients can directly read device states
 	std::vector<Vrui::VRDeviceDescriptor*> virtualDevices; // List of virtual devices combining selected trackers, buttons, and valuators
+	std::vector<bool> deviceConnecteds; // List of flags if each virtual device is currently connected
 	Threads::Mutex batteryStateMutex; // Mutex serializing access to the list of virtual device battery states
 	std::vector<Vrui::BatteryState> batteryStates; // List of current battery states for all virtual devices
 	Threads::Mutex hmdConfigurationMutex; // Mutex serializing access to the list of HMD configurations
@@ -214,6 +215,7 @@ class VRDeviceManager
 		/* Convert offset time point to a periodic time stamp with microsecond resolution: */
 		return Vrui::VRDeviceState::TimeStamp(now.tv_sec*1000000L+(now.tv_nsec+nsecOffset+500L)/1000L);
 		}
+	void setVirtualDeviceConnected(int deviceIndex,bool newConnected); // Sets the "connected" state of the virtual device of the given index
 	void disableTracker(int trackerIndex); // Sets the given tracker's tracking state to invalid
 	void setTrackerState(int trackerIndex,const Vrui::VRDeviceState::TrackerState& newTrackerState,Vrui::VRDeviceState::TimeStamp newTimeStamp); // Updates state of single tracker
 	void setButtonState(int buttonIndex,Vrui::VRDeviceState::ButtonState newButtonState); // Updates state of single button
@@ -244,6 +246,10 @@ class VRDeviceManager
 	const Vrui::VRDeviceDescriptor& getVirtualDevice(int deviceIndex) const // Returns the virtual input device of the given index
 		{
 		return *(virtualDevices[deviceIndex]);
+		}
+	bool isVirtualDeviceConnected(int deviceIndex) const // Returns the connection state of the virtual input device of the given index
+		{
+		return deviceConnecteds[deviceIndex];
 		}
 	unsigned int getNumPowerFeatures(void) const // Returns the number of power features
 		{

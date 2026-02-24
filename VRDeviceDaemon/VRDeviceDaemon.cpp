@@ -1,6 +1,6 @@
 /***********************************************************************
 VRDeviceDaemon - Daemon for distributed VR device driver architecture.
-Copyright (c) 2002-2024 Oliver Kreylos
+Copyright (c) 2002-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -21,6 +21,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 ***********************************************************************/
 
 #include <ctype.h>
+#include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -33,6 +34,8 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <stdexcept>
 #include <iostream>
 #include <Misc/FileNameExtensions.h>
+#include <Misc/CommandLineParser.h>
+#include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Threads/MutexCond.h>
 #include <Threads/EventDispatcher.h>
@@ -71,73 +74,42 @@ void signalHandler(int signalId)
 
 int main(int argc,char* argv[])
 	{
-	/* Parse command line: */
+	/* Parse the command line: */
+	Misc::CommandLineParser cmdLine;
+	cmdLine.setDescription("Device driver and tracking server for a variety of VR-related input device types.");
 	bool daemonize=false;
-	const char* configFileName=VRDEVICEDAEMON_CONFIG_CONFIGFILEDIR "/" VRDEVICEDAEMON_CONFIG_CONFIGFILENAME VRUI_INTERNAL_CONFIG_CONFIGFILESUFFIX;
-	const char* rootSectionName=0;
+	cmdLine.addEnableOption("daemonize","D",daemonize,"Turn the server into a daemon after start-up.");
+	std::string pidFileName="/var/run/VRDeviceDaemon.pid";
+	cmdLine.addValueOption("pidFile","pf",pidFileName,"<path>","Path to the file where to store the VRDeviceDaemon's PID when daemonized.");
+	std::string logFileName="/var/log/VRDeviceDaemon.log";
+	cmdLine.addValueOption("logFile","lf",logFileName,"<path>","Path to the file to which to redirect the VRDeviceDaemon's output when daemonized.");
+	std::string rootSectionName;
+	cmdLine.addValueOption(0,"rootSection",rootSectionName,"<section name>","Sets the name of the configuration space's root section from which to read configuration data.");
 	std::vector<std::string> mergeConfigFileNames;
-	bool printHelp=false;
-	for(int i=1;i<argc;++i)
+	cmdLine.addListOption(0,"mergeConfig",mergeConfigFileNames,"<config file name>","Adds a the name of a configuration file to merge into the configuration space.");
+	int httpListenPortId=-1;
+	cmdLine.addValueOption("httpPort","p",httpListenPortId,"<TCP port number>","Sets the port of the TCP socket on which to listen for HTTP POST requests.");
+	std::string configFileName(VRDEVICEDAEMON_CONFIG_CONFIGFILEDIR "/" VRDEVICEDAEMON_CONFIG_CONFIGFILENAME VRUI_INTERNAL_CONFIG_CONFIGFILESUFFIX);
+	cmdLine.setArguments("[ <config file name> ]","Sets the name of the configuration file that forms the basis of the configuration space.");
+	cmdLine.stopOnArguments();
+	try
 		{
-		if(argv[i][0]=='-')
+		char** argPtr=argv;
+		while(cmdLine.parse(argPtr,argv+argc))
 			{
-			if(strcasecmp(argv[i]+1,"h")==0)
-				printHelp=true;
-			else if(strcasecmp(argv[i]+1,"D")==0)
-				daemonize=true;
-			else if(strcasecmp(argv[i]+1,"rootSection")==0)
-				{
-				++i;
-				if(i<argc)
-					rootSectionName=argv[i];
-				}
-			else if(strcasecmp(argv[i]+1,"mergeConfig")==0)
-				{
-				++i;
-				if(i<argc)
-					{
-					std::string mergeConfigFileName;
-					
-					/* Check if the configuration file name is relative: */
-					if(argv[i][0]!='/')
-						{
-						/* Start from the configuration file directory: */
-						mergeConfigFileName=VRDEVICEDAEMON_CONFIG_CONFIGFILEDIR;
-						mergeConfigFileName.push_back('/');
-						}
-					
-					mergeConfigFileName.append(argv[i]);
-					
-					/* Check if the configuration file name has no extension: */
-					if(Misc::hasExtension(argv[i],""))
-						{
-						/* Use the default extension: */
-						mergeConfigFileName.append(".cfg");
-						}
-					
-					/* Remember the merge configuration file name: */
-					mergeConfigFileNames.push_back(mergeConfigFileName);
-					}
-				}
+			/* Remember the configuration file name, then fail on additional arguments: */
+			configFileName=*argPtr;
+			++argPtr;
+			cmdLine.failOnArguments();
 			}
-		else
-			configFileName=argv[i];
 		}
-	
-	if(printHelp)
+	catch(const std::runtime_error& err)
 		{
-		std::cout<<"Usage: "<<argv[0]<<" [-h] [-D] [-rootSection <root section name>] (-mergeConfig <configuration file name>)* [<configuration file name>]"<<std::endl;
-		std::cout<<"\t-h Print this help text"<<std::endl;
-		std::cout<<"\t-D Daemonize the VR device daemon"<<std::endl;
-		std::cout<<"\t-rootSection <root section name>"<<std::endl;
-		std::cout<<"\t\tSelects the root configuration file section from which to load configuration data"<<std::endl;
-		std::cout<<"\t-mergeConfig <configuration file name>"<<std::endl;
-		std::cout<<"\t\tMerges an additional configuration file into the main configuration file"<<std::endl;
-		std::cout<<"\t<configuration file name>"<<std::endl;
-		std::cout<<"\t\tName of the configuration file from which to load configuration data"<<std::endl;
-		
-		return 0;
+		std::cerr<<"VRDeviceDaemon: "<<err.what()<<std::endl;
+		return 1;
 		}
+	if(cmdLine.hadHelp())
+		return 0;
 	
 	if(daemonize)
 		{
@@ -149,13 +121,13 @@ int main(int argc,char* argv[])
 		int childPid=fork();
 		if(childPid<0)
 			{
-			std::cerr<<"Error during fork"<<std::endl<<std::flush;
+			std::cerr<<"VRDeviceDaemon: Error during fork"<<std::endl<<std::flush;
 			return 1; // Fork error
 			}
 		else if(childPid>0)
 			{
 			/* Save daemon's process ID to pid file: */
-			int pidFd=open("/var/run/VRDeviceDaemon.pid",O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
+			int pidFd=open(pidFileName.c_str(),O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
 			if(pidFd>=0)
 				{
 				/* Write process ID: */
@@ -163,7 +135,7 @@ int main(int argc,char* argv[])
 				snprintf(pidBuffer,sizeof(pidBuffer),"%d\n",childPid);
 				size_t pidLen=strlen(pidBuffer);
 				if(write(pidFd,pidBuffer,pidLen)!=ssize_t(pidLen))
-					std::cerr<<"Could not write PID to PID file"<<std::endl;
+					std::cerr<<"VRDeviceDaemon: Could not write PID to file "<<pidFileName<<std::endl;
 				close(pidFd);
 				}
 			return 0; // Parent process exits
@@ -176,17 +148,11 @@ int main(int argc,char* argv[])
 		for(int i=getdtablesize()-1;i>=0;--i)
 			close(i);
 		
-		#if 0
-		/* Redirect stdin, stdout and stderr to /dev/null: */
-		// int nullFd=open("/dev/null",O_RDWR); // Ugly hack; descriptors are assigned sequentially
-		// dup(nullFd);
-		// dup(nullFd);
-		#else
 		/* Redirect stdin, stdout and stderr to log file (this is ugly, but works because descriptors are assigned sequentially): */
-		int logFd=open("/var/log/VRDeviceDaemon.log",O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
-		if(logFd!=0||dup(logFd)!=1||dup(logFd)!=2)
-			std::cerr<<"Error while rerouting output to log file"<<std::endl;
-		#endif
+		int nullFd=open("/dev/null",O_RDONLY);
+		int logFd=open(logFileName.c_str(),O_RDWR|O_CREAT|O_TRUNC,S_IWUSR|S_IRUSR|S_IRGRP|S_IROTH);
+		if(nullFd!=0||logFd!=1||dup(logFd)!=2)
+			std::cerr<<"VRDeviceDaemon: Error while rerouting output to log file"<<std::endl;
 		
 		/* Ignore most signals: */
 		struct sigaction sigIgnore;
@@ -233,11 +199,11 @@ int main(int argc,char* argv[])
 		Misc::ConfigurationFile* configFile=0;
 		try
 			{
-			configFile=new Misc::ConfigurationFile(const_cast<const char*>(configFileName));
+			configFile=new Misc::ConfigurationFile(configFileName.c_str());
 			}
 		catch(const std::runtime_error& err)
 			{
-			std::cerr<<"VRDeviceDaemon: Caught exception "<<err.what()<<" while reading configuration file"<<std::endl;
+			std::cerr<<"VRDeviceDaemon: Caught exception "<<err.what()<<" while reading configuration file "<<configFileName<<std::endl;
 			return 1;
 			}
 		
@@ -250,7 +216,21 @@ int main(int argc,char* argv[])
 			#endif
 			try
 				{
-				configFile->merge(mcfnIt->c_str());
+				/* Normalize the configuration file name: */
+				std::string cfName;
+				if(mcfnIt->empty()||(*mcfnIt)[0]!='/')
+					{
+					/* Anchor non-absolute paths to the configuration directory: */
+					cfName=VRDEVICEDAEMON_CONFIG_CONFIGFILEDIR "/";
+					}
+				cfName.append(*mcfnIt);
+				if(Misc::hasExtension(mcfnIt->c_str(),""))
+					{
+					/* Give names without an extension the default extension: */
+					cfName.append(VRUI_INTERNAL_CONFIG_CONFIGFILESUFFIX);
+					}
+				
+				configFile->merge(cfName.c_str());
 				}
 			catch(const std::runtime_error& err)
 				{
@@ -259,14 +239,17 @@ int main(int argc,char* argv[])
 				}
 			}
 		
-		/* Set current section to given root section or name of current machine: */
-		if(rootSectionName==0||rootSectionName[0]=='\0')
+		/* Set current section to given root section or name of current machine, or fall back to "localhost": */
+		if(rootSectionName.empty()&&getenv("HOSTNAME")!=0)
 			rootSectionName=getenv("HOSTNAME");
-		if(rootSectionName==0||rootSectionName[0]=='\0')
+		if(rootSectionName.empty()&&getenv("HOST")!=0)
 			rootSectionName=getenv("HOST");
-		if(rootSectionName==0||rootSectionName[0]=='\0')
+		if(rootSectionName.empty())
 			rootSectionName="localhost";
-		configFile->setCurrentSection(rootSectionName);
+		configFile->setCurrentSection(rootSectionName.c_str());
+		#ifdef VERBOSE
+		std::cout<<"VRDeviceDaemon: Configuring from root section "<<rootSectionName<<std::endl<<std::flush;
+		#endif
 		
 		/* Initialize devices: */
 		#ifdef VERBOSE
@@ -291,6 +274,11 @@ int main(int argc,char* argv[])
 		std::cout<<"VRDeviceDaemon: Initializing device server"<<std::endl<<std::flush;
 		#endif
 		configFile->setCurrentSection("./DeviceServer");
+		if(httpListenPortId>=0)
+			{
+			/* Override the HTTP listen port setting in the configuration file: */
+			configFile->storeValue("./httpPort",httpListenPortId);
+			}
 		try
 			{
 			deviceServer=new VRDeviceServer(dispatcher,deviceManager,*configFile);
@@ -341,7 +329,7 @@ int main(int argc,char* argv[])
 		/* Close all file descriptors and remove the log file: */
 		for(int i=getdtablesize()-1;i>=0;--i)
 			close(i);
-		// unlink("/var/log/DeviceDaemon.log");
+		// unlink(logFileName.c_str());
 		}
 	#endif
 	

@@ -1,6 +1,6 @@
 /***********************************************************************
 XBackground - Utility to draw one of several calibration patterns.
-Copyright (c) 2004-2018 Oliver Kreylos
+Copyright (c) 2004-2025 Oliver Kreylos
 
 This file is part of the Vrui calibration utility package.
 
@@ -33,6 +33,10 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <X11/Xlib.h>
 #include <X11/keysym.h>
 #include <X11/Xutil.h>
+#include <Misc/StdError.h>
+#include <Misc/ValueCoder.h>
+#include <Misc/StandardValueCoders.h>
+#include <Misc/CommandLineParser.icpp>
 
 /*********************************************************
 Helper class to convert floating-point colors to X colors:
@@ -118,7 +122,7 @@ unsigned char* loadPPMFile(const char* ppmFileName,int ppmSize[2])
 	if(ppmFile==0)
 		{
 		std::ostringstream str;
-		str<<"loadPPMFile: Could not open input file "<<ppmFileName;
+		str<<"loadPPMFile: Unable to open input file "<<ppmFileName;
 		throw std::runtime_error(str.str());
 		}
 	
@@ -185,6 +189,61 @@ unsigned char* loadPPMFile(const char* ppmFileName,int ppmSize[2])
 	return result;
 	}
 
+/***********************************************
+Helper class to represent X11 window geometries:
+***********************************************/
+
+struct XWindowGeometry
+	{
+	/* Elements: */
+	public:
+	unsigned int setMask; // Bit mask of geometry components that were set
+	unsigned int size[2]; // Window's width and height in pixels
+	int position[2]; // Position of window's top-left corner relative to its parent in pixels
+	
+	/* Constructors and destructors: */
+	XWindowGeometry(void) // Creates a dummy window geometry with no set parameters
+		:setMask(0x0U)
+		{
+		}
+	XWindowGeometry(unsigned int width,unsigned int height) // Creates a window geometry with the given window size
+		:setMask(0x1U)
+		{
+		size[0]=width;
+		size[1]=height;
+		}
+	XWindowGeometry(unsigned int width,unsigned int height,int x, int y) // Creates a window geometry with the given window size and position
+		:setMask(0x3U)
+		{
+		size[0]=width;
+		size[1]=height;
+		position[0]=x;
+		position[1]=y;
+		}
+	
+	/* Methods: */
+	void setSize(unsigned int newWidth,unsigned int newHeight) // Sets the window size
+		{
+		setMask|=0x1U;
+		size[0]=newWidth;
+		size[1]=newHeight;
+		}
+	void setPosition(int newX,int newY) // Sets the window position
+		{
+		setMask|=0x2U;
+		position[0]=newX;
+		position[1]=newY;
+		}
+	bool hasSize(void) const // Returns true if the window geometry's size component was set
+		{
+		return (setMask&0x1U)!=0x0U;
+		}
+	bool hasPosition(void) const // Returns true if the window geometry's position component was set
+		{
+		return (setMask&0x2U)!=0x0U;
+		}
+	};
+
 /*************************************
 Helper class to represent X11 windows:
 *************************************/
@@ -200,8 +259,7 @@ struct WindowState
 	Window parent; // Handle of window's parent, to query on-screen position of decorated windows
 	int parentOffset[2]; // Position of window's top-left corner in its parent's coordinate system
 	Atom wmProtocolsAtom,wmDeleteWindowAtom; // Atoms needed for window manager communication
-	int origin[2]; // Window origin in pixels
-	int size[2]; // Window width and height in pixels
+	XWindowGeometry geometry; // Window position and size
 	GC gc; // Graphics context for the window
 	ColorConverter colorConverter; // Class to convert colors to X colors for the window's visual
 	XImage* image; // Image to display in the window (or 0 if no image was given)
@@ -215,8 +273,6 @@ struct WindowState
 		 image(0),
 		 fullscreened(false)
 		{
-		origin[0]=origin[1]=0;
-		size[0]=size[1]=128;
 		}
 	~WindowState(void)
 		{
@@ -236,17 +292,19 @@ struct WindowState
 		display=sDisplay;
 		screen=sScreen;
 		
-		/* Get root window of this screen: */
+		/* Get the root window of this screen: */
 		root=RootWindow(display,screen);
 		
-		/* Get root window's size: */
+		/* Get the root window's size: */
 		XWindowAttributes rootAttr;
 		XGetWindowAttributes(display,root,&rootAttr);
 		
 		/* Create the new window: */
-		// size[0]=rootAttr.width;
-		// size[1]=rootAttr.height;
-		window=XCreateSimpleWindow(display,root,origin[0],origin[1],size[0],size[1],0,WhitePixel(display,screen),BlackPixel(display,screen));
+		if(!geometry.hasSize())
+			geometry.setSize(640,480);
+		if(!geometry.hasPosition())
+			geometry.setPosition((int(rootAttr.width)-int(geometry.size[0]))/2,(int(rootAttr.height)-int(geometry.size[1]))/2);
+		window=XCreateSimpleWindow(display,root,geometry.position[0],geometry.position[1],geometry.size[0],geometry.size[1],0,WhitePixel(display,screen),BlackPixel(display,screen));
 		XSetStandardProperties(display,window,"XBackground","XBackground",None,0,0,0);
 		XSelectInput(display,window,ExposureMask|StructureNotifyMask|KeyPressMask);
 		
@@ -317,8 +375,7 @@ struct WindowState
 					}
 				
 				/* Retrieve the window size: */
-				size[0]=event.xconfigure.width;
-				size[1]=event.xconfigure.height;
+				geometry.setSize(event.xconfigure.width,event.xconfigure.height);
 				receivedConfigureNotify=true;
 				}
 			else if(event.type==ReparentNotify)
@@ -336,34 +393,40 @@ struct WindowState
 				}
 			}
 		
-		if(receivedConfigureNotify)
+		XWindowGeometry actualGeometry;
+		for(int trial=0;trial<2;++trial) // Try this at most two times
 			{
-			/*********************************************************************
-			Since modern window managers ignore window positions when opening
-			windows, we now need to move the window to its requested position.
-			*********************************************************************/
-			
-			/* In case this request goes to a redirected parent window, calculate its intended position by taking this window's parent offset into account: */
-			XMoveWindow(display,window,origin[0]-parentOffset[0],origin[1]-parentOffset[1]);
+			/* As this request will go to the redirected parent window, calculate its intended position by taking this window's parent offset into account: */
+			XMoveWindow(display,window,geometry.position[0]-parentOffset[0],geometry.position[1]-parentOffset[1]);
 			
 			/* Wait for the final ConfigureNotify event to determine the final window position and size: */
-			while(true)
+			XEvent event;
+			XWindowEvent(display,window,StructureNotifyMask,&event);
+			if(event.type==ConfigureNotify)
 				{
-				XEvent event;
-				XWindowEvent(display,window,StructureNotifyMask,&event);
-			
+				/* Retrieve the final window position and size: */
+				actualGeometry=XWindowGeometry(event.xconfigure.width,event.xconfigure.height,event.xconfigure.x,event.xconfigure.y);
+				}
+			while(XCheckWindowEvent(display,window,StructureNotifyMask,&event))
+				{
 				if(event.type==ConfigureNotify)
 					{
 					/* Retrieve the final window position and size: */
-					origin[0]=event.xconfigure.x;
-					origin[1]=event.xconfigure.y;
-					size[0]=event.xconfigure.width;
-					size[1]=event.xconfigure.height;
-					
-					break;
+					actualGeometry=XWindowGeometry(event.xconfigure.width,event.xconfigure.height,event.xconfigure.x,event.xconfigure.y);
 					}
 				}
+			
+			/* Check if the window actually ended up where we wanted: */
+			if(actualGeometry.position[0]==geometry.position[0]&&actualGeometry.position[1]==geometry.position[1])
+				break;
+			
+			/* Adjust the parent offset and try again: */
+			for(int i=0;i<2;++i)
+				parentOffset[i]+=actualGeometry.position[i]-geometry.position[i];
 			}
+		
+		/* Store the final window rectangle: */
+		geometry=actualGeometry;
 		
 		if(makeFullscreen)
 			{
@@ -407,16 +470,19 @@ struct WindowState
 		bool useGreen=false;
 		bool useBlue=false;
 		for(const char* compPtr=components;*compPtr!='\0';++compPtr)
-			switch(toupper(*compPtr))
+			switch(*compPtr)
 				{
+				case 'r':
 				case 'R':
 					useRed=true;
 					break;
 				
+				case 'g':
 				case 'G':
 					useGreen=true;
 					break;
 				
+				case 'b':
 				case 'B':
 					useBlue=true;
 					break;
@@ -548,7 +614,7 @@ struct WindowState
 		}
 	};
 
-void redraw(const WindowState& ws,int winOriginX,int winOriginY,int winWidth,int winHeight,int imageType,int squareSize)
+void redraw(const WindowState& ws,int winOriginX,int winOriginY,int winWidth,int winHeight,int patternType,int squareSize)
 	{
 	if(ws.image!=0)
 		{
@@ -557,7 +623,7 @@ void redraw(const WindowState& ws,int winOriginX,int winOriginY,int winWidth,int
 		}
 	else
 		{
-		switch(imageType)
+		switch(patternType)
 			{
 			case 0: // Calibration grid
 				{
@@ -647,310 +713,285 @@ void redraw(const WindowState& ws,int winOriginX,int winOriginY,int winWidth,int
 		}
 	}
 
+namespace Misc {
+
+template <>
+class ValueCoder<XWindowGeometry>
+	{
+	/* Methods: */
+	public:
+	static XWindowGeometry decode(const char* start,const char* end,const char** decodeEnd =0)
+		{
+		try
+			{
+			XWindowGeometry result;
+			const char* sPtr=start;
+			
+			/* Check if the size component is present: */
+			if(sPtr!=end&&*sPtr!='+'&&*sPtr!='-')
+				{
+				/* Parse the window width: */
+				unsigned int width=Misc::ValueCoder<unsigned int>::decode(sPtr,end,&sPtr);
+				
+				/* Check for the 'x': */
+				if(sPtr==end||(*sPtr!='x'&&*sPtr!='X'))
+					throw Misc::DecodingError("missing x separator");
+				++sPtr;
+				
+				/* Parse the window height: */
+				unsigned int height=Misc::ValueCoder<unsigned int>::decode(sPtr,end,&sPtr);
+				
+				/* Update the result: */
+				result.setSize(width,height);
+				}
+			
+			/* Check if the position component is present: */
+			if(sPtr!=end&&(*sPtr=='+'||*sPtr=='-'))
+				{
+				/* Parse the window x position: */
+				int x=Misc::ValueCoder<int>::decode(sPtr,end,&sPtr);
+				
+				/* Parse the window y position: */
+				int y=Misc::ValueCoder<int>::decode(sPtr,end,&sPtr);
+				
+				/* Update the result: */
+				result.setPosition(x,y);
+				}
+			
+			/* Set the decode end pointer: */
+			if(decodeEnd!=0)
+				*decodeEnd=sPtr;
+			
+			return result;
+			}
+		catch(std::runtime_error& err)
+			{
+			throw Misc::makeStdErr(0,"Unable to convert %s to XWindowGeometry due to %s",std::string(start,end).c_str(),err.what());
+			}
+		}
+	};
+
+}
+
 int main(int argc,char* argv[])
 	{
-	/* Parse command line: */
-	char* displayName=getenv("DISPLAY");
-	// char* displayName=":0.0";
-	int origin[2]={0,0};
-	int size[2]={800,600};
-	bool makeFullscreen=false;
-	bool decorate=true;
-	int imageType=0;
-	int squareSize=300;
-	char* imgFileName=0;
-	const char* components="rgb";
-	bool splitStereo=false;
-	bool printHelp=false;
-	for(int i=1;i<argc;++i)
+	try
 		{
-		if(argv[i][0]=='-')
+		/* Build a command line parser: */
+		Misc::CommandLineParser cmdLine;
+		cmdLine.setDescription("Utility to display a variety of calibration patterns or images.");
+		cmdLine.setArguments("[ <image file name> [ [r|R][g|G][b|B] ] ]","Loads an image file of the given name in PPM format and applies the optional color mask as a subset of RGB.");
+		char* displayNameEnv=getenv("DISPLAY");
+		std::string displayName=displayNameEnv!=0?displayNameEnv:":0";
+		cmdLine.addValueOption("display","display",displayName,"<X display connection name>","Sets the name of the X display on which to display the calibration image.");
+		XWindowGeometry geometry;
+		cmdLine.addValueOption("geometry","geometry",geometry,"[<width>x<height>][(+|-)<x>(+|-)<y>]","Sets the size and/or position of the calibration window.");
+		bool fullscreen=false;
+		cmdLine.addEnableOption("fullscreen","f",fullscreen,"Ask the window manager to make the calibration window full-screen.");
+		bool decorate=true;
+		cmdLine.addDisableOption("noDecorate","nd",decorate,"Do not add window manager decorations around the calibration window.");
+		const char* patternTypeNames[]=
 			{
-			if(strcasecmp(argv[i]+1,"display")==0)
-				{
-				++i;
-				displayName=argv[i];
-				}
-			else if(strcasecmp(argv[i]+1,"geometry")==0)
-				{
-				++i;
-				
-				/* Parse an X geometry string: */
-				int geomIndex=0;
-				int geometry[4];
-				for(int j=0;j<2;++j)
-					{
-					geometry[j]=size[j];
-					geometry[2+j]=origin[j];
-					}
-				const char* gPtr=argv[i];
-				bool correct=true;
-				while(*gPtr!='\0'&&geomIndex<4&&correct)
-					{
-					if(*gPtr=='x')
-						{
-						if(geomIndex==0)
-							geomIndex=1;
-						else
-							correct=false;
-						++gPtr;
-						}
-					else if(*gPtr=='+')
-						{
-						if(geomIndex<2)
-							geomIndex=2;
-						else if(geomIndex==2)
-							geomIndex=3;
-						else
-							correct=false;
-						++gPtr;
-						}
-					else if(*gPtr>='0'&&*gPtr<='9')
-						{
-						geometry[geomIndex]=0;
-						do
-							{
-							geometry[geomIndex]=geometry[geomIndex]*10+int(*gPtr-'0');
-							++gPtr;
-							}
-						while(*gPtr>='0'&&*gPtr<='9');
-						}
-					else
-						correct=false;
-					}
-				
-				if(correct)
-					{
-					for(int j=0;j<2;++j)
-						{
-						size[j]=geometry[j];
-						origin[j]=geometry[2+j];
-						}
-					}
-				else
-					fprintf(stderr,"Ignoring invalid geometry string %s\n",argv[i]);
-				}
-			else if(strcasecmp(argv[i]+1,"nd")==0||strcasecmp(argv[i]+1,"nodecorate")==0)
-				decorate=false;
-			else if(strcasecmp(argv[i]+1,"f")==0)
-				makeFullscreen=true;
-			else if(strcasecmp(argv[i]+1,"type")==0)
-				{
-				++i;
-				imageType=atoi(argv[i]);
-				}
-			else if(strcasecmp(argv[i]+1,"s")==0||strcasecmp(argv[i]+1,"size")==0)
-				{
-				++i;
-				squareSize=atoi(argv[i]);
-				}
-			else if(strcasecmp(argv[i]+1,"c")==0||strcasecmp(argv[i]+1,"color")==0)
-				{
-				++i;
-				components=argv[i];
-				}
-			else if(strcasecmp(argv[i]+1,"stereo")==0)
-				splitStereo=true;
-			else if(strcasecmp(argv[i]+1,"h")==0||strcasecmp(argv[i]+1,"help")==0)
-				printHelp=true;
-			}
-		else if(imgFileName==0)
-			imgFileName=argv[i];
-		else
-			components=argv[i];
-		}
-	
-	if(printHelp)
-		{
-		std::cout<<"Invocation: "<<argv[0]<<" [option 0] ... [option n] [<image file name> [<color components>]]"<<std::endl;
-		std::cout<<"  <image file name>"<<std::endl;
-		std::cout<<"    Name of an image file in binary PPM format to display inside the window"<<std::endl;
-		std::cout<<"  <color components>"<<std::endl;
-		std::cout<<"    Color component string, e.g., RG or RGB, to select which image color channels to use"<<std::endl;
-		std::cout<<"Options:"<<std::endl;
-		std::cout<<"  -display <display name>"<<std::endl;
-		std::cout<<"    Opens window on the X display of the given name"<<std::endl;
-		std::cout<<"  -geometry <width>x<height>[+<x>+<y>]"<<std::endl;
-		std::cout<<"    Sets initial window size to <width> by <height> and initial position of top-left corner to <x>, <y>"<<std::endl;
-		std::cout<<"  -nd | -nodecorate"<<std::endl;
-		std::cout<<"    Creates the window without window manager decorations"<<std::endl;
-		std::cout<<"  -f"<<std::endl;
-		std::cout<<"    Switches the window to full-screen mode after creation"<<std::endl;
-		std::cout<<"  -type <pattern type>"<<std::endl;
-		std::cout<<"    Selects a test pattern type. Recognized types:"<<std::endl;
-		std::cout<<"      0: Calibration pattern"<<std::endl;
-		std::cout<<"      1: Pixel phase test pattern"<<std::endl;
-		std::cout<<"      2: Calibration grid of grid size defined by -size <square size>"<<std::endl;
-		std::cout<<"      3: Calibration checkerboard of grid size defined by -size <square size>"<<std::endl;
-		std::cout<<"      4: Black screen"<<std::endl;
-		std::cout<<"  ( -s | -size ) <square size>"<<std::endl;
-		std::cout<<"    Sets the square size for test pattern types 2 and 3"<<std::endl;
-		std::cout<<"  ( -c | -color ) <color component string>"<<std::endl;
-		std::cout<<"    Color component string, e.g., RG or RGB, to select pattern foreground color"<<std::endl;
-		std::cout<<"  -stereo"<<std::endl;
-		std::cout<<"    Sets window to side-by-side stereo mode"<<std::endl;
-		std::cout<<"  -h | -help"<<std::endl;
-		std::cout<<"    Prints this help text"<<std::endl;
+			"TV","Phase","Grid","Checkerboard","Blank"
+			};
+		unsigned int patternType=0;
+		cmdLine.addCategoryOption("patternType","pt",5,patternTypeNames,patternType,"Selects the calibration pattern type.");
+		cmdLine.addValueOption("type","type",patternType,"<calibration type index>","Selects the calibration pattern type: 0=TV, 1=Phase, 2=Grid, 3=Checkerboard, 4=Blank.");
+		int squareSize=300;
+		cmdLine.addValueOption("size","s",squareSize,"<calibration grid size>","Sets the size of a square calibration grid cell in pixels.");
+		std::string patternChannels="rgb";
+		cmdLine.addValueOption("color","c",patternChannels,"[r|R][g|G][b|B]","Sets the channel mask for the calibration pattern to a subset of RGB.");
+		bool splitStereo=false;
+		cmdLine.addEnableOption("stereo","stereo",splitStereo,"Displays the calibration pattern in side-by-side stereo.");
+		const char* imageFileName=0;
+		const char* imageChannels=0;
 		
-		return 0;
-		}
-	
-	/* Open a connection to the X server: */
-	Display* display=XOpenDisplay(displayName);
-	if(display==0)
-		return 1;
-	
-	/* Check if the display name contains a screen name: */
-	bool haveColon=false;
-	const char* periodPtr=0;
-	for(const char* dnPtr=displayName;*dnPtr!='\0';++dnPtr)
-		{
-		if(*dnPtr==':')
-			haveColon=true;
-		else if(haveColon&&*dnPtr=='.')
-			periodPtr=dnPtr;
-		}
-	
-	int numWindows;
-	WindowState* ws=0;
-	if(periodPtr!=0)
-		{
-		/* Create a window for the given screen: */
-		numWindows=1;
-		ws=new WindowState[numWindows];
-		for(int j=0;j<2;++j)
+		/* Parse the command line: */
+		char** argPtr=argv;
+		while(cmdLine.parse(argPtr,argv+argc))
 			{
-			ws[0].origin[j]=origin[j];
-			ws[0].size[j]=size[j];
+			/* Parse a non-option argument: */
+			if(imageFileName==0)
+				imageFileName=*argPtr;
+			else if(imageChannels==0)
+				imageChannels=*argPtr;
+			else
+				throw Misc::makeStdErr(0,"Extra argument %s",*argPtr);
+			
+			++argPtr;
 			}
-		int screen=atoi(periodPtr+1);
-		ws[0].init(display,screen,makeFullscreen,decorate);
 		
-		/* Load an image, if given: */
-		if(imgFileName!=0&&strcasecmp(imgFileName,"Grid")!=0)
-			ws[0].loadImage(imgFileName,components);
-		}
-	else
-		{
-		/* Create a window for each screen: */
-		numWindows=ScreenCount(display);
-		ws=new WindowState[numWindows];
-		for(int screen=0;screen<numWindows;++screen)
+		/* Bail out if help was given: */
+		if(cmdLine.hadHelp())
+			return 0;
+		
+		/* Assign default image channel components if none were given: */
+		if(imageFileName!=0&&imageChannels==0)
+			imageChannels="rgb";
+		
+		/* Open a connection to the X server: */
+		Display* display=XOpenDisplay(displayName.c_str());
+		if(display==0)
+			throw Misc::makeStdErr(0,"Cannot open connection to display %s",displayName.c_str());
+		
+		/* Check if the display name contains a screen name: */
+		bool haveColon=false;
+		const char* periodPtr=0;
+		for(const char* dnPtr=displayName.c_str();*dnPtr!='\0';++dnPtr)
 			{
-			for(int j=0;j<2;++j)
-				{
-				ws[screen].origin[j]=origin[j];
-				ws[screen].size[j]=size[j];
-				}
-			ws[screen].init(display,screen,makeFullscreen,decorate);
+			if(*dnPtr==':')
+				haveColon=true;
+			else if(haveColon&&*dnPtr=='.')
+				periodPtr=dnPtr;
+			}
+		
+		/* Open one or more windows: */
+		int numWindows;
+		WindowState* ws=0;
+		if(periodPtr!=0)
+			{
+			/* Create a window for the given screen: */
+			numWindows=1;
+			ws=new WindowState[numWindows];
+			ws[0].geometry=geometry;
+			int screen=atoi(periodPtr+1);
+			ws[0].init(display,screen,fullscreen,decorate);
 			
 			/* Load an image, if given: */
-			if(imgFileName!=0&&strcasecmp(imgFileName,"Grid")!=0)
-				ws[screen].loadImage(imgFileName,components);
+			if(imageFileName!=0&&strcasecmp(imageFileName,"Grid")!=0)
+				ws[0].loadImage(imageFileName,imageChannels);
 			}
-		}
-	
-	/* Set the stereo rendering colors: */
-	unsigned char stereoColors[2][3]={{0x00,0xdf,0x00},{0xff,0x20,0xff}};
-	
-	/* Calculate the mono rendering color: */
-	unsigned char monoColor[3]={0,0,0};
-	for(const char* cPtr=components;*cPtr!='\0';++cPtr)
-		{
-		if(toupper(*cPtr)=='R')
-			monoColor[0]=255;
-		else if(toupper(*cPtr)=='G')
-			monoColor[1]=255;
-		else if(toupper(*cPtr)=='B')
-			monoColor[2]=255;
-		}
-	
-	/* Process X events: */
-	bool goOn=true;
-	while(goOn)
-		{
-		XEvent event;
-		XNextEvent(display,&event);
-		
-		/* Find the target window of this event: */
-		int i;
-		for(i=0;i<numWindows&&event.xany.window!=ws[i].window;++i)
-			;
-		if(i<numWindows)
-			switch(event.type)
+		else
+			{
+			/* Create a window for each screen: */
+			numWindows=ScreenCount(display);
+			ws=new WindowState[numWindows];
+			for(int screen=0;screen<numWindows;++screen)
 				{
-				case ConfigureNotify:
-					{
-					/* Check whether this is a real (parent-relative coordinates) or synthetic (root-relative coordinates) event: */
-					if(event.xconfigure.send_event) // Synthetic event
-						{
-						/* Update the window position and size: */
-						ws[i].origin[0]=event.xconfigure.x;
-						ws[i].origin[1]=event.xconfigure.y;
-						ws[i].size[0]=event.xconfigure.width;
-						ws[i].size[1]=event.xconfigure.height;
-						}
-					else // Real event
-						{
-						/* Update this window's parent offset, just in case: */
-						ws[i].parentOffset[0]=event.xconfigure.x;
-						ws[i].parentOffset[1]=event.xconfigure.y;
-						
-						/* Update the window size: */
-						ws[i].size[0]=event.xconfigure.width;
-						ws[i].size[1]=event.xconfigure.height;
-						
-						/* Query the parent's geometry to find the absolute window position: */
-						Window root;
-						int x,y;
-						unsigned int width,height,borderWidth,depth;
-						XGetGeometry(ws[i].display,ws[i].parent,&root,&x,&y,&width,&height,&borderWidth,&depth);
-						
-						/* Calculate the window position: */
-						ws[i].origin[0]=x+ws[i].parentOffset[0];
-						ws[i].origin[1]=y+ws[i].parentOffset[1];
-						}
-					
-					break;
-					}
+				ws[screen].geometry=geometry;
+				ws[screen].init(display,screen,fullscreen,decorate);
 				
-				case KeyPress:
-					{
-					XKeyEvent keyEvent=event.xkey;
-					KeySym keySym=XLookupKeysym(&keyEvent,0);
-					if(keySym==XK_F11)
-						ws[i].toggleFullscreen();
-					
-					goOn=keySym!=XK_Escape;
+				/* Load an image, if given: */
+				if(imageFileName!=0&&strcasecmp(imageFileName,"Grid")!=0)
+					ws[screen].loadImage(imageFileName,imageChannels);
+				}
+			}
+		
+		/* Set the stereo pattern rendering colors: */
+		unsigned char stereoColors[2][3]={{0x00,0xdf,0x00},{0xff,0x20,0xff}};
+		
+		/* Calculate the mono pattern rendering color: */
+		unsigned char monoColor[3]={0,0,0};
+		for(const char* pcPtr=patternChannels.c_str();*pcPtr!='\0';++pcPtr)
+			{
+			switch(*pcPtr)
+				{
+				case 'r':
+				case 'R':
+					monoColor[0]=255;
 					break;
-					}
 				
-				case Expose:
-					if(splitStereo)
-						{
-						/* Render test pattern for double-wide split-stereo screen: */
-						ws->setForeground(stereoColors[0]);
-						redraw(ws[i],0,0,ws[i].size[0]/2,ws[i].size[1],imageType,squareSize);
-						ws->setForeground(stereoColors[1]);
-						redraw(ws[i],ws[i].size[0]/2,0,ws[i].size[0]/2,ws[i].size[1],imageType,squareSize);
-						}
-					else
-						{
-						/* Render test pattern for regular-size screen: */
-						ws->setForeground(monoColor);
-						redraw(ws[i],0,0,ws[i].size[0],ws[i].size[1],imageType,squareSize);
-						}
+				case 'g':
+				case 'G':
+					monoColor[1]=255;
 					break;
-					
-				case ClientMessage:
-					if(event.xclient.message_type==ws[i].wmProtocolsAtom&&event.xclient.format==32&&(Atom)(event.xclient.data.l[0])==ws[i].wmDeleteWindowAtom)
-						goOn=false;
+				
+				case 'b':
+				case 'B':
+					monoColor[2]=255;
 					break;
 				}
+			}
+		
+		/* Process X events: */
+		bool goOn=true;
+		while(goOn)
+			{
+			XEvent event;
+			XNextEvent(display,&event);
+			
+			/* Find the target window of this event: */
+			int i;
+			for(i=0;i<numWindows&&event.xany.window!=ws[i].window;++i)
+				;
+			if(i<numWindows)
+				switch(event.type)
+					{
+					case ConfigureNotify:
+						{
+						/* Check whether this is a real (parent-relative coordinates) or synthetic (root-relative coordinates) event: */
+						if(event.xconfigure.send_event) // Synthetic event
+							{
+							/* Update the window position and size: */
+							ws[i].geometry.setSize(event.xconfigure.width,event.xconfigure.height);
+							ws[i].geometry.setPosition(event.xconfigure.x,event.xconfigure.y);
+							}
+						else // Real event
+							{
+							/* Update this window's parent offset, just in case: */
+							ws[i].parentOffset[0]=event.xconfigure.x;
+							ws[i].parentOffset[1]=event.xconfigure.y;
+							
+							/* Update the window size: */
+							ws[i].geometry.setSize(event.xconfigure.width,event.xconfigure.height);
+							
+							/* Query the parent's geometry to find the absolute window position: */
+							Window root;
+							int x,y;
+							unsigned int width,height,borderWidth,depth;
+							XGetGeometry(ws[i].display,ws[i].parent,&root,&x,&y,&width,&height,&borderWidth,&depth);
+							
+							/* Calculate the window position: */
+							ws[i].geometry.setPosition(x+ws[i].parentOffset[0],y+ws[i].parentOffset[1]);
+							}
+						
+						break;
+						}
+					
+					case KeyPress:
+						{
+						XKeyEvent keyEvent=event.xkey;
+						KeySym keySym=XLookupKeysym(&keyEvent,0);
+						if(keySym==XK_F11)
+							ws[i].toggleFullscreen();
+						
+						goOn=keySym!=XK_Escape;
+						break;
+						}
+					
+					case Expose:
+						if(splitStereo)
+							{
+							/* Render test pattern for double-wide split-stereo screen: */
+							ws->setForeground(stereoColors[0]);
+							redraw(ws[i],0,0,ws[i].geometry.size[0]/2,ws[i].geometry.size[1],patternType,squareSize);
+							ws->setForeground(stereoColors[1]);
+							redraw(ws[i],ws[i].geometry.size[0]/2,0,ws[i].geometry.size[0]/2,ws[i].geometry.size[1],patternType,squareSize);
+							}
+						else
+							{
+							/* Render test pattern for regular-size screen: */
+							ws->setForeground(monoColor);
+							redraw(ws[i],0,0,ws[i].geometry.size[0],ws[i].geometry.size[1],patternType,squareSize);
+							}
+						break;
+						
+					case ClientMessage:
+						if(event.xclient.message_type==ws[i].wmProtocolsAtom&&event.xclient.format==32&&(Atom)(event.xclient.data.l[0])==ws[i].wmDeleteWindowAtom)
+							goOn=false;
+						break;
+					}
+			}
+		
+		/* Clean up: */
+		delete[] ws;
+		XCloseDisplay(display);
+		}
+	catch(const std::runtime_error& err)
+		{
+		std::cerr<<"Terminating with error "<<err.what()<<std::endl;
+		return 1;
 		}
 	
-	/* Clean up: */
-	delete[] ws;
-	XCloseDisplay(display);
 	return 0;
 	}

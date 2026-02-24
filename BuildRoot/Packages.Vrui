@@ -1,7 +1,7 @@
 ########################################################################
 # Packages.Vrui - List of Vrui sub-packages that can be included/linked
 # into projects.
-# Copyright (c) 1999-2021 Oliver Kreylos
+# Copyright (c) 1999-2026 Oliver Kreylos
 # Mac OS X adaptation copyright (c) 2006 Braden Pellett
 #
 # This file is part of the WhyTools Build Environment.
@@ -41,12 +41,20 @@ MYREALTIME_LIBS       = -lRealtime$(LDEXT)
 MYREALTIME_RPATH      = $(VRUI_RPATH)
 
 MYTHREADS_BASEDIR = $(VRUI_PACKAGEROOT)
-MYTHREADS_DEPENDS = MYMISC PTHREADS
+MYTHREADS_DEPENDS = MYREALTIME MYMISC PTHREADS
 MYTHREADS_DEPENDS_INLINE = PTHREADS
 MYTHREADS_INCLUDE = -I$(VRUI_INCLUDEDIR)
 MYTHREADS_LIBDIR  = -L$(VRUI_LIBDIR)
 MYTHREADS_LIBS    = -lThreads$(LDEXT)
 MYTHREADS_RPATH   = $(VRUI_RPATH)
+
+MYDBUS_BASEDIR = $(VRUI_PACKAGEROOT)
+MYDBUS_DEPENDS = MYTHREADS MYMISC LIBDBUS
+MYDBUS_DEPENDS_INLINE = MYTHREADS LIBDBUS
+MYDBUS_INCLUDE = -I$(VRUI_INCLUDEDIR)
+MYDBUS_LIBDIR  = -L$(VRUI_LIBDIR)
+MYDBUS_LIBS    = -lDBus$(LDEXT)
+MYDBUS_RPATH   = $(VRUI_RPATH)
 
 MYUSB_BASEDIR = $(VRUI_PACKAGEROOT)
 MYUSB_DEPENDS = MYTHREADS MYMISC LIBUSB1

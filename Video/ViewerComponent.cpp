@@ -2,7 +2,7 @@
 ViewerComponent - An application component to stream video from a camera
 to an OpenGL texture for rendering, including user interfaces to select
 cameras and video modes and control camera settings.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2025 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -42,6 +42,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <GLMotif/RowColumn.h>
 #include <GLMotif/Label.h>
 #include <GLMotif/DropdownBox.h>
+#include <Video/VideoDataFormatSelector.h>
 
 namespace Video {
 
@@ -670,6 +671,86 @@ ViewerComponent::ViewerComponent(const char* videoDeviceName,unsigned int videoD
 	
 	/* Open the selected video device: */
 	openVideoDevice(videoDeviceIndex,initialFormat,initialFormatComponentMask);
+	}
+
+ViewerComponent::ViewerComponent(unsigned int sVideoDeviceIndex,const VideoDataFormatSelector& initialFormat,GLMotif::WidgetManager* sWidgetManager)
+	:videoDeviceIndex(sVideoDeviceIndex),
+	 videoDevice(0),videoExtractor(0),
+	 storeVideoFrames(true),
+	 videoFrameVersion(0),
+	 videoFrameCallback(0),videoFormatChangedCallback(0),videoFormatSizeChangedCallback(0),
+	 widgetManager(sWidgetManager),
+	 videoDevicesDialog(0),videoControlPanel(0)
+	{
+	/* Query the list of all connected video devices: */
+	videoDeviceList=VideoDevice::getVideoDevices();
+	if(videoDeviceList.empty())
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No video devices connected to host");
+	
+	/* Create the video devices dialog: */
+	videoDevicesDialog=createVideoDevicesDialog();
+	
+	/* Create a legacy bit mask of selected video data format components: */
+	int mask=0x0;
+	if(initialFormat.hasSize())
+		mask|=0x1;
+	if(initialFormat.hasFrameInterval())
+		mask|=0x2;
+	if(initialFormat.hasPixelFormat())
+		mask|=0x4;
+	
+	/* Open the selected video device: */
+	openVideoDevice(sVideoDeviceIndex,initialFormat,mask);
+	}
+
+ViewerComponent::ViewerComponent(const char* videoDeviceName,unsigned int videoDeviceNameIndex,const VideoDataFormatSelector& initialFormat,GLMotif::WidgetManager* sWidgetManager)
+	:videoDeviceIndex(0),
+	 videoDevice(0),videoExtractor(0),
+	 storeVideoFrames(true),
+	 videoFrameVersion(0),
+	 videoFrameCallback(0),videoFormatChangedCallback(0),videoFormatSizeChangedCallback(0),
+	 widgetManager(sWidgetManager),
+	 videoDevicesDialog(0),videoControlPanel(0)
+	{
+	/* Query the list of all connected video devices: */
+	videoDeviceList=VideoDevice::getVideoDevices();
+	if(videoDeviceList.empty())
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No video devices connected to host");
+	
+	/* Find a video device whose name matches the given name and index: */
+	videoDeviceIndex=videoDeviceList.size();
+	unsigned int vdni=videoDeviceNameIndex;
+	for(unsigned int i=0;i<videoDeviceIndex;++i)
+		if(strcasecmp(videoDeviceList[i]->getName().c_str(),videoDeviceName)==0)
+			{
+			if(vdni==0U)
+				{
+				/* Select the matching video device and bail out: */
+				videoDeviceIndex=i;
+				break;
+				}
+			
+			/* Try the next video device of the same name: */
+			--vdni;
+			}
+	
+	if(videoDeviceIndex>=videoDeviceList.size())
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Fewer than %u video devices of name %s connected to host",videoDeviceNameIndex+1,videoDeviceName);
+	
+	/* Create the video devices dialog: */
+	videoDevicesDialog=createVideoDevicesDialog();
+	
+	/* Create a legacy bit mask of selected video data format components: */
+	int mask=0x0;
+	if(initialFormat.hasSize())
+		mask|=0x1;
+	if(initialFormat.hasFrameInterval())
+		mask|=0x2;
+	if(initialFormat.hasPixelFormat())
+		mask|=0x4;
+	
+	/* Open the selected video device: */
+	openVideoDevice(videoDeviceIndex,initialFormat,mask);
 	}
 
 ViewerComponent::~ViewerComponent(void)

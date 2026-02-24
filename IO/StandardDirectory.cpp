@@ -1,7 +1,7 @@
 /***********************************************************************
 StandardDirectory - Class to access standard operating system
 directories.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2025 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -246,7 +246,7 @@ Misc::PathType StandardDirectory::getPathType(const char* relativePath) const
 FilePtr StandardDirectory::openFile(const char* fileName,File::AccessMode accessMode) const
 	{
 	/* Check if the file name is absolute: */
-	if(fileName[0]=='/')
+	if(IO::isAbsolutePath(fileName))
 		{
 		/* Open and return the file using the absolute path: */
 		return IO::openFile(fileName,accessMode);
@@ -267,10 +267,10 @@ FilePtr StandardDirectory::openFile(const char* fileName,File::AccessMode access
 DirectoryPtr StandardDirectory::openDirectory(const char* directoryName) const
 	{
 	/* Check if the directory name is absolute: */
-	if(directoryName[0]=='/')
+	if(IO::isAbsolutePath(directoryName))
 		{
 		/* Open and return the directory using the absolute path: */
-		return new StandardDirectory(directoryName);
+		return IO::openDirectory(directoryName);
 		}
 	else
 		{

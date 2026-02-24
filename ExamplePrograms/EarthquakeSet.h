@@ -22,7 +22,6 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #define EARTHQUAKESET_INCLUDED
 
 #include <vector>
-#include <IO/File.h>
 #include <IO/Directory.h>
 #include <Math/Interval.h>
 #include <Geometry/Point.h>
@@ -33,6 +32,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <GL/GLColorMap.h>
 
 /* Forward declarations: */
+namespace IO {
+class File;
+}
 namespace Geometry {
 template <class ScalarParam,int dimensionParam>
 class Vector;
@@ -98,8 +100,8 @@ class EarthquakeSet:public GLObject
 	double currentTime; // Current event time during animation
 	
 	/* Private methods: */
-	void loadANSSFile(IO::FilePtr earthquakeFile,const Geometry::Geoid<double>& referenceEllipsoid,const Geometry::Vector<double,3>& offset,std::vector<Event>& eventList); // Loads an earthquake event file in ANSS readable database snapshot format into the given event list
-	void loadCSVFile(IO::FilePtr earthquakeFile,const Geometry::Geoid<double>& referenceEllipsoid,const Geometry::Vector<double,3>& offset,std::vector<Event>& eventList); // Loads an earthquake event file in space- or comma-separated format into the given event list
+	void loadANSSFile(IO::File& earthquakeFile,const Geometry::Geoid<double>& referenceEllipsoid,const Geometry::Vector<double,3>& offset,std::vector<Event>& eventList); // Loads an earthquake event file in ANSS readable database snapshot format into the given event list
+	void loadCSVFile(IO::File& earthquakeFile,const Geometry::Geoid<double>& referenceEllipsoid,const Geometry::Vector<double,3>& offset,std::vector<Event>& eventList); // Loads an earthquake event file in space- or comma-separated format into the given event list
 	#if EARTHQUAKESET_EXPLICIT_RECURSION
 	void drawBackToFront(const Point& eyePos,GLuint* indexBuffer) const; // Creates an index buffer for the earthquake set in back-to-front order for the given eye position
 	#else

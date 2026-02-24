@@ -1,7 +1,7 @@
 /***********************************************************************
 HMDCameraViewer - Vislet class to show a live pass-through video feed
 from a mono or stereo camera attached to a head-mounted display.
-Copyright (c) 2020-2024 Oliver Kreylos
+Copyright (c) 2020-2025 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -112,7 +112,7 @@ class HMDCameraViewerFactory:public VisletFactory
 	bool stereo; // Flag whether the camera's frames are stereo pairs
 	IRect subFrames[2]; // Rectangles of mono or left and right sub-frames
 	std::string intrinsicsNames[2]; // Names of mono or left and right intrinsic camera parameter files, relative to Vrui's Resource directory
-	Rotation extrinsics; // Rotation from normalized camera space (looking along -z axis) to head tracker space
+	Rotation extrinsics[2]; // Rotation from normalized camera space (looking along -z axis) to head tracker space for the mono or left and right cameras
 	Video::IntrinsicParameters::Scalar sphereRadius; // Radius of the video projection sphere in physical-space units
 	Realtime::TimeStamp cameraLatency; // Estimated time from exposure to delivery of a new video frame
 	ToggleToolFactory* toggleToolFactory; // Pointer to the factory creating camera toggle tools

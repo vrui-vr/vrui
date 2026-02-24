@@ -8428,3 +8428,130 @@ Vrui-14.0-002:
 - Check whether the ss utility is in /usr/bin or /usr/sbin when creating
   the OnHMD script.
 - Fixed typo in etc/ControlWindow.cfg.
+
+Vrui-14.1-001:
+- Implemented act methods in node types of SceneGraph library that need
+  to update the action state's current transformation.
+  - TransformNode, ONTransformNode, OGTransformNode, DOGTransformNode,
+    GeodeticToCartesianTransformNode, BillboardNode.
+- API change: Redesigned Misc::ColorMap from scratch.
+- Added isPathAbsolute method to IO::Opener class and fixed handling of
+  absolute vs. relative paths when opening files or directories.
+- Fixes to Math::Interval class:
+  - Renamed misnamed "add" friend function to "operator+".
+  - Added isNonEmpty method, which is *not* the opposite of isEmpty.
+  - Added clamp, valueToFraction, and fractionToValue methods.
+  - Fixed friend declarations.
+- Big change to IO::CSVSource class:
+  - Big speed-up via use of character classes.
+  - Simplified parser code.
+  - Proper handling of CR/LF line endings.
+  - Proper handling of empty files.
+  - Added readFieldIntoBuffer method to efficiently read fields as NUL-
+    terminated strings.
+    - Added getFieldString and getFieldLength methods to access result
+      from most recent readFieldIntoBuffer call.
+- Added support for canted stereo cameras to HMDCameraViewer vislet.
+- Added OpenGL extension class for GL_NV_vdpau_interop.
+- Added Misc::CommandLineParser class to simplify processing application
+  command lines.
+  - Use new class in several Vrui utilities and example applications.
+- Created new Video::VideoDataFormatSelector class that keeps track of
+  which components of a video data format are explicitly requested.
+  - Added code to hook an object of this type into a command line
+    parser.
+  - Changed interface of Video::ViewerComponent to accept a
+    Video::VideoDataFormatSelector.
+- Re-enabled tool creation unwinding on exception in
+  Vrui::ToolManager::createTool.
+- Catch and handle exceptions in Vrui::ToolManager::update.
+- Use optional assignment to set VRUI_MAKEDIR in makefiles to enable
+  setup through the environment.
+- Fix wrong version number in ExamplePrograms makefile.
+- Add class names to exceptions thrown in Plugins::FactoryManager.
+- Catch and handle exceptions from event callbacks in
+  Threads::EventDispatcher.
+- Fixed tool deletion in Vrui::InputGraphManager to work properly with
+  essential tools.
+- Added addItem and setProperty convenience methods to IO::JsonArray and
+  IO::JsonObject classes in IO/JsonEntityTypes.h.
+- Fixed printing of power off capability in DeviceTest utility.
+- Added Comm::HttpPostRequest class to parse HTTP POST requests.
+- Added HTTP interface to VRDeviceServer that listens to HTTP POST
+  requests on a TCP socket and executes commands or returns information
+  as JSON files.
+- Fixed virtual device intialization in OpenVRHost device driver module.
+- Added VRServerLauncher to Vrui/Utilities; meta-server to listen to
+  commands as HTTP POST requests on a TCP socket and run VRDeviceDaemon
+  and VRCompositingServer sub-processes in an orderly fashion.
+- Added array keeping track of virtual devices' connected states to
+  VRDeviceManager, with new methods setVirtualDeviceConnected and
+  isVirtualDeviceConnected.
+  - Added code to update devices' connected states to OpenVRHost class.
+- Added hapticTick and powerOff commands to VRDeviceServer's HTTP
+  interface.
+  - Moved getServerStatus code into separate method of same name.
+- Catch errors when connecting a client over the UNIX socket in
+  VRCompositingServer's VRServer class.
+- Catch exceptions in the main compositor thread to cleanly exit when,
+  for example, the VR display gets disconnected.
+- Intercept SIGHUP in addition to SIGINT and SIGTERM to cleanly shut
+  down a Threads::EventDispatcher.
+- Fixed help text formatting in Misc::CommandLineParser.
+- Behavior change in Misc::CommandLineParser:
+  - By default, or when failOnArguments() is called, throw an exception
+    on unhandled non-option command line arguments.
+  - When stopOnArguments() is called, stop parsing on non-option command
+    line arguments to let caller handle them (old default behavior).
+- RunOpenVRTracker.sh and RunVRCompositor.sh scripts use exec to run the
+  actual server process and pass the script's command line to the
+  process.
+  - Fix makefile dependencies for RunOpenVRTracker.sh.
+- Major rewrites to VRServerLauncher.
+- Changes to VRCompositingServer:
+  - Add command line option to select a TCP port on which to listen for
+    HTTP POST requests.
+  - Use Misc::CommandLineParser.
+  - Move signal handling to Threads::EventDispatcher class.
+- Changes to VRDeviceDaemon:
+  - Add command line option to override httpPort setting in
+    configuration file.
+  - Add command line options to select PID and log file names when
+    daemonized.
+  - Use Misc::CommandLineParser.
+- Added new Plugins::DsoHandle class to manage DSO handles received from
+  dlopen() using RAII.
+  - Also hide dlfcn.h behind the interface by providing open and resolve
+    methods.
+- Pre-load the SteamVR lighthouse tracking driver's dependency on non-
+  standard libudev by explicitly loading that DSO before loading the
+  driver DSO.
+  - Add location of libudev relative to Steam root directory to
+    OpenVRHost-Config.h.
+- Complete Misc::SelfDestructPointer interface:
+  - Add move constructor and move assignment operator.
+  - Add assignment operator from standard pointer, obsoleting setTarget
+    method.
+- Added Threads::createFunctionCall wrappers for functions/methods
+  accepting (const) references as arguments.
+- Don't pass empty options (HMD_TYPE, HMD_REFRESH) to VRCompositor in
+  RunVRCompositor.sh
+- Added command to upload spatial environment definitions at run-time to
+  VRDeviceDaemon's HTTP command protocol.
+- Added a list of pre-defined spatial environments to VRServerLauncher
+  that can be queried by clients and be used to populate a drop-down box
+  or somesuch to let users upload spatial environments into
+  VRDeviceDaemon using a simple GUI.
+  - Added VRServerLauncher.cfg configuration file to configure
+    VRServerLauncher's configuration as well as a list of pre-defined
+    spatial environments.
+- Added new Misc::DynamicArray class for dynamically growing and
+  shrinking arrays, intended to be used internally by higher-level data
+  structures.
+- Added new Threads::RunLoop and Threads::RunLoopThread classes to
+  replace the fundamentally broken Threads::EventDispatcher and
+  Threads::EventDispatcherThread classes.
+- Added DBus, a small C++ wrapper library for the Desktop Bus (DBus) IPC
+  mechanism's C API.
+  - Headers/sources are in DBus subdirectory.
+  - Builds libDBus shared library.

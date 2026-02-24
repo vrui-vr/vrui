@@ -1,7 +1,7 @@
 /***********************************************************************
 OpenVRHost-Config - Configuration settings for OpenVRHost device driver
 module.
-Copyright (c) 2016-2023 Oliver Kreylos
+Copyright (c) 2016-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -26,5 +26,8 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #define VRDEVICEDAEMON_CONFIG_OPENVRHOST_STEAMDIR "/opt/SteamVR-1.15.19"
 #define VRDEVICEDAEMON_CONFIG_OPENVRHOST_STEAMVRDIR "steamapps/common/SteamVR"
+
+#define VRDEVICEDAEMON_CONFIG_OPENVRHOST_LIBUDEVDIR "ubuntu12_32/steam-runtime/amd64/lib/x86_64-linux-gnu"
+#define VRDEVICEDAEMON_CONFIG_OPENVRHOST_LIBUDEVDSO "libudev.so.0"
 
 #endif

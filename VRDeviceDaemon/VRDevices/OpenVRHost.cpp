@@ -1,7 +1,7 @@
 /***********************************************************************
 OpenVRHost - Class to wrap a low-level OpenVR tracking and display
 device driver in a VRDevice.
-Copyright (c) 2016-2024 Oliver Kreylos
+Copyright (c) 2016-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -30,7 +30,6 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <unistd.h>
 #include <string>
 #include <iostream>
-#include <dlfcn.h>
 #include <Misc/SizedTypes.h>
 #include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
@@ -803,7 +802,6 @@ OpenVRHost::OpenVRHost(VRDevice::Factory* sFactory,VRDeviceManager* sDeviceManag
 	 verbosity(configFile.retrieveValue<int>("./verbosity",0)),
 	 blockQueueHandles(17),nextBlockQueueHandle(0xa00000001UL),
 	 pathHandles(17),nextPathHandle(0x10002afc0000003cUL),
-	 openvrDriverDsoHandle(0),
 	 openvrTrackedDeviceProvider(0),
 	 ioBufferMap(17),lastIOBufferHandle(0),
 	 runFrameTimerKey(0),
@@ -859,10 +857,19 @@ OpenVRHost::OpenVRHost(VRDevice::Factory* sFactory,VRDeviceManager* sDeviceManag
 	openvrDriverDsoName=configFile.retrieveString("./openvrDriverDsoName",openvrDriverDsoName);
 	openvrDriverDsoName=pathcat(openvrDriverRootDir,openvrDriverDsoName);
 	
+	/* Pre-load the udev library dso required by the OpenVR device driver: */
+	std::string libudevDsoName=steamRootDir;
+	libudevDsoName.push_back('/');
+	libudevDsoName.append(VRDEVICEDAEMON_CONFIG_OPENVRHOST_LIBUDEVDIR);
+	libudevDsoName.push_back('/');
+	libudevDsoName.append(VRDEVICEDAEMON_CONFIG_OPENVRHOST_LIBUDEVDSO);
+	log(1,"Pre-loading libudev library from %s\n",libudevDsoName.c_str());
+	if(!libudev.open(libudevDsoName.c_str(),RTLD_NOW))
+		log(1,"Cannot pre-load libudev library from %s due to error %s; try setting LD_LIBRARY_PATH instead",libudevDsoName.c_str(),dlerror());
+	
 	/* Open the OpenVR device driver dso: */
 	log(1,"Loading OpenVR driver module from %s\n",openvrDriverDsoName.c_str());
-	openvrDriverDsoHandle=dlopen(openvrDriverDsoName.c_str(),RTLD_NOW);
-	if(openvrDriverDsoHandle==0)
+	if(!openvrDriver.open(openvrDriverDsoName.c_str(),RTLD_NOW))
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot load OpenVR driver dynamic shared object %s due to error %s",openvrDriverDsoName.c_str(),dlerror());
 	
 	/* Retrieve the name of the main driver factory function: */
@@ -871,22 +878,16 @@ OpenVRHost::OpenVRHost(VRDevice::Factory* sFactory,VRDeviceManager* sDeviceManag
 	
 	/* Resolve the main factory function (using an evil hack to avoid warnings): */
 	typedef void* (*HmdDriverFactoryFunction)(const char* pInterfaceName,int* pReturnCode);
-	ptrdiff_t factoryIntermediate=reinterpret_cast<ptrdiff_t>(dlsym(openvrDriverDsoHandle,openvrFactoryFunctionName.c_str()));
+	ptrdiff_t factoryIntermediate=reinterpret_cast<ptrdiff_t>(openvrDriver.resolve(openvrFactoryFunctionName.c_str()));
 	HmdDriverFactoryFunction HmdDriverFactory=reinterpret_cast<HmdDriverFactoryFunction>(factoryIntermediate);
 	if(HmdDriverFactory==0)
-		{
-		dlclose(openvrDriverDsoHandle);
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot resolve OpenVR driver factory function %s due to error %s",openvrFactoryFunctionName.c_str(),dlerror());
-		}
 	
 	/* Get a pointer to the server-side driver object: */
 	int error=0;
 	openvrTrackedDeviceProvider=reinterpret_cast<vr::IServerTrackedDeviceProvider*>(HmdDriverFactory(vr::IServerTrackedDeviceProvider_Version,&error));
 	if(openvrTrackedDeviceProvider==0)
-		{
-		dlclose(openvrDriverDsoHandle);
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot retrieve server-side driver object due to error %d",error);
-		}
 	
 	/*********************************************************************
 	Second initialization step: Initialize the VR device driver module.
@@ -1010,6 +1011,12 @@ OpenVRHost::OpenVRHost(VRDevice::Factory* sFactory,VRDeviceManager* sDeviceManag
 				vd->rayDirection=Vrui::VRDeviceDescriptor::Vector(0,0,-1);
 				vd->rayStart=0.0f;
 				
+				/* Set if the device has a battery: */
+				vd->hasBattery=deviceType==Controller||deviceType==Tracker;
+				
+				/* Set if the device can be powered off: */
+				vd->canPowerOff=dc.numPowerFeatures>0;
+				
 				/* Assign a tracker index: */
 				vd->trackerIndex=getTrackerIndex(nextTrackerIndex++);
 				
@@ -1039,6 +1046,9 @@ OpenVRHost::OpenVRHost(VRDevice::Factory* sFactory,VRDeviceManager* sDeviceManag
 				
 				/* Register the virtual device: */
 				virtualDeviceIndices[deviceType][deviceIndex]=addVirtualDevice(vd);
+				
+				/* Mark the device as unconnected: */
+				deviceManager->setVirtualDeviceConnected(virtualDeviceIndices[deviceType][deviceIndex],false);
 				}
 			}
 		else
@@ -1114,9 +1124,6 @@ OpenVRHost::~OpenVRHost(void)
 	
 	/* Delete the OpenVR device state array: */
 	delete[] deviceStates;
-	
-	/* Close the OpenVR device driver dso: */
-	dlclose(openvrDriverDsoHandle);
 	}
 
 /* Methods inherited from class VRDevice: */
@@ -2142,6 +2149,9 @@ bool OpenVRHost::TrackedDeviceAdded(const char* pchDeviceSerialNumber,vr::ETrack
 		{
 		/* Register the new base station with the device manager: */
 		ds.deviceIndex=deviceManager->addBaseStation(ds.serialNumber);
+		
+		/* Assign an invalid virtual device index: */
+		ds.virtualDeviceIndex=~0U;
 		}
 	else
 		{
@@ -2200,6 +2210,8 @@ void OpenVRHost::TrackedDevicePoseUpdated(uint32_t unWhichDevice,const vr::Drive
 		{
 		/* Change the device's connected state: */
 		ds.connected=newPose.deviceIsConnected;
+		if(ds.virtualDeviceIndex!=~0U)
+			deviceManager->setVirtualDeviceConnected(ds.virtualDeviceIndex,ds.connected);
 		
 		log(1,"Tracked device with serial number %s is now %s\n",ds.serialNumber.c_str(),ds.connected?"connected":"disconnected");
 		}

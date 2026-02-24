@@ -109,13 +109,16 @@ endif
 # Select support for commodity VR headsets via the OpenVR API
 ########################################################################
 
-# Root directory of the SteamVR run-time. Set this to the path of the
-# directory containing the /drivers and /resources subdirectories,
-# usually called SteamVR, to bypass the automatic detection procedure.
+# Root directory of the SteamVR run-time. Set this to the directory
+# containing the /drivers and /resources subdirectories, typically named
+# "SteamVR". If this variable is neither defined here nor in the
+# environment nor given on make's command line, the following code will
+# try to find a SteamVR installation on the local system.
 # STEAMVRDIR = 
 
-# If no SteamVR directory is defined above, or given on make's command
-# line, search the file system for an installation:
+# If no SteamVR directory is defined above or in the environment, or
+# given on make's command line, search the file system for a SteamVR
+# installation:
 ifeq ($(strip $(STEAMVRDIR)),)
   STEAMVRDIR = $(realpath $(firstword $(wildcard $(HOME)/.[Ss]team/[Ss]team/[Ss]team[Aa]pps/[Cc]ommon/[Ss]team[Vv][Rr] $(HOME)/.local/share/[Ss]team/[Ss]team[Aa]pps/[Cc]ommon/[Ss]team[Vv][Rr])))
   ifeq ($(strip $(STEAMVRDIR)),)
@@ -233,9 +236,9 @@ PROJECT_NAME = Vrui
 
 # Specify version of created dynamic shared libraries
 PROJECT_MAJOR = 14
-PROJECT_MINOR = 0
-PROJECT_BUILD = 2
-PROJECT_NUMERICVERSION = 14000002
+PROJECT_MINOR = 1
+PROJECT_BUILD = 1
+PROJECT_NUMERICVERSION = 14001001
 
 # Override the include file and library search directories:
 VRUI_INCLUDEDIR = $(PROJECT_ROOT)
@@ -341,6 +344,9 @@ BUILDUTILS += $(VRUI_MAKEDIR)/StripPackages
 LIBRARY_NAMES    = libMisc \
                    libRealtime \
                    libThreads
+ifneq ($(SYSTEM_HAVE_LIBDBUS),0)
+  LIBRARY_NAMES += libDBus
+endif
 ifneq ($(SYSTEM_HAVE_LIBUSB1),0)
   LIBRARY_NAMES += libUSB
 endif
@@ -486,6 +492,12 @@ ifneq ($(SYSTEM_HAVE_VULKAN),0)
   RESOURCES += $(VRCOMPOSITINGSERVER_SHADERS:%=$(SPIRVVERTEXDIR)/%.spv) \
                $(VRCOMPOSITINGSERVER_SHADERS:%=$(SPIRVFRAGMENTDIR)/%.spv)
 endif
+
+#
+# A meta-server to run the VR tracking server and the VR compositing server:
+#
+
+EXECUTABLES += $(EXEDIR)/VRServerLauncher
 
 #
 # The Vrui device driver test programs (textual and visual):
@@ -813,10 +825,41 @@ $(call LIBRARYNAME,libThreads): $(call LIBOBJNAMES,$(THREADS_SOURCES))
 libThreads: $(call LIBRARYNAME,libThreads)
 
 #
+# The DBus C++ wrapper library (DBus):
+#
+
+$(DEPDIR)/Configure-DBus: $(DEPDIR)/Configure-Threads
+ifneq ($(SYSTEM_HAVE_LIBDBUS),0)
+	@echo Libdbus library exists on host system
+else
+	@echo Libdbus library does not exist on host system
+endif
+	@cp DBus/Config.h.template DBus/Config.h.temp
+	@$(call CONFIG_SETVAR,DBus/Config.h.temp,DBUS_CONFIG_HAVE_LIBDBUS,$(SYSTEM_HAVE_LIBDBUS))
+	@if ! diff -qN DBus/Config.h.temp DBus/Config.h > /dev/null ; then cp DBus/Config.h.temp DBus/Config.h ; fi
+	@rm DBus/Config.h.temp
+	@touch $(DEPDIR)/Configure-DBus
+
+DBUS_HEADERS = $(wildcard DBus/*.h) \
+               $(wildcard DBus/*.icpp)
+
+DBUS_SOURCES = $(wildcard DBus/*.cpp)
+
+$(call LIBOBJNAMES,$(DBUS_SOURCES)): | $(DEPDIR)/config
+
+DBUS_PACKAGES = MYTHREADS MYMISC LIBDBUS
+$(call LIBRARYNAME,libDBus): PACKAGES = $(DBUS_PACKAGES)
+$(call LIBRARYNAME,libDBus): EXTRACINCLUDEFLAGS += $(MYDBUS_INCLUDE)
+$(call LIBRARYNAME,libDBus): | $(call DEPENDENCIES,$(DBUS_PACKAGES))
+$(call LIBRARYNAME,libDBus): $(call LIBOBJNAMES,$(DBUS_SOURCES))
+.PHONY: libDBus
+libDBus: $(call LIBRARYNAME,libDBus)
+
+#
 # The USB Support Library (USB):
 #
 
-$(DEPDIR)/Configure-USB: $(DEPDIR)/Configure-Threads
+$(DEPDIR)/Configure-USB: $(DEPDIR)/Configure-DBus
 ifneq ($(SYSTEM_HAVE_LIBUSB1),0)
 	@echo Libusb library version 1.0 exists on host system
   ifneq ($(LIBUSB1_HAS_TOPOLOGY_CALLS),0)
@@ -1473,6 +1516,7 @@ endif
 VIDEO_HEADERS = Video/Config.h \
                 Video/Types.h \
                 Video/VideoDataFormat.h \
+                Video/VideoDataFormatSelector.h \
                 Video/FrameBuffer.h \
                 Video/ImageExtractor.h \
                 Video/VideoDevice.h \
@@ -1496,6 +1540,7 @@ endif
 VIDEO_HEADERS += Video/ViewerComponent.h
 
 VIDEO_SOURCES = Video/VideoDataFormat.cpp \
+                Video/VideoDataFormatSelector.cpp \
                 Video/VideoDevice.cpp \
                 Video/ImageSequenceVideoDevice.cpp \
                 Video/ImageExtractor.cpp \
@@ -2028,7 +2073,7 @@ $(call VRDEVICENAMES,RazerHydraDevice): PACKAGES += MYUSB LIBUSB1
 $(call VRDEVICENAMES,RazerHydraDevice): $(call PLUGINOBJNAMES,VRDeviceDaemon/VRDevices/RazerHydra.cpp \
                                                               VRDeviceDaemon/VRDevices/RazerHydraDevice.cpp)
 $(call VRDEVICENAMES,OculusRift): PACKAGES += MYUSB MYIO LIBUSB1
-$(call VRDEVICENAMES,OpenVRHost): PACKAGES += OPENVR
+$(call VRDEVICENAMES,OpenVRHost): PACKAGES += MYPLUGINS OPENVR
 $(call VRDEVICENAMES,OpenVRHost): EXTRACINCLUDEFLAGS += -I$(OPENVR_BASEDIR)/headers
 # $(call VRDEVICENAMES,OpenVRHost): CFLAGS += -DVERYVERBOSE
 
@@ -2064,13 +2109,13 @@ VRCalibrators: $(VRCALIBRATORS)
 
 ifneq ($(SYSTEM_HAVE_OPENVR),0)
 $(EXEDIR)/RunOpenVRTracker.sh: | $(DEPDIR)/config
-$(EXEDIR)/RunOpenVRTracker.sh: VRDeviceDaemon/VRDevices/OpenVRHost-Config.h
+$(EXEDIR)/RunOpenVRTracker.sh: $(VRUI_SCRIPTDIR)/RunVRCompositor.sh $(DEPDIR)/Configure-Vrui
 	@echo Creating helper script to run OpenVRHost tracking device driver...
 	@cp $(VRUI_SCRIPTDIR)/RunOpenVRTracker.sh $(EXEDIR)/RunOpenVRTracker.sh
 	@sed -i -e 's@STEAMDIR=.*@STEAMDIR=$(subst $(HOME),$$HOME,$(STEAMDIR))@' $(EXEDIR)/RunOpenVRTracker.sh
-	@sed -i -e 's@RUNTIMEDIR1=.*@RUNTIMEDIR1=$(subst $(STEAMDIR),$$STEAMDIR,$(STEAMRUNTIMEDIR1))@' $(EXEDIR)/RunOpenVRTracker.sh
-	@sed -i -e 's@RUNTIMEDIR2=.*@RUNTIMEDIR2=$(subst $(STEAMDIR),$$STEAMDIR,$(STEAMRUNTIMEDIR2))@' $(EXEDIR)/RunOpenVRTracker.sh
-	@sed -i -e 's@STEAMVRDIR=.*@STEAMVRDIR=$(subst $(STEAMDIR),$$STEAMDIR,$(STEAMVRDIR))@' $(EXEDIR)/RunOpenVRTracker.sh
+	@sed -i -e 's@RUNTIMEDIR1=.*@RUNTIMEDIR1=$(subst $(STEAMDIR),$${STEAMDIR},$(STEAMRUNTIMEDIR1))@' $(EXEDIR)/RunOpenVRTracker.sh
+	@sed -i -e 's@RUNTIMEDIR2=.*@RUNTIMEDIR2=$(subst $(STEAMDIR),$${STEAMDIR},$(STEAMRUNTIMEDIR2))@' $(EXEDIR)/RunOpenVRTracker.sh
+	@sed -i -e 's@STEAMVRDIR=.*@STEAMVRDIR=$(subst $(STEAMDIR),$${STEAMDIR},$(STEAMVRDIR))@' $(EXEDIR)/RunOpenVRTracker.sh
 	@sed -i -e 's@VRUIBINDIR=.*@VRUIBINDIR=$(EXECUTABLEINSTALLDIR)@' $(EXEDIR)/RunOpenVRTracker.sh
 	@sed -i -e 's@VRUIETCDIR=.*@VRUIETCDIR=$(ETCINSTALLDIR)@' $(EXEDIR)/RunOpenVRTracker.sh
 	@chmod a+x $(EXEDIR)/RunOpenVRTracker.sh
@@ -2177,6 +2222,19 @@ $(EXEDIR)/TransformCalculator: $(OBJDIR)/Vrui/Utilities/TransformCalculator.o
 TransformCalculator: $(EXEDIR)/TransformCalculator
 
 #
+# The VR server launcher
+#
+
+VRSERVERLAUNCHER_SOURCES = Vrui/Utilities/VRServerLauncher.cpp
+
+$(VRSERVERLAUNCHER_SOURCES:%.cpp=$(OBJDIR)/%.o): | $(DEPDIR)/config
+
+$(EXEDIR)/VRServerLauncher: PACKAGES += MYCOMM MYIO MYTHREADS MYMISC
+$(EXEDIR)/VRServerLauncher: $(VRSERVERLAUNCHER_SOURCES:%.cpp=$(OBJDIR)/%.o)
+.PHONY: VRServerLauncher
+VRServerLauncher: $(EXEDIR)/VRServerLauncher
+
+#
 # The VR Device Daemon test programs:
 #
 
@@ -2276,7 +2334,7 @@ PrintInputDeviceDataFile: $(EXEDIR)/PrintInputDeviceDataFile
 # The calibration pattern generator:
 #
 
-$(EXEDIR)/XBackground: PACKAGES += X11
+$(EXEDIR)/XBackground: PACKAGES += MYMISC X11
 $(EXEDIR)/XBackground: EXTRACINCLUDEFLAGS += -ICalibration
 $(EXEDIR)/XBackground: $(OBJDIR)/Calibration/XBackground.o
 .PHONY: XBackground
@@ -2539,13 +2597,13 @@ endif
 $(TEMPLATEMAKEFILE): $(VRUI_MAKEDIR)/makefile.template $(DEPDIR)/Configure-Install
 	@echo Configuring template makefile...
 	@cp $(VRUI_MAKEDIR)/makefile.template $(TEMPLATEMAKEFILE)
-	@sed -i -e 's@^VRUI_MAKEDIR = .*@VRUI_MAKEDIR = $(MAKEINSTALLDIR)@' $(TEMPLATEMAKEFILE)
+	@sed -i -e 's@^VRUI_MAKEDIR ?= .*@VRUI_MAKEDIR ?= $(MAKEINSTALLDIR)@' $(TEMPLATEMAKEFILE)
 
 # Pseudo-target to configure the ExamplePrograms makefile
 ExamplePrograms/makefile: ExamplePrograms/makefile.template $(DEPDIR)/Configure-Install
 	@echo Configuring makefile in ExamplePrograms...
 	@cp ExamplePrograms/makefile.template ExamplePrograms/makefile
-	@sed -i -e 's@^VRUI_MAKEDIR = .*@VRUI_MAKEDIR = $(MAKEINSTALLDIR)@' ExamplePrograms/makefile
+	@sed -i -e 's@^VRUI_MAKEDIR ?= .*@VRUI_MAKEDIR ?= $(MAKEINSTALLDIR)@' ExamplePrograms/makefile
 
 # Pseudo-target to configure the ExamplePrograms/MeshEditor makefile
 ExamplePrograms/MeshEditor/makefile: ExamplePrograms/MeshEditor/makefile.template $(DEPDIR)/Configure-Install
@@ -2557,7 +2615,7 @@ ExamplePrograms/MeshEditor/makefile: ExamplePrograms/MeshEditor/makefile.templat
 ExamplePrograms/VRMLViewer/makefile: ExamplePrograms/VRMLViewer/makefile.template $(DEPDIR)/Configure-Install
 	@echo Configuring makefile in ExamplePrograms/VRMLViewer...
 	@cp ExamplePrograms/VRMLViewer/makefile.template ExamplePrograms/VRMLViewer/makefile
-	@sed -i -e 's@^VRUI_MAKEDIR = .*@VRUI_MAKEDIR = $(MAKEINSTALLDIR)@' ExamplePrograms/VRMLViewer/makefile
+	@sed -i -e 's@^VRUI_MAKEDIR ?= .*@VRUI_MAKEDIR ?= $(MAKEINSTALLDIR)@' ExamplePrograms/VRMLViewer/makefile
 
 BUILDROOT_FILES = $(VRUI_MAKEDIR)/SystemDefinitions \
                   $(VRUI_MAKEDIR)/Packages.System \
@@ -2580,6 +2638,10 @@ install:
 	@install -m u=rw,go=r $(REALTIME_HEADERS) $(HEADERINSTALLDIR)/Realtime
 	@install -d $(HEADERINSTALLDIR)/Threads
 	@install -m u=rw,go=r $(THREADS_HEADERS) $(HEADERINSTALLDIR)/Threads
+ifneq ($(SYSTEM_HAVE_LIBDBUS),0)
+	@install -d $(HEADERINSTALLDIR)/DBus
+	@install -m u=rw,go=r $(DBUS_HEADERS) $(HEADERINSTALLDIR)/DBus
+endif
 ifneq ($(SYSTEM_HAVE_LIBUSB1),0)
 	@install -d $(HEADERINSTALLDIR)/USB
 	@install -m u=rw,go=r $(USB_HEADERS) $(HEADERINSTALLDIR)/USB
@@ -2775,6 +2837,7 @@ endif
 	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/Misc $(MISC_HEADERS)
 	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/Realtime $(REALTIME_HEADERS)
 	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/Threads $(THREADS_HEADERS)
+	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/DBus $(DBUS_HEADERS)
 	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/USB $(USB_HEADERS)
 	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/RawHID $(RAWHID_HEADERS)
 	@$(VRUI_MAKEDIR)/CleanDir.sh $(HEADERINSTALLDIR)/IO $(IO_HEADERS)
@@ -2820,6 +2883,10 @@ devinstall:
 	@ln -sf $(REALTIME_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Realtime
 	@mkdir -p $(HEADERINSTALLDIR)/Threads
 	@ln -sf $(THREADS_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Threads
+ifneq ($(SYSTEM_HAVE_LIBDBUS),0)
+	@mkdir -p $(HEADERINSTALLDIR)/DBus
+	@ln -sf $(DBUS_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/DBus
+endif
 ifneq ($(SYSTEM_HAVE_LIBUSB1),0)
 	@mkdir -p $(HEADERINSTALLDIR)/USB
 	@ln -sf $(USB_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/USB

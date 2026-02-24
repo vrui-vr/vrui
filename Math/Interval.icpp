@@ -1,6 +1,6 @@
 /***********************************************************************
 Interval - Class for closed intervals of arbitrary scalar types.
-Copyright (c) 2003-2010 Oliver Kreylos
+Copyright (c) 2003-2025 Oliver Kreylos
 
 This file is part of the Templatized Math Library (Math).
 
@@ -50,7 +50,7 @@ Interval<ScalarParam>& Interval<ScalarParam>::intersectInterval(const Interval<S
 	if(max>other.max)
 		max=other.max;
 	
-	/* Check if interval is now empty: */
+	/* Check if interval is now null: */
 	if(min>max)
 		{
 		/* Set interval to prototype empty interval: */
@@ -96,12 +96,11 @@ Interval<ScalarParam> intersect(const Interval<ScalarParam>& i1,const Interval<S
 	if(max>i2.max)
 		max=i2.max;
 	
-	/* Check if result interval is emtpy: */
-	if(min>max)
+	/* Return the result if it is non-null; otherwise, return the prototype empty interval: */
+	if(min<=max)
+		return Interval<ScalarParam>(min,max);
+	else
 		return Interval<ScalarParam>::empty;
-	
-	/* Return result: */
-	return Interval<ScalarParam>(min,max);
 	}
 
 }

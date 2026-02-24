@@ -3,7 +3,7 @@ Animation - Example program demonstrating data exchange between a
 background animation thread and the foreground rendering thread using
 a triple buffer, and retained-mode OpenGL rendering using vertex and
 index buffers.
-Copyright (c) 2014-2021 Oliver Kreylos
+Copyright (c) 2014-2025 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -22,6 +22,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <unistd.h>
 #include <iostream>
+#include <Misc/StdError.h>
+#include <Misc/CommandLineParser.h>
 #include <Threads/Thread.h>
 #include <Threads/TripleBuffer.h>
 #include <Math/Math.h>
@@ -123,8 +125,27 @@ Animation::Animation(int& argc,char**& argv)
 	 meshMaterialFront(GLMaterial::Color(1.0f,0.5f,0.5f),GLMaterial::Color(0.25f,0.25f,0.25f),8.0f),
 	 meshMaterialBack(GLMaterial::Color(0.5f,0.5f,1.0f),GLMaterial::Color(0.25f,0.25f,0.25f),8.0f)
 	{
-	/* Initialize the mesh: */
-	meshSize[0]=meshSize[1]=129;
+	/* Initialize the mesh triple buffer: */
+	for(int i=0;i<3;++i)
+		meshVertices.getBuffer(i)=0;
+	
+	/* Initialize application options: */
+	meshSize[1]=meshSize[0]=129;
+	
+	/* Parse the command line: */
+	Misc::CommandLineParser cmd;
+	cmd.setDescription("Example application showing how to use a background thread to animate a mesh.");
+	cmd.addArrayOption<int>("meshSize","ms",2,meshSize,"<width> <height>","Defines the number of vertices along each dimension of the animation mesh");
+	cmd.addArrayOption<GLfloat>("frontColor","fc",3,meshMaterialFront.diffuse.getRgba(),"<red> <green> <blue>","Defines the diffuse color to draw the back of the animated mesh with RGB components in [0, 1]");
+	cmd.addArrayOption<GLfloat>("backColor","bc",3,meshMaterialBack.diffuse.getRgba(),"<red> <green> <blue>","Defines the diffuse color to draw the front of the animated mesh with RGB components in [0, 1]");
+	char** argPtr=argv;
+	if(cmd.parse(argPtr,argv+argc))
+		throw Misc::makeStdErr(0,"Extra command line argument %s",*argPtr);
+	if(cmd.hadHelp())
+		{
+		Vrui::shutdown();
+		return;
+		}
 	
 	/* Create initial mesh structures in all three slots of the triple buffer (vertices' x and y positions will be reused): */
 	for(int i=0;i<3;++i)
@@ -164,9 +185,12 @@ Animation::Animation(int& argc,char**& argv)
 
 Animation::~Animation(void)
 	{
-	/* Shut down the background animation thread: */
-	animationThread.cancel();
-	animationThread.join();
+	if(!animationThread.isJoined())
+		{
+		/* Shut down the background animation thread: */
+		animationThread.cancel();
+		animationThread.join();
+		}
 	
 	/* Delete the in-memory vertex arrays in all three triple buffer slots: */
 	for(int i=0;i<3;++i)
