@@ -2206,6 +2206,9 @@ void RunLoop::run(void)
 		pipeClosed=false;
 		}
 	
+	/* Reset the shutdown flag: */
+	shutdownRequested=false;
+	
 	/* Handle batches of events until stopped: */
 	while(dispatchNextEvents())
 		;
