@@ -1692,8 +1692,16 @@ bool RunLoop::handlePipeMessages(void)
 						/* Call the signal handler if it is enabled: */
 						if(signalHandler->enabled)
 							{
-							SignalHandler::Event event(signalHandler,lastDispatchTime,signum);
-							(*signalHandler->eventHandler)(event);
+							try
+								{
+								SignalHandler::Event event(signalHandler,lastDispatchTime,signum);
+								(*signalHandler->eventHandler)(event);
+								}
+							catch(const std::runtime_error& err)
+								{
+								/* Write an error message: */
+								Misc::sourcedUserError(__PRETTY_FUNCTION__,"Caught exception %s from OS signal event handler",err.what());
+								}
 							}
 						}
 					else
@@ -1752,9 +1760,17 @@ bool RunLoop::handlePipeMessages(void)
 				/* Check if the user signal is enabled: */
 				if(userSignal->enabled)
 					{
-					/* Call the user signal's event handler: */
-					UserSignal::Event event(userSignal,lastDispatchTime,pmPtr->signalUserSignal.signalData);
-					(*userSignal->eventHandler)(event);
+					try
+						{
+						/* Call the user signal's event handler: */
+						UserSignal::Event event(userSignal,lastDispatchTime,pmPtr->signalUserSignal.signalData);
+						(*userSignal->eventHandler)(event);
+						}
+					catch(const std::runtime_error& err)
+						{
+						/* Write an error message: */
+						Misc::sourcedUserError(__PRETTY_FUNCTION__,"Caught exception %s from user signal event handler",err.what());
+						}
 					if(pmPtr->signalUserSignal.signalData!=0)
 						pmPtr->signalUserSignal.signalData->unref(); // Drop the reference to the signal data that was held by the pipe message
 					}
@@ -2087,8 +2103,16 @@ bool RunLoop::dispatchNextEvents(void)
 				replaceFirstActiveTimer(last.timer,last.timeout);
 				}
 			
-			/* Call the timer's event handler: */
-			(*event.timer->eventHandler)(event);
+			try
+				{
+				/* Call the timer's event handler: */
+				(*event.timer->eventHandler)(event);
+				}
+			catch(const std::runtime_error& err)
+				{
+				/* Write an error message: */
+				Misc::sourcedUserError(__PRETTY_FUNCTION__,"Caught exception %s from timer event handler",err.what());
+				}
 			}
 		}
 	
@@ -2171,8 +2195,16 @@ bool RunLoop::dispatchNextEvents(void)
 			event.eventMask=getPollRequestEvents(pollFds[handledIOWatcherIndex+1]);
 			event.eventMask&=event.ioWatcher->eventMask|IOWatcher::ProblemMask; // Can't mask out "problem" indicators
 			
-			/* Call the I/O watcher's event handler: */
-			(*event.ioWatcher->eventHandler)(event);
+			try
+				{
+				/* Call the I/O watcher's event handler: */
+				(*event.ioWatcher->eventHandler)(event);
+				}
+			catch(const std::runtime_error& err)
+				{
+				/* Write an error message: */
+				Misc::sourcedUserError(__PRETTY_FUNCTION__,"Caught exception %s from I/O watcher event handler",err.what());
+				}
 			}
 	handlingIOWatchers=false;
 	
@@ -2180,9 +2212,17 @@ bool RunLoop::dispatchNextEvents(void)
 	handlingProcessFunctions=true;
 	for(handledProcessFunctionIndex=0;handledProcessFunctionIndex<activeProcessFunctions.size();++handledProcessFunctionIndex)
 		{
-		/* Call the process function's event handler: */
-		ProcessFunction* pf=activeProcessFunctions[handledProcessFunctionIndex].processFunction;
-		(*pf->eventHandler)(*pf);
+		try
+			{
+			/* Call the process function's event handler: */
+			ProcessFunction* pf=activeProcessFunctions[handledProcessFunctionIndex].processFunction;
+			(*pf->eventHandler)(*pf);
+			}
+		catch(const std::runtime_error& err)
+			{
+			/* Write an error message: */
+			Misc::sourcedUserError(__PRETTY_FUNCTION__,"Caught exception %s from process function event handler",err.what());
+			}
 		}
 	handlingProcessFunctions=false;
 	
