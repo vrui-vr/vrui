@@ -8555,5 +8555,7 @@ Vrui-14.1-001:
   mechanism's C API.
   - Headers/sources are in DBus subdirectory.
   - Builds libDBus shared library.
+
+Vrui-14.1-002:
 - Moved VRServerLauncher to Threads::RunLoop class; added support for
   restarting the launcher after configuration changes via SIGHUP.
