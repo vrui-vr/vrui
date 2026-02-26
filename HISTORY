@@ -8559,3 +8559,15 @@ Vrui-14.1-001:
 Vrui-14.1-002:
 - Moved VRServerLauncher to Threads::RunLoop class; added support for
   restarting the launcher after configuration changes via SIGHUP.
+- Added new Threads::Ownable, a base class for shared reference-counted
+  objects that can have a single owner. Currently only used by, and
+  specifically designed for, Threads::RunLoop.
+  - Also introduces Threads::OwningPointer, a smart pointer that manages
+    object ownership.
+- Make all Threads::RunLoop-managed objects (I/O watchers, timers, ...)
+  subclasses of Threads::Ownable and manage object lifetimes by holding
+  references in all internal data structures including self-pipe
+  messages to avoid race conditions when objects are managed from out-
+  of-thread.
+  - Change object pointer types from Misc::Autopointer to
+    Threads::OwningPointer.

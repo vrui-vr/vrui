@@ -30,6 +30,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <signal.h>
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
+#include <Threads/RefCounted.h>
 #include <Threads/Mutex.h>
 #include <Threads/Cond.h>
 #include <Threads/FunctionCalls.h>
@@ -142,63 +143,63 @@ struct RunLoop::PipeMessage
 		/* Messages related to I/O watchers: */
 		struct
 			{
-			IOWatcher* ioWatcher; // Pointer to the I/O watcher whose event mask is to be changed
+			IOWatcher* ioWatcher; // Pointer to the I/O watcher whose event mask is to be changed; the pipe message holds a reference to the I/O watcher
 			unsigned int newEventMask; // The new event mask
 			} setIOWatcherEventMask;
 		struct
 			{
-			IOWatcher* ioWatcher; // Pointer to the I/O watcher to be enabled
+			IOWatcher* ioWatcher; // Pointer to the I/O watcher to be enabled; the pipe message holds a reference to the I/O watcher
 			} enableIOWatcher;
 		struct
 			{
-			IOWatcher* ioWatcher; // Pointer to the I/O watcher to be disabled
+			IOWatcher* ioWatcher; // Pointer to the I/O watcher to be disabled; the pipe message holds a reference to the I/O watcher
 			TempCond* cond; // Pointer to a temporary condition variable on which the caller is waiting for confirmation, or null if call is asynchronous
 			} disableIOWatcher;
 		struct
 			{
-			IOWatcher* ioWatcher; // Pointer to the I/O watcher whose event handler is to be set
+			IOWatcher* ioWatcher; // Pointer to the I/O watcher whose event handler is to be set; the pipe message holds a reference to the I/O watcher
 			IOWatcher::EventHandler* eventHandler; // Pointer to the new event handler; the pipe message holds a reference to the handler
 			} setIOWatcherEventHandler;
 		
 		/* Messages related to timers: */
 		struct
 			{
-			Timer* timer; // Pointer to the timer whose time-out is to be set
+			Timer* timer; // Pointer to the timer whose time-out is to be set; the pipe message holds a reference to the timer
 			struct timespec timeout; // New time-out; specified as a struct timespec to avoid the Time default constructor
 			} setTimerTimeout;
 		struct
 			{
-			Timer* timer; // Pointer to the timer whose interval is to be set
+			Timer* timer; // Pointer to the timer whose interval is to be set; the pipe message holds a reference to the timer
 			struct timespec interval; // New interval; specified as a struct timespec to avoid the Interval default constructor
 			} setTimerInterval;
 		struct
 			{
-			Timer* timer; // Pointer to the timer to be enabled
+			Timer* timer; // Pointer to the timer to be enabled; the pipe message holds a reference to the timer
 			} enableTimer;
 		struct
 			{
-			Timer* timer; // Pointer to the timer to be disabled
+			Timer* timer; // Pointer to the timer to be disabled; the pipe message holds a reference to the timer
 			TempCond* cond; // Pointer to a temporary condition variable on which the caller is waiting for confirmation, or null if call is asynchronous
 			} disableTimer;
 		struct
 			{
-			Timer* timer; // Pointer to the timer whose event handler is to be set
+			Timer* timer; // Pointer to the timer whose event handler is to be set; the pipe message holds a reference to the timer
 			Timer::EventHandler* eventHandler; // Pointer to the new event handler; the pipe message holds a reference to the handler
 			} setTimerEventHandler;
 		
 		/* Messages related to OS signal handlers: */
 		struct
 			{
-			SignalHandler* signalHandler; // Pointer to the signal handler to be enabled
+			SignalHandler* signalHandler; // Pointer to the OS signal handler to be enabled; the pipe message holds a reference to the OS signal handler
 			} enableSignalHandler;
 		struct
 			{
-			SignalHandler* signalHandler; // Pointer to the signal handler to be disabled
+			SignalHandler* signalHandler; // Pointer to the OS signal handler to be disabled; the pipe message holds a reference to the OS signal handler
 			TempCond* cond; // Pointer to a temporary condition variable on which the caller is waiting for confirmation, or null if call is asynchronous
 			} disableSignalHandler;
 		struct
 			{
-			SignalHandler* signalHandler; // Pointer to the signal handler whose event handler is to be set
+			SignalHandler* signalHandler; // Pointer to the OS signal handler whose event handler is to be set; the pipe message holds a reference to the OS signal handler
 			SignalHandler::EventHandler* eventHandler; // Pointer to the new event handler; the pipe message holds a reference to the handler
 			} setSignalHandlerEventHandler;
 		struct
@@ -209,42 +210,42 @@ struct RunLoop::PipeMessage
 		/* Messages related to user signals: */
 		struct
 			{
-			UserSignal* userSignal; // Pointer to the user signal to be enabled
+			UserSignal* userSignal; // Pointer to the user signal to be enabled; the pipe message holds a reference to the user signal
 			} enableUserSignal;
 		struct
 			{
-			UserSignal* userSignal; // Pointer to the user signal to be disabled
+			UserSignal* userSignal; // Pointer to the user signal to be disabled; the pipe message holds a reference to the user signal
 			TempCond* cond; // Pointer to a temporary condition variable on which the caller is waiting for confirmation, or null if call is asynchronous
 			} disableUserSignal;
 		struct
 			{
-			UserSignal* userSignal; // Pointer to the user signal whose event handler is to be set
+			UserSignal* userSignal; // Pointer to the user signal whose event handler is to be set; the pipe message holds a reference to the user signal
 			UserSignal::EventHandler* eventHandler; // Pointer to the new event handler; the pipe message holds a reference to the handler
 			} setUserSignalEventHandler;
 		struct
 			{
-			UserSignal* userSignal; // Pointer to the user signal to whom the signal is addressed
+			UserSignal* userSignal; // Pointer to the user signal to whom the signal is addressed; the pipe message holds a reference to the user signal
 			RefCounted* signalData; // Pointer to the signal data; the pipe message holds a reference to the data
 			} signalUserSignal;
 		
 		/* Messages related to process functions: */
 		struct
 			{
-			ProcessFunction* processFunction; // Pointer to the process function whose spinning request flag is to be set
+			ProcessFunction* processFunction; // Pointer to the process function whose spinning request flag is to be set; the pipe message holds a reference to the process function
 			bool spinning; // The new value of the spinning request flag
 			} setProcessFunctionSpinning;
 		struct
 			{
-			ProcessFunction* processFunction; // Pointer to the process function to be enabled
+			ProcessFunction* processFunction; // Pointer to the process function to be enabled; the pipe message holds a reference to the process function
 			} enableProcessFunction;
 		struct
 			{
-			ProcessFunction* processFunction; // Pointer to the process function to be disabled
+			ProcessFunction* processFunction; // Pointer to the process function to be disabled; the pipe message holds a reference to the process function
 			TempCond* cond; // Pointer to a temporary condition variable on which the caller is waiting for confirmation, or null if call is asynchronous
 			} disableProcessFunction;
 		struct
 			{
-			ProcessFunction* processFunction; // Pointer to the process function whose event handler is to be set
+			ProcessFunction* processFunction; // Pointer to the process function whose event handler is to be set; the pipe message holds a reference to the process function
 			ProcessFunction::EventHandler* eventHandler; // Pointer to the new event handler; the pipe message holds a reference to the handler
 			} setProcessFunctionEventHandler;
 		};
@@ -265,18 +266,18 @@ struct RunLoop::PipeMessage
 Methods of class RunLoop::IOWatcher:
 ***********************************/
 
+void RunLoop::IOWatcher::disowned(void)
+	{
+	/* Ask the run loop to disable this I/O watcher synchronously, thus dropping all references to it and not sending further events: */
+	runLoop.disableIOWatcher(this,true);
+	}
+
 RunLoop::IOWatcher::IOWatcher(RunLoop& sRunLoop,int sFd,unsigned int sEventMask,bool sEnabled,RunLoop::IOWatcher::EventHandler& sEventHandler)
 	:runLoop(sRunLoop),fd(sFd),eventMask(sEventMask),enabled(false),eventHandler(&sEventHandler)
 	{
-	/* If the enabled flag is set, enable the I/O watcher immediately: */
+	/* If the enabled flag is set, enable this I/O watcher immediately: */
 	if(sEnabled)
 		runLoop.enableIOWatcher(this);
-	}
-
-RunLoop::IOWatcher::~IOWatcher(void)
-	{
-	/* Ask the run loop to disable the watcher synchronously, thus dropping all references to it and not sending further events: */
-	runLoop.disableIOWatcher(this,true);
 	}
 
 /**********************************************
@@ -287,25 +288,25 @@ struct RunLoop::ActiveIOWatcher
 	{
 	/* Elements: */
 	public:
-	IOWatcher* watcher; // Pointer to the I/O watcher object
+	IOWatcher* ioWatcher; // Pointer to the I/O watcher object; holds a reference to the I/O watcher object
 	};
 
 /*******************************
 Methods of class RunLoop::Timer:
 *******************************/
 
+void RunLoop::Timer::disowned(void)
+	{
+	/* Ask the run loop to disable this timer synchronously, thus dropping all references to it and not sending further events: */
+	runLoop.disableTimer(this,true);
+	}
+
 RunLoop::Timer::Timer(RunLoop& sRunLoop,const RunLoop::Time& sTimeout,const RunLoop::Interval& sInterval,bool sEnabled,RunLoop::Timer::EventHandler& sEventHandler)
 	:runLoop(sRunLoop),timeout(sTimeout),interval(sInterval),enabled(false),eventHandler(&sEventHandler)
 	{
-	/* If the enabled flag is set, enable the timer immediately: */
+	/* If the enabled flag is set, enable this timer immediately: */
 	if(sEnabled)
 		runLoop.enableTimer(this);
-	}
-
-RunLoop::Timer::~Timer(void)
-	{
-	/* Ask the run loop to disable the timer synchronously, thus dropping all references to it and not sending further events: */
-	runLoop.disableTimer(this,true);
 	}
 
 /******************************************
@@ -316,7 +317,7 @@ struct RunLoop::ActiveTimer
 	{
 	/* Elements: */
 	public:
-	Timer* timer; // Pointer to the timer object
+	Timer* timer; // Pointer to the timer object; holds a reference to the timer object
 	Time timeout; // Next time point at which the timer elapses; copy of the timer's time-out element
 	
 	/* Constructors and destructors: */
@@ -335,7 +336,7 @@ struct RunLoop::RegisteredSignalHandler
 	/* Elements: */
 	public:
 	RunLoop* runLoop; // The run loop that registered this signal or null for unhandled signals
-	RunLoop::SignalHandler* signalHandler; // Pointer to the signal handler registered for this signal, or 0 if the run loop should stop on receiving the signal
+	RunLoop::SignalHandler* signalHandler; // Pointer to the OS signal handler registered for this signal, or 0 if the run loop should stop on receiving the signal; holds a reference to the OS signal handler object
 	
 	/* Constructors and destructors: */
 	RegisteredSignalHandler(void) // Default constructor represents unhandled signal
@@ -348,51 +349,51 @@ struct RunLoop::RegisteredSignalHandler
 Methods of class RunLoop::SignalHandler:
 ***************************************/
 
+void RunLoop::SignalHandler::disowned(void)
+	{
+	/* Ask the run loop to disable this OS signal handler synchronously, thus dropping all references to it and not sending further events: */
+	runLoop.disableSignalHandler(this,true);
+	}
+
 RunLoop::SignalHandler::SignalHandler(RunLoop& sRunLoop,int sSignum,bool sEnabled,RunLoop::SignalHandler::EventHandler& sEventHandler)
 	:runLoop(sRunLoop),signum(sSignum),enabled(sEnabled),eventHandler(&sEventHandler)
 	{
-	}
-
-RunLoop::SignalHandler::~SignalHandler(void)
-	{
-	/* Ask the run loop to disable the signal handler synchronously, thus dropping all references to it and not sending further events: */
-	runLoop.disableSignalHandler(this,true);
 	}
 
 /************************************
 Methods of class RunLoop::UserSignal:
 ************************************/
 
+void RunLoop::UserSignal::disowned(void)
+	{
+	/* Ask the run loop to disable this user signal synchronously, thus dropping all references to it and not sending further events: */
+	runLoop.disableUserSignal(this,true);
+	}
+
 RunLoop::UserSignal::UserSignal(RunLoop& sRunLoop,bool sEnabled,EventHandler& sEventHandler)
 	:runLoop(sRunLoop),enabled(false),eventHandler(&sEventHandler)
 	{
-	/* If the enabled flag is set, enable the user signal immediately: */
+	/* If the enabled flag is set, enable this user signal immediately: */
 	if(sEnabled)
 		runLoop.enableUserSignal(this);
-	}
-
-RunLoop::UserSignal::~UserSignal(void)
-	{
-	/* Ask the run loop to disable the user signal synchronously, thus dropping all references to it and not sending further events: */
-	runLoop.disableUserSignal(this,true);
 	}
 
 /*****************************************
 Methods of class RunLoop::ProcessFunction:
 *****************************************/
 
+void RunLoop::ProcessFunction::disowned(void)
+	{
+	/* Ask the run loop to disable this process function synchronously, thus dropping all references to it and not sending further events: */
+	runLoop.disableProcessFunction(this,true);
+	}
+
 RunLoop::ProcessFunction::ProcessFunction(RunLoop& sRunLoop,bool sSpinning,bool sEnabled,EventHandler& sEventHandler)
 	:runLoop(sRunLoop),spinning(sSpinning),enabled(false),eventHandler(&sEventHandler)
 	{
-	/* If the enabled flag is set, enable the process function immediately: */
+	/* If the enabled flag is set, enable this process function immediately: */
 	if(sEnabled)
 		runLoop.enableProcessFunction(this);
-	}
-
-RunLoop::ProcessFunction::~ProcessFunction(void)
-	{
-	/* Ask the run loop to disable the process function synchronously, thus dropping all references to it and not sending further events: */
-	runLoop.disableProcessFunction(this,true);
 	}
 
 /****************************************************
@@ -403,7 +404,7 @@ struct RunLoop::ActiveProcessFunction
 	{
 	/* Elements: */
 	public:
-	ProcessFunction* processFunction; // Pointer to the process function object
+	ProcessFunction* processFunction; // Pointer to the process function object; holds a reference to the process function object
 	
 	/* Constructors and destructors: */
 	ActiveProcessFunction(ProcessFunction* sProcessFunction) // Elementwise constructor
@@ -423,11 +424,13 @@ RunLoop::RegisteredSignalHandler RunLoop::registeredSignalHandlers[RunLoop::maxS
 Methods of class RunLoop:
 ************************/
 
-bool RunLoop::writePipeMessage(const RunLoop::PipeMessage& pm,const char* methodName,RefCounted* messageObject)
+bool RunLoop::writePipeMessage(const RunLoop::PipeMessage& pm,const char* methodName,Ownable* messageSender,RefCounted* messageObject)
 	{
 	bool result=true;
 	
-	/* If there is a message object, take a reference to it: */
+	/* If there is a message sender and/or object, take references to them: */
+	if(messageSender!=0)
+		messageSender->ref();
 	if(messageObject!=0)
 		messageObject->ref();
 	
@@ -438,7 +441,9 @@ bool RunLoop::writePipeMessage(const RunLoop::PipeMessage& pm,const char* method
 		/* Check if the self-pipe was closed because the run loop is shutting down: */
 		if(errno==EBADF)
 			{
-			/* Drop the reference to a message object again and signal failure: */
+			/* Drop the references to a message sender and/or object again and signal failure: */
+			if(messageSender!=0)
+				messageSender->unref();
 			if(messageObject!=0)
 				messageObject->unref();
 			result=false;
@@ -535,7 +540,7 @@ void RunLoop::setIOWatcherEventMask(RunLoop::IOWatcher* ioWatcher,unsigned int n
 		PipeMessage pm(PipeMessage::SetIOWatcherEventMask);
 		pm.setIOWatcherEventMask.ioWatcher=ioWatcher;
 		pm.setIOWatcherEventMask.newEventMask=newEventMask;
-		writePipeMessage(pm,__PRETTY_FUNCTION__);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,ioWatcher);
 		}
 	}
 
@@ -544,13 +549,14 @@ void RunLoop::enableIOWatcher(RunLoop::IOWatcher* ioWatcher)
 	/* Check if this call was made from inside the run loop's thread: */
 	if(Threads::Thread::isSelfEqual(threadId))
 		{
-		/* Check that the I/O watcher is not already enabled: */
-		if(!ioWatcher->enabled)
+		/* Check that the I/O watcher is not already enabled and still has an owner: */
+		if(!ioWatcher->enabled&&ioWatcher->isOwned())
 			{
 			/* Append an entry for the I/O watcher to the end of the active lists: */
 			ActiveIOWatcher newIOWatcher;
-			newIOWatcher.watcher=ioWatcher;
+			newIOWatcher.ioWatcher=ioWatcher;
 			activeIOWatchers.push_back(newIOWatcher);
+			ioWatcher->ref(); // Take another reference to the I/O watcher
 			
 			/* Append a poll request for the I/O watcher to the end of the poll request list: */
 			struct pollfd pollFd;
@@ -572,7 +578,7 @@ void RunLoop::enableIOWatcher(RunLoop::IOWatcher* ioWatcher)
 		/* Make an asynchronous request by writing to the self-pipe: */
 		PipeMessage pm(PipeMessage::EnableIOWatcher);
 		pm.enableIOWatcher.ioWatcher=ioWatcher;
-		writePipeMessage(pm,__PRETTY_FUNCTION__);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,ioWatcher);
 		}
 	}
 
@@ -601,12 +607,12 @@ void RunLoop::disableIOWatcher(RunLoop::IOWatcher* ioWatcher,bool willDestroy)
 				/* Move the currently-handled I/O watcher to the place of the to-be-deleted one: */
 				activeIOWatchers[aiowi]=activeIOWatchers[hiowi];
 				pollFds[aiowi+1]=pollFds[hiowi+1]; // Take account of the extra self-pipe entry at the head of the list
-				activeIOWatchers[aiowi].watcher->activeIndex=aiowi;
+				activeIOWatchers[aiowi].ioWatcher->activeIndex=aiowi;
 				
 				/* Move the last I/O watcher in the lists to the place of the currently-handled one: */
 				activeIOWatchers[hiowi]=activeIOWatchers[numActiveIOWatchers-1];
 				pollFds[hiowi+1]=pollFds[numActiveIOWatchers]; // Take account of the extra self-pipe entry at the head of the list
-				activeIOWatchers[hiowi].watcher->activeIndex=hiowi;
+				activeIOWatchers[hiowi].ioWatcher->activeIndex=hiowi;
 				
 				/* Reduce the currently-handled index to handle the I/O watcher that used to be the last in the lists next: */
 				--handledIOWatcherIndex;
@@ -616,7 +622,7 @@ void RunLoop::disableIOWatcher(RunLoop::IOWatcher* ioWatcher,bool willDestroy)
 				/* Move the last I/O watcher in the lists to the place of the to-be-disabled one: */
 				activeIOWatchers[aiowi]=activeIOWatchers[numActiveIOWatchers-1];
 				pollFds[aiowi+1]=pollFds[numActiveIOWatchers]; // Take account of the extra self-pipe entry at the head of the list
-				activeIOWatchers[aiowi].watcher->activeIndex=aiowi;
+				activeIOWatchers[aiowi].ioWatcher->activeIndex=aiowi;
 				}
 			
 			/* Remove the now unused last entries from the active I/O watcher lists: */
@@ -624,22 +630,11 @@ void RunLoop::disableIOWatcher(RunLoop::IOWatcher* ioWatcher,bool willDestroy)
 			pollFds.pop_back();
 			--numActiveIOWatchers;
 			
-			#if 0 // THINKABOUTME
-			if(willDestroy)
-				{
-				/***************************************************************
-				At this point, we would need to remove any messages related to
-				this I/O watcher from the self-pipe to avoid de-referencing an
-				invalid I/O watcher pointer at some later time. This would
-				require significant work including a call to poll().
-				The question is whether a call sequence requiring this makes any
-				sense in real usage, or should simply be forbidden.
-				***************************************************************/
-				}
-			#endif
-			
 			/* Mark the I/O watcher as disabled: */
 			ioWatcher->enabled=false;
+			
+			/* Drop the active I/O watcher list's reference to the I/O watcher: */
+			ioWatcher->unref();
 			}
 		}
 	else
@@ -662,7 +657,7 @@ void RunLoop::disableIOWatcher(RunLoop::IOWatcher* ioWatcher,bool willDestroy)
 			pm.disableIOWatcher.cond=&cond;
 			
 			/* Write to the self-pipe, but only wait on completion if the write succeeded: */
-			if(writePipeMessage(pm,__PRETTY_FUNCTION__))
+			if(writePipeMessage(pm,__PRETTY_FUNCTION__,ioWatcher))
 				{
 				/* Wait on the condition variable: */
 				cond.wait();
@@ -672,7 +667,7 @@ void RunLoop::disableIOWatcher(RunLoop::IOWatcher* ioWatcher,bool willDestroy)
 			{
 			/* Make an asynchronous request by writing to the self-pipe: */
 			pm.disableIOWatcher.cond=0;
-			writePipeMessage(pm,__PRETTY_FUNCTION__);
+			writePipeMessage(pm,__PRETTY_FUNCTION__,ioWatcher);
 			}
 		}
 	}
@@ -691,7 +686,7 @@ void RunLoop::setIOWatcherEventHandler(RunLoop::IOWatcher* ioWatcher,RunLoop::IO
 		PipeMessage pm(PipeMessage::SetIOWatcherEventHandler);
 		pm.setIOWatcherEventHandler.ioWatcher=ioWatcher;
 		pm.setIOWatcherEventHandler.eventHandler=&newEventHandler;
-		writePipeMessage(pm,__PRETTY_FUNCTION__,&newEventHandler);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,ioWatcher,&newEventHandler);
 		}
 	}
 
@@ -837,7 +832,7 @@ void RunLoop::setTimerTimeout(RunLoop::Timer* timer,const RunLoop::Time& newTime
 		PipeMessage pm(PipeMessage::SetTimerTimeout);
 		pm.setTimerTimeout.timer=timer;
 		pm.setTimerTimeout.timeout=newTimeout;
-		writePipeMessage(pm,__PRETTY_FUNCTION__);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,timer);
 		}
 	}
 
@@ -855,7 +850,7 @@ void RunLoop::setTimerInterval(RunLoop::Timer* timer,const RunLoop::Interval& ne
 		PipeMessage pm(PipeMessage::SetTimerInterval);
 		pm.setTimerInterval.timer=timer;
 		pm.setTimerInterval.interval=newInterval;
-		writePipeMessage(pm,__PRETTY_FUNCTION__);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,timer);
 		}
 	}
 
@@ -864,8 +859,8 @@ void RunLoop::enableTimer(RunLoop::Timer* timer)
 	/* Check if this call was made from inside the run loop's thread: */
 	if(Threads::Thread::isSelfEqual(threadId))
 		{
-		/* Check that the timer is not already enabled: */
-		if(!timer->enabled)
+		/* Check that the timer is not already enabled and still has an owner: */
+		if(!timer->enabled&&timer->isOwned())
 			{
 			/* Ensure that the timer's time-out is not before lastDispatchTime: */
 			if(timer->timeout<lastDispatchTime)
@@ -873,6 +868,7 @@ void RunLoop::enableTimer(RunLoop::Timer* timer)
 			
 			/* Insert the timer into the active timers heap: */
 			insertActiveTimer(timer,timer->timeout);
+			timer->ref(); // Take an additional reference to the timer
 			
 			/* Mark the timer as enabled: */
 			timer->enabled=true;
@@ -883,7 +879,7 @@ void RunLoop::enableTimer(RunLoop::Timer* timer)
 		/* Make an asynchronous request by writing to the self-pipe: */
 		PipeMessage pm(PipeMessage::EnableTimer);
 		pm.enableTimer.timer=timer;
-		writePipeMessage(pm,__PRETTY_FUNCTION__);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,timer);
 		}
 	}
 
@@ -905,22 +901,11 @@ void RunLoop::disableTimer(RunLoop::Timer* timer,bool willDestroy)
 				updateActiveTimer(lastTimer);
 				}
 			
-			#if 0 // THINKABOUTME
-			if(willDestroy)
-				{
-				/***************************************************************
-				At this point, we would need to remove any messages related to
-				this timer from the self-pipe to avoid de-referencing an invalid
-				timer pointer at some later time. This would require significant
-				work including a call to poll().
-				The question is whether a call sequence requiring this makes any
-				sense in real usage, or should simply be forbidden.
-				***************************************************************/
-				}
-			#endif
-			
 			/* Mark the timer as disabled: */
 			timer->enabled=false;
+			
+			/* Drop the active timers heap's reference to the timer: */
+			timer->unref();
 			}
 		}
 	else
@@ -943,7 +928,7 @@ void RunLoop::disableTimer(RunLoop::Timer* timer,bool willDestroy)
 			pm.disableTimer.cond=&cond;
 			
 			/* Write to the self-pipe, but only wait on completion if the write succeeded: */
-			if(writePipeMessage(pm,__PRETTY_FUNCTION__))
+			if(writePipeMessage(pm,__PRETTY_FUNCTION__,timer))
 				{
 				/* Wait on the condition variable: */
 				cond.wait();
@@ -953,7 +938,7 @@ void RunLoop::disableTimer(RunLoop::Timer* timer,bool willDestroy)
 			{
 			/* Make an asynchronous request by writing to the self-pipe: */
 			pm.disableTimer.cond=0;
-			writePipeMessage(pm,__PRETTY_FUNCTION__);
+			writePipeMessage(pm,__PRETTY_FUNCTION__,timer);
 			}
 		}
 	}
@@ -972,7 +957,7 @@ void RunLoop::setTimerEventHandler(RunLoop::Timer* timer,RunLoop::Timer::EventHa
 		PipeMessage pm(PipeMessage::SetTimerEventHandler);
 		pm.setTimerEventHandler.timer=timer;
 		pm.setTimerEventHandler.eventHandler=&newEventHandler;
-		writePipeMessage(pm,__PRETTY_FUNCTION__,&newEventHandler);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,timer,&newEventHandler);
 		}
 	}
 
@@ -985,15 +970,19 @@ void RunLoop::enableSignalHandler(RunLoop::SignalHandler* signalHandler)
 	/* Check if this call was made from inside the run loop's thread: */
 	if(Threads::Thread::isSelfEqual(threadId))
 		{
-		/* Enable the signal handler: */
-		signalHandler->enabled=true;
+		/* Check that the OS signal handler is not already enabled and still has an owner: */
+		if(!signalHandler->enabled&&signalHandler->isOwned())
+			{
+			/* Enable the OS signal handler: */
+			signalHandler->enabled=true;
+			}
 		}
 	else
 		{
 		/* Make an asynchronous request by writing to the self-pipe: */
 		PipeMessage pm(PipeMessage::EnableSignalHandler);
 		pm.enableSignalHandler.signalHandler=signalHandler;
-		writePipeMessage(pm,__PRETTY_FUNCTION__);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,signalHandler);
 		}
 	}
 
@@ -1002,23 +991,12 @@ void RunLoop::disableSignalHandler(RunLoop::SignalHandler* signalHandler,bool wi
 	/* Check if this call was made from inside the run loop's thread: */
 	if(Threads::Thread::isSelfEqual(threadId))
 		{
-		/* Disable the signal handler: */
+		/* Disable the OS signal handler: */
 		signalHandler->enabled=false;
 		
 		if(willDestroy)
 			{
-			#if 0 // THINKABOUTME
-			/*****************************************************************
-			At this point, we would need to remove any messages related to
-			this signal handler from the self-pipe to avoid de-referencing an
-			invalid signal handler pointer at some later time. This would
-			require significant work including a call to poll().
-			The question is whether a call sequence requiring this makes any
-			sense in real usage, or should simply be forbidden.
-			*****************************************************************/
-			#endif
-			
-			/* Lock the signal handler table: */
+			/* Lock the OS signal handler table: */
 			Threads::Mutex::Lock signalHandlersLock(signalHandlersMutex);
 			
 			/* Unregister this run loop and the signal handler: */
@@ -1032,6 +1010,9 @@ void RunLoop::disableSignalHandler(RunLoop::SignalHandler* signalHandler,bool wi
 			sigAction.sa_handler=SIG_DFL;
 			if(sigaction(signum,&sigAction,0)<0)
 				Misc::sourcedConsoleError(__PRETTY_FUNCTION__,"Cannot restore OS signal %d",signum);
+			
+			/* Drop the OS signal handler table's reference to the OS signal handler: */
+			signalHandler->unref();
 			}
 		}
 	else
@@ -1054,7 +1035,7 @@ void RunLoop::disableSignalHandler(RunLoop::SignalHandler* signalHandler,bool wi
 			pm.disableSignalHandler.cond=&cond;
 			
 			/* Write to the self-pipe, but only wait on completion if the write succeeded: */
-			if(writePipeMessage(pm,__PRETTY_FUNCTION__))
+			if(writePipeMessage(pm,__PRETTY_FUNCTION__,signalHandler))
 				{
 				/* Wait on the condition variable: */
 				cond.wait();
@@ -1064,7 +1045,7 @@ void RunLoop::disableSignalHandler(RunLoop::SignalHandler* signalHandler,bool wi
 			{
 			/* Make an asynchronous request by writing to the self-pipe: */
 			pm.disableSignalHandler.cond=0;
-			writePipeMessage(pm,__PRETTY_FUNCTION__);
+			writePipeMessage(pm,__PRETTY_FUNCTION__,signalHandler);
 			}
 		}
 	}
@@ -1083,7 +1064,7 @@ void RunLoop::setSignalHandlerEventHandler(RunLoop::SignalHandler* signalHandler
 		PipeMessage pm(PipeMessage::SetSignalHandlerEventHandler);
 		pm.setSignalHandlerEventHandler.signalHandler=signalHandler;
 		pm.setSignalHandlerEventHandler.eventHandler=&newEventHandler;
-		writePipeMessage(pm,__PRETTY_FUNCTION__,&newEventHandler);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,signalHandler,&newEventHandler);
 		}
 	}
 
@@ -1112,15 +1093,19 @@ void RunLoop::enableUserSignal(RunLoop::UserSignal* userSignal)
 	/* Check if this call was made from inside the run loop's thread: */
 	if(Threads::Thread::isSelfEqual(threadId))
 		{
-		/* Enable the user signal: */
-		userSignal->enabled=true;
+		/* Check that the user signal is not already enabled and still has an owner: */
+		if(!userSignal->enabled&&userSignal->isOwned())
+			{
+			/* Enable the user signal: */
+			userSignal->enabled=true;
+			}
 		}
 	else
 		{
 		/* Make an asynchronous request by writing to the self-pipe: */
 		PipeMessage pm(PipeMessage::EnableUserSignal);
 		pm.enableUserSignal.userSignal=userSignal;
-		writePipeMessage(pm,__PRETTY_FUNCTION__);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,userSignal);
 		}
 	}
 
@@ -1131,20 +1116,6 @@ void RunLoop::disableUserSignal(RunLoop::UserSignal* userSignal,bool willDestroy
 		{
 		/* Disable the user signal: */
 		userSignal->enabled=false;
-		
-		if(willDestroy)
-			{
-			#if 0 // THINKABOUTME
-			/*****************************************************************
-			At this point, we would need to remove any messages related to
-			this user signal from the self-pipe to avoid de-referencing an
-			invalid user signal pointer at some later time. This would require
-			significant work including a call to poll().
-			The question is whether a call sequence requiring this makes any
-			sense in real usage, or should simply be forbidden.
-			*****************************************************************/
-			#endif
-			}
 		}
 	else
 		{
@@ -1166,7 +1137,7 @@ void RunLoop::disableUserSignal(RunLoop::UserSignal* userSignal,bool willDestroy
 			pm.disableUserSignal.cond=&cond;
 			
 			/* Write to the self-pipe, but only wait on completion if the write succeeded: */
-			if(writePipeMessage(pm,__PRETTY_FUNCTION__))
+			if(writePipeMessage(pm,__PRETTY_FUNCTION__,userSignal))
 				{
 				/* Wait on the condition variable: */
 				cond.wait();
@@ -1176,7 +1147,7 @@ void RunLoop::disableUserSignal(RunLoop::UserSignal* userSignal,bool willDestroy
 			{
 			/* Make an asynchronous request by writing to the self-pipe: */
 			pm.disableUserSignal.cond=0;
-			writePipeMessage(pm,__PRETTY_FUNCTION__);
+			writePipeMessage(pm,__PRETTY_FUNCTION__,userSignal);
 			}
 		}
 	}
@@ -1195,7 +1166,7 @@ void RunLoop::setUserSignalEventHandler(RunLoop::UserSignal* userSignal,RunLoop:
 		PipeMessage pm(PipeMessage::SetUserSignalEventHandler);
 		pm.setUserSignalEventHandler.userSignal=userSignal;
 		pm.setUserSignalEventHandler.eventHandler=&newEventHandler;
-		writePipeMessage(pm,__PRETTY_FUNCTION__,&newEventHandler);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,userSignal,&newEventHandler);
 		}
 	}
 
@@ -1217,7 +1188,7 @@ void RunLoop::signalUserSignal(RunLoop::UserSignal* userSignal,RefCounted& signa
 		PipeMessage pm(PipeMessage::SignalUserSignal);
 		pm.signalUserSignal.userSignal=userSignal;
 		pm.signalUserSignal.signalData=&signalData;
-		writePipeMessage(pm,__PRETTY_FUNCTION__,&signalData);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,userSignal,&signalData);
 		}
 	}
 
@@ -1252,7 +1223,7 @@ void RunLoop::setProcessFunctionSpinning(RunLoop::ProcessFunction* processFuncti
 		PipeMessage pm(PipeMessage::SetProcessFunctionSpinning);
 		pm.setProcessFunctionSpinning.processFunction=processFunction;
 		pm.setProcessFunctionSpinning.spinning=newSpinning;
-		writePipeMessage(pm,__PRETTY_FUNCTION__);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,processFunction);
 		}
 	}
 
@@ -1261,11 +1232,12 @@ void RunLoop::enableProcessFunction(RunLoop::ProcessFunction* processFunction)
 	/* Check if this call was made from inside the run loop's thread: */
 	if(Threads::Thread::isSelfEqual(threadId))
 		{
-		/* Check that the process function is not already enabled: */
-		if(!processFunction->enabled)
+		/* Check that the process function is not already enabled and still has an owner: */
+		if(!processFunction->enabled&&processFunction->isOwned())
 			{
 			/* Append an entry for the process function to the end of the active list: */
 			activeProcessFunctions.push_back(ActiveProcessFunction(processFunction));
+			processFunction->ref(); // Take another reference to the process function object
 			processFunction->activeIndex=activeProcessFunctions.size()-1;
 			
 			/* Increase the number of spinning process functions if the process function wants to spin: */
@@ -1281,7 +1253,7 @@ void RunLoop::enableProcessFunction(RunLoop::ProcessFunction* processFunction)
 		/* Make an asynchronous request by writing to the self-pipe: */
 		PipeMessage pm(PipeMessage::EnableProcessFunction);
 		pm.enableProcessFunction.processFunction=processFunction;
-		writePipeMessage(pm,__PRETTY_FUNCTION__);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,processFunction);
 		}
 	}
 
@@ -1333,22 +1305,11 @@ void RunLoop::disableProcessFunction(RunLoop::ProcessFunction* processFunction,b
 			if(processFunction->spinning)
 				--numSpinningProcessFunctions;
 			
-			#if 0 // THINKABOUTME
-			if(willDestroy)
-				{
-				/***************************************************************
-				At this point, we would need to remove any messages related to
-				this process function from the self-pipe to avoid de-referencing
-				an invalid process function pointer at some later time. This
-				would require significant work including a call to poll().
-				The question is whether a call sequence requiring this makes any
-				sense in real usage, or should simply be forbidden.
-				***************************************************************/
-				}
-			#endif
-			
 			/* Mark the process function as disabled: */
 			processFunction->enabled=false;
+			
+			/* Drop the active process function list's reference to the process function object: */
+			processFunction->unref();
 			}
 		}
 	else
@@ -1371,7 +1332,7 @@ void RunLoop::disableProcessFunction(RunLoop::ProcessFunction* processFunction,b
 			pm.disableProcessFunction.cond=&cond;
 			
 			/* Write to the self-pipe, but only wait on completion if the write succeeded: */
-			if(writePipeMessage(pm,__PRETTY_FUNCTION__))
+			if(writePipeMessage(pm,__PRETTY_FUNCTION__,processFunction))
 				{
 				/* Wait on the condition variable: */
 				cond.wait();
@@ -1381,7 +1342,7 @@ void RunLoop::disableProcessFunction(RunLoop::ProcessFunction* processFunction,b
 			{
 			/* Make an asynchronous request by writing to the self-pipe: */
 			pm.disableProcessFunction.cond=0;
-			writePipeMessage(pm,__PRETTY_FUNCTION__);
+			writePipeMessage(pm,__PRETTY_FUNCTION__,processFunction);
 			}
 		}
 	}
@@ -1400,8 +1361,7 @@ void RunLoop::setProcessFunctionEventHandler(RunLoop::ProcessFunction* processFu
 		PipeMessage pm(PipeMessage::SetProcessFunctionEventHandler);
 		pm.setProcessFunctionEventHandler.processFunction=processFunction;
 		pm.setProcessFunctionEventHandler.eventHandler=&newEventHandler;
-		newEventHandler.ref(); // Add a reference to the new event handler while the message is in the queue
-		writePipeMessage(pm,__PRETTY_FUNCTION__);
+		writePipeMessage(pm,__PRETTY_FUNCTION__,processFunction,&newEventHandler);
 		}
 	}
 
@@ -1451,6 +1411,9 @@ bool RunLoop::handlePipeMessages(void)
 				/* Update the I/O watcher's event mask: */
 				ioWatcher->eventMask=newEventMask;
 				
+				/* Drop the message's reference to the I/O watcher: */
+				ioWatcher->unref();
+				
 				break;
 				}
 			
@@ -1459,18 +1422,20 @@ bool RunLoop::handlePipeMessages(void)
 				/* Retrieve a pointer to the I/O watcher from the pipe message: */
 				IOWatcher* ioWatcher=pmPtr->enableIOWatcher.ioWatcher;
 				
-				/* Check that the I/O watcher is not already enabled: */
-				if(!ioWatcher->enabled)
+				/* Check that the I/O watcher is not already enabled and still has an owner: */
+				if(!ioWatcher->enabled&&ioWatcher->isOwned())
 					{
 					/* Append an entry for the I/O watcher to the end of the active lists: */
 					ActiveIOWatcher newIOWatcher;
-					newIOWatcher.watcher=ioWatcher;
+					newIOWatcher.ioWatcher=ioWatcher;
 					activeIOWatchers.push_back(newIOWatcher);
+					ioWatcher->ref(); // Add another reference to the I/O watcher
 					
 					/* Append a poll request for the I/O watcher to the end of the poll request list: */
 					struct pollfd pollFd;
 					pollFd.fd=ioWatcher->fd;
 					setPollRequestEvents(pollFd,ioWatcher->eventMask);
+					pollFd.revents=0x0;
 					pollFds.push_back(pollFd);
 					
 					/* Set the I/O watcher's position in the active list and increase the number of active I/O watchers: */
@@ -1480,6 +1445,9 @@ bool RunLoop::handlePipeMessages(void)
 					/* Mark the I/O watcher as enabled: */
 					ioWatcher->enabled=true;
 					}
+				
+				/* Drop the message's reference to the I/O watcher: */
+				ioWatcher->unref();
 				
 				break;
 				}
@@ -1498,16 +1466,22 @@ bool RunLoop::handlePipeMessages(void)
 					activeIOWatchers.pop_back();
 					pollFds[aiowi+1]=pollFds[numActiveIOWatchers]; // Take account of the extra self-pipe entry at the head of the list
 					pollFds.pop_back();
-					activeIOWatchers[aiowi].watcher->activeIndex=aiowi;
+					activeIOWatchers[aiowi].ioWatcher->activeIndex=aiowi;
 					--numActiveIOWatchers;
 					
 					/* Mark the I/O watcher as disabled: */
 					ioWatcher->enabled=false;
+					
+					/* Drop the active I/O watcher list's reference to the I/O watcher: */
+					ioWatcher->unref();
 					}
 				
 				/* If the caller provided a condition variable for synchronization, signal it: */
 				if(pmPtr->disableIOWatcher.cond!=0)
 					pmPtr->disableIOWatcher.cond->signal();
+				
+				/* Drop the message's reference to the I/O watcher: */
+				ioWatcher->unref();
 				
 				break;
 				}
@@ -1519,7 +1493,10 @@ bool RunLoop::handlePipeMessages(void)
 				
 				/* Replace the I/O watcher's event handler: */
 				ioWatcher->eventHandler=pmPtr->setIOWatcherEventHandler.eventHandler;
-				ioWatcher->eventHandler->unref(); // Drop the reference to the event handler that was held by the pipe message
+				
+				/* Drop the message's references to the I/O watcher and the event handler: */
+				ioWatcher->eventHandler->unref();
+				ioWatcher->unref();
 				
 				break;
 				}
@@ -1538,6 +1515,9 @@ bool RunLoop::handlePipeMessages(void)
 				if(timer->enabled)
 					updateActiveTimer(timer);
 				
+				/* Drop the message's reference to the timer: */
+				timer->unref();
+				
 				break;
 				}
 			
@@ -1549,6 +1529,9 @@ bool RunLoop::handlePipeMessages(void)
 				/* Set the timer's interval: */
 				timer->interval=Interval(pmPtr->setTimerInterval.interval);
 				
+				/* Drop the message's reference to the timer: */
+				timer->unref();
+				
 				break;
 				}
 			
@@ -1557,8 +1540,8 @@ bool RunLoop::handlePipeMessages(void)
 				/* Retrieve a pointer to the timer from the pipe message: */
 				Timer* timer=pmPtr->enableTimer.timer;
 				
-				/* Check that the timer is not already enabled: */
-				if(!timer->enabled)
+				/* Check that the timer is not already enabled and still has an owner: */
+				if(!timer->enabled&&timer->isOwned())
 					{
 					/* Ensure that the timer's time-out is not before lastDispatchTime: */
 					if(timer->timeout<lastDispatchTime)
@@ -1566,10 +1549,14 @@ bool RunLoop::handlePipeMessages(void)
 					
 					/* Insert the timer into the active timers heap: */
 					insertActiveTimer(timer,timer->timeout);
+					timer->ref(); // Take another reference to the timer
 					
 					/* Mark the timer as enabled: */
 					timer->enabled=true;
 					}
+				
+				/* Drop the message's reference to the timer: */
+				timer->unref();
 				
 				break;
 				}
@@ -1592,6 +1579,9 @@ bool RunLoop::handlePipeMessages(void)
 						updateActiveTimer(lastTimer);
 						}
 					
+					/* Drop the active timer heap's reference to the timer: */
+					timer->unref();
+					
 					/* Mark the timer as disabled: */
 					timer->enabled=false;
 					}
@@ -1599,6 +1589,9 @@ bool RunLoop::handlePipeMessages(void)
 				/* If the caller provided a condition variable for synchronization, signal it: */
 				if(pmPtr->disableTimer.cond!=0)
 					pmPtr->disableTimer.cond->signal();
+				
+				/* Drop the message's reference to the timer: */
+				timer->unref();
 				
 				break;
 				}
@@ -1610,42 +1603,52 @@ bool RunLoop::handlePipeMessages(void)
 				
 				/* Replace the timer's event handler: */
 				timer->eventHandler=pmPtr->setTimerEventHandler.eventHandler;
-				timer->eventHandler->unref(); // Drop the reference to the event handler that was held by the pipe message
+				
+				/* Drop the message's references to the timer and the event handler: */
+				timer->eventHandler->unref();
+				timer->unref();
 				
 				break;
 				}
 			
 			case PipeMessage::EnableSignalHandler:
 				{
-				/* Retrieve a pointer to the signal handler from the pipe message: */
+				/* Retrieve a pointer to the OS signal handler from the pipe message: */
 				SignalHandler* signalHandler=pmPtr->enableSignalHandler.signalHandler;
 				
-				/* Mark the signal handler as enabled: */
-				signalHandler->enabled=true;
+				/* Check that the OS signal handler is not already enabled and still has an owner: */
+				if(!signalHandler->enabled&&signalHandler->isOwned())
+					{
+					/* Mark the OS signal handler as enabled: */
+					signalHandler->enabled=true;
+					}
+				
+				/* Drop the message's reference to the OS signal handler: */
+				signalHandler->unref();
 				
 				break;
 				}
 			
 			case PipeMessage::DisableSignalHandler:
 				{
-				/* Retrieve a pointer to the signal handler from the pipe message: */
+				/* Retrieve a pointer to the OS signal handler from the pipe message: */
 				SignalHandler* signalHandler=pmPtr->disableSignalHandler.signalHandler;
 				
-				/* Mark the signal handler as disabled: */
+				/* Mark the OS signal handler as disabled: */
 				signalHandler->enabled=true;
 				
 				/* If the caller provided a condition variable for synchronization, unregister the OS signal, then signal it: */
 				if(pmPtr->disableSignalHandler.cond!=0)
 					{
-					/* Lock the signal handler table: */
+					/* Lock the OS signal handler table: */
 					Threads::Mutex::Lock signalHandlersLock(signalHandlersMutex);
 					
-					/* Unregister this run loop and the signal handler: */
+					/* Unregister this run loop and the OS signal handler: */
 					int signum=signalHandler->signum;
 					registeredSignalHandlers[signum].runLoop=0;
 					registeredSignalHandlers[signum].signalHandler=0;
 					
-					/* Return the signal to default disposition: */
+					/* Return the OS signal to default disposition: */
 					struct sigaction sigAction;
 					memset(&sigAction,0,sizeof(struct sigaction));
 					sigAction.sa_handler=SIG_DFL;
@@ -1654,7 +1657,13 @@ bool RunLoop::handlePipeMessages(void)
 					
 					/* Signal the condition variable: */
 					pmPtr->disableSignalHandler.cond->signal();
+					
+					/* Drop the OS signal handler table's reference to the OS signal handler: */
+					signalHandler->unref();
 					}
+				
+				/* Drop the message's reference to the OS signal handler: */
+				signalHandler->unref();
 				
 				break;
 				}
@@ -1666,14 +1675,17 @@ bool RunLoop::handlePipeMessages(void)
 				
 				/* Replace the signal handler's event handler: */
 				signalHandler->eventHandler=pmPtr->setSignalHandlerEventHandler.eventHandler;
-				signalHandler->eventHandler->unref(); // Drop the reference to the event handler that was held by the pipe message
+				
+				/* Drop the message's references to the OS signal handler and the event handler: */
+				signalHandler->eventHandler->unref();
+				signalHandler->unref();
 				
 				break;
 				}
 			
 			case PipeMessage::Signal:
 				{
-				/* Retrieve the signal handler from the signal handler table: */
+				/* Retrieve the OS signal handler from the OS signal handler table: */
 				int signum=pmPtr->signal.signum;
 				bool isForUs=false;
 				SignalHandler* signalHandler=0;
@@ -1686,22 +1698,14 @@ bool RunLoop::handlePipeMessages(void)
 				/* Double-check that this signal is really for us: */
 				if(isForUs)
 					{
-					/* Check if there is a signal handler: */
+					/* Check if there is an OS signal handler: */
 					if(signalHandler!=0)
 						{
-						/* Call the signal handler if it is enabled: */
+						/* Call the OS signal handler if it is enabled: */
 						if(signalHandler->enabled)
 							{
-							try
-								{
-								SignalHandler::Event event(signalHandler,lastDispatchTime,signum);
-								(*signalHandler->eventHandler)(event);
-								}
-							catch(const std::runtime_error& err)
-								{
-								/* Write an error message: */
-								Misc::sourcedUserError(__PRETTY_FUNCTION__,"Caught exception %s from OS signal event handler",err.what());
-								}
+							SignalHandler::Event event(signalHandler,lastDispatchTime,signum);
+							(*signalHandler->eventHandler)(event);
 							}
 						}
 					else
@@ -1719,8 +1723,15 @@ bool RunLoop::handlePipeMessages(void)
 				/* Retrieve a pointer to the user signal from the pipe message: */
 				UserSignal* userSignal=pmPtr->enableUserSignal.userSignal;
 				
-				/* Mark the user signal as enabled: */
-				userSignal->enabled=true;
+				/* Check that the user signal is not already enabled and still has an owner: */
+				if(!userSignal->enabled&&userSignal->isOwned())
+					{
+					/* Mark the user signal as enabled: */
+					userSignal->enabled=true;
+					}
+				
+				/* Drop the message's reference to the user signal: */
+				userSignal->unref();
 				
 				break;
 				}
@@ -1737,6 +1748,9 @@ bool RunLoop::handlePipeMessages(void)
 				if(pmPtr->disableUserSignal.cond!=0)
 					pmPtr->disableUserSignal.cond->signal();
 				
+				/* Drop the message's reference to the user signal: */
+				userSignal->unref();
+				
 				break;
 				}
 			
@@ -1747,7 +1761,10 @@ bool RunLoop::handlePipeMessages(void)
 				
 				/* Replace the user signal's event handler: */
 				userSignal->eventHandler=pmPtr->setUserSignalEventHandler.eventHandler;
-				userSignal->eventHandler->unref(); // Drop the reference to the event handler that was held by the pipe message
+				
+				/* Drop the message's references to the user signal and the event handler: */
+				userSignal->eventHandler->unref();
+				userSignal->unref();
 				
 				break;
 				}
@@ -1760,20 +1777,15 @@ bool RunLoop::handlePipeMessages(void)
 				/* Check if the user signal is enabled: */
 				if(userSignal->enabled)
 					{
-					try
-						{
-						/* Call the user signal's event handler: */
-						UserSignal::Event event(userSignal,lastDispatchTime,pmPtr->signalUserSignal.signalData);
-						(*userSignal->eventHandler)(event);
-						}
-					catch(const std::runtime_error& err)
-						{
-						/* Write an error message: */
-						Misc::sourcedUserError(__PRETTY_FUNCTION__,"Caught exception %s from user signal event handler",err.what());
-						}
-					if(pmPtr->signalUserSignal.signalData!=0)
-						pmPtr->signalUserSignal.signalData->unref(); // Drop the reference to the signal data that was held by the pipe message
+					/* Call the user signal's event handler: */
+					UserSignal::Event event(userSignal,lastDispatchTime,pmPtr->signalUserSignal.signalData);
+					(*userSignal->eventHandler)(event);
 					}
+				
+				/* Drop the message's references to the user signal and the signal data: */
+				if(pmPtr->signalUserSignal.signalData!=0)
+					pmPtr->signalUserSignal.signalData->unref();
+				userSignal->unref();
 				
 				break;
 				}
@@ -1801,6 +1813,9 @@ bool RunLoop::handlePipeMessages(void)
 					processFunction->spinning=newSpinning;
 					}
 				
+				/* Drop the message's reference to the process function: */
+				processFunction->unref();
+				
 				break;
 				}
 			
@@ -1809,11 +1824,12 @@ bool RunLoop::handlePipeMessages(void)
 				/* Retrieve a pointer to the process function from the pipe message: */
 				ProcessFunction* processFunction=pmPtr->enableProcessFunction.processFunction;
 				
-				/* Check that the process function is not already enabled: */
-				if(!processFunction->enabled)
+				/* Check that the process function is not already enabled and still has an owner: */
+				if(!processFunction->enabled&&processFunction->isOwned())
 					{
 					/* Append an entry for the process function to the end of the active list: */
 					activeProcessFunctions.push_back(ActiveProcessFunction(processFunction));
+					processFunction->ref(); // Take another reference to the process function
 					
 					/* Set the process function's position in the active list: */
 					processFunction->activeIndex=activeProcessFunctions.size()-1;
@@ -1821,6 +1837,9 @@ bool RunLoop::handlePipeMessages(void)
 					/* Mark the process function as enabled: */
 					processFunction->enabled=true;
 					}
+				
+				/* Drop the message's reference to the process function: */
+				processFunction->unref();
 				
 				break;
 				}
@@ -1839,6 +1858,9 @@ bool RunLoop::handlePipeMessages(void)
 					activeProcessFunctions[apfi].processFunction->activeIndex=apfi;
 					activeProcessFunctions.pop_back();
 					
+					/* Drop the active process function list's reference to the process function: */
+					processFunction->unref();
+					
 					/* Mark the process function as disabled: */
 					processFunction->enabled=false;
 					}
@@ -1846,6 +1868,9 @@ bool RunLoop::handlePipeMessages(void)
 				/* If the caller provided a condition variable for synchronization, signal it: */
 				if(pmPtr->disableProcessFunction.cond!=0)
 					pmPtr->disableProcessFunction.cond->signal();
+				
+				/* Drop the message's reference to the process function: */
+				processFunction->unref();
 				
 				break;
 				}
@@ -1857,7 +1882,10 @@ bool RunLoop::handlePipeMessages(void)
 				
 				/* Replace the process function's event handler: */
 				processFunction->eventHandler=pmPtr->setProcessFunctionEventHandler.eventHandler;
-				processFunction->eventHandler->unref(); // Drop the reference to the event handler that was held by the pipe message
+				
+				/* Drop the message's references to the process function and the event handler: */
+				processFunction->eventHandler->unref();
+				processFunction->unref();
 				
 				break;
 				}
@@ -1895,25 +1923,6 @@ RunLoop::RunLoop(void)
 
 RunLoop::~RunLoop(void)
 	{
-	/* Unregister this run loop from all OS signals: */
-	{
-	Threads::Mutex::Lock signalHandlersLock(signalHandlersMutex);
-	for(int signum=0;signum<=maxSignal;++signum)
-		if(registeredSignalHandlers[signum].runLoop==this)
-			{
-			/* Unregister this run loop: */
-			registeredSignalHandlers[signum].runLoop=0;
-			registeredSignalHandlers[signum].signalHandler=0;
-			
-			/* Return the signal to default disposition: */
-			struct sigaction sigAction;
-			memset(&sigAction,0,sizeof(struct sigaction));
-			sigAction.sa_handler=SIG_DFL;
-			if(sigaction(signum,&sigAction,0)<0)
-				Misc::sourcedConsoleError(__PRETTY_FUNCTION__,"Cannot restore OS signal %d",signum);
-			}
-	}
-	
 	/* Drain and close the self-pipe if it hasn't been done already: */
 	if(!pipeClosed)
 		{
@@ -1927,6 +1936,42 @@ RunLoop::~RunLoop(void)
 		/* Close the read end of the self-pipe: */
 		close(pipeFds[0]);
 		}
+	
+	/* Drop all references held by the active I/O watcher list: */
+	for(unsigned int i=0;i<numActiveIOWatchers;++i)
+		activeIOWatchers[i].ioWatcher->unref();
+	
+	/* Drop all references held by the active timer heap: */
+	for(size_t i=0;i<activeTimers.size();++i)
+		activeTimers[i].timer->unref();
+	
+	/* Unregister this run loop from all OS signals: */
+	{
+	Threads::Mutex::Lock signalHandlersLock(signalHandlersMutex);
+	for(int signum=0;signum<=maxSignal;++signum)
+		if(registeredSignalHandlers[signum].runLoop==this)
+			{
+			/* Unregister this run loop: */
+			registeredSignalHandlers[signum].runLoop=0;
+			SignalHandler* signalHandler=registeredSignalHandlers[signum].signalHandler;
+			registeredSignalHandlers[signum].signalHandler=0;
+			
+			/* Return the signal to default disposition: */
+			struct sigaction sigAction;
+			memset(&sigAction,0,sizeof(struct sigaction));
+			sigAction.sa_handler=SIG_DFL;
+			if(sigaction(signum,&sigAction,0)<0)
+				Misc::sourcedConsoleError(__PRETTY_FUNCTION__,"Cannot restore OS signal %d",signum);
+			
+			/* Drop the OS signal table's reference to the OS signal handler: */
+			if(signalHandler!=0)
+				signalHandler->unref();
+			}
+	}
+	
+	/* Drop all references held by the active process function list: */
+	for(size_t i=0;i<activeProcessFunctions.size();++i)
+		activeProcessFunctions[i].processFunction->unref();
 	
 	/* Release the message buffer: */
 	delete[] messageBuffer;
@@ -1956,11 +2001,11 @@ RunLoop::SignalHandler* RunLoop::createSignalHandler(int signum,bool enabled,Run
 	if(signum<0||signum>maxSignal)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid OS signal number %d",signum);
 	
-	/* Lock the signal handler table: */
+	/* Lock the OS signal handler table: */
 	{
 	Threads::Mutex::Lock signalHandlersLock(signalHandlersMutex);
 	
-	/* Check if there is already a run loop registered for the given signal: */
+	/* Check if there is already a run loop registered for the given OS signal: */
 	if(registeredSignalHandlers[signum].runLoop!=0)
 		{
 		if(registeredSignalHandlers[signum].runLoop!=this)
@@ -1969,9 +2014,10 @@ RunLoop::SignalHandler* RunLoop::createSignalHandler(int signum,bool enabled,Run
 			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"OS signal %d already handled",signum);
 		}
 	
-	/* Register this run loop and a new signal handler for the given signal: */
+	/* Register this run loop and a new OS signal handler for the given signal: */
 	registeredSignalHandlers[signum].runLoop=this;
 	registeredSignalHandlers[signum].signalHandler=new SignalHandler(*this,signum,enabled,eventHandler);
+	registeredSignalHandlers[signum].signalHandler->ref(); // Take a reference to the new OS signal handler
 	
 	/* Capture the given signal: */
 	struct sigaction sigAction;
@@ -1981,7 +2027,7 @@ RunLoop::SignalHandler* RunLoop::createSignalHandler(int signum,bool enabled,Run
 		{
 		/* Unregister this run loop and destroy the new signal handler again and throw an exception: */
 		registeredSignalHandlers[signum].runLoop=0;
-		delete registeredSignalHandlers[signum].signalHandler;
+		registeredSignalHandlers[signum].signalHandler->unref();
 		registeredSignalHandlers[signum].signalHandler=0;
 		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot intercept OS signal %d",signum);
 		}
@@ -2082,6 +2128,7 @@ bool RunLoop::dispatchNextEvents(void)
 			Timer::Event event(activeTimers[0].timer,lastDispatchTime,activeTimers[0].timeout);
 			
 			/* Check if this is a repeating time-out: */
+			bool dropRef=false;
 			if(event.timer->interval.tv_sec!=0||event.timer->interval.tv_nsec!=0)
 				{
 				/* Advance the timer's time-out, and bump it to lastDispatchTime if it's too early: */
@@ -2101,18 +2148,16 @@ bool RunLoop::dispatchNextEvents(void)
 				ActiveTimer last=activeTimers[activeTimers.size()-1];
 				activeTimers.pop_back();
 				replaceFirstActiveTimer(last.timer,last.timeout);
+				
+				/* Drop the active timer heap's reference to the timer after the callback returns: */
+				dropRef=true;
 				}
 			
-			try
-				{
-				/* Call the timer's event handler: */
-				(*event.timer->eventHandler)(event);
-				}
-			catch(const std::runtime_error& err)
-				{
-				/* Write an error message: */
-				Misc::sourcedUserError(__PRETTY_FUNCTION__,"Caught exception %s from timer event handler",err.what());
-				}
+			/* Call the timer's event handler: */
+			(*event.timer->eventHandler)(event);
+			
+			if(dropRef)
+				event.timer->unref();
 			}
 		}
 	
@@ -2146,7 +2191,7 @@ bool RunLoop::dispatchNextEvents(void)
 	
 	/* Calculate a time-out for the poll() call: */
 	int pollTimeout=-1; // Assume that we'll block forever
-	if(dontBlock||numSpinningProcessFunctions>0)
+	if(numSpinningProcessFunctions>0)
 		{
 		/* Don't block for I/O events; only poll: */
 		pollTimeout=0;
@@ -2170,9 +2215,6 @@ bool RunLoop::dispatchNextEvents(void)
 	/* Block until an I/O event occurs or the time-out expires: */
 	int pollResult=poll(pollFds.data(),numActiveIOWatchers+1,pollTimeout); // Account for the extra watcher for the self-pipe's read end
 	
-	/* Reset the no-block flag: */
-	dontBlock=false;
-	
 	#endif
 	
 	/* Sample the current time: */
@@ -2189,22 +2231,14 @@ bool RunLoop::dispatchNextEvents(void)
 		if(pollFds[handledIOWatcherIndex+1].revents!=0x0)
 			{
 			/* Set the I/O watcher who is to receive this event: */
-			event.ioWatcher=activeIOWatchers[handledIOWatcherIndex].watcher;
+			event.ioWatcher=activeIOWatchers[handledIOWatcherIndex].ioWatcher;
 			
 			/* Set the bit mask of events that actually occurred and mask out events in which the I/O watcher is not interested: */
 			event.eventMask=getPollRequestEvents(pollFds[handledIOWatcherIndex+1]);
 			event.eventMask&=event.ioWatcher->eventMask|IOWatcher::ProblemMask; // Can't mask out "problem" indicators
 			
-			try
-				{
-				/* Call the I/O watcher's event handler: */
-				(*event.ioWatcher->eventHandler)(event);
-				}
-			catch(const std::runtime_error& err)
-				{
-				/* Write an error message: */
-				Misc::sourcedUserError(__PRETTY_FUNCTION__,"Caught exception %s from I/O watcher event handler",err.what());
-				}
+			/* Call the I/O watcher's event handler: */
+			(*event.ioWatcher->eventHandler)(event);
 			}
 	handlingIOWatchers=false;
 	
@@ -2212,17 +2246,9 @@ bool RunLoop::dispatchNextEvents(void)
 	handlingProcessFunctions=true;
 	for(handledProcessFunctionIndex=0;handledProcessFunctionIndex<activeProcessFunctions.size();++handledProcessFunctionIndex)
 		{
-		try
-			{
-			/* Call the process function's event handler: */
-			ProcessFunction* pf=activeProcessFunctions[handledProcessFunctionIndex].processFunction;
-			(*pf->eventHandler)(*pf);
-			}
-		catch(const std::runtime_error& err)
-			{
-			/* Write an error message: */
-			Misc::sourcedUserError(__PRETTY_FUNCTION__,"Caught exception %s from process function event handler",err.what());
-			}
+		/* Call the process function's event handler: */
+		ProcessFunction* pf=activeProcessFunctions[handledProcessFunctionIndex].processFunction;
+		(*pf->eventHandler)(*pf);
 		}
 	handlingProcessFunctions=false;
 	

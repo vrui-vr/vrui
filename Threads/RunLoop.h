@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Misc/StdError.h>
 #include <Misc/DynamicArray.h>
 #include <Realtime/Time.h>
-#include <Threads/RefCounted.h>
+#include <Threads/Ownable.h>
 #include <Threads/Mutex.h>
 #include <Threads/Thread.h>
 
@@ -36,6 +36,7 @@ struct pollfd;
 namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
+class RefCounted;
 }
 
 namespace Threads {
@@ -47,7 +48,7 @@ class RunLoop
 	typedef Realtime::TimePointMonotonic Time; // Type for absolute time points
 	typedef Realtime::TimeVector Interval; // Type for time intervals
 	
-	class IOWatcher:public RefCounted // Class to watch for I/O events on file descriptors
+	class IOWatcher:public Ownable // Class to watch for I/O events on file descriptors
 		{
 		friend class RunLoop;
 		
@@ -146,12 +147,14 @@ class RunLoop
 		Misc::Autopointer<EventHandler> eventHandler; // The event handler
 		unsigned int activeIndex; // Index of an enabled I/O watcher's entry in the run loop's active I/O watcher list
 		
+		/* Protected methods from class Ownable: */
+		virtual void disowned(void);
+		
 		/* Constructors and destructors: */
 		IOWatcher(RunLoop& sRunLoop,int sFd,unsigned int sEventMask,bool sEnabled,EventHandler& sEventHandler); // Elementwise constructor
-		public:
-		virtual ~IOWatcher(void); // Destructor
 		
 		/* Methods: */
+		public:
 		RunLoop& getRunLoop(void) // Returns a reference to the run loop with which this I/O watcher is associated
 			{
 			return runLoop;
@@ -200,9 +203,9 @@ class RunLoop
 	
 	friend class IOWatcher;
 	
-	typedef Misc::Autopointer<IOWatcher> IOWatcherPtr; // Type for automatically managed pointers to I/O watchers
+	typedef OwningPointer<IOWatcher> IOWatcherPtr; // Type for ownership-establishing pointers to I/O watchers
 	
-	class Timer:public RefCounted // Class to schedule timer events
+	class Timer:public Ownable // Class to schedule timer events
 		{
 		friend class RunLoop;
 		
@@ -257,12 +260,14 @@ class RunLoop
 		Misc::Autopointer<EventHandler> eventHandler; // The event handler
 		unsigned int activeIndex; // Index of an enabled timer's entry in the run loop's active timer heap
 		
+		/* Protected methods from class Ownable: */
+		virtual void disowned(void);
+		
 		/* Constructors and destructors: */
 		Timer(RunLoop& sRunLoop,const Time& sTimeout,const Interval& sInterval,bool sEnabled,EventHandler& sEventHandler); // Elementwise constructor
-		public:
-		virtual ~Timer(void); // Destructor
 		
 		/* Methods: */
+		public:
 		RunLoop& getRunLoop(void) // Returns a reference to the run loop with which this timer is associated
 			{
 			return runLoop;
@@ -321,9 +326,9 @@ class RunLoop
 	
 	friend class Timer;
 	
-	typedef Misc::Autopointer<Timer> TimerPtr; // Type for automatically managed pointers to timers
+	typedef OwningPointer<Timer> TimerPtr; // Type for ownership-establishing pointers to timers
 	
-	class SignalHandler:public RefCounted // Class to handle OS signals
+	class SignalHandler:public Ownable // Class to handle OS signals
 		{
 		friend class RunLoop;
 		
@@ -376,12 +381,14 @@ class RunLoop
 		bool enabled; // Flag if the signal handler is enabled
 		Misc::Autopointer<EventHandler> eventHandler; // The event handler
 		
+		/* Protected methods from class Ownable: */
+		virtual void disowned(void);
+		
 		/* Constructors and destructors: */
 		SignalHandler(RunLoop& sRunLoop,int sSignum,bool sEnabled,EventHandler& sEventHandler); // Elementwise constructor
-		public:
-		virtual ~SignalHandler(void); // Destructor
 		
 		/* Methods: */
+		public:
 		RunLoop& getRunLoop(void) // Returns a reference to the run loop with which this signal handler is associated
 			{
 			return runLoop;
@@ -421,9 +428,9 @@ class RunLoop
 	
 	friend class SignalHandler;
 	
-	typedef Misc::Autopointer<SignalHandler> SignalHandlerPtr; // Type for automatically managed pointers to signal handlers
+	typedef OwningPointer<SignalHandler> SignalHandlerPtr; // Type for ownership-establishing pointers to OS signal handlers
 	
-	class UserSignal:public RefCounted // Class for user-defined signals to synchronously notify clients of asynchronous events
+	class UserSignal:public Ownable // Class for user-defined signals to synchronously notify clients of asynchronous events
 		{
 		friend class RunLoop;
 		
@@ -480,12 +487,14 @@ class RunLoop
 		bool enabled; // Flag if the user signal is enabled
 		Misc::Autopointer<EventHandler> eventHandler; // The event handler
 		
+		/* Protected methods from class Ownable: */
+		virtual void disowned(void);
+		
 		/* Constructors and destructors: */
 		UserSignal(RunLoop& sRunLoop,bool enabled,EventHandler& sEventHandler); // Elementwise constructor
-		public:
-		virtual ~UserSignal(void); // Destructor
 		
 		/* Methods: */
+		public:
 		RunLoop& getRunLoop(void) // Returns a reference to the run loop with which this user signal is associated
 			{
 			return runLoop;
@@ -526,9 +535,9 @@ class RunLoop
 	
 	friend class UserSignal;
 	
-	typedef Misc::Autopointer<UserSignal> UserSignalPtr; // Type for automatically managed pointers to user signals
+	typedef OwningPointer<UserSignal> UserSignalPtr; // Type for ownership-establishing pointers to user signals
 	
-	class ProcessFunction:public RefCounted // Class for functions that are called every time after the run loop processes events
+	class ProcessFunction:public Ownable // Class for functions that are called every time after the run loop processes events
 		{
 		friend class RunLoop;
 		
@@ -544,12 +553,14 @@ class RunLoop
 		Misc::Autopointer<EventHandler> eventHandler; // The event handler
 		unsigned int activeIndex; // Index of an enabled process function's entry in the run loop's active process function list
 		
+		/* Protected methods from class Ownable: */
+		virtual void disowned(void);
+		
 		/* Constructors and destructors: */
 		ProcessFunction(RunLoop& sRunLoop,bool sSpinning,bool sEnabled,EventHandler& sEventHandler); // Elementwise constructor
-		public:
-		virtual ~ProcessFunction(void); // Destructor
 		
 		/* Methods: */
+		public:
 		RunLoop& getRunLoop(void) // Returns a reference to the run loop with which this process function is associated
 			{
 			return runLoop;
@@ -592,6 +603,8 @@ class RunLoop
 			}
 		};
 	
+	typedef OwningPointer<ProcessFunction> ProcessFunctionPtr; // Type for ownership-establishing pointers to process functions
+	
 	private:
 	struct PipeMessage; // Structure for messages sent on a run loop's self-pipe
 	struct ActiveIOWatcher; // Structure keeping track of currently active I/O watchers
@@ -627,7 +640,7 @@ class RunLoop
 	unsigned int handledProcessFunctionIndex; // Index of the active process function which is currently being handled
 	
 	/* Private methods: */
-	bool writePipeMessage(const PipeMessage& pm,const char* methodName,RefCounted* messageObject =0); // Writes a message to the self-pipe; adds a reference to the given object if the write succeeds; returns false if the self-pipe was closed during run loop shutdown, throws exception on other errors
+	bool writePipeMessage(const PipeMessage& pm,const char* methodName,Ownable* messageSender =0,RefCounted* messageObject =0); // Writes a message to the self-pipe; adds references to the given sender and/or object if the write succeeds; returns false if the self-pipe was closed during run loop shutdown, throws exception on other errors
 	
 	/* Internal interface for I/O watchers: */
 	void setIOWatcherEventMask(IOWatcher* ioWatcher,unsigned int newEventMask); // Sets bit mask of I/O events in which the given I/O watcher is interested
