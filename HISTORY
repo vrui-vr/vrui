@@ -8580,3 +8580,6 @@ Vrui-14.1-002:
   to streamline the common case of re-enabling a one-shot timer with a
   new time-out.
 - Fixed object life-time management in DBus::Connection.
+- Added DBus interface to VRServerLauncher to track the active session
+  and its associated X11 display, and cleanly shut down VR servers when
+  the active session changes or the system goes to sleep or shuts down.

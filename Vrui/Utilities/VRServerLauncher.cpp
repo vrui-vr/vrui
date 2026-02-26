@@ -44,6 +44,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/ConfigurationFile.h>
 #include <Threads/FunctionCalls.h>
 #include <Threads/RunLoop.h>
+#include <DBus/Connection.h>
 #include <IO/OStream.h>
 #include <IO/JsonEntityTypes.h>
 #include <Comm/UNIXPipe.h>
@@ -134,9 +135,14 @@ class VRServerLauncher
 	/* Elements: */
 	private:
 	Threads::RunLoop& runLoop; // Reference to the main thread's run loop
+	DBus::Connection systemBus; // A connection to the system DBus to track active sessions and manage sleep inhibition locks
+	std::string seatPath; // The DBus path for the seat to which this launcher server is attached
+	std::string activeSessionPath; // The DBus path for the currently active session
+	std::string activeDisplay; // The X11 display string for the display attached with the current session
+	int sleepInhibitorFd; // A UNIX file descriptor inhibiting the system from going to sleep
 	Misc::Autopointer<Comm::ListeningTCPSocket> httpListenSocket; // Socket listening for incoming HTTP connections
-	Threads::RunLoop::IOWatcherPtr httpListenSocketWatcher; // I/O watcher for the HTTP listening socket
-	Threads::RunLoop::SignalHandlerPtr sigChldHandler; // Signal handler for SIGCHLD signals
+	Threads::RunLoop::IOWatcherOwner httpListenSocketWatcher; // I/O watcher for the HTTP listening socket
+	Threads::RunLoop::SignalHandlerOwner sigChldHandler; // Signal handler for SIGCHLD signals
 	Server servers[2]; // Array of server tracking structures
 	std::vector<Environment> environments; // A list of pre-defined spatial environments that can be loaded into VRDeviceDaemon at run-time
 	
@@ -148,6 +154,15 @@ class VRServerLauncher
 	void stopServers(void);
 	void newConnectionCallback(Threads::RunLoop::IOWatcher::Event& event); // Callback called when a new connection is available on the HTTP listening socket
 	void childTerminatedCallback(Threads::RunLoop::SignalHandler::Event& event); // Callback called when a child process terminates
+	
+	/* DBus method calls and message handlers: */
+	void requestSleepInhibitorReply(DBus::Message& message);
+	void requestSleepInhibitor(void);
+	void querySessionDisplayReplyHandler(DBus::Message& message);
+	void queryActiveSessionReplyHandler(DBus::Message& message);
+	void querySeatPathReplyHandler(DBus::Message& message);
+	void querySeatIdReplyHandler(DBus::Message& message);
+	void systemBusSignalHandler(DBus::Message& message);
 	
 	/* Constructors and destructors: */
 	public:
@@ -236,14 +251,24 @@ bool VRServerLauncher::startServer(VRServerLauncher::Server& server)
 			exit(EXIT_FAILURE);
 			}
 		
-		/* Run the server executable: */
+		/* Construct the server executable's command line: */
 		char* argv[20];
 		int argc=0;
 		argv[argc++]=const_cast<char*>(server.executableName.c_str());
 		for(std::vector<std::string>::iterator argIt=server.arguments.begin();argIt!=server.arguments.end();++argIt)
 			argv[argc++]=const_cast<char*>(argIt->c_str());
 		argv[argc]=0;
-		if(execv(argv[0],argv)<0)
+		
+		/* Construct the server executable's environment: */
+		char* envp[20];
+		int envc=0;
+		std::string display="DISPLAY=";
+		display.append(activeDisplay);
+		envp[envc++]=const_cast<char*>(display.c_str());
+		envp[envc]=0;
+		
+		/* Run the server executable: */
+		if(execve(argv[0],argv,envp)<0)
 			{
 			/* Print an error message to what is now the server's log file, then kill this process and let the parent handle it: */
 			std::cerr<<Misc::makeLibcErrMsg(__PRETTY_FUNCTION__,errno,"Cannot execute %s for %s",server.executableName.c_str(),server.displayName.c_str())<<std::endl;
@@ -432,7 +457,8 @@ void VRServerLauncher::newConnectionCallback(Threads::RunLoop::IOWatcher::Event&
 				}
 			else if(nvl.front().value=="startServers")
 				{
-				bool success=true;
+				/* Only start the servers if there is an active X11 display: */
+				bool success=!activeDisplay.empty();
 				
 				/* Start the two server sub-processes: */
 				for(int serverIndex=0;serverIndex<2&&success;++serverIndex)
@@ -508,9 +534,221 @@ void VRServerLauncher::childTerminatedCallback(Threads::RunLoop::SignalHandler::
 		}
 	}
 
-VRServerLauncher::VRServerLauncher(Threads::RunLoop& sRunLoop,int httpPort,const std::string& homeDir,const std::string& defaultPidFileDir,const std::string& defaultLogFileDir)
-	:runLoop(sRunLoop)
+void VRServerLauncher::requestSleepInhibitorReply(DBus::Message& message)
 	{
+	/* Parse the reply: */
+	DBus::Message::ReadIterator it=message.getReadIterator();
+	
+	/* Extract the sleep inhibitor's file descriptor: */
+	sleepInhibitorFd=it.readUnixFd();
+	}
+
+void VRServerLauncher::requestSleepInhibitor(void)
+	{
+	/* Acquire an inhibitor lock by sending a message to the logind service: */
+	DBus::Message request=DBus::Message::createMethodCall("org.freedesktop.login1","/org/freedesktop/login1","org.freedesktop.login1.Manager","Inhibit");
+	request.appendString("shutdown:sleep");
+	request.appendString("VRServerLauncher");
+	request.appendString("Shut down VR devices");
+	request.appendString("delay");
+	systemBus.sendWithReply(request,-1,*Threads::createFunctionCall(this,&VRServerLauncher::requestSleepInhibitorReply));
+	}
+
+void VRServerLauncher::querySessionDisplayReplyHandler(DBus::Message& message)
+	{
+	/* Parse the reply: */
+	DBus::Message::ReadIterator it=message.getReadIterator();
+	
+	/* Recurse into the root variant: */
+	DBus::Message::ReadIterator vIt=it.recurse();
+	
+	/* Read the X11 display string: */
+	activeDisplay=vIt.readString();
+	
+	if(!activeDisplay.empty())
+		std::cout<<"VRServerLauncher: Active session now "<<activeSessionPath<<" with X11 display "<<activeDisplay<<std::endl;
+	else
+		std::cout<<"VRServerLauncher: Active session now "<<activeSessionPath<<" without an X11 display "<<std::endl;
+	}
+
+void VRServerLauncher::queryActiveSessionReplyHandler(DBus::Message& message)
+	{
+	/* Parse the reply: */
+	DBus::Message::ReadIterator it=message.getReadIterator();
+	
+	/* Recurse into the root variant: */
+	DBus::Message::ReadIterator vIt=it.recurse();
+	
+	/* Recurse into the property structure: */
+	DBus::Message::ReadIterator rIt=vIt.recurse();
+	
+	/* Read the active session ID and path: */
+	const char* sessionId=rIt.readString();
+	++rIt;
+	activeSessionPath=rIt.readObjectPath();
+	
+	if(activeSessionPath!="/")
+		{
+		/* Query the active session's X11 display string: */
+		DBus::Message request=DBus::Message::createMethodCall("org.freedesktop.login1",activeSessionPath.c_str(),"org.freedesktop.DBus.Properties","Get");
+		request.appendString("org.freedesktop.login1.Session");
+		request.appendString("Display");
+		systemBus.sendWithReply(request,-1,*Threads::createFunctionCall(this,&VRServerLauncher::querySessionDisplayReplyHandler));
+		}
+	else
+		{
+		/* No active session, no display: */
+		activeDisplay.clear();
+		
+		std::cout<<"VRServerLauncher: No active session"<<std::endl;
+		}
+	}
+
+void VRServerLauncher::querySeatPathReplyHandler(DBus::Message& message)
+	{
+	/* Parse the reply: */
+	DBus::Message::ReadIterator it=message.getReadIterator();
+	
+	/* Read the seat's path: */
+	seatPath=it.readObjectPath();
+	std::cout<<"VRServerLauncher: Attached to seat "<<seatPath<<std::endl;
+	
+	/* Query the seat's active session: */
+	DBus::Message request=DBus::Message::createMethodCall("org.freedesktop.login1",seatPath.c_str(),"org.freedesktop.DBus.Properties","Get");
+	request.appendString("org.freedesktop.login1.Seat");
+	request.appendString("ActiveSession");
+	systemBus.sendWithReply(request,-1,*Threads::createFunctionCall(this,&VRServerLauncher::queryActiveSessionReplyHandler));
+	}
+
+void VRServerLauncher::querySeatIdReplyHandler(DBus::Message& message)
+	{
+	/* Parse the reply: */
+	DBus::Message::ReadIterator it=message.getReadIterator();
+	
+	/* Recurse into the root variant: */
+	DBus::Message::ReadIterator vIt=it.recurse();
+	
+	/* Read the seat's ID: */
+	const char* seatId=vIt.readString();
+	
+	/* Query the seat's path: */
+	DBus::Message request=DBus::Message::createMethodCall("org.freedesktop.login1","/org/freedesktop/login1","org.freedesktop.login1.Manager","GetSeat");
+	request.appendString(seatId);
+	systemBus.sendWithReply(request,-1,*Threads::createFunctionCall(this,&VRServerLauncher::querySeatPathReplyHandler));
+	}
+
+void VRServerLauncher::systemBusSignalHandler(DBus::Message& message)
+	{
+	/* Bail out if the message isn't a signal: */
+	if(message.getType()!=DBus::Message::Signal)
+		return;
+	
+	/* Check if the message is a sleep/wake-up notification: */
+	if(message.hasInterface("org.freedesktop.login1.Manager")&&(message.hasMember("PrepareForSleep")||message.hasMember("PrepareForShutdown")))
+		{
+		/* Retrieve the sleep/shutdown flag: */
+		DBus::Message::ReadIterator it=message.getReadIterator();
+		if(it.read<bool>())
+			{
+			/* Check if we have a sleep inhibitor, which means that the servers are currently running: */
+			if(sleepInhibitorFd>=0)
+				{
+				/* Shut down the server sub-processes: */
+				std::cout<<"VRServerLauncher: Stopping servers because system is going to sleep/shutting down"<<std::endl;
+				stopServers();
+				
+				/* Release the sleep inhibitor: */
+				close(sleepInhibitorFd);
+				sleepInhibitorFd=-1;
+				}
+			}
+		else
+			{
+			/* We could request another sleep inhibitor right after waking up, but we can also wait until we actually start the servers */
+			requestSleepInhibitor();
+			}
+		}
+	
+	/* Check if the message is an active session change notification: */
+	if(message.hasPath(seatPath.c_str())&&message.hasInterface("org.freedesktop.DBus.Properties")&&message.hasMember("PropertiesChanged"))
+		{
+		/* Retrieve the interface name: */
+		DBus::Message::ReadIterator it=message.getReadIterator();
+		const char* interfaceName=it.readString();
+		if(strcmp(interfaceName,"org.freedesktop.login1.Seat")==0)
+			{
+			++it;
+			
+			/* Retrieve the array of changed properties: */
+			for(DBus::Message::ReadIterator aIt=it.recurse();aIt.valid();++aIt)
+				{
+				/* Read the dictionary entry: */
+				DBus::Message::ReadIterator dIt=aIt.recurse();
+				const char* propertyName=dIt.readString();
+				++dIt;
+				if(strcmp(propertyName,"ActiveSession")==0)
+					{
+					/* Read the entry value: */
+					DBus::Message::ReadIterator vIt=dIt.recurse();
+					DBus::Message::ReadIterator rIt=vIt.recurse();
+					const char* sessionId=rIt.readString();
+					++rIt;
+					const char* sessionPath=rIt.readObjectPath();
+					
+					/* Check that the active session actually changed: */
+					if(activeSessionPath!=sessionPath)
+						{
+						/* Shut down the server sub-processes: */
+						std::cout<<"VRServerLauncher: Stopping servers because the active session changed"<<std::endl;
+						stopServers();
+						
+						/* Activate the new session: */
+						activeSessionPath=sessionPath;
+						if(activeSessionPath!="/")
+							{
+							/* Query the active session's X11 display string: */
+							DBus::Message request=DBus::Message::createMethodCall("org.freedesktop.login1",activeSessionPath.c_str(),"org.freedesktop.DBus.Properties","Get");
+							request.appendString("org.freedesktop.login1.Session");
+							request.appendString("Display");
+							systemBus.sendWithReply(request,-1,*Threads::createFunctionCall(this,&VRServerLauncher::querySessionDisplayReplyHandler));
+							}
+						else
+							{
+							/* No active session, no display: */
+							activeDisplay.clear();
+							
+							std::cout<<"VRServerLauncher: No active session"<<std::endl;
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+VRServerLauncher::VRServerLauncher(Threads::RunLoop& sRunLoop,int httpPort,const std::string& homeDir,const std::string& defaultPidFileDir,const std::string& defaultLogFileDir)
+	:runLoop(sRunLoop),
+	 systemBus(DBUS_BUS_SYSTEM),
+	 sleepInhibitorFd(-1)
+	{
+	/* Watch the system bus connection using the run loop: */
+	systemBus.watchConnection(runLoop);
+	
+	/* Add a match rule to receive signals from the logind service: */
+	systemBus.addMatchRule("type='signal',sender='org.freedesktop.login1'",false);
+	systemBus.addFilter(*Threads::createFunctionCall(this,&VRServerLauncher::systemBusSignalHandler));
+	
+	/* Send a message to the system bus to query the ID our our seat, and its currently active session and display: */
+	{
+	DBus::Message request=DBus::Message::createMethodCall("org.freedesktop.login1","/org/freedesktop/login1/seat/self","org.freedesktop.DBus.Properties","Get");
+	request.appendString("org.freedesktop.login1.Seat");
+	request.appendString("Id");
+	systemBus.sendWithReply(request,-1,*Threads::createFunctionCall(this,&VRServerLauncher::querySeatIdReplyHandler));
+	}
+	
+	/* Request a sleep inhibitor: */
+	requestSleepInhibitor();
+	
 	/* Load the VRServerLauncher configuration file: */
 	Misc::ConfigurationFile configFile(VRUI_INTERNAL_CONFIG_SYSCONFIGDIR "/VRServerLauncher" VRUI_INTERNAL_CONFIG_CONFIGFILESUFFIX);
 	Misc::ConfigurationFileSection cfg=configFile.getSection("/VRServerLauncher");
@@ -626,6 +864,10 @@ VRServerLauncher::~VRServerLauncher(void)
 	{
 	/* Stop the servers in case they are still running: */
 	stopServers();
+	
+	/* Release any sleep inhibitors: */
+	if(sleepInhibitorFd>=0)
+		close(sleepInhibitorFd);
 	}
 
 void sigHandlerFunction(Threads::RunLoop::SignalHandler::Event& event,bool& flag)
