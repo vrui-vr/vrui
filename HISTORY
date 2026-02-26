@@ -8583,3 +8583,4 @@ Vrui-14.1-002:
 - Added DBus interface to VRServerLauncher to track the active session
   and its associated X11 display, and cleanly shut down VR servers when
   the active session changes or the system goes to sleep or shuts down.
+- Systemd version 255 retired seat/self; fixed up VRServerLauncher.

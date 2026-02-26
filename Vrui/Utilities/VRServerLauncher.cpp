@@ -740,10 +740,17 @@ VRServerLauncher::VRServerLauncher(Threads::RunLoop& sRunLoop,int httpPort,const
 	
 	/* Send a message to the system bus to query the ID our our seat, and its currently active session and display: */
 	{
+	#if 0 // Systemd v 255 no longer has /self seat
 	DBus::Message request=DBus::Message::createMethodCall("org.freedesktop.login1","/org/freedesktop/login1/seat/self","org.freedesktop.DBus.Properties","Get");
 	request.appendString("org.freedesktop.login1.Seat");
 	request.appendString("Id");
 	systemBus.sendWithReply(request,-1,*Threads::createFunctionCall(this,&VRServerLauncher::querySeatIdReplyHandler));
+	#else
+	/* Query the seat's path: */
+	DBus::Message request=DBus::Message::createMethodCall("org.freedesktop.login1","/org/freedesktop/login1","org.freedesktop.login1.Manager","GetSeat");
+	request.appendString("seat0");
+	systemBus.sendWithReply(request,-1,*Threads::createFunctionCall(this,&VRServerLauncher::querySeatPathReplyHandler));
+	#endif
 	}
 	
 	/* Request a sleep inhibitor: */
