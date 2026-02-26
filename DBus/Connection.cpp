@@ -37,6 +37,40 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 namespace DBus {
 
+namespace {
+
+/****************
+Helper functions:
+****************/
+
+void unref(void* memory) // Destructor function for objects derived from Threads::RefCounted passed to DBus objects
+	{
+	/* Get a pointer to the reference-counted object: */
+	Threads::RefCounted* refCounted=static_cast<Threads::RefCounted*>(memory);
+	
+	#if DEBUG_PROTOCOL
+	std::cout<<"Unreferencing object "<<refCounted<<std::endl;
+	#endif
+	
+	/* Drop a reference to the reference-counted object: */
+	refCounted->unref();
+	}
+
+void disown(void* memory) // Destructor function for objects derived from Threads::Ownable passed to DBus objects
+	{
+	/* Get a pointer to the ownable object: */
+	Threads::Ownable* ownable=static_cast<Threads::Ownable*>(memory);
+	
+	#if DEBUG_PROTOCOL
+	std::cout<<"Disowning object "<<ownable<<std::endl;
+	#endif
+	
+	/* Disown the ownable object: */
+	ownable->disown();
+	}
+
+}
+
 /*********************************************
 Declaration of class Connection::WatchHandler:
 *********************************************/
@@ -132,12 +166,13 @@ dbus_bool_t Connection::addWatchFunction(DBusWatch* watch,void* data)
 	if(flags&DBUS_WATCH_WRITABLE)
 		eventMask|=Threads::RunLoop::IOWatcher::Write;
 	Threads::RunLoop::IOWatcher* ioWatcher=runLoop->createIOWatcher(dbus_watch_get_unix_fd(watch),eventMask,dbus_watch_get_enabled(watch),*new WatchHandler(watch));
+	ioWatcher->own();
 	#if DEBUG_PROTOCOL
 	std::cout<<"Created I/O watcher "<<ioWatcher<<std::endl;
 	#endif
 	
 	/* Store the I/O watcher pointer with the watch: */
-	dbus_watch_set_data(watch,ioWatcher,0);
+	dbus_watch_set_data(watch,ioWatcher,disown);
 	
 	return true;
 	}
@@ -147,15 +182,6 @@ void Connection::removeWatchFunction(DBusWatch* watch,void* data)
 	#if DEBUG_PROTOCOL
 	std::cout<<"Remove watch "<<watch<<" for file descriptor "<<dbus_watch_get_unix_fd(watch)<<std::endl;
 	#endif
-	
-	/* Retrieve the I/O watcher pointer: */
-	Threads::RunLoop::IOWatcher* ioWatcher=static_cast<Threads::RunLoop::IOWatcher*>(dbus_watch_get_data(watch));
-	
-	/* Delete the I/O watcher: */
-	#if DEBUG_PROTOCOL
-	std::cout<<"Deleting I/O watcher "<<ioWatcher<<std::endl;
-	#endif
-	delete ioWatcher;
 	}
 
 void Connection::watchToggledFunction(DBusWatch* watch,void* data)
@@ -187,9 +213,10 @@ dbus_bool_t Connection::addTimeoutFunction(DBusTimeout* timeout,void* data)
 	Threads::RunLoop::Interval interval(nanoseconds/1000000000L,nanoseconds%1000000000L);
 	firstTimeout+=interval;
 	Threads::RunLoop::Timer* timer=runLoop->createTimer(firstTimeout,interval,dbus_timeout_get_enabled(timeout),*new TimeoutHandler(timeout));
+	timer->own();
 	
 	/* Store the timer pointer with the timeout: */
-	dbus_timeout_set_data(timeout,timer,0);
+	dbus_timeout_set_data(timeout,timer,disown);
 	
 	return true;
 	}
@@ -199,15 +226,6 @@ void Connection::removeTimeoutFunction(DBusTimeout* timeout,void* data)
 	#if DEBUG_PROTOCOL
 	std::cout<<"Remove timeout "<<timeout<<" with interval "<<dbus_timeout_get_interval(timeout)<<std::endl;
 	#endif
-	
-	/* Retrieve the timer pointer: */
-	Threads::RunLoop::Timer* timer=static_cast<Threads::RunLoop::Timer*>(dbus_timeout_get_data(timeout));
-	
-	/* Delete the timer: */
-	#if DEBUG_PROTOCOL
-	std::cout<<"Deleting timer "<<timer<<std::endl;
-	#endif
-	delete timer;
 	}
 
 void Connection::timeoutToggledFunction(DBusTimeout* timeout,void* data)
@@ -399,23 +417,6 @@ Connection& Connection::operator=(Connection&& source)
 	return *this;
 	}
 
-namespace {
-
-/****************
-Helper functions:
-****************/
-
-void unrefProcessFunction(void* memory) // Unreferences a process function if the connection it's associated with drops
-	{
-	/* Drop the reference held by the connection: */
-	#if DEBUG_PROTOCOL
-	std::cout<<"DBus::Connection: Dropping reference to process function"<<std::endl;
-	#endif
-	static_cast<Threads::RunLoop::ProcessFunction*>(memory)->unref();
-	}
-
-}
-
 void Connection::watchConnection(Threads::RunLoop& runLoop)
 	{
 	/* Register watch functions: */
@@ -432,28 +433,11 @@ void Connection::watchConnection(Threads::RunLoop& runLoop)
 	/* Create a process function to dispatch messages: */
 	bool mustDispatch=dbus_connection_get_dispatch_status(connection)==DBUS_DISPATCH_DATA_REMAINS;
 	Threads::RunLoop::ProcessFunction* processFunction=runLoop.createProcessFunction(true,mustDispatch,*Threads::createFunctionCall(dispatchFunction,connection));
-	processFunction->ref();
+	processFunction->own();
 	
 	/* Register a dispatch status function: */
-	dbus_connection_set_dispatch_status_function(connection,dispatchStatusFunction,processFunction,unrefProcessFunction);
+	dbus_connection_set_dispatch_status_function(connection,dispatchStatusFunction,processFunction,disown);
 	}
-
-namespace {
-
-/****************
-Helper functions:
-****************/
-
-void unrefMessageHandler(void* memory) // Unreferences a message handler if the filter it's associated with drops
-	{
-	/* Drop the reference held by the filter: */
-	#if DEBUG_PROTOCOL
-	std::cout<<"DBus::Connection: Dropping reference to message handler"<<std::endl;
-	#endif
-	static_cast<Connection::MessageHandler*>(memory)->unref();
-	}
-
-}
 
 void Connection::addFilter(Connection::MessageHandler& messageHandler)
 	{
@@ -461,7 +445,7 @@ void Connection::addFilter(Connection::MessageHandler& messageHandler)
 	messageHandler.ref();
 	
 	/* Add the filter function and check for errors: */
-	if(!dbus_connection_add_filter(connection,filterFunction,&messageHandler,unrefMessageHandler))
+	if(!dbus_connection_add_filter(connection,filterFunction,&messageHandler,unref))
 		{
 		/* Drop the reference on the message handler and throw an exception: */
 		messageHandler.unref();
@@ -490,23 +474,6 @@ PendingCall Connection::sendWithReply(Message& message,int timeout)
 	return PendingCall(pendingCall,0);
 	}
 
-namespace {
-
-/****************
-Helper functions:
-****************/
-
-void unrefReplyHandler(void* memory)
-	{
-	/* Drop the reference held by the pending call: */
-	#if DEBUG_PROTOCOL
-	std::cout<<"DBus::Connection: Dropping reference to pending call reply handler"<<std::endl;
-	#endif
-	static_cast<Connection::MessageHandler*>(memory)->unref();
-	}
-
-}
-
 void Connection::sendWithReply(Message& message,int timeout,Connection::MessageHandler& replyHandler)
 	{
 	/* Take a reference to the reply handler: */
@@ -521,7 +488,7 @@ void Connection::sendWithReply(Message& message,int timeout,Connection::MessageH
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot send message");
 		}
 	
-	if(!dbus_pending_call_set_notify(pendingCall,replyNotifyFunction,&replyHandler,unrefReplyHandler))
+	if(!dbus_pending_call_set_notify(pendingCall,replyNotifyFunction,&replyHandler,unref))
 		{
 		/* Drop the reference to the reply handler and throw an exception: */
 		replyHandler.unref();

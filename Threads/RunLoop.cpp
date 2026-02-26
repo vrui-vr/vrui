@@ -35,6 +35,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Threads/Cond.h>
 #include <Threads/FunctionCalls.h>
 
+// DEBUGGING
+#include <iostream>
+
 namespace Threads {
 
 namespace {
@@ -112,6 +115,7 @@ struct RunLoop::PipeMessage
 		
 		/* Messages related to timers: */
 		SetTimerTimeout, // Set the next time-out of a timer
+		SetTimerTimeoutReenable, // Ditto, and also re-enable a disabled timer
 		SetTimerInterval, // Set the interval of a recurring timer
 		EnableTimer, // Enable a timer
 		DisableTimer, // Disable a timer, possibly terminally
@@ -812,7 +816,7 @@ void RunLoop::replaceFirstActiveTimer(RunLoop::Timer* newTimer,const RunLoop::Ti
 Internal interface for timers:
 *****************************/
 
-void RunLoop::setTimerTimeout(RunLoop::Timer* timer,const RunLoop::Time& newTimeout)
+void RunLoop::setTimerTimeout(RunLoop::Timer* timer,const RunLoop::Time& newTimeout,bool reenable)
 	{
 	/* Check if this call was made from inside the run loop's thread: */
 	if(Threads::Thread::isSelfEqual(threadId))
@@ -822,14 +826,23 @@ void RunLoop::setTimerTimeout(RunLoop::Timer* timer,const RunLoop::Time& newTime
 		if(timer->timeout<lastDispatchTime)
 			timer->timeout=lastDispatchTime;
 		
-		/* If the timer is enabled, fix the active timer heap: */
+		/* If the timer is enabled, fix the active timer heap; otherwise, if requested and the timer still has an owner, re-enable it: */
 		if(timer->enabled)
 			updateActiveTimer(timer);
+		else if(reenable&&timer->isOwned())
+			{
+			/* Insert the timer into the active timers heap: */
+			insertActiveTimer(timer,timer->timeout);
+			timer->ref(); // Take an additional reference to the timer
+			
+			/* Mark the timer as enabled: */
+			timer->enabled=true;
+			}
 		}
 	else
 		{
 		/* Make an asynchronous request by writing to the self-pipe: */
-		PipeMessage pm(PipeMessage::SetTimerTimeout);
+		PipeMessage pm(reenable?PipeMessage::SetTimerTimeoutReenable:PipeMessage::SetTimerTimeout);
 		pm.setTimerTimeout.timer=timer;
 		pm.setTimerTimeout.timeout=newTimeout;
 		writePipeMessage(pm,__PRETTY_FUNCTION__,timer);
@@ -1502,6 +1515,7 @@ bool RunLoop::handlePipeMessages(void)
 				}
 			
 			case PipeMessage::SetTimerTimeout:
+			case PipeMessage::SetTimerTimeoutReenable:
 				{
 				/* Retrieve a pointer to the timer from the pipe message: */
 				Timer* timer=pmPtr->setTimerTimeout.timer;
@@ -1511,9 +1525,18 @@ bool RunLoop::handlePipeMessages(void)
 				if(timer->timeout<lastDispatchTime)
 					timer->timeout=lastDispatchTime;
 				
-				/* If the timer is enabled, fix the active timer heap: */
+				/* If the timer is enabled, fix the active timer heap, otherwise, if requested and the timer still has an owner, re-enable it: */
 				if(timer->enabled)
 					updateActiveTimer(timer);
+				else if(pmPtr->messageType==PipeMessage::SetTimerTimeoutReenable&&timer->isOwned())
+					{
+					/* Insert the timer into the active timers heap: */
+					insertActiveTimer(timer,timer->timeout);
+					timer->ref(); // Take another reference to the timer
+					
+					/* Mark the timer as enabled: */
+					timer->enabled=true;
+					}
 				
 				/* Drop the message's reference to the timer: */
 				timer->unref();
@@ -1909,6 +1932,9 @@ RunLoop::RunLoop(void)
 	 handlingIOWatchers(false),
 	 handlingProcessFunctions(false)
 	{
+	// DEBUGGING
+	std::cout<<sizeof(PipeMessage);
+	
 	/* Create the self-pipe: */
 	pipeFds[1]=pipeFds[0]=-1;
 	if(pipe(pipeFds)<0)

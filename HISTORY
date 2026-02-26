@@ -8574,3 +8574,9 @@ Vrui-14.1-002:
 - Added typedef for compatible non-owning smart pointers to
   Threads::OwningPointer and a share() method that returns a non-owning
   pointer to the owned object.
+- Added typedefs for owning and non-owning pointers to all managed
+  object types to Threads::RunLoop.
+- Added reenable flag to setTimeout methods in Threads::RunLoop::Timer
+  to streamline the common case of re-enabling a one-shot timer with a
+  new time-out.
+- Fixed object life-time management in DBus::Connection.

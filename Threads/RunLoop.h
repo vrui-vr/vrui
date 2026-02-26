@@ -203,7 +203,8 @@ class RunLoop
 	
 	friend class IOWatcher;
 	
-	typedef OwningPointer<IOWatcher> IOWatcherPtr; // Type for ownership-establishing pointers to I/O watchers
+	typedef OwningPointer<IOWatcher> IOWatcherOwner; // Type for ownership-establishing pointers to I/O watchers
+	typedef Misc::Autopointer<IOWatcher> IOWatcherPtr; // Type for non-ownership-establishing pointers to I/O watchers
 	
 	class Timer:public Ownable // Class to schedule timer events
 		{
@@ -289,10 +290,10 @@ class RunLoop
 			{
 			return enabled;
 			}
-		void setTimeout(const Time& newTimeout) // Sets the next time point at which the timer expires
+		void setTimeout(const Time& newTimeout,bool reenable =false) // Sets the next time point at which the timer expires; re-enables a disabled timer if the given flag is true
 			{
 			/* Delegate to the run loop: */
-			runLoop.setTimerTimeout(this,newTimeout);
+			runLoop.setTimerTimeout(this,newTimeout,reenable);
 			}
 		void setInterval(const Interval& newInterval) // Sets the timer interval for a recurring timer; an interval of 0 turns the timer into a one-shot timer that will automatically be disabled when it elapses
 			{
@@ -326,7 +327,8 @@ class RunLoop
 	
 	friend class Timer;
 	
-	typedef OwningPointer<Timer> TimerPtr; // Type for ownership-establishing pointers to timers
+	typedef OwningPointer<Timer> TimerOwner; // Type for ownership-establishing pointers to timers
+	typedef Misc::Autopointer<Timer> TimerPtr; // Type for non-ownership-establishing pointers to timers
 	
 	class SignalHandler:public Ownable // Class to handle OS signals
 		{
@@ -428,7 +430,8 @@ class RunLoop
 	
 	friend class SignalHandler;
 	
-	typedef OwningPointer<SignalHandler> SignalHandlerPtr; // Type for ownership-establishing pointers to OS signal handlers
+	typedef OwningPointer<SignalHandler> SignalHandlerOwner; // Type for ownership-establishing pointers to OS signal handlers
+	typedef Misc::Autopointer<SignalHandler> SignalHandlerPtr; // Type for non-ownership-establishing pointers to OS signal handlers
 	
 	class UserSignal:public Ownable // Class for user-defined signals to synchronously notify clients of asynchronous events
 		{
@@ -535,7 +538,8 @@ class RunLoop
 	
 	friend class UserSignal;
 	
-	typedef OwningPointer<UserSignal> UserSignalPtr; // Type for ownership-establishing pointers to user signals
+	typedef OwningPointer<UserSignal> UserSignalOwner; // Type for ownership-establishing pointers to user signals
+	typedef Misc::Autopointer<UserSignal> UserSignalPtr; // Type for non-ownership-establishing pointers to user signals
 	
 	class ProcessFunction:public Ownable // Class for functions that are called every time after the run loop processes events
 		{
@@ -603,7 +607,8 @@ class RunLoop
 			}
 		};
 	
-	typedef OwningPointer<ProcessFunction> ProcessFunctionPtr; // Type for ownership-establishing pointers to process functions
+	typedef OwningPointer<ProcessFunction> ProcessFunctionOwner; // Type for ownership-establishing pointers to process functions
+	typedef Misc::Autopointer<ProcessFunction> ProcessFunctionPtr; // Type for non-ownership-establishing pointers to process functions
 	
 	private:
 	struct PipeMessage; // Structure for messages sent on a run loop's self-pipe
@@ -653,7 +658,7 @@ class RunLoop
 	void replaceFirstActiveTimer(Timer* newTimer,const Time& newTimeout); // Replaces the first active timer in the active timer heap with the given timer
 	
 	/* Internal interface for I/O watchers: */
-	void setTimerTimeout(Timer* timer,const Time& newTimeout); // Sets the given timer's next time-out
+	void setTimerTimeout(Timer* timer,const Time& newTimeout,bool reenable); // Sets the given timer's next time-out; re-enables a disabled timer if the given flag is true
 	void setTimerInterval(Timer* timer,const Interval& newInterval); // Sets the interval for a recurring timer; an interval of 0 marks the timer as a one-shot timer that will automatically be disabled when it elapses
 	void enableTimer(Timer* timer); // Enables the given timer
 	void disableTimer(Timer* timer,bool willDestroy =false); // Disables the given timer; if the willDestroy flag is true, the caller will destroy the timer immediately after disabling it, requiring extra synchronization
