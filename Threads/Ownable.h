@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef THREADS_OWNABLE_INCLUDED
 #define THREADS_OWNABLE_INCLUDED
 
-#include <Misc/StdError.h>
+#include <Misc/Autopointer.h>
 #include <Threads/Atomic.h>
 
 namespace Threads {
@@ -106,6 +106,7 @@ class OwningPointer // Smart pointer class to manage lifetime (through reference
 	/* Embedded classes: */
 	public:
 	typedef TargetParam Target; // Type of the objects that can be owned by objects of this class
+	typedef Misc::Autopointer<Target> SharedPointer; // Non-owning smart pointer referencing the same target type
 	
 	/* Elements: */
 	private:
@@ -208,6 +209,10 @@ class OwningPointer // Smart pointer class to manage lifetime (through reference
 	Target* operator->(void) const // Arrow operator
 		{
 		return owned;
+		}
+	SharedPointer share(void) // Return a non-owning smart pointer to the owned object
+		{
+		return SharedPointer(owned);
 		}
 	};
 
