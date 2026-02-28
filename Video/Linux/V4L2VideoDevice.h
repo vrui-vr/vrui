@@ -1,7 +1,7 @@
 /***********************************************************************
 V4L2VideoDevice - Wrapper class around video devices as represented by
 the Video for Linux version 2 (V4L2) library.
-Copyright (c) 2009-2016 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -112,7 +112,7 @@ class V4L2VideoDevice:public VideoDevice
 	/* Streaming capture interface methods: */
 	virtual unsigned int allocateFrameBuffers(unsigned int requestedNumFrameBuffers);
 	virtual void startStreaming(void);
-	virtual void startStreaming(StreamingCallback* newStreamingCallback);
+	virtual void startStreaming(StreamingCallback& newStreamingCallback);
 	virtual FrameBuffer* dequeueFrame(void);
 	virtual void enqueueFrame(FrameBuffer* frame);
 	virtual void stopStreaming(void);

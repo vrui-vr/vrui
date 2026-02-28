@@ -1,7 +1,7 @@
 /***********************************************************************
 VRDeviceClient - Class encapsulating the VR device protocol's client
 side.
-Copyright (c) 2002-2024 Oliver Kreylos
+Copyright (c) 2002-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -35,6 +35,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Realtime/Time.h>
 #include <Realtime/SharedMemory.h>
 #include <Threads/Config.h>
+#include <Threads/FunctionCalls.h>
 #include <Comm/UNIXPipe.h>
 #include <Comm/TCPPipe.h>
 #include <Vrui/EnvironmentDefinition.h>
@@ -171,9 +172,7 @@ void VRDeviceClient::readConnectReply(void)
 			}
 		
 		/* Initialize HMD configuration update callback array: */
-		hmdConfigurationUpdatedCallbacks=new HMDConfigurationUpdatedCallback*[numHmdConfigurations];
-		for(unsigned int i=0;i<numHmdConfigurations;++i)
-			hmdConfigurationUpdatedCallbacks[i]=0;
+		hmdConfigurationUpdatedCallbacks=new Misc::Autopointer<HMDConfigurationUpdatedCallback>[numHmdConfigurations];
 		}
 	
 	/* Check if the server will send tracker valid flags: */
@@ -201,10 +200,8 @@ void VRDeviceClient::readConnectReply(void)
 		}
 	}
 
-bool VRDeviceClient::handlePipeMessage(void)
+void VRDeviceClient::handlePipeMessage(Threads::RunLoop::IOWatcher::Event& event)
 	{
-	bool result=true;
-	
 	try
 		{
 		MessageIdType message=pipe->read<MessageIdType>();
@@ -453,7 +450,10 @@ bool VRDeviceClient::handlePipeMessage(void)
 			}
 			}
 		else if(message==STOPSTREAM_REPLY)
-			result=false;
+			{
+			/* Disable this I/O watcher: */
+			event.getIOWatcher().disable();
+			}
 		else
 			throw std::runtime_error("Unexpected message");
 		}
@@ -469,19 +469,11 @@ bool VRDeviceClient::handlePipeMessage(void)
 			(*errorCallback)(ProtocolError(msg,this));
 			}
 		}
-		connectionDead=true;
-		packetSignalCond.broadcast();
 		
-		result=false;
+		connectionDead=true;
+		event.getIOWatcher().disable();
+		packetSignalCond.broadcast();
 		}
-	
-	return result;
-	}
-
-void VRDeviceClient::pipeCallback(Threads::EventDispatcher::IOEvent& event)
-	{
-	/* Forward the call to the message handler: */
-	static_cast<VRDeviceClient*>(event.getUserData())->handlePipeMessage();
 	}
 
 void VRDeviceClient::initClient(void)
@@ -507,34 +499,33 @@ void VRDeviceClient::initClient(void)
 	
 	/* Read the connect reply message: */
 	readConnectReply();
+	
+	/* Register a disabled I/O watcher for the server pipe: */
+	pipeWatcher=runLoop.createIOWatcher(pipe->getFd(),Threads::RunLoop::IOWatcher::Read,false,*Threads::createFunctionCall(this,&VRDeviceClient::handlePipeMessage));
 	}
 
-VRDeviceClient::VRDeviceClient(Threads::EventDispatcher& sDispatcher,const char* deviceServerHostName,int deviceServerPort)
-	:dispatcher(sDispatcher),
-	 pipe(new Comm::TCPPipe(deviceServerHostName,deviceServerPort)),pipeEventKey(0),
+VRDeviceClient::VRDeviceClient(Threads::RunLoop& sRunLoop,const char* deviceServerHostName,int deviceServerPort)
+	:runLoop(sRunLoop),
+	 pipe(new Comm::TCPPipe(deviceServerHostName,deviceServerPort)),
 	 serverProtocolVersionNumber(0),serverHasTimeStamps(false),serverHasValidFlags(false),
-	 stateMemory(0),batteryStates(0),batteryStateUpdatedCallback(0),
+	 stateMemory(0),batteryStates(0),
 	 numHmdConfigurations(0),hmdConfigurations(0),hmdConfigurationUpdatedCallbacks(0),
 	 numPowerFeatures(0),numHapticFeatures(0),
 	 getBaseStationsRequest(0),getEnvironmentDefinitionRequest(0),
-	 environmentDefinitionUpdatedCallback(0),
-	 active(false),streaming(false),connectionDead(false),
-	 packetNotificationCallback(0),errorCallback(0)
+	 active(false),streaming(false),connectionDead(false)
 	{
 	initClient();
 	}
 
-VRDeviceClient::VRDeviceClient(Threads::EventDispatcher& sDispatcher,const char* deviceServerSocketName,bool deviceServerSocketAbstract)
-	:dispatcher(sDispatcher),
-	 pipe(new Comm::UNIXPipe(deviceServerSocketName,deviceServerSocketAbstract)),pipeEventKey(0),
+VRDeviceClient::VRDeviceClient(Threads::RunLoop& sRunLoop,const char* deviceServerSocketName,bool deviceServerSocketAbstract)
+	:runLoop(sRunLoop),
+	 pipe(new Comm::UNIXPipe(deviceServerSocketName,deviceServerSocketAbstract)),
 	 serverProtocolVersionNumber(0),serverHasTimeStamps(false),serverHasValidFlags(false),
-	 stateMemory(0),batteryStates(0),batteryStateUpdatedCallback(0),
+	 stateMemory(0),batteryStates(0),
 	 numHmdConfigurations(0),hmdConfigurations(0),hmdConfigurationUpdatedCallbacks(0),
 	 numPowerFeatures(0),numHapticFeatures(0),
 	 getBaseStationsRequest(0),getEnvironmentDefinitionRequest(0),
-	 environmentDefinitionUpdatedCallback(0),
-	 active(false),streaming(false),connectionDead(false),
-	 packetNotificationCallback(0),errorCallback(0)
+	 active(false),streaming(false),connectionDead(false)
 	{
 	initClient();
 	}
@@ -563,17 +554,15 @@ Comm::Pipe* openServerPipe(const Misc::ConfigurationFileSection& configFileSecti
 
 }
 
-VRDeviceClient::VRDeviceClient(Threads::EventDispatcher& sDispatcher,const Misc::ConfigurationFileSection& configFileSection)
-	:dispatcher(sDispatcher),
-	 pipe(openServerPipe(configFileSection)),pipeEventKey(0),
+VRDeviceClient::VRDeviceClient(Threads::RunLoop& sRunLoop,const Misc::ConfigurationFileSection& configFileSection)
+	:runLoop(sRunLoop),
+	 pipe(openServerPipe(configFileSection)),
 	 serverProtocolVersionNumber(0),serverHasTimeStamps(false),serverHasValidFlags(false),
-	 stateMemory(0),batteryStates(0),batteryStateUpdatedCallback(0),
+	 stateMemory(0),batteryStates(0),
 	 numHmdConfigurations(0),hmdConfigurations(0),hmdConfigurationUpdatedCallbacks(0),
 	 numPowerFeatures(0),numHapticFeatures(0),
 	 getBaseStationsRequest(0),getEnvironmentDefinitionRequest(0),
-	 environmentDefinitionUpdatedCallback(0),
-	 active(false),streaming(false),connectionDead(false),
-	 packetNotificationCallback(0),errorCallback(0)
+	 active(false),streaming(false),connectionDead(false)
 	{
 	initClient();
 	}
@@ -593,16 +582,7 @@ VRDeviceClient::~VRDeviceClient(void)
 	pipe->flush();
 	
 	/* Delete all callbacks: */
-	{
-	Threads::Mutex::Lock callbacksLock(callbacksMutex);
-	delete batteryStateUpdatedCallback;
-	for(unsigned int i=0;i<numHmdConfigurations;++i)
-		delete hmdConfigurationUpdatedCallbacks[i];
 	delete[] hmdConfigurationUpdatedCallbacks;
-	delete environmentDefinitionUpdatedCallback;
-	delete packetNotificationCallback;
-	delete errorCallback;
-	}
 	
 	/* Delete all virtual input devices: */
 	for(std::vector<VRDeviceDescriptor*>::iterator vdIt=virtualDevices.begin();vdIt!=virtualDevices.end();++vdIt)
@@ -631,13 +611,14 @@ void VRDeviceClient::activate(void)
 	/* Ignore a redundant request: */
 	if(!active)
 		{
+		/* Enable the pipe watcher: */
+		pipeWatcher->enable();
+		
 		/* Send the activation request message: */
 		pipe->write(MessageIdType(ACTIVATE_REQUEST));
 		pipe->flush();
 		
-		/* Register server connection events with the event dispatcher: */
-		pipeEventKey=dispatcher.addIOEventListener(pipe->getFd(),Threads::EventDispatcher::Read,&VRDeviceClient::pipeCallback,this);
-		
+		/* Mark the client as active: */
 		active=true;
 		}
 	}
@@ -647,15 +628,15 @@ void VRDeviceClient::deactivate(void)
 	/* Ignore a redundant request: */
 	if(active)
 		{
+		/* Mark the client as inactive: */
 		active=false;
-		
-		/* Unregister server connection events with the event dispatcher: */
-		dispatcher.removeIOEventListener(pipeEventKey);
-		pipeEventKey=0;
 		
 		/* Send the deactivation request message: */
 		pipe->write(MessageIdType(DEACTIVATE_REQUEST));
 		pipe->flush();
+		
+		/* Disable the pipe watcher: */
+		pipeWatcher->disable();
 		}
 	}
 
@@ -711,34 +692,27 @@ void VRDeviceClient::hapticTick(unsigned int hapticFeatureIndex,unsigned int dur
 		}
 	}
 
-void VRDeviceClient::setBatteryStateUpdatedCallback(VRDeviceClient::BatteryStateUpdatedCallback* newBatteryStateUpdatedCallback)
+void VRDeviceClient::setBatteryStateUpdatedCallback(VRDeviceClient::BatteryStateUpdatedCallback& newBatteryStateUpdatedCallback)
 	{
 	/* Replace the previous callback with the new one: */
-	{
 	Threads::Mutex::Lock callbacksLock(callbacksMutex);
-	delete batteryStateUpdatedCallback;
-	batteryStateUpdatedCallback=newBatteryStateUpdatedCallback;
-	}
+	batteryStateUpdatedCallback=&newBatteryStateUpdatedCallback;
 	}
 
-void VRDeviceClient::setHmdConfigurationUpdatedCallback(unsigned int trackerIndex,VRDeviceClient::HMDConfigurationUpdatedCallback* newHmdConfigurationUpdatedCallback)
+void VRDeviceClient::setHmdConfigurationUpdatedCallback(unsigned int trackerIndex,VRDeviceClient::HMDConfigurationUpdatedCallback& newHmdConfigurationUpdatedCallback)
 	{
 	/* Find the HMD configuration associated with the given tracker index: */
 	unsigned int index;
 	for(index=0;index<numHmdConfigurations&&trackerIndex!=hmdConfigurations[index].getTrackerIndex();++index)
 		;
-	if(index<numHmdConfigurations)
-		{
-		/* Replace the previous callback for the given tracker index with the new one: */
-		Threads::Mutex::Lock callbacksLock(callbacksMutex);
-		delete hmdConfigurationUpdatedCallbacks[index];
-		hmdConfigurationUpdatedCallbacks[index]=newHmdConfigurationUpdatedCallback;
-		}
-	else
-		{
-		/* Delete the new callback and just ignore it: */
-		delete newHmdConfigurationUpdatedCallback;
-		}
+	if(index>=numHmdConfigurations)
+		throw ProtocolError("VRDeviceClient: HMD index out of range",this);
+	
+	/* Replace the previous callback for the given tracker index with the new one: */
+	{
+	Threads::Mutex::Lock callbacksLock(callbacksMutex);
+	hmdConfigurationUpdatedCallbacks[index]=&newHmdConfigurationUpdatedCallback;
+	}
 	}
 
 std::vector<VRBaseStation> VRDeviceClient::getBaseStations(void)
@@ -862,6 +836,7 @@ bool VRDeviceClient::updateEnvironmentDefinition(const EnvironmentDefinition& en
 			{
 			/* Mark the connection as dead and re-throw the original exception: */
 			connectionDead=true;
+			pipeWatcher->disable();
 			throw;
 			}
 		
@@ -871,25 +846,22 @@ bool VRDeviceClient::updateEnvironmentDefinition(const EnvironmentDefinition& en
 		return false;
 	}
 
-void VRDeviceClient::setEnvironmentDefinitionUpdatedCallback(VRDeviceClient::EnvironmentDefinitionUpdatedCallback* newEnvironmentDefinitionUpdatedCallback)
+void VRDeviceClient::setEnvironmentDefinitionUpdatedCallback(VRDeviceClient::EnvironmentDefinitionUpdatedCallback& newEnvironmentDefinitionUpdatedCallback)
 	{
 	/* Replace the previous callback with the new one: */
-	{
 	Threads::Mutex::Lock callbacksLock(callbacksMutex);
-	delete environmentDefinitionUpdatedCallback;
-	environmentDefinitionUpdatedCallback=newEnvironmentDefinitionUpdatedCallback;
-	}
+	environmentDefinitionUpdatedCallback=&newEnvironmentDefinitionUpdatedCallback;
 	}
 
-void VRDeviceClient::startStream(VRDeviceClient::Callback* newPacketNotificationCallback,VRDeviceClient::ErrorCallback* newErrorCallback)
+void VRDeviceClient::startStream(VRDeviceClient::Callback& newPacketNotificationCallback,VRDeviceClient::ErrorCallback& newErrorCallback)
 	{
 	if(active&&!streaming&&!connectionDead)
 		{
 		/* Install the new callback functions: */
 		{
 		Threads::Mutex::Lock callbacksLock(callbacksMutex);
-		packetNotificationCallback=newPacketNotificationCallback;
-		errorCallback=newErrorCallback;
+		packetNotificationCallback=&newPacketNotificationCallback;
+		errorCallback=&newErrorCallback;
 		
 		if(batteryStateUpdatedCallback!=0)
 			{
@@ -905,15 +877,39 @@ void VRDeviceClient::startStream(VRDeviceClient::Callback* newPacketNotification
 		Threads::MutexCond::Lock packetSignalLock(packetSignalCond);
 		pipe->write(MessageIdType(STARTSTREAM_REQUEST));
 		pipe->flush();
-		// packetSignalCond.wait(packetSignalLock);
+		// packetSignalCond.wait(packetSignalLock); // Actually, let's not wait
 		streaming=true;
 		}
 		}
-	else
+	}
+
+void VRDeviceClient::startStream(VRDeviceClient::Callback& newPacketNotificationCallback)
+	{
+	if(active&&!streaming&&!connectionDead)
 		{
-		/* Just delete the new callback functions: */
-		delete newPacketNotificationCallback;
-		delete newErrorCallback;
+		/* Install the new callback function: */
+		{
+		Threads::Mutex::Lock callbacksLock(callbacksMutex);
+		packetNotificationCallback=&newPacketNotificationCallback;
+		errorCallback=0;
+		
+		if(batteryStateUpdatedCallback!=0)
+			{
+			/* Send initial battery states for all devices: */
+			Threads::Mutex::Lock batteryStatesLock(batteryStatesMutex);
+			for(unsigned int i=0;i<virtualDevices.size();++i)
+				(*batteryStateUpdatedCallback)(i);
+			}
+		}
+		
+		/* Send start streaming message and wait for first state packet to arrive: */
+		{
+		Threads::MutexCond::Lock packetSignalLock(packetSignalCond);
+		pipe->write(MessageIdType(STARTSTREAM_REQUEST));
+		pipe->flush();
+		// packetSignalCond.wait(packetSignalLock); // Actually, let's not wait
+		streaming=true;
+		}
 		}
 	}
 
@@ -932,9 +928,7 @@ void VRDeviceClient::stopStream(void)
 		/* Delete the callback functions: */
 		{
 		Threads::Mutex::Lock callbacksLock(callbacksMutex);
-		delete packetNotificationCallback;
 		packetNotificationCallback=0;
-		delete errorCallback;
 		errorCallback=0;
 		}
 		}

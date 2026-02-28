@@ -1,7 +1,7 @@
 /***********************************************************************
 DeviceTest - Program to test the connection to a Vrui VR Device Daemon
 and to dump device positions/orientations and button states.
-Copyright (c) 2002-2025 Oliver Kreylos
+Copyright (c) 2002-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -31,12 +31,12 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <stdexcept>
 #include <Misc/SizedTypes.h>
 #include <Misc/Timer.h>
-#include <Misc/FunctionCalls.h>
 #include <Misc/OutputOperators.h>
 #include <Misc/Marshaller.h>
 #include <Geometry/GeometryMarshallers.h>
 #include <Misc/ConfigurationFile.h>
-#include <Threads/EventDispatcher.h>
+#include <Threads/FunctionCalls.h>
+#include <Threads/RunLoop.h>
 #include <IO/File.h>
 #include <IO/OpenFile.h>
 #include <Realtime/Time.h>
@@ -799,9 +799,9 @@ void environmentDefinitionUpdatedCallback(const Vrui::EnvironmentDefinition& new
 	std::cout<<"Server updated environment definition"<<std::endl;
 	}
 
-Threads::EventDispatcher dispatcher;
+Threads::RunLoop runLoop;
 
-void stdioCallback(Threads::EventDispatcher::IOEvent& event)
+void stdioCallback(Threads::RunLoop::IOWatcher::Event& event)
 	{
 	/* Read everything available on stdin: */
 	char buffer[1024];
@@ -819,27 +819,26 @@ void stdioCallback(Threads::EventDispatcher::IOEvent& event)
 				case 'Q':
 				case 'q':
 					/* Shut down the main loop: */
-					dispatcher.stop();
+					runLoop.stop();
 					break;
 				}
 			}
 		}
 	}
 
-void packetNotificationCallback(Vrui::VRDeviceClient* deviceClient,TrackerPrinter* trackerPrinter)
+void packetNotificationCallback(Vrui::VRDeviceClient* deviceClient,TrackerPrinter& trackerPrinter)
 	{
 	/* Print tracker data: */
-	trackerPrinter->print();
+	trackerPrinter.print();
 	}
 
-void updateDevicesCallback(Threads::EventDispatcher::TimerEvent& event)
+void updateDevicesCallback(Threads::RunLoop::Timer::Event& event,TrackerPrinter& trackerPrinter)
 	{
 	/* Update the device client's device state: */
-	TrackerPrinter* trackerPrinter=static_cast<TrackerPrinter*>(event.getUserData());
-	trackerPrinter->updateDeviceStates();
+	trackerPrinter.updateDeviceStates();
 	
 	/* Print tracker data: */
-	trackerPrinter->print();
+	trackerPrinter.print();
 	}
 
 void help(const char* appName)
@@ -1035,12 +1034,12 @@ int main(int argc,char* argv[])
 				serverName=serverNamePort;
 			
 			/* Connect to the VR device server over a TCP socket: */
-			deviceClient=new Vrui::VRDeviceClient(dispatcher,serverName.c_str(),portNumber);
+			deviceClient=new Vrui::VRDeviceClient(runLoop,serverName.c_str(),portNumber);
 			}
 		else
 			{
 			/* Connect to the VR device server over a UNIX domain socket: */
-			deviceClient=new Vrui::VRDeviceClient(dispatcher,serverSocketName,serverSocketAbstract);
+			deviceClient=new Vrui::VRDeviceClient(runLoop,serverSocketName,serverSocketAbstract);
 			}
 		}
 	catch(const std::runtime_error& err)
@@ -1205,12 +1204,12 @@ int main(int argc,char* argv[])
 		eyeRotVersions[i]=hmdConfigurations[i]->getEyeRotVersion();
 		eyeVersions[i]=hmdConfigurations[i]->getEyeVersion();
 		distortionMeshVersions[i]=hmdConfigurations[i]->getDistortionMeshVersion();
-		deviceClient->setHmdConfigurationUpdatedCallback(hmdConfigurations[i]->getTrackerIndex(),Misc::createFunctionCall(hmdConfigurationUpdatedCallback));
+		deviceClient->setHmdConfigurationUpdatedCallback(hmdConfigurations[i]->getTrackerIndex(),*Threads::createFunctionCall(hmdConfigurationUpdatedCallback));
 		}
 	deviceClient->unlockHmdConfigurations();
 	
 	/* Register a callback to be notified when the server's environment definition changes: */
-	deviceClient->setEnvironmentDefinitionUpdatedCallback(Misc::createFunctionCall(environmentDefinitionUpdatedCallback));
+	deviceClient->setEnvironmentDefinitionUpdatedCallback(*Threads::createFunctionCall(environmentDefinitionUpdatedCallback));
 	
 	/* Open the save file: */
 	std::ofstream* saveFile=0;
@@ -1232,27 +1231,27 @@ int main(int argc,char* argv[])
 	tcsetattr(STDIN_FILENO,TCSANOW,&term);
 	
 	/* Register a callback for stdin: */
-	Threads::EventDispatcher::ListenerKey stdinListener=dispatcher.addIOEventListener(STDIN_FILENO,Threads::EventDispatcher::Read,stdioCallback,0);
+	Threads::RunLoop::IOWatcherOwner stdinWatcher=runLoop.createIOWatcher(STDIN_FILENO,Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(stdioCallback));
 	
 	/* Activate the device client: */
 	deviceClient->activate();
 	
 	/* Run main loop: */
-	Threads::EventDispatcher::ListenerKey updateListener(0);
+	Threads::RunLoop::TimerOwner updateTimer;
 	if(pipeType==0)
 		{
 		/* Start streaming device data to the packet notification callback: */
-		deviceClient->startStream(Misc::createFunctionCall(packetNotificationCallback,&trackerPrinter));
+		deviceClient->startStream(*Threads::createFunctionCall(packetNotificationCallback,trackerPrinter));
 		}
 	else
 		{
 		/* Register a callback to display device data from the server's shared memory segment at regular intervals: */
-		updateListener=dispatcher.addTimerEventListener(Threads::EventDispatcher::Time::now(),Threads::EventDispatcher::Time(0,100000),updateDevicesCallback,&trackerPrinter);
+		updateTimer=runLoop.createTimer(Threads::RunLoop::Time(),Threads::RunLoop::Interval(0,200000),true,*Threads::createFunctionCall(updateDevicesCallback,trackerPrinter));
 		}
 	
 	/* Dispatch events: */
 	Misc::Timer t;
-	dispatcher.dispatchEvents();
+	runLoop.run();
 	t.elapse();
 	std::cout<<std::endl<<"Received "<<trackerPrinter.getNumSamples()<<" device data packets in "<<t.getTime()*1000.0<<" ms ("<<double(trackerPrinter.getNumSamples())/t.getTime()<<" packets/s)"<<std::endl;
 	
@@ -1263,12 +1262,9 @@ int main(int argc,char* argv[])
 		}
 	else
 		{
-		/* Unregister the timer callback: */
-		dispatcher.removeTimerEventListener(updateListener);
+		/* Destroy the update timer: */
+		updateTimer=0;
 		}
-	
-	/* Unregister the stdin callback: */
-	dispatcher.removeIOEventListener(stdinListener);
 	
 	deviceClient->deactivate();
 	

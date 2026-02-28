@@ -1,6 +1,6 @@
 /***********************************************************************
 VideoDevice - Base class for video capture devices.
-Copyright (c) 2009-2024 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -22,10 +22,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Video/VideoDevice.h>
 
 #include <Misc/StdError.h>
-#include <Misc/FunctionCalls.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ArrayValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <Threads/FunctionCalls.h>
 #include <Math/MathValueCoders.h>
 #include <Video/Config.h>
 #if 0
@@ -52,13 +52,11 @@ Methods of class VideoDevice:
 ****************************/
 
 VideoDevice::VideoDevice(void)
-	:streamingCallback(0)
 	{
 	}
 
 VideoDevice::~VideoDevice(void)
 	{
-	delete streamingCallback;
 	}
 
 void VideoDevice::registerDeviceClass(VideoDevice::EnumerateVideoDevicesFunc enumerateVideoDevices)
@@ -300,22 +298,19 @@ void VideoDevice::configure(const Misc::ConfigurationFileSection& cfg)
 
 void VideoDevice::startStreaming(void)
 	{
-	/* Delete the streaming callback: */
-	delete streamingCallback;
+	/* Destroy the current streaming callback: */
 	streamingCallback=0;
 	}
 
-void VideoDevice::startStreaming(VideoDevice::StreamingCallback* newStreamingCallback)
+void VideoDevice::startStreaming(VideoDevice::StreamingCallback& newStreamingCallback)
 	{
-	/* Store the new streaming callback: */
-	delete streamingCallback;
-	streamingCallback=newStreamingCallback;
+	/* Replace the current streaming callback: */
+	streamingCallback=&newStreamingCallback;
 	}
 
 void VideoDevice::stopStreaming(void)
 	{
-	/* Delete the streaming callback: */
-	delete streamingCallback;
+	/* Destroy the current streaming callback: */
 	streamingCallback=0;
 	}
 

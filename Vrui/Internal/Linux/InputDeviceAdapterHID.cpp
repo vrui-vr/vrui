@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterHID - Linux-specific version of HID input device
 adapter.
-Copyright (c) 2009-2025 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -30,6 +30,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <Threads/RunLoop.h>
 #include <RawHID/EventDeviceMatcher.h>
 #include <Math/MathValueCoders.h>
 #include <Geometry/OrthonormalTransformation.h>
@@ -389,10 +390,10 @@ InputDeviceAdapterHID::InputDeviceAdapterHID(InputDeviceManager* sInputDeviceMan
 	/* Initialize input device adapter: */
 	InputDeviceAdapter::initializeAdapter(configFileSection);
 	
-	/* Register all HIDs with the shared event dispatcher: */
-	Threads::EventDispatcher& eventDispatcher=inputDeviceManager->acquireEventDispatcher();
+	/* Register all HIDs with the shared run loop: */
+	Threads::RunLoop& runLoop=inputDeviceManager->acquireRunLoop();
 	for(std::vector<Device*>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
-		(*dIt)->registerEventHandler(eventDispatcher);
+		(*dIt)->watch(runLoop);
 	}
 
 InputDeviceAdapterHID::~InputDeviceAdapterHID(void)

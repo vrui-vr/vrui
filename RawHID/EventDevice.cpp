@@ -1,7 +1,7 @@
 /***********************************************************************
 EventDevice - Class representing an input device using the Linux event
 subsystem.
-Copyright (c) 2023-2025 Oliver Kreylos
+Copyright (c) 2023-2026 Oliver Kreylos
 
 This file is part of the Raw HID Support Library (RawHID).
 
@@ -38,6 +38,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <sys/ioctl.h>
 #include <linux/input.h>
 #include <Misc/StdError.h>
+#include <Threads/FunctionCalls.h>
 #include <RawHID/Config.h>
 #include <RawHID/EventDeviceMatcher.h>
 
@@ -290,10 +291,10 @@ void EventDevice::initFeatureMaps(void)
 		}
 	}
 
-void EventDevice::ioEventCallback(Threads::EventDispatcher::IOEvent& event)
+void EventDevice::ioEventCallback(Threads::RunLoop::IOWatcher::Event& event)
 	{
 	/* Process pending events: */
-	static_cast<EventDevice*>(event.getUserData())->processEvents();
+	processEvents();
 	}
 
 std::vector<std::string> EventDevice::getEventDeviceFileNames(void)
@@ -326,8 +327,7 @@ EventDevice::EventDevice(const char* deviceFileName)
 	:fd(-1),
 	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
 	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
-	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false),
-	 eventDispatcher(0),listenerKey(0)
+	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false)
 	{
 	/* Try opening the device file of the given name: */
 	fd=open(deviceFileName,O_RDWR);
@@ -341,8 +341,7 @@ EventDevice::EventDevice(EventDeviceMatcher& deviceMatcher)
 	:fd(findDevice(deviceMatcher)),
 	 numKeyFeatures(0),keyFeatureMap(0),keyFeatureCodes(0),keyFeatureValues(0),
 	 numAbsAxisFeatures(0),absAxisFeatureMap(0),absAxisFeatureConfigs(0),absAxisFeatureValues(0),
-	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false),
-	 eventDispatcher(0),listenerKey(0)
+	 numRelAxisFeatures(0),relAxisFeatureMap(0),relAxisFeatureCodes(0),synReport(false)
 	{
 	if(fd<0)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No event device matching %s found",deviceMatcher.getMatchSpec().c_str());
@@ -360,11 +359,14 @@ EventDevice::EventDevice(EventDevice&& source)
 	 absAxisFeatureEventCallbacks(std::move(source.absAxisFeatureEventCallbacks)),
 	 relAxisFeatureEventCallbacks(std::move(source.relAxisFeatureEventCallbacks)),
 	 synReportEventCallbacks(std::move(source.synReportEventCallbacks)),
-	 eventDispatcher(0),listenerKey(0)
+	 deviceWatcher(std::move(source.deviceWatcher))
 	{
-	/* Throw an exception if the source is currently registered with an event dispatcher: */
-	if(source.eventDispatcher!=0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unable to move-copy an event device currently registered with an event dispatcher");
+	/* If the source was watched by a run loop, transfer the watcher over to us: */
+	if(deviceWatcher!=0)
+		{
+		/* Replace the device watcher's event handler with one pointing to us: */
+		deviceWatcher->setEventHandler(*Threads::createFunctionCall(this,&EventDevice::ioEventCallback));
+		}
 	
 	/* Invalidate the source: */
 	source.fd=-1;
@@ -383,9 +385,8 @@ EventDevice::EventDevice(EventDevice&& source)
 
 EventDevice::~EventDevice(void)
 	{
-	/* Unregister the event device from any event dispatchers: */
-	if(eventDispatcher!=0)
-		eventDispatcher->removeIOEventListener(listenerKey);
+	/* Stop watching this device: */
+	deviceWatcher=0;
 	
 	/* Release allocated resources: */
 	delete[] keyFeatureMap;
@@ -698,26 +699,16 @@ void EventDevice::processEvents(void)
 		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Unable to read events");
 	}
 
-void EventDevice::registerEventHandler(Threads::EventDispatcher& newEventDispatcher)
+void EventDevice::watch(Threads::RunLoop& runLoop)
 	{
-	/* Check if the event device is already registered with an event dispatcher: */
-	if(eventDispatcher!=0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Event device is already registered with an event dispatcher");
-	
-	/* Add an I/O listener to the given event dispatcher: */
-	eventDispatcher=&newEventDispatcher;
-	listenerKey=eventDispatcher->addIOEventListener(fd,Threads::EventDispatcher::Read,ioEventCallback,this);
+	/* Replace any current device watcher with a new one: */
+	deviceWatcher=runLoop.createIOWatcher(fd,Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&EventDevice::ioEventCallback));
 	}
 
-void EventDevice::unregisterEventHandler(void)
+void EventDevice::unwatch(void)
 	{
-	/* Check if the event device is actually registered with an event dispatcher: */
-	if(eventDispatcher==0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Event device is not registered with an event dispatcher");
-	
-	if(eventDispatcher!=0)
-		eventDispatcher->removeIOEventListener(listenerKey);
-	eventDispatcher=0;
+	/* Destroy any current device watcher: */
+	deviceWatcher=0;
 	}
 
 }

@@ -1,7 +1,7 @@
 /***********************************************************************
 MeasurePoints - Vrui application to measure sets of 3D positions using a
 tracked VR input device.
-Copyright (c) 2019-2024 Oliver Kreylos
+Copyright (c) 2019-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -29,10 +29,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <iostream>
 #include <Misc/PrintInteger.h>
 #include <Misc/StdError.h>
-#include <Misc/FunctionCalls.h>
 #include <Misc/SelfDestructArray.h>
 #include <Misc/HashTable.h>
 #include <Misc/MessageLogger.h>
+#include <Threads/FunctionCalls.h>
 #include <IO/Directory.h>
 #include <IO/CSVSource.h>
 #include <IO/OStream.h>
@@ -984,7 +984,7 @@ MeasurePoints::MeasurePoints(int& argc,char**& argv)
 		}
 	
 	/* Initialize the device client: */
-	deviceClient=new Vrui::VRDeviceClient(dispatcher,serverName,portNumber);
+	deviceClient=new Vrui::VRDeviceClient(runLoop,serverName,portNumber);
 	
 	/* Retrieve the number of buttons in the VRDeviceDaemon's namespace: */
 	deviceClient->lockState();
@@ -1009,7 +1009,7 @@ MeasurePoints::MeasurePoints(int& argc,char**& argv)
 	
 	/* Activate the device client and start streaming: */
 	deviceClient->activate();
-	deviceClient->startStream(Misc::createFunctionCall(this,&MeasurePoints::trackingCallback));
+	deviceClient->startStream(*Threads::createFunctionCall(this,&MeasurePoints::trackingCallback));
 	
 	/* Create the button press prompt: */
 	pressButtonPrompt=createPressButtonPrompt();

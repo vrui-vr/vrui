@@ -1,7 +1,7 @@
 /***********************************************************************
 DC1394VideoDevice - Wrapper class around video devices as represented by
 the dc1394 IEEE 1394 (Firewire) DCAM video library.
-Copyright (c) 2009-2021 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -116,7 +116,7 @@ class DC1394VideoDevice:public VideoDevice
 	/* Streaming capture interface methods: */
 	virtual unsigned int allocateFrameBuffers(unsigned int requestedNumFrameBuffers);
 	virtual void startStreaming(void);
-	virtual void startStreaming(StreamingCallback* newStreamingCallback);
+	virtual void startStreaming(StreamingCallback& newStreamingCallback);
 	virtual FrameBuffer* dequeueFrame(void);
 	virtual void enqueueFrame(FrameBuffer* frame);
 	virtual void stopStreaming(void);

@@ -2,7 +2,7 @@
 ViewerComponent - An application component to stream video from a camera
 to an OpenGL texture for rendering, including user interfaces to select
 cameras and video modes and control camera settings.
-Copyright (c) 2018-2025 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -29,10 +29,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdexcept>
 #include <iostream>
 #include <Misc/StdError.h>
-#include <Misc/FunctionCalls.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/StandardHashFunction.h>
 #include <Misc/HashTable.h>
+#include <Threads/FunctionCalls.h>
 #include <Math/Math.h>
 #include <Math/MathValueCoders.h>
 #include <GL/Extensions/GLARBTextureNonPowerOfTwo.h>
@@ -526,7 +526,7 @@ void ViewerComponent::startStreaming(void)
 			
 			/* Start capturing video in the new format from the video device: */
 			videoDevice->allocateFrameBuffers(5);
-			videoDevice->startStreaming(Misc::createFunctionCall(this,&ViewerComponent::frameCallback));
+			videoDevice->startStreaming(*Threads::createFunctionCall(this,&ViewerComponent::frameCallback));
 			}
 		catch(const std::runtime_error& err)
 			{
@@ -616,7 +616,6 @@ ViewerComponent::ViewerComponent(unsigned int sVideoDeviceIndex,const VideoDataF
 	 videoDevice(0),videoExtractor(0),
 	 storeVideoFrames(true),
 	 videoFrameVersion(0),
-	 videoFrameCallback(0),videoFormatChangedCallback(0),videoFormatSizeChangedCallback(0),
 	 widgetManager(sWidgetManager),
 	 videoDevicesDialog(0),videoControlPanel(0)
 	{
@@ -637,7 +636,6 @@ ViewerComponent::ViewerComponent(const char* videoDeviceName,unsigned int videoD
 	 videoDevice(0),videoExtractor(0),
 	 storeVideoFrames(true),
 	 videoFrameVersion(0),
-	 videoFrameCallback(0),videoFormatChangedCallback(0),videoFormatSizeChangedCallback(0),
 	 widgetManager(sWidgetManager),
 	 videoDevicesDialog(0),videoControlPanel(0)
 	{
@@ -678,7 +676,6 @@ ViewerComponent::ViewerComponent(unsigned int sVideoDeviceIndex,const VideoDataF
 	 videoDevice(0),videoExtractor(0),
 	 storeVideoFrames(true),
 	 videoFrameVersion(0),
-	 videoFrameCallback(0),videoFormatChangedCallback(0),videoFormatSizeChangedCallback(0),
 	 widgetManager(sWidgetManager),
 	 videoDevicesDialog(0),videoControlPanel(0)
 	{
@@ -708,7 +705,6 @@ ViewerComponent::ViewerComponent(const char* videoDeviceName,unsigned int videoD
 	 videoDevice(0),videoExtractor(0),
 	 storeVideoFrames(true),
 	 videoFrameVersion(0),
-	 videoFrameCallback(0),videoFormatChangedCallback(0),videoFormatSizeChangedCallback(0),
 	 widgetManager(sWidgetManager),
 	 videoDevicesDialog(0),videoControlPanel(0)
 	{
@@ -757,11 +753,6 @@ ViewerComponent::~ViewerComponent(void)
 	{
 	/* Close the open video device: */
 	closeVideoDevice();
-	
-	/* Delete the callback functions: */
-	delete videoFrameCallback;
-	delete videoFormatChangedCallback;
-	delete videoFormatSizeChangedCallback;
 	
 	/* Delete UI components: */
 	delete videoDevicesDialog;
@@ -923,31 +914,28 @@ GLMotif::Widget* ViewerComponent::getVideoControlPanel(void)
 	return videoControlPanel;
 	}
 
-void ViewerComponent::setVideoFrameCallback(ViewerComponent::VideoFrameCallback* newVideoFrameCallback,bool newStoreVideoFrames)
+void ViewerComponent::setVideoFrameCallback(ViewerComponent::VideoFrameCallback& newVideoFrameCallback,bool newStoreVideoFrames)
 	{
-	/* Delete the current callback and install the new one: */
+	/* Replace the current callback: */
 	{
 	Threads::Spinlock::Lock videoFrameCallbackLock(videoFrameCallbackMutex);
-	delete videoFrameCallback;
-	videoFrameCallback=newVideoFrameCallback;
+	videoFrameCallback=&newVideoFrameCallback;
 	}
 	
 	/* Enable/disable automatic display of new video frames: */
 	storeVideoFrames=newStoreVideoFrames||videoFrameCallback==0;
 	}
 
-void ViewerComponent::setVideoFormatChangedCallback(ViewerComponent::VideoFormatChangedCallback* newVideoFormatChangedCallback)
+void ViewerComponent::setVideoFormatChangedCallback(ViewerComponent::VideoFormatChangedCallback& newVideoFormatChangedCallback)
 	{
-	/* Delete the current callback and install the new one: */
-	delete videoFormatChangedCallback;
-	videoFormatChangedCallback=newVideoFormatChangedCallback;
+	/* Replace the current callback: */
+	videoFormatChangedCallback=&newVideoFormatChangedCallback;
 	}
 
-void ViewerComponent::setVideoFormatSizeChangedCallback(ViewerComponent::VideoFormatChangedCallback* newVideoFormatSizeChangedCallback)
+void ViewerComponent::setVideoFormatSizeChangedCallback(ViewerComponent::VideoFormatChangedCallback& newVideoFormatSizeChangedCallback)
 	{
-	/* Delete the current callback and install the new one: */
-	delete videoFormatSizeChangedCallback;
-	videoFormatSizeChangedCallback=newVideoFormatSizeChangedCallback;
+	/* Replace the current callback: */
+	videoFormatSizeChangedCallback=&newVideoFormatSizeChangedCallback;
 	}
 
 void ViewerComponent::storeVideoFrame(const Images::BaseImage& frame)

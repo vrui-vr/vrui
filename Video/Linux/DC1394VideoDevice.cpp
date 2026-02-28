@@ -1,7 +1,7 @@
 /***********************************************************************
 DC1394VideoDevice - Wrapper class around video devices as represented by
 the dc1394 IEEE 1394 (Firewire) DCAM video library.
-Copyright (c) 2009-2024 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -26,9 +26,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <iostream>
 #include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
-#include <Misc/FunctionCalls.h>
 #include <Misc/StandardHashFunction.h>
 #include <Misc/HashTable.h>
+#include <Threads/FunctionCalls.h>
 #include <GLMotif/WidgetManager.icpp>
 #include <GLMotif/StyleSheet.h>
 #include <GLMotif/PopupWindow.h>
@@ -912,7 +912,7 @@ void DC1394VideoDevice::startStreaming(void)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot start image transfers");
 	}
 
-void DC1394VideoDevice::startStreaming(VideoDevice::StreamingCallback* newStreamingCallback)
+void DC1394VideoDevice::startStreaming(VideoDevice::StreamingCallback& newStreamingCallback)
 	{
 	/* Call the base class method: */
 	VideoDevice::startStreaming(newStreamingCallback);

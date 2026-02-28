@@ -2,7 +2,7 @@
 LatencyTester - Class representing the USB latency tester Oculus shipped
 with the first-generation Oculus Rift development kit when they were
 still considering themselves an "open source" enterprise.
-Copyright (c) 2013-2023 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Compositing Server (VRCompositor).
 
@@ -25,12 +25,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define LATENCYTESTER_INCLUDED
 
 #include <Misc/SizedTypes.h>
-#include <Threads/EventDispatcher.h>
+#include <Misc/Autopointer.h>
+#include <Threads/RunLoop.h>
 #include <RawHID/BusType.h>
 #include <RawHID/Device.h>
 
 /* Forward declarations: */
-namespace Misc {
+namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 }
@@ -55,24 +56,23 @@ class LatencyTester:public RawHID::Device
 			}
 		};
 	
-	typedef Misc::FunctionCall<unsigned int> SampleCallback; // Type of functions called when a new color sample arrives from the latency tester
-	typedef Misc::FunctionCall<unsigned int> ButtonEventCallback; // Type of functions called when the latency tester's button is pressed; parameter is tester's internal ms timestamp
+	typedef Threads::FunctionCall<unsigned int> SampleCallback; // Type of functions called when a new color sample arrives from the latency tester
+	typedef Threads::FunctionCall<unsigned int> ButtonEventCallback; // Type of functions called when the latency tester's button is pressed; parameter is tester's internal ms timestamp
 	
 	/* Elements: */
 	private:
-	Threads::EventDispatcher& dispatcher; // Reference to event dispatcher
-	Threads::EventDispatcher::ListenerKey ioListenerKey; // Key for I/O event listener registered with event dispatcher
+	Threads::RunLoop::IOWatcherOwner ioWatcher; // I/O watcher for the latency tester device
 	Misc::UInt16 nextTestId; // ID to associate test requests and their results
-	SampleCallback* sampleCallback; // Callback called when a color sample exceeds the callback reporting threshold
+	Misc::Autopointer<SampleCallback> sampleCallback; // Callback called when a color sample exceeds the callback reporting threshold
 	Color sampleCallbackThreshold; // Minimal color value to invoke the sampling callback
-	ButtonEventCallback* buttonEventCallback; // Callback called when the latency tester's button is pressed
+	Misc::Autopointer<ButtonEventCallback> buttonEventCallback; // Callback called when the latency tester's button is pressed
 	
 	/* Private methods: */
-	void ioCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when a report can be read from the raw HID device
+	void ioCallback(Threads::RunLoop::IOWatcher::Event& event); // Callback called when a report can be read from the raw HID device
 	
 	/* Constructors and destructors: */
 	public:
-	LatencyTester(int busTypeMask,unsigned int index,Threads::EventDispatcher& sDispatcher); // Connects to the Oculus latency tester of the given index on any of the included HID buses, using the given event dispatcher to communicate
+	LatencyTester(int busTypeMask,unsigned int index,Threads::RunLoop& runLoop); // Connects to the Oculus latency tester of the given index on any of the included HID buses, using the given event dispatcher to communicate
 	~LatencyTester(void);
 	
 	/* Methods: */
@@ -80,8 +80,8 @@ class LatencyTester:public RawHID::Device
 	void setLatencyCalibration(const Color& calibration);
 	void startLatencyTest(const Color& target);
 	void setLatencyDisplay(Misc::UInt8 mode,Misc::UInt32 value);
-	void setSampleCallback(SampleCallback* newSampleCallback,const Color& sampleCallbackThreshold); // Sets the sample callback and callback threshold; takes ownership of function call object
-	void setButtonEventCallback(ButtonEventCallback* newButtonEventCallback); // Sets the button event callback; takes ownership of function call object
+	void setSampleCallback(SampleCallback& newSampleCallback,const Color& sampleCallbackThreshold); // Sets the sample callback and callback threshold; takes ownership of function call object
+	void setButtonEventCallback(ButtonEventCallback& newButtonEventCallback); // Sets the button event callback; takes ownership of function call object
 	};
 
 #endif

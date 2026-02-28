@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterHID - Linux-specific version of HID input device
 adapter.
-Copyright (c) 2009-2025 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -27,7 +27,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <string>
 #include <vector>
 #include <Threads/Mutex.h>
-#include <Threads/EventDispatcher.h>
 #include <RawHID/EventDevice.h>
 #include <Math/BrokenLine.h>
 #include <Vrui/Internal/InputDeviceAdapter.h>

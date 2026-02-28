@@ -1,7 +1,7 @@
 /***********************************************************************
 MeasurePoints - Vrui application to measure sets of 3D positions using a
 tracked VR input device.
-Copyright (c) 2019-2023 Oliver Kreylos
+Copyright (c) 2019-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -27,7 +27,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <string>
 #include <vector>
 #include <Threads/Mutex.h>
-#include <Threads/EventDispatcherThread.h>
+#include <Threads/RunLoopThread.h>
 #include <Threads/TripleBuffer.h>
 #include <Geometry/Point.h>
 #include <Geometry/AffineCombiner.h>
@@ -90,7 +90,7 @@ class MeasurePoints:public Vrui::Application
 	
 	/* Elements: */
 	static const Color pointSetColors[]; // Default colors for point sets
-	Threads::EventDispatcherThread dispatcher; // Event dispatcher to handle VRDeviceDaemon communication
+	Threads::RunLoopThread runLoop; // Run loop to handle VRDeviceDaemon communication in a background thread
 	Vrui::VRDeviceClient* deviceClient; // Connection to the VRDeviceDaemon
 	DeviceList buttonDevices; // Map from button indices to virtual input devices advertised by the VRDeviceDaemon
 	Geometry::LinearUnit trackingUnit; // Measurement unit of VRDeviceDaemon's coordinate space

@@ -1,7 +1,7 @@
 /***********************************************************************
 VRCompositor - Class to display a stream of stereoscopic frames rendered
 by a VR application on a VR headset's screen(s).
-Copyright (c) 2022-2024 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Compositing Server (VRCompositor).
 
@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdexcept>
 #include <iostream>
 #include <Misc/SizedTypes.h>
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 #include <IO/OpenFile.h>
 #include <Vulkan/Instance.h>
 #include <Vulkan/Device.h>
@@ -151,6 +151,11 @@ Vulkan::PipelineLayout createPipelineLayout(Vulkan::Device& device,Vulkan::Descr
 /*****************************
 Methods of class VRCompositor:
 *****************************/
+
+void VRCompositor::packetNotification(Vrui::VRDeviceClient* deviceClient)
+	{
+	/* Nothing to do here... */
+	}
 
 void VRCompositor::updateHmdConfiguration(bool initial)
 	{
@@ -678,8 +683,8 @@ VkSamplerCreateInfo setupInputImageSampler(void)
 
 }
 
-VRCompositor::VRCompositor(Threads::EventDispatcher& sDispatcher,Vrui::VRDeviceClient& sVrDeviceClient,Vulkan::Instance& sInstance,const std::string& hmdName,double targetRefreshRate)
-	:dispatcher(sDispatcher),vrDeviceClient(sVrDeviceClient),
+VRCompositor::VRCompositor(Threads::RunLoop& runLoop,Vrui::VRDeviceClient& sVrDeviceClient,Vulkan::Instance& sInstance,const std::string& hmdName,double targetRefreshRate)
+	:vrDeviceClient(sVrDeviceClient),
 	 environmentDefinitionUpdated(false),
 	 headDeviceTrackerIndex(0),faceDetectorButtonIndex(0),
 	 distortionMeshVersion(0),hmdConfigurationUpdated(false),
@@ -724,8 +729,8 @@ VRCompositor::VRCompositor(Threads::EventDispatcher& sDispatcher,Vrui::VRDeviceC
 	updateHmdConfiguration(true);
 	
 	/* Install callbacks to get notified when the HMD configuration or the server's environment definition changes: */
-	vrDeviceClient.setHmdConfigurationUpdatedCallback(headDeviceTrackerIndex,Misc::createFunctionCall(this,&VRCompositor::hmdConfigurationUpdatedCallback));
-	vrDeviceClient.setEnvironmentDefinitionUpdatedCallback(Misc::createFunctionCall(this,&VRCompositor::environmentDefinitionUpdatedCallback));
+	vrDeviceClient.setHmdConfigurationUpdatedCallback(headDeviceTrackerIndex,*Threads::createFunctionCall(this,&VRCompositor::hmdConfigurationUpdatedCallback));
+	vrDeviceClient.setEnvironmentDefinitionUpdatedCallback(*Threads::createFunctionCall(this,&VRCompositor::environmentDefinitionUpdatedCallback));
 	
 	/* Create the input images and their views: */
 	VkFormat inputImageFormat=VK_FORMAT_R8G8B8A8_SRGB; // Assume rendered frames are stored in non-linear compressed sRGB
@@ -786,13 +791,13 @@ VRCompositor::VRCompositor(Threads::EventDispatcher& sDispatcher,Vrui::VRDeviceC
 	try
 		{
 		/* Create a latency tester: */
-		latencyTester=new LatencyTester(RawHID::BUSTYPE_USB,0,dispatcher);
+		latencyTester=new LatencyTester(RawHID::BUSTYPE_USB,0,runLoop);
 		latencyTester->setLatencyConfiguration(false,LatencyTester::Color(128,128,128));
 		latencyTester->setLatencyDisplay(2,0x40400040U);
 		
 		/* Register callbacks: */
-		latencyTester->setSampleCallback(Misc::createFunctionCall(this,&VRCompositor::latencySampleCallback),LatencyTester::Color(128,128,128));
-		latencyTester->setButtonEventCallback(Misc::createFunctionCall(this,&VRCompositor::latencyButtonEventCallback));
+		latencyTester->setSampleCallback(*Threads::createFunctionCall(this,&VRCompositor::latencySampleCallback),LatencyTester::Color(128,128,128));
+		latencyTester->setButtonEventCallback(*Threads::createFunctionCall(this,&VRCompositor::latencyButtonEventCallback));
 		}
 	catch(const std::runtime_error& err)
 		{
@@ -806,10 +811,6 @@ VRCompositor::~VRCompositor(void)
 	{
 	/* Deactivate the device server: */
 	vrDeviceClient.deactivate();
-	
-	/* Remove the HMD configuration and environment definition change callbacks: */
-	vrDeviceClient.setHmdConfigurationUpdatedCallback(headDeviceTrackerIndex,0);
-	vrDeviceClient.setEnvironmentDefinitionUpdatedCallback(0);
 	
 	/* Release all allocated resources: */
 	delete boundaryRenderer;
@@ -857,11 +858,11 @@ long tonsec(const Realtime::Time& time)
 
 }
 
-void VRCompositor::run(Threads::EventDispatcher::ListenerKey vsyncSignalKey)
+void VRCompositor::run(Threads::RunLoop::UserSignal& vsyncSignal)
 	{
 	/* If the device client does not have shared memory, start streaming VR device states: */
 	if(!vrDeviceClient.hasSharedMemory())
-		vrDeviceClient.startStream(0);
+		vrDeviceClient.startStream(*Threads::createFunctionCall(this,&VRCompositor::packetNotification));
 	
 	/* Lock the most recent render result in the input triple buffer: */
 	if(renderResults.lockNewValue())
@@ -995,7 +996,7 @@ void VRCompositor::run(Threads::EventDispatcher::ListenerKey vsyncSignalKey)
 		sharedMemorySegment->vblankTimer.finishWrite();
 		
 		/* Send a vsync signal to a connected client: */
-		dispatcher.signal(vsyncSignalKey,0);
+		vsyncSignal.signal();
 		
 		/* Lock the next image in the input triple buffer: */
 		bool newImage=renderResults.lockNewValue();

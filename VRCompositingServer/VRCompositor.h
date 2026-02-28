@@ -1,7 +1,7 @@
 /***********************************************************************
 VRCompositor - Class to display a stream of stereoscopic frames rendered
 by a VR application on a VR headset's screen(s).
-Copyright (c) 2022-2024 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Compositing Server (VRCompositor).
 
@@ -29,7 +29,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Realtime/Time.h>
 #include <Realtime/SharedMemory.h>
 #include <Threads/Mutex.h>
-#include <Threads/EventDispatcher.h>
+#include <Threads/RunLoop.h>
 #include <Geometry/Point.h>
 #include <Geometry/Rotation.h>
 #include <Geometry/OrthonormalTransformation.h>
@@ -75,7 +75,6 @@ class VRCompositor:public Vrui::VRCompositorProtocol
 	{
 	/* Elements: */
 	private:
-	Threads::EventDispatcher& dispatcher; // Reference to the server's event dispatcher
 	Vrui::VRDeviceClient& vrDeviceClient; // Client connected to a Vrui VRDeviceDaemon
 	Threads::Mutex environmentDefinitionMutex; // Mutex protecting the environment definition
 	Vrui::EnvironmentDefinition environmentDefinition; // Definition of the physical environment read from the device daemon
@@ -143,6 +142,7 @@ class VRCompositor:public Vrui::VRCompositorProtocol
 	volatile long nappytime; // Go to sleep...
 	
 	/* Private methods: */
+	void packetNotification(Vrui::VRDeviceClient* deviceClient); // Dummy callback called when a new data packet arrives from the VR device server
 	void updateHmdConfiguration(bool initial); // Updates the compositor's client-facing and internal HMD configuration by reading from the VR device server
 	void hmdConfigurationUpdatedCallback(const Vrui::HMDConfiguration& newHmdConfiguration); // Callback called when the internal HMD configuration changes
 	void environmentDefinitionUpdatedCallback(const Vrui::EnvironmentDefinition& newEnvironmentDefinition); // Callback called when the server's environment definition changes
@@ -158,7 +158,7 @@ class VRCompositor:public Vrui::VRCompositorProtocol
 	/* Constructors and destructors: */
 	public:
 	static Vulkan::CStringList getInstanceExtensions(void); // Returns list of Vulkan extensions required to run a VR compositor
-	VRCompositor(Threads::EventDispatcher& sDispatcher,Vrui::VRDeviceClient& sVrDeviceClient,Vulkan::Instance& sInstance,const std::string& hmdName,double targetRefreshRate);
+	VRCompositor(Threads::RunLoop& runLoop,Vrui::VRDeviceClient& sVrDeviceClient,Vulkan::Instance& sInstance,const std::string& hmdName,double targetRefreshRate);
 	virtual ~VRCompositor(void);
 	
 	/* Methods: */
@@ -173,7 +173,7 @@ class VRCompositor:public Vrui::VRCompositorProtocol
 		{
 		return inputImages[inputImageIndex].getOffset();
 		}
-	void run(Threads::EventDispatcher::ListenerKey vsyncSignalKey); // Runs the compositing loop until shut down; sends the given signal to the given dispatcher on each vblank event
+	void run(Threads::RunLoop::UserSignal& vsyncSignal); // Runs the compositing loop until shut down; sends the given signal to the given dispatcher on each vblank event
 	void shutdown(void); // Shuts down the compositor's main loop
 	void activate(void); // Tells the compositor that a client is connected
 	void deactivate(void); // Tells the compositor that no client is connected

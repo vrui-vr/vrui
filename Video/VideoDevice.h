@@ -1,6 +1,6 @@
 /***********************************************************************
 VideoDevice - Base class for video capture devices.
-Copyright (c) 2009-2022 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -31,9 +31,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 /* Forward declarations: */
 namespace Misc {
+class ConfigurationFileSection;
+}
+namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
-class ConfigurationFileSection;
 }
 namespace GLMotif {
 class WidgetManager;
@@ -76,7 +78,7 @@ class VideoDevice
 	
 	typedef Misc::Autopointer<DeviceId> DeviceIdPtr; // Type for smart pointers to device ID objects
 	typedef void (*EnumerateVideoDevicesFunc)(std::vector<DeviceIdPtr>& devices); // Type for functions to enumerate connected video devices of a certain class
-	typedef Misc::FunctionCall<const FrameBuffer*> StreamingCallback; // Function call type for streaming capture callback
+	typedef Threads::FunctionCall<const FrameBuffer*> StreamingCallback; // Function call type for streaming capture callback
 	
 	private:
 	struct DeviceClass // Structure to represent additional video device classes
@@ -91,7 +93,7 @@ class VideoDevice
 	private:
 	static DeviceClass* deviceClasses; // List of additional registered video device classes
 	protected:
-	StreamingCallback* streamingCallback; // Function called when a frame buffer becomes ready in streaming capture mode
+	Misc::Autopointer<StreamingCallback> streamingCallback; // Function called when a frame buffer becomes ready in streaming capture mode
 	
 	/* Constructors and destructors: */
 	public:
@@ -117,7 +119,7 @@ class VideoDevice
 	/* Streaming capture interface methods: */
 	virtual unsigned int allocateFrameBuffers(unsigned int requestedNumFrameBuffers) =0; // Allocates the given number of streaming frame buffers; returns actual number of buffers allocated by device
 	virtual void startStreaming(void); // Starts streaming video capture using a previously allocated set of frame buffers
-	virtual void startStreaming(StreamingCallback* newStreamingCallback); // Ditto; calls callback from separate thread whenever a new frame buffer becomes ready
+	virtual void startStreaming(StreamingCallback& newStreamingCallback); // Ditto; calls callback from separate thread whenever a new frame buffer becomes ready
 	virtual FrameBuffer* dequeueFrame(void) =0; // Returns the next frame buffer captured from the video device; blocks if no frames are ready
 	virtual void enqueueFrame(FrameBuffer* frame) =0; // Returns the given frame buffer to the capturing queue after the caller is done with it
 	virtual void stopStreaming(void); // Stops streaming video capture

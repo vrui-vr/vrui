@@ -1,7 +1,7 @@
 /***********************************************************************
 ImageSequenceVideoDevice - Class for "fake" video capture devices
 showing a set of image files.
-Copyright (c) 2014-2024 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdio.h>
 #include <Misc/StdError.h>
 #include <Misc/Time.h>
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 #include <IO/OpenFile.h>
 #include <Math/Math.h>
 #include <Math/Constants.h>
@@ -282,7 +282,7 @@ void ImageSequenceVideoDevice::startStreaming(void)
 	refreshThread.start(this,&ImageSequenceVideoDevice::refreshThreadMethod);
 	}
 
-void ImageSequenceVideoDevice::startStreaming(VideoDevice::StreamingCallback* newStreamingCallback)
+void ImageSequenceVideoDevice::startStreaming(VideoDevice::StreamingCallback& newStreamingCallback)
 	{
 	/* Call the base class method: */
 	VideoDevice::startStreaming(newStreamingCallback);

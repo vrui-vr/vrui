@@ -8556,7 +8556,7 @@ Vrui-14.1-001:
   - Headers/sources are in DBus subdirectory.
   - Builds libDBus shared library.
 
-Vrui-14.1-002:
+Vrui-15.0-001:
 - Moved VRServerLauncher to Threads::RunLoop class; added support for
   restarting the launcher after configuration changes via SIGHUP.
 - Added new Threads::Ownable, a base class for shared reference-counted
@@ -8584,3 +8584,9 @@ Vrui-14.1-002:
   and its associated X11 display, and cleanly shut down VR servers when
   the active session changes or the system goes to sleep or shuts down.
 - Systemd version 255 retired seat/self; fixed up VRServerLauncher.
+- API change: Replaced uses of Misc::FunctionCall with
+  Threads::FunctionCall in all libraries above the Threads level.
+- API change: Pass function call objects by reference instead of as
+  pointers.
+- API change: Replaced uses of Threads::EventDispatcher with
+  Threads::RunLoop throughout Vrui and underlying libraries.

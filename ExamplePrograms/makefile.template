@@ -46,8 +46,8 @@ PROJECT_DISPLAYNAME = Vrui Example Programs
 # clobbering each other. The value should be identical to the
 # major.minor version number found in VERSION in the root package
 # directory.
-PROJECT_MAJOR = 14
-PROJECT_MINOR = 1
+PROJECT_MAJOR = 15
+PROJECT_MINOR = 0
 
 # Include definitions for the system environment and system-provided
 # packages

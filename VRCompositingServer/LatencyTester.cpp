@@ -2,7 +2,7 @@
 LatencyTester - Class representing the USB latency tester Oculus shipped
 with the first-generation Oculus Rift development kit when they were
 still considering themselves an "open source" enterprise.
-Copyright (c) 2013-2023 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Compositing Server (VRCompositor).
 
@@ -23,8 +23,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include "LatencyTester.h"
 
-#include <Misc/FunctionCalls.h>
 #include <Misc/MessageLogger.h>
+#include <Threads/FunctionCalls.h>
 #include <RawHID/BusType.h>
 
 #ifdef STANDALONE
@@ -65,7 +65,7 @@ inline LatencyTester::Color decodeColor(Misc::UInt8*& bufPtr)
 
 }
 
-void LatencyTester::ioCallback(Threads::EventDispatcher::IOEvent& event)
+void LatencyTester::ioCallback(Threads::RunLoop::IOWatcher::Event& event)
 	{
 	/* Read the next raw HID report: */
 	Misc::UInt8 buffer[64]; // 64 is largest message size
@@ -166,24 +166,18 @@ void LatencyTester::ioCallback(Threads::EventDispatcher::IOEvent& event)
 		}
 	}
 
-LatencyTester::LatencyTester(int busTypeMask,unsigned int index,Threads::EventDispatcher& sDispatcher)
+LatencyTester::LatencyTester(int busTypeMask,unsigned int index,Threads::RunLoop& runLoop)
 	:RawHID::Device(busTypeMask,0x2833U,0x0101U,index),
-	 dispatcher(sDispatcher),ioListenerKey(0),
-	 nextTestId(1U),
-	 sampleCallback(0),buttonEventCallback(0)
+	 nextTestId(1U)
 	{
-	/* Register an I/O callback for the raw HID device with the event dispatcher: */
-	ioListenerKey=dispatcher.addIOEventListener(getFd(),Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<LatencyTester,&LatencyTester::ioCallback>,this);
+	/* Watch the raw HID device with the run loop: */
+	ioWatcher=runLoop.createIOWatcher(getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&LatencyTester::ioCallback));
 	}
 
 LatencyTester::~LatencyTester(void)
 	{
-	/* Remove the I/O callback from the event dispatcher: */
-	dispatcher.removeIOEventListener(ioListenerKey);
-	
-	/* Delete callbacks: */
-	delete sampleCallback;
-	delete buttonEventCallback;
+	/* Stop watching the raw HID device: */
+	ioWatcher=0;
 	}
 
 void LatencyTester::setLatencyConfiguration(bool sendSamples,const LatencyTester::Color& threshold)
@@ -247,35 +241,33 @@ void LatencyTester::setLatencyDisplay(Misc::UInt8 mode,Misc::UInt32 value)
 	writeFeatureReport(packet,sizeof(packet));
 	}
 
-void LatencyTester::setSampleCallback(LatencyTester::SampleCallback* newSampleCallback,const LatencyTester::Color& newSampleCallbackThreshold)
+void LatencyTester::setSampleCallback(LatencyTester::SampleCallback& newSampleCallback,const LatencyTester::Color& newSampleCallbackThreshold)
 	{
-	/* Replace an existing sample callback: */
-	delete sampleCallback;
-	sampleCallback=newSampleCallback;
+	/* Replace the sample callback: */
+	sampleCallback=&newSampleCallback;
 	
 	/* Set the callback threshold: */
 	sampleCallbackThreshold=newSampleCallbackThreshold;
 	}
 
-void LatencyTester::setButtonEventCallback(LatencyTester::ButtonEventCallback* newButtonEventCallback)
+void LatencyTester::setButtonEventCallback(LatencyTester::ButtonEventCallback& newButtonEventCallback)
 	{
-	/* Replace an existing button event callback: */
-	delete buttonEventCallback;
-	buttonEventCallback=newButtonEventCallback;
+	/* Replace the button event callback: */
+	buttonEventCallback=&newButtonEventCallback;
 	}
 
 #ifdef STANDALONE
 
-Threads::EventDispatcher dispatcher;
+Threads::RunLoop runLoop;
 
-void stdinCallback(Threads::EventDispatcher::IOEvent& event)
+void stdinCallback(Threads::RunLoop::IOWatcher::Event& event)
 	{
 	/* Read from stdin: */
 	char buffer[2048];
 	read(STDIN_FILENO,buffer,sizeof(buffer));
 	
 	/* Shut down event handling: */
-	dispatcher.stop();
+	runLoop.stop();
 	}
 
 int main(void)
@@ -288,17 +280,14 @@ int main(void)
 	tcsetattr(STDIN_FILENO,TCSANOW,&term);
 	
 	/* Listen for input on stdin: */
-	Threads::EventDispatcher::ListenerKey stdinListener=dispatcher.addIOEventListener(STDIN_FILENO,Threads::EventDispatcher::Read,stdinCallback,0);
+	Threads::RunLoop::IOWatcherOwner stdinWatcher=runLoop.createIOWatcher(STDIN_FILENO,Threads::RunLoop::IOWatcher::Read,*Threads::createFunctionCall(stdinCallback));
 	
 	/* Connect to the first Oculus latency tester on the USB bus: */
-	LatencyTester latencyTester(RawHID::BUSTYPE_USB,0,dispatcher);
+	LatencyTester latencyTester(RawHID::BUSTYPE_USB,0,runLoop);
 	
 	/* Start sampling: */
 	latencyTester.setLatencyConfiguration(true,LatencyTester::Color(128,128,128));
-	dispatcher.dispatchEvents();
-	
-	/* Remove the stdin listener: */
-	dispatcher.removeIOEventListener(stdinListener);
+	runLoop.run();
 	
 	/* Restore original terminal state: */
 	tcsetattr(STDIN_FILENO,TCSANOW,&originalTerm);

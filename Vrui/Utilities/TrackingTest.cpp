@@ -1,7 +1,7 @@
 /***********************************************************************
 TrackingTest - Vrui application to visualize tracking data received
 from a VRDeviceDaemon.
-Copyright (c) 2016-2024 Oliver Kreylos
+Copyright (c) 2016-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -28,7 +28,8 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/FunctionCalls.h>
 #include <Realtime/Time.h>
 #include <Threads/MutexCond.h>
-#include <Threads/EventDispatcherThread.h>
+#include <Threads/FunctionCalls.h>
+#include <Threads/RunLoopThread.h>
 #include <Threads/TripleBuffer.h>
 #include <Realtime/Time.h>
 #include <Math/Math.h>
@@ -166,7 +167,7 @@ class TrackingTest:public Vrui::Application
 		};
 	
 	/* Elements: */
-	Threads::EventDispatcherThread dispatcher; // Event dispatcher to handle VRDeviceDaemon communication
+	Threads::RunLoopThread runLoop; // Run loop to handle VRDeviceDaemon communication in a background thread
 	Vrui::VRDeviceClient* deviceClient; // Connection to the VRDeviceDaemon
 	Geometry::LinearUnit trackingUnit; // Linear unit used by the tracking system
 	Scalar frameSize; // Size of coordinate frame axes in tracking system units
@@ -449,7 +450,7 @@ TrackingTest::TrackingTest(int& argc,char**& argv)
 		}
 	
 	/* Initialize the device client: */
-	deviceClient=new Vrui::VRDeviceClient(dispatcher,serverName,portNumber);
+	deviceClient=new Vrui::VRDeviceClient(runLoop,serverName,portNumber);
 	
 	/* Get the number of trackers served by the VRDeviceDaemon: */
 	deviceClient->lockState();
@@ -465,7 +466,7 @@ TrackingTest::TrackingTest(int& argc,char**& argv)
 	
 	/* Activate the device client and start streaming: */
 	deviceClient->activate();
-	deviceClient->startStream(Misc::createFunctionCall(this,&TrackingTest::trackingCallback));
+	deviceClient->startStream(*Threads::createFunctionCall(this,&TrackingTest::trackingCallback));
 	
 	/* Wait for the first set of tracker samples to arrive: */
 	trackerStateCond.wait();

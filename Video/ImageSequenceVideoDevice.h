@@ -1,7 +1,7 @@
 /***********************************************************************
 ImageSequenceVideoDevice - Class for "fake" video capture devices
 showing a set of image files.
-Copyright (c) 2014-2024 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -85,7 +85,7 @@ class ImageSequenceVideoDevice:public VideoDevice
 	public:
 	virtual ~ImageSequenceVideoDevice(void);
 	
-	/* Methods from VideoDevice: */
+	/* Methods from class VideoDevice: */
 	virtual std::vector<VideoDataFormat> getVideoFormatList(void) const;
 	virtual VideoDataFormat getVideoFormat(void) const;
 	virtual VideoDataFormat& setVideoFormat(VideoDataFormat& newFormat);
@@ -96,7 +96,7 @@ class ImageSequenceVideoDevice:public VideoDevice
 	/* Streaming capture interface methods: */
 	virtual unsigned int allocateFrameBuffers(unsigned int requestedNumFrameBuffers);
 	virtual void startStreaming(void);
-	virtual void startStreaming(StreamingCallback* newStreamingCallback);
+	virtual void startStreaming(StreamingCallback& newStreamingCallback);
 	virtual FrameBuffer* dequeueFrame(void);
 	virtual void enqueueFrame(FrameBuffer* frame);
 	virtual void stopStreaming(void);

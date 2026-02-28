@@ -1,7 +1,7 @@
 /***********************************************************************
 EventDevice - Class representing an input device using the Linux event
 subsystem.
-Copyright (c) 2023-2025 Oliver Kreylos
+Copyright (c) 2023-2026 Oliver Kreylos
 
 This file is part of the Raw HID Support Library (RawHID).
 
@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <vector>
 #include <Misc/CallbackData.h>
 #include <Misc/CallbackList.h>
-#include <Threads/EventDispatcher.h>
+#include <Threads/RunLoop.h>
 
 /* Forward declarations: */
 namespace RawHID {
@@ -213,13 +213,12 @@ class EventDevice
 	Misc::CallbackList absAxisFeatureEventCallbacks;
 	Misc::CallbackList relAxisFeatureEventCallbacks;
 	Misc::CallbackList synReportEventCallbacks;
-	Threads::EventDispatcher* eventDispatcher; // Pointer to event dispatcher with which this event device is registered, or null
-	Threads::EventDispatcher::ListenerKey listenerKey; // Listener key with which this event device is registered
+	Threads::RunLoop::IOWatcherOwner deviceWatcher; // Watcher for the event device's file
 	
 	/* Private methods: */
 	static int findDevice(EventDeviceMatcher& deviceMatcher); // Returns a file descriptor for the event device file matching the given device matcher
 	void initFeatureMaps(void); // Initializes the device's feature maps
-	static void ioEventCallback(Threads::EventDispatcher::IOEvent& event); // Callback when there is data pending on the device's file
+	void ioEventCallback(Threads::RunLoop::IOWatcher::Event& event); // Callback when there is data pending on the device's file
 	
 	/* Constructors and destructors: */
 	public:
@@ -306,8 +305,8 @@ class EventDevice
 	void setFFGain(float gain); // Sets the overall gain of force feedback events on the device to the range [0, 1]
 	void setFFAutocenter(float strength); // Sets the strength of the device's autocenter feature to the range [0, 1]
 	void processEvents(void); // Processes a number of pending device events; blocks until at least one event has been processed
-	void registerEventHandler(Threads::EventDispatcher& newEventDispatcher); // Registers the event device with the given event dispatcher
-	void unregisterEventHandler(void); // Unregisters the event device from an event dispatcher with which it is currently registered
+	void watch(Threads::RunLoop& runLoop); // Watches the event device with the given run loop
+	void unwatch(void); // Stops watching the event device from the run loop that is currently watching it
 	};
 
 }

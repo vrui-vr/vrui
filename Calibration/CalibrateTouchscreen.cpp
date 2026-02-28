@@ -1,7 +1,7 @@
 /***********************************************************************
 CalibrateTouchscreen - Vrui utility to calibrate a touchscreen or pen
 display or similar device.
-Copyright (c) 2023-2025 Oliver Kreylos
+Copyright (c) 2023-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -33,7 +33,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/ConfigurationFile.h>
 #include <Realtime/Time.h>
 #include <Threads/Mutex.h>
-#include <Threads/EventDispatcherThread.h>
+#include <Threads/RunLoopThread.h>
 #include <RawHID/EventDevice.h>
 #include <RawHID/EventDeviceMatcher.h>
 #include <RawHID/PenDeviceConfig.h>
@@ -67,7 +67,7 @@ class CalibrateTouchscreen:public Vrui::Application
 	/* Elements: */
 	RawHID::EventDevice* penDevice; // The input device associated with the touchscreen's pen device
 	RawHID::PenDeviceConfig penDeviceConfig; // The pen device's configuration
-	Threads::EventDispatcherThread dispatcher; // Event dispatcher for events on the pen device
+	Threads::RunLoopThread runLoop; // Run loop handling events on the pen device in a background thread
 	Box2 posDomain; // Domain of pen's position axes
 	Vrui::VRScreen* screen; // The screen associated with the touchscreen
 	Scalar screenSize[2]; // Width and height of the touchscreen in physical coordinate units
@@ -490,8 +490,8 @@ CalibrateTouchscreen::CalibrateTouchscreen(int& argc,char**& argv)
 	else
 		penDevice->getAbsAxisFeatureEventCallbacks().add(this,&CalibrateTouchscreen::absAxisCallback);
 	
-	/* Register the pen device with the event dispatcher: */
-	penDevice->registerEventHandler(dispatcher);
+	/* Watch the pen device with the run loop: */
+	penDevice->watch(runLoop);
 	
 	/* Register tool classes: */
 	addEventTool("Undo Point",0,0);

@@ -1183,7 +1183,7 @@ void RunLoop::setUserSignalEventHandler(RunLoop::UserSignal* userSignal,RunLoop:
 		}
 	}
 
-void RunLoop::signalUserSignal(RunLoop::UserSignal* userSignal,RefCounted& signalData)
+void RunLoop::signalUserSignal(RunLoop::UserSignal* userSignal,RefCounted* signalData)
 	{
 	/* Check if this call was made from inside the run loop's thread: */
 	if(Threads::Thread::isSelfEqual(threadId))
@@ -1191,7 +1191,7 @@ void RunLoop::signalUserSignal(RunLoop::UserSignal* userSignal,RefCounted& signa
 		if(userSignal->enabled)
 			{
 			/* Call the user signal's event handler directly: */
-			UserSignal::Event event(userSignal,lastDispatchTime,&signalData);
+			UserSignal::Event event(userSignal,lastDispatchTime,signalData);
 			(*userSignal->eventHandler)(event);
 			}
 		}
@@ -1200,8 +1200,8 @@ void RunLoop::signalUserSignal(RunLoop::UserSignal* userSignal,RefCounted& signa
 		/* Make an asynchronous request by writing to the self-pipe: */
 		PipeMessage pm(PipeMessage::SignalUserSignal);
 		pm.signalUserSignal.userSignal=userSignal;
-		pm.signalUserSignal.signalData=&signalData;
-		writePipeMessage(pm,__PRETTY_FUNCTION__,userSignal,&signalData);
+		pm.signalUserSignal.signalData=signalData;
+		writePipeMessage(pm,__PRETTY_FUNCTION__,userSignal,signalData);
 		}
 	}
 

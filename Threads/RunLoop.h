@@ -532,7 +532,12 @@ class RunLoop
 		void signal(RefCounted& signalData) // Sends a signal with the given data to the user signal handler
 			{
 			/* Delegate to the run loop: */
-			runLoop.signalUserSignal(this,signalData);
+			runLoop.signalUserSignal(this,&signalData);
+			}
+		void signal(void) // Ditto, without signal data
+			{
+			/* Delegate to the run loop: */
+			runLoop.signalUserSignal(this,0);
 			}
 		};
 	
@@ -674,7 +679,7 @@ class RunLoop
 	void enableUserSignal(UserSignal* userSignal); // Enables the given user signal
 	void disableUserSignal(UserSignal* userSignal,bool willDestroy =false); // Disables the given user signal; if the willDestroy flag is true, the caller will destroy the user signal immediately after disabling it, requiring extra synchronization
 	void setUserSignalEventHandler(UserSignal* userSignal,UserSignal::EventHandler& newEventHandler); // Sets the given user signal's event handler
-	void signalUserSignal(UserSignal* userSignal,RefCounted& signalData); // Calls the given user signal with the given signal data
+	void signalUserSignal(UserSignal* userSignal,RefCounted* signalData); // Calls the given user signal with the given signal data
 	
 	/* Internal interface for process functions: */
 	void setProcessFunctionSpinning(ProcessFunction* processFunction,bool newSpinning); // Sets the spinning request flag for the given process function

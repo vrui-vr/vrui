@@ -2,7 +2,7 @@
 ViewerComponent - An application component to stream video from a camera
 to an OpenGL texture for rendering, including user interfaces to select
 cameras and video modes and control camera settings.
-Copyright (c) 2018-2025 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <utility>
 #include <vector>
+#include <Misc/Autopointer.h>
 #include <Threads/Spinlock.h>
 #include <Threads/TripleBuffer.h>
 #include <GL/gl.h>
@@ -39,7 +40,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Video/ImageExtractor.h>
 
 /* Forward declarations: */
-namespace Misc {
+namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 }
@@ -92,8 +93,8 @@ class ViewerComponent:public GLObject
 			}
 		};
 	
-	typedef Misc::FunctionCall<const Images::BaseImage&> VideoFrameCallback; // Type for callback functions called when a new video frame arrived
-	typedef Misc::FunctionCall<const VideoDataFormat&> VideoFormatChangedCallback; // Type of callback function called when the video format changes
+	typedef Threads::FunctionCall<const Images::BaseImage&> VideoFrameCallback; // Type for callback functions called when a new video frame arrived
+	typedef Threads::FunctionCall<const VideoDataFormat&> VideoFormatChangedCallback; // Type of callback function called when the video format changes
 	
 	/* Elements: */
 	private:
@@ -111,8 +112,8 @@ class ViewerComponent:public GLObject
 	unsigned int videoFrameVersion; // Version number of the most recent video frame in the triple buffer
 	Threads::Spinlock videoFrameCallbackMutex; // Mutex serializing access to the video frame callback so that it can be changed during streaming
 	VideoFrameCallback* videoFrameCallback; // Callback to call when a new video frame arrives
-	VideoFormatChangedCallback* videoFormatChangedCallback; // Callback called when the streamed video format changes
-	VideoFormatChangedCallback* videoFormatSizeChangedCallback; // Callback called when the streamed video format's frame size changes
+	Misc::Autopointer<VideoFormatChangedCallback> videoFormatChangedCallback; // Callback called when the streamed video format changes
+	Misc::Autopointer<VideoFormatChangedCallback> videoFormatSizeChangedCallback; // Callback called when the streamed video format's frame size changes
 	
 	/* User interface state: */
 	GLMotif::WidgetManager* widgetManager; // Manager for UI widgets
@@ -157,9 +158,9 @@ class ViewerComponent:public GLObject
 		}
 	GLMotif::Widget* getVideoDevicesDialog(void); // Returns a pointer to the dialog selecting video devices and video formats
 	GLMotif::Widget* getVideoControlPanel(void); // Returns a pointer to the dialog controlling the currently open video device
-	void setVideoFrameCallback(VideoFrameCallback* newVideoFrameCallback,bool newStoreVideoFrames =true); // Sets the function to be called when a new video frame arrives; adopts function object; disables automatic storing of video frames in the input buffer if flag is false
-	void setVideoFormatChangedCallback(VideoFormatChangedCallback* newVideoFormatChangedCallback); // Sets the function to be called when the streamed video format changes; adopts function object
-	void setVideoFormatSizeChangedCallback(VideoFormatChangedCallback* newVideoFormatChangedCallback); // Sets the function to be called when the streamed video format's frame size changes; adopts function object
+	void setVideoFrameCallback(VideoFrameCallback& newVideoFrameCallback,bool newStoreVideoFrames =true); // Sets the function to be called when a new video frame arrives; adopts function object; disables automatic storing of video frames in the input buffer if flag is false
+	void setVideoFormatChangedCallback(VideoFormatChangedCallback& newVideoFormatChangedCallback); // Sets the function to be called when the streamed video format changes; adopts function object
+	void setVideoFormatSizeChangedCallback(VideoFormatChangedCallback& newVideoFormatChangedCallback); // Sets the function to be called when the streamed video format's frame size changes; adopts function object
 	bool getStoreVideoFrames(void) const // Returns true if the frame callback inserts incoming video frames into the input triple buffer
 		{
 		return storeVideoFrames;

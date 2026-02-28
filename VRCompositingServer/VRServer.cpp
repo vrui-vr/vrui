@@ -24,13 +24,15 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <string.h>
 #include <unistd.h>
 #include <termios.h>
+#include <signal.h>
 #include <string>
 #include <iostream>
 #include <Misc/SizedTypes.h>
 #include <Misc/SelfDestructPointer.h>
 #include <Misc/CommandLineParser.h>
+#include <Threads/FunctionCalls.h>
 #include <Threads/Thread.h>
-#include <Threads/EventDispatcher.h>
+#include <Threads/RunLoop.h>
 #include <IO/JsonEntityTypes.h>
 #include <IO/OStream.h>
 #include <Comm/Pipe.h>
@@ -54,7 +56,7 @@ class VRServer
 	{
 	/* Elements: */
 	private:
-	Threads::EventDispatcher dispatcher; // An event dispatcher to handle I/O events
+	Threads::RunLoop runLoop; // A run loop to handle I/O events
 	Vrui::VRDeviceClient vrDeviceClient; // Client connected to a Vrui VR device server
 	
 	/* The VR compositor: */
@@ -66,18 +68,18 @@ class VRServer
 	Comm::ListeningUNIXSocket listenSocket; // UNIX socket listening for incoming client connections
 	Comm::UNIXPipe* clientPipe; // UNIX pipe connected to the current client
 	Comm::ListeningSocketPtr httpListenSocket; // Optional TCP socket listening for incoming HTTP requests
-	Threads::EventDispatcher::ListenerKey stdioListener; // Key for listener for standard input
-	Threads::EventDispatcher::ListenerKey listenSocketListener; // Key for listener for listening UNIX socket
-	Threads::EventDispatcher::ListenerKey httpListenSocketListener; // Key for listener for listening TCP socket
-	Threads::EventDispatcher::ListenerKey clientPipeListener; // Key for listener for the current client pipe
-	Threads::EventDispatcher::ListenerKey vsyncSignalListener; // Key for listener for vsync events from the compositor
+	Threads::RunLoop::IOWatcherOwner stdioWatcher; // Watcher for standard input
+	Threads::RunLoop::IOWatcherOwner listenSocketWatcher; // Watcher for the listening UNIX socket
+	Threads::RunLoop::IOWatcherOwner httpListenSocketWatcher; // Watcher for the listening TCP socket for HTTP POST requests
+	Threads::RunLoop::IOWatcherOwner clientPipeWatcher; // Watcher for the pipe connected to the current client
+	Threads::RunLoop::UserSignalOwner vsyncSignal; // User signal for vsync events from the compositing thread
 	
 	/* Private methods: */
-	void stdioCallback(Threads::EventDispatcher::IOEvent& event);
-	void listenSocketCallback(Threads::EventDispatcher::IOEvent& event);
-	void httpListenSocketCallback(Threads::EventDispatcher::IOEvent& event);
-	void clientPipeCallback(Threads::EventDispatcher::IOEvent& event);
-	void vsyncSignalCallback(Threads::EventDispatcher::SignalEvent& event);
+	void stdioHandler(Threads::RunLoop::IOWatcher::Event& event);
+	void listenSocketHandler(Threads::RunLoop::IOWatcher::Event& event);
+	void httpListenSocketHandler(Threads::RunLoop::IOWatcher::Event& event);
+	void clientPipeHandler(Threads::RunLoop::IOWatcher::Event& event);
+	void vsyncSignalHandler(Threads::RunLoop::UserSignal::Event& event);
 	void* compositorThreadMethod(void);
 	
 	/* Constructors and destructors: */
@@ -98,7 +100,7 @@ class VRServer
 Methods of class VRServer:
 *************************/
 
-void VRServer::stdioCallback(Threads::EventDispatcher::IOEvent& event)
+void VRServer::stdioHandler(Threads::RunLoop::IOWatcher::Event& event)
 	{
 	/* Read everything available on stdin: */
 	char buffer[1024];
@@ -114,7 +116,7 @@ void VRServer::stdioCallback(Threads::EventDispatcher::IOEvent& event)
 				case 'Q':
 				case 'q':
 					/* Shut down the server: */
-					dispatcher.stop();
+					runLoop.stop();
 					std::cout<<std::endl;
 					break;
 				
@@ -142,12 +144,12 @@ void VRServer::stdioCallback(Threads::EventDispatcher::IOEvent& event)
 		}
 	else if(readResult==0)
 		{
-		/* Stop listening on stdin: */
-		event.removeListener();
+		/* Stop watching stdin: */
+		stdioWatcher=0;
 		}
 	}
 
-void VRServer::listenSocketCallback(Threads::EventDispatcher::IOEvent& event)
+void VRServer::listenSocketHandler(Threads::RunLoop::IOWatcher::Event& event)
 	{
 	Comm::UNIXPipe* tempPipe=0;
 	try
@@ -179,8 +181,8 @@ void VRServer::listenSocketCallback(Threads::EventDispatcher::IOEvent& event)
 			clientPipe=tempPipe;
 			tempPipe=0;
 			
-			/* Start dispatching events from the client: */
-			clientPipeListener=dispatcher.addIOEventListener(clientPipe->getFd(),Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::clientPipeCallback>,this);
+			/* Start watching the client connection: */
+			clientPipeWatcher=runLoop.createIOWatcher(clientPipe->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::clientPipeHandler));
 			}
 		else
 			{
@@ -197,7 +199,7 @@ void VRServer::listenSocketCallback(Threads::EventDispatcher::IOEvent& event)
 		}
 	}
 
-void VRServer::httpListenSocketCallback(Threads::EventDispatcher::IOEvent& event)
+void VRServer::httpListenSocketHandler(Threads::RunLoop::IOWatcher::Event& event)
 	{
 	try
 		{
@@ -247,12 +249,8 @@ void VRServer::httpListenSocketCallback(Threads::EventDispatcher::IOEvent& event
 		}
 	}
 
-void VRServer::clientPipeCallback(Threads::EventDispatcher::IOEvent& event)
+void VRServer::clientPipeHandler(Threads::RunLoop::IOWatcher::Event& event)
 	{
-	/* Bail out if the client pipe has already been closed: */
-	if(clientPipe==0)
-		return;
-	
 	/* Read data and close the client connection if the client hung up: */
 	try
 		{
@@ -264,19 +262,18 @@ void VRServer::clientPipeCallback(Threads::EventDispatcher::IOEvent& event)
 		{
 		std::cout<<"Client closed connection"<<std::endl;
 		
-		/* Close the client pipe: */
+		/* Stop watching the client pipe and close it: */
+		clientPipeWatcher=0;
+		clientPipe->discard();
 		delete clientPipe;
 		clientPipe=0;
-		
-		/* Remove this callback: */
-		event.removeListener();
 	
 		/* Notify the compositor: */
 		compositor.deactivate();
 		}
 	}
 
-void VRServer::vsyncSignalCallback(Threads::EventDispatcher::SignalEvent& event)
+void VRServer::vsyncSignalHandler(Threads::RunLoop::UserSignal::Event& event)
 	{
 	/* Bail out if there is no client connected: */
 	if(clientPipe==0)
@@ -293,13 +290,11 @@ void VRServer::vsyncSignalCallback(Threads::EventDispatcher::SignalEvent& event)
 		/* Disconnect the client: */
 		std::cout<<"Closing client connection due to exception "<<err.what()<<std::endl;
 		
-		/* Close the client pipe: */
+		/* Stop watching the client pipe and close it: */
+		clientPipeWatcher=0;
 		clientPipe->discard();
 		delete clientPipe;
 		clientPipe=0;
-		
-		/* Remove the client pipe callback: */
-		dispatcher.removeIOEventListener(clientPipeListener);
 	
 		/* Notify the compositor: */
 		compositor.deactivate();
@@ -311,42 +306,44 @@ void* VRServer::compositorThreadMethod(void)
 	try
 		{
 		/* Run the compositor's main loop: */
-		compositor.run(vsyncSignalListener);
+		compositor.run(*vsyncSignal);
 		}
 	catch(const std::runtime_error& err)
 		{
 		std::cout<<"Shutting down compositor due to exception "<<err.what()<<std::endl;
 		compositorCrashed=true;
-		dispatcher.stop();
+		runLoop.stop();
 		}
 	
 	return 0;
 	}
 
 VRServer::VRServer(const std::string& vrDeviceServerSocketName,bool vrDeviceServerSocketAbstract,int httpListenPortId,Vulkan::Instance& instance,const std::string& hmdName,double hmdFrameRate)
-	:vrDeviceClient(dispatcher,vrDeviceServerSocketName.c_str(),vrDeviceServerSocketAbstract),
-	 compositor(dispatcher,vrDeviceClient,instance,hmdName,hmdFrameRate),compositorCrashed(false),
+	:vrDeviceClient(runLoop,vrDeviceServerSocketName.c_str(),vrDeviceServerSocketAbstract),
+	 compositor(runLoop,vrDeviceClient,instance,hmdName,hmdFrameRate),compositorCrashed(false),
 	 listenSocket(VRSERVER_SOCKET_NAME,5,VRSERVER_SOCKET_ABSTRACT),
 	 clientPipe(0)
 	{
 	/* Set up the event dispatcher: */
-	stdioListener=dispatcher.addIOEventListener(STDIN_FILENO,Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::stdioCallback>,this);
-	listenSocketListener=dispatcher.addIOEventListener(listenSocket.getFd(),Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::listenSocketCallback>,this);
-	vsyncSignalListener=dispatcher.addSignalListener(Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::vsyncSignalCallback>,this);
+	stdioWatcher=runLoop.createIOWatcher(STDIN_FILENO,Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::stdioHandler));
+	listenSocketWatcher=runLoop.createIOWatcher(listenSocket.getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::listenSocketHandler));
+	vsyncSignal=runLoop.createUserSignal(true,*Threads::createFunctionCall(this,&VRServer::vsyncSignalHandler));
 	
 	/* Check if we should listen for HTTP POST requests: */
 	if(httpListenPortId>=0)
 		{
 		/* Create the HTTP socket and start listening on it: */
 		httpListenSocket=new Comm::ListeningTCPSocket(httpListenPortId,5);
-		httpListenSocketListener=dispatcher.addIOEventListener(httpListenSocket->getFd(),Threads::EventDispatcher::Read,Threads::EventDispatcher::wrapMethod<VRServer,&VRServer::httpListenSocketCallback>,this);
+		httpListenSocketWatcher=runLoop.createIOWatcher(httpListenSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::httpListenSocketHandler));
 		}
 	
 	/* Ignore SIGPIPE and leave handling of pipe errors to TCP sockets: */
 	Comm::ignorePipeSignals();
 	
-	/* Stop the launcher when a signal is received: */
-	dispatcher.stopOnSignals();
+	/* Stop the VR server on SIGHUP, SIGINT, and SIGTERM: */
+	runLoop.stopOnSignal(SIGHUP);
+	runLoop.stopOnSignal(SIGINT);
+	runLoop.stopOnSignal(SIGTERM);
 	
 	/* Start running the VR compositor in a background thread: */
 	compositorThread.start(this,&VRServer::compositorThreadMethod);
@@ -364,14 +361,14 @@ VRServer::~VRServer(void)
 
 void VRServer::run(void)
 	{
-	/* Dispatch events: */
-	dispatcher.dispatchEvents();
+	/* Run the run loop: */
+	runLoop.run();
 	}
 
 void VRServer::stop(void)
 	{
-	/* Stop the dispatcher to shut down the server: */
-	dispatcher.stop();
+	/* Stop the run loop to shut down the server: */
+	runLoop.stop();
 	}
 
 /****************

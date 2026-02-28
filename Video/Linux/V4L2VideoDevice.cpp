@@ -1,7 +1,7 @@
 /***********************************************************************
 V4L2VideoDevice - Wrapper class around video devices as represented by
 the Video for Linux version 2 (V4L2) library.
-Copyright (c) 2009-2024 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -37,9 +37,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <vector>
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
-#include <Misc/FunctionCalls.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <Threads/FunctionCalls.h>
 #include <Math/Math.h>
 #include <GLMotif/WidgetManager.icpp>
 #include <GLMotif/StyleSheet.h>
@@ -990,7 +990,7 @@ void V4L2VideoDevice::startStreaming(void)
 		}
 	}
 
-void V4L2VideoDevice::startStreaming(VideoDevice::StreamingCallback* newStreamingCallback)
+void V4L2VideoDevice::startStreaming(VideoDevice::StreamingCallback& newStreamingCallback)
 	{
 	/* Call the base class method: */
 	VideoDevice::startStreaming(newStreamingCallback);

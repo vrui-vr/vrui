@@ -2,7 +2,7 @@
 InputDeviceAdapterDeviceDaemon - Class to convert from Vrui's own
 distributed device driver architecture to Vrui's internal device
 representation.
-Copyright (c) 2004-2025 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 

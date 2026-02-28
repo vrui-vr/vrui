@@ -1,7 +1,7 @@
 /***********************************************************************
 RoomSetup - Vrui application to calculate basic layout parameters of a
 tracked VR environment.
-Copyright (c) 2016-2024 Oliver Kreylos
+Copyright (c) 2016-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -35,12 +35,12 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/SelfDestructPointer.h>
 #include <Misc/StdError.h>
 #include <Misc/FileTests.h>
-#include <Misc/FunctionCalls.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/MessageLogger.h>
-#include <Threads/EventDispatcherThread.h>
+#include <Threads/FunctionCalls.h>
+#include <Threads/RunLoopThread.h>
 #include <Threads/TripleBuffer.h>
 #include <Math/Math.h>
 #include <Math/Interval.h>
@@ -128,7 +128,7 @@ class RoomSetup:public Vrui::Application,public Vrui::TransparentObject,public G
 		};
 	
 	/* Elements: */
-	Threads::EventDispatcherThread dispatcher; // Event dispatcher to handle VRDeviceDaemon communication
+	Threads::RunLoopThread runLoop; // Run loop to handle VRDeviceDaemon communication in a background thread
 	Vrui::VRDeviceClient* deviceClient; // Connection to the VRDeviceDaemon
 	std::vector<const Vrui::VRDeviceDescriptor*> controllers; // List of input devices that have buttons
 	Vrui::Point customProbeTip; // Probe tip position defined on the command line
@@ -1320,7 +1320,7 @@ RoomSetup::RoomSetup(int& argc,char**& argv)
 	std::string hostName=colonPtr!=0?std::string(serverName,colonPtr):std::string(serverName);
 	
 	/* Initialize the device client: */
-	deviceClient=new Vrui::VRDeviceClient(dispatcher,hostName.c_str(),portNumber);
+	deviceClient=new Vrui::VRDeviceClient(runLoop,hostName.c_str(),portNumber);
 	
 	/* Query a list of virtual devices that have buttons: */
 	for(int i=0;i<deviceClient->getNumVirtualDevices();++i)
@@ -1461,7 +1461,7 @@ RoomSetup::RoomSetup(int& argc,char**& argv)
 	
 	/* Activate the device client and start streaming: */
 	deviceClient->activate();
-	deviceClient->startStream(Misc::createFunctionCall(this,&RoomSetup::trackingCallback));
+	deviceClient->startStream(*Threads::createFunctionCall(this,&RoomSetup::trackingCallback));
 	}
 
 RoomSetup::~RoomSetup(void)

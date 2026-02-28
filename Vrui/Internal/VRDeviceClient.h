@@ -1,7 +1,7 @@
 /***********************************************************************
 VRDeviceClient - Class encapsulating the VR device protocol's client
 side.
-Copyright (c) 2002-2023 Oliver Kreylos
+Copyright (c) 2002-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -27,10 +27,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <utility>
 #include <vector>
 #include <stdexcept>
-#include <Misc/FunctionCalls.h>
+#include <Misc/Autopointer.h>
 #include <Threads/Mutex.h>
 #include <Threads/MutexCond.h>
-#include <Threads/EventDispatcher.h>
+#include <Threads/RunLoop.h>
 #include <Comm/Pipe.h>
 #include <Vrui/Internal/VRDeviceState.h>
 #include <Vrui/Internal/BatteryState.h>
@@ -42,6 +42,10 @@ class ConfigurationFileSection;
 }
 namespace Realtime {
 class SharedMemory;
+}
+namespace Threads {
+template <class ParameterParam>
+class FunctionCall;
 }
 namespace Vrui {
 class EnvironmentDefinition;
@@ -70,17 +74,17 @@ class VRDeviceClient:public VRDeviceProtocol
 			}
 		};
 	
-	typedef Misc::FunctionCall<VRDeviceClient*> Callback; // Type for callback functions
-	typedef Misc::FunctionCall<unsigned int> BatteryStateUpdatedCallback; // Type for callback functions called from background thread when a virtual device's battery status changes; battery states are locked inside call
-	typedef Misc::FunctionCall<const HMDConfiguration&> HMDConfigurationUpdatedCallback; // Type for callback functions called from background thread when an HMD configuration is updated; configurations are locked inside call
-	typedef Misc::FunctionCall<const EnvironmentDefinition&> EnvironmentDefinitionUpdatedCallback; // Type for callback functions called from background thread when the server's environment definition is updated
-	typedef Misc::FunctionCall<const ProtocolError&> ErrorCallback; // Type for error callback functions called from background thread to signal errors in streaming mode
+	typedef Threads::FunctionCall<VRDeviceClient*> Callback; // Type for callback functions
+	typedef Threads::FunctionCall<unsigned int> BatteryStateUpdatedCallback; // Type for callback functions called from background thread when a virtual device's battery status changes; battery states are locked inside call
+	typedef Threads::FunctionCall<const HMDConfiguration&> HMDConfigurationUpdatedCallback; // Type for callback functions called from background thread when an HMD configuration is updated; configurations are locked inside call
+	typedef Threads::FunctionCall<const EnvironmentDefinition&> EnvironmentDefinitionUpdatedCallback; // Type for callback functions called from background thread when the server's environment definition is updated
+	typedef Threads::FunctionCall<const ProtocolError&> ErrorCallback; // Type for error callback functions called from background thread to signal errors in streaming mode
 	
 	/* Elements: */
 	private:
-	Threads::EventDispatcher& dispatcher; // Dispatcher for events on the server connection
+	Threads::RunLoop& runLoop; // Reference to the run loop dispatching events
 	Comm::PipePtr pipe; // Pipe connected to device server
-	Threads::EventDispatcher::ListenerKey pipeEventKey; // Key for events on the server connection
+	Threads::RunLoop::IOWatcherOwner pipeWatcher; // I/O watcher for events on the device server pipe
 	bool local; // Flag whether the connected device server runs on the same host, i.e., uses the same time stamp source
 	unsigned int serverProtocolVersionNumber; // Version number of server protocol
 	bool serverHasTimeStamps; // Flag whether the connected device server sends tracker state time stamps
@@ -92,37 +96,36 @@ class VRDeviceClient:public VRDeviceProtocol
 	mutable Threads::Mutex batteryStatesMutex; // Mutex to serialize access to the battery state array
 	BatteryState* batteryStates; // Array of virtual device battery states maintained by the server
 	Threads::Mutex callbacksMutex; // Mutex protecting all callback elements
-	BatteryStateUpdatedCallback* batteryStateUpdatedCallback; // Callback called when a virtual device's battery status changes
+	Misc::Autopointer<BatteryStateUpdatedCallback> batteryStateUpdatedCallback; // Callback called when a virtual device's battery status changes
 	unsigned int numHmdConfigurations; // Number of HMD configurations maintained by the server
 	mutable Threads::Mutex hmdConfigurationMutex; // Mutex to serialize access to the HMD configurations
 	HMDConfiguration* hmdConfigurations; // Array of HMD configurations maintained by the server
-	HMDConfigurationUpdatedCallback** hmdConfigurationUpdatedCallbacks; // Callbacks called when an HMD configuration has been updated
+	Misc::Autopointer<HMDConfigurationUpdatedCallback>* hmdConfigurationUpdatedCallbacks; // Callbacks called when an HMD configuration has been updated
 	unsigned int numPowerFeatures; // Number of power features maintained by the server
 	unsigned int numHapticFeatures; // Number of haptic features maintained by the server
 	Threads::MutexCond getBaseStationsCond; // Condition variable to signal the arrival of the list of base stations from the server
 	std::vector<VRBaseStation>* getBaseStationsRequest; // Pointer to vector to hold the list of base stations from the server; 0 if no request is active
 	Threads::MutexCond getEnvironmentDefinitionCond; // Condition variable to signal the arrival of an environment definition from the server
 	EnvironmentDefinition* getEnvironmentDefinitionRequest; // Pointer to object to hold the environment definition from the server; 0 if no request is active
-	EnvironmentDefinitionUpdatedCallback* environmentDefinitionUpdatedCallback; // Callback called when the server's environment definition is updated
+	Misc::Autopointer<EnvironmentDefinitionUpdatedCallback> environmentDefinitionUpdatedCallback; // Callback called when the server's environment definition is updated
 	bool active; // Flag if client is active
 	bool streaming; // Flag if client is in streaming mode
 	volatile bool connectionDead; // Flag whether the connection to the server was interrupted while in streaming mode
 	Threads::MutexCond packetSignalCond; // Condition variable to signal packet reception in streaming mode
-	Callback* packetNotificationCallback; // Function called when a new state packet arrives from the server in streaming mode (called from background thread)
-	ErrorCallback* errorCallback; // Function called when a protocol error occurs in streaming mode (called from background thread)
+	Misc::Autopointer<Callback> packetNotificationCallback; // Function called when a new state packet arrives from the server in streaming mode (called from background thread)
+	Misc::Autopointer<ErrorCallback> errorCallback; // Function called when a protocol error occurs in streaming mode (called from background thread)
 	VRDeviceState::TimeStamp timeStampDelta; // Offset between server's time stamps and the client's local clock source
 	
 	/* Private methods: */
 	void readConnectReply(void); // Reads the server's initial connect reply message
-	bool handlePipeMessage(void); // Method called when data can be read from the server connection; returns false if the connection was closed
-	static void pipeCallback(Threads::EventDispatcher::IOEvent& event); // Wrapper method called when data can be read from the server connection
+	void handlePipeMessage(Threads::RunLoop::IOWatcher::Event& event); // Method called when data can be read from the server connection
 	void initClient(void); // Initializes communication between device server and client
 	
 	/* Constructors and destructors: */
 	public:
-	VRDeviceClient(Threads::EventDispatcher& sDispatcher,const char* deviceServerHostName,int deviceServerPort); // Connects client to given server over TCP
-	VRDeviceClient(Threads::EventDispatcher& sDispatcher,const char* deviceServerSocketName,bool deviceServerSocketAbstract); // Connects client to given server over a UNIX domain socket
-	VRDeviceClient(Threads::EventDispatcher& sDispatcher,const Misc::ConfigurationFileSection& configFileSection); // Connects client to server listed in current configuration file section
+	VRDeviceClient(Threads::RunLoop& sRunLoop,const char* deviceServerHostName,int deviceServerPort); // Connects client to given server over TCP
+	VRDeviceClient(Threads::RunLoop& sRunLoop,const char* deviceServerSocketName,bool deviceServerSocketAbstract); // Connects client to given server over a UNIX domain socket
+	VRDeviceClient(Threads::RunLoop& sRunLoop,const Misc::ConfigurationFileSection& configFileSection); // Connects client to server listed in current configuration file section
 	~VRDeviceClient(void); // Disconnects client from server
 	
 	/* Methods: */
@@ -192,13 +195,14 @@ class VRDeviceClient:public VRDeviceProtocol
 	void getPacket(void); // Requests state packet from server; blocks until arrival
 	void powerOff(unsigned int powerFeatureIndex); // Requests to power off the given power feature
 	void hapticTick(unsigned int hapticFeatureIndex,unsigned int duration,unsigned int frequency,unsigned int amplitude); // Requests a haptic tick of the given duration in milliseconds, frequency in Hertz, and relative amplitude in [0, 256) on the given haptic feature
-	void setBatteryStateUpdatedCallback(BatteryStateUpdatedCallback* newBatteryStateUpdatedCallback); // Installs given callback function (device client adopts function object; battery states must be locked)
-	void setHmdConfigurationUpdatedCallback(unsigned int trackerIndex,HMDConfigurationUpdatedCallback* newHmdConfigurationUpdatedCallback); // Installs given callback function for the given tracker index (device client adopts function object; HMD configurations must be locked)
+	void setBatteryStateUpdatedCallback(BatteryStateUpdatedCallback& newBatteryStateUpdatedCallback); // Installs given callback function; battery states must be locked by caller prior to calling
+	void setHmdConfigurationUpdatedCallback(unsigned int trackerIndex,HMDConfigurationUpdatedCallback& newHmdConfigurationUpdatedCallback); // Installs given callback function for the given tracker index; HMD configurations must be locked by caller prior to calling
 	std::vector<VRBaseStation> getBaseStations(void); // Requests list of tracking base station states from server; cannot be called in streaming mode; blocks until arrival
 	bool getEnvironmentDefinition(EnvironmentDefinition& environmentDefinition); // Requests to read the server's environment definition into the given object; cannot be called in streaming mode; blocks until arrival; returns true if environment definition was read
 	bool updateEnvironmentDefinition(const EnvironmentDefinition& environmentDefinition); // Requests to update the server's environment definition from the given object; cannot be called in streaming mode; returns true if environment definition was updated
-	void setEnvironmentDefinitionUpdatedCallback(EnvironmentDefinitionUpdatedCallback* newEnvironmentDefinitionUpdatedCallback); // Installs given callback function (device client adopts function object)
-	void startStream(Callback* newPacketNotificationCallback,ErrorCallback* newErrorCallback =0); // Installs given callback functions (device client adopts function objects) and starts streaming mode
+	void setEnvironmentDefinitionUpdatedCallback(EnvironmentDefinitionUpdatedCallback& newEnvironmentDefinitionUpdatedCallback); // Installs given callback function
+	void startStream(Callback& newPacketNotificationCallback,ErrorCallback& newErrorCallback); // Installs given callback functions and starts streaming mode
+	void startStream(Callback& newPacketNotificationCallback); // Ditto, without using an error callback
 	void stopStream(void); // Stops streaming mode
 	void updateDeviceStates(void); // Updates device states from the server's shared memory segment; assumes that shared memory is supported
 	};

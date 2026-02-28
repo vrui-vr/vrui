@@ -2,7 +2,7 @@
 OculusRiftDK2VideoDevice - Custom subclass of V4L2VideoDevice to correct
 the DK2's tracking cameras quirks, and allow for LED strobe
 synchronization.
-Copyright (c) 2014-2016 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -102,7 +102,7 @@ class OculusRiftDK2VideoDevice:public V4L2VideoDevice
 	
 	/* Streaming capture interface methods: */
 	virtual void startStreaming(void);
-	virtual void startStreaming(StreamingCallback* newStreamingCallback);
+	virtual void startStreaming(StreamingCallback& newStreamingCallback);
 	virtual void stopStreaming(void);
 	
 	/* New methods: */

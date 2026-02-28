@@ -2,7 +2,7 @@
 InputDeviceAdapterDeviceDaemon - Class to convert from Vrui's own
 distributed device driver architecture to Vrui's internal device
 representation.
-Copyright (c) 2004-2025 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -27,10 +27,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <stdio.h>
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
-#include <Misc/FunctionCalls.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <Threads/FunctionCalls.h>
 #include <Geometry/GeometryValueCoders.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/InputDevice.h>
@@ -228,7 +228,7 @@ void InputDeviceAdapterDeviceDaemon::initializeInputDevice(int deviceIndex,const
 
 InputDeviceAdapterDeviceDaemon::InputDeviceAdapterDeviceDaemon(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection)
 	:InputDeviceAdapterIndexMap(sInputDeviceManager),
-	 deviceClient(inputDeviceManager->acquireEventDispatcher(),configFileSection),
+	 deviceClient(inputDeviceManager->acquireRunLoop(),configFileSection),
 	 predictMotion(configFileSection.retrieveValue("./predictMotion",false)),
 	 motionPredictionDelta(configFileSection.retrieveValue("./motionPredictionDelta",0.0)),
 	 validFlags(0),batteryStateIndexMap(0),batteryStates(0)
@@ -265,7 +265,7 @@ InputDeviceAdapterDeviceDaemon::InputDeviceAdapterDeviceDaemon(InputDeviceManage
 	deviceClient.activate();
 	
 	/* Register a callback to receive battery status updates: */
-	deviceClient.setBatteryStateUpdatedCallback(Misc::createFunctionCall(this,&InputDeviceAdapterDeviceDaemon::batteryStateUpdatedCallback));
+	deviceClient.setBatteryStateUpdatedCallback(*Threads::createFunctionCall(this,&InputDeviceAdapterDeviceDaemon::batteryStateUpdatedCallback));
 	
 	/* Check if the device client can use shared memory to read device states: */
 	if(deviceClient.hasSharedMemory())
@@ -276,7 +276,7 @@ InputDeviceAdapterDeviceDaemon::InputDeviceAdapterDeviceDaemon(InputDeviceManage
 	else
 		{
 		/* Start streaming and wait for first packet to arrive: */
-		deviceClient.startStream(Misc::createFunctionCall(packetNotificationCallback),Misc::createFunctionCall(this,&InputDeviceAdapterDeviceDaemon::errorCallback));
+		deviceClient.startStream(*Threads::createFunctionCall(packetNotificationCallback),*Threads::createFunctionCall(this,&InputDeviceAdapterDeviceDaemon::errorCallback));
 		}
 	}
 

@@ -1,7 +1,7 @@
 /***********************************************************************
 HMDConfigurationUpdater - Class to connect a rendering window for HMDs
 to HMD configuration updates.
-Copyright (c) 2024 Oliver Kreylos
+Copyright (c) 2024-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -24,7 +24,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Internal/HMDConfigurationUpdater.h>
 
 #include <Misc/StdError.h>
-#include <Misc/FunctionCalls.h>
 #include <Threads/FunctionCalls.h>
 #include <GLMotif/PopupWindow.h>
 #include <GLMotif/RowColumn.h>
@@ -160,7 +159,7 @@ HMDConfigurationUpdater::HMDConfigurationUpdater(Viewer* sHmdViewer,HMDConfigura
 	dc.lockHmdConfigurations();
 	
 	/* Install an HMD configuration update callback with the input device adapter: */
-	dc.setHmdConfigurationUpdatedCallback(hmdTrackerIndex,Misc::createFunctionCall(this,&HMDConfigurationUpdater::hmdConfigurationUpdated));
+	dc.setHmdConfigurationUpdatedCallback(hmdTrackerIndex,*Threads::createFunctionCall(this,&HMDConfigurationUpdater::hmdConfigurationUpdated));
 	
 	/* Get the current eye position version and calculate the current IPD in mm: */
 	eyePosVersion=hmdConfiguration->getEyePosVersion();
