@@ -35,9 +35,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Threads/Cond.h>
 #include <Threads/FunctionCalls.h>
 
-// DEBUGGING
-#include <iostream>
-
 namespace Threads {
 
 namespace {
@@ -1993,9 +1990,6 @@ RunLoop::RunLoop(void)
 	 handlingIOWatchers(false),
 	 handlingProcessFunctions(false)
 	{
-	// DEBUGGING
-	std::cout<<sizeof(PipeMessage);
-	
 	/* Create the self-pipe: */
 	pipeFds[1]=pipeFds[0]=-1;
 	if(pipe(pipeFds)<0)
