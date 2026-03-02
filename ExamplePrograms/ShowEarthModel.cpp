@@ -2,7 +2,7 @@
 ShowEarthModel - Simple Vrui application to render a model of Earth,
 with the ability to additionally display earthquake location data and
 other geology-related stuff.
-Copyright (c) 2005-2025 Oliver Kreylos
+Copyright (c) 2005-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -31,11 +31,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <iostream>
 #include <iomanip>
 #include <vector>
-#include <Misc/FunctionCalls.h>
 #include <Misc/StdError.h>
 #include <Misc/File.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <Threads/FunctionCalls.h>
 #include <IO/Directory.h>
 #include <Math/Math.h>
 #include <Math/Constants.h>
@@ -1032,7 +1032,7 @@ ShowEarthModel::ShowEarthModel(int& argc,char**& argv)
 		/* Register the custom tool classes with the Vrui tool manager: */
 		EarthquakeToolFactory* earthquakeToolFactory=new EarthquakeToolFactory(*Vrui::getToolManager(),earthquakeSets);
 		Vrui::getToolManager()->addClass(earthquakeToolFactory,EarthquakeToolFactory::factoryDestructor);
-		EarthquakeQueryToolFactory* earthquakeQueryToolFactory=new EarthquakeQueryToolFactory(*Vrui::getToolManager(),earthquakeSets,Misc::createFunctionCall(this,&ShowEarthModel::setEventTime));
+		EarthquakeQueryToolFactory* earthquakeQueryToolFactory=new EarthquakeQueryToolFactory(*Vrui::getToolManager(),earthquakeSets,*Threads::createFunctionCall(this,&ShowEarthModel::setEventTime));
 		Vrui::getToolManager()->addClass(earthquakeQueryToolFactory,EarthquakeQueryToolFactory::factoryDestructor);
 		}
 	
@@ -1116,7 +1116,7 @@ void ShowEarthModel::toolCreationCallback(Vrui::ToolManager::ToolCreationCallbac
 	if(surfaceNavigationTool!=0)
 		{
 		/* Set the new tool's alignment function: */
-		surfaceNavigationTool->setAlignFunction(Misc::createFunctionCall(this,&ShowEarthModel::alignSurfaceFrame));
+		surfaceNavigationTool->setAlignFunction(*Threads::createFunctionCall(this,&ShowEarthModel::alignSurfaceFrame));
 		}
 	}
 

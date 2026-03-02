@@ -8585,8 +8585,14 @@ Vrui-15.0-001:
   the active session changes or the system goes to sleep or shuts down.
 - Systemd version 255 retired seat/self; fixed up VRServerLauncher.
 - API change: Replaced uses of Misc::FunctionCall with
-  Threads::FunctionCall in all libraries above the Threads level.
+  Threads::FunctionCall in all libraries above and including the Threads
+  level.
 - API change: Pass function call objects by reference instead of as
-  pointers.
+  pointers to clarify usage and avoid unneeded calls to ref()/unref().
 - API change: Replaced uses of Threads::EventDispatcher with
   Threads::RunLoop throughout Vrui and underlying libraries.
+- API change: Completion function parameter for Threads::WorkerPool
+  changed from Job* to Job&.
+- Added static pollEventsToEventMask and eventMaskToPollEvents methods
+  to Threads::RunLoop::IOWatcher to simplify adapting to APIs designed
+  for using poll(), such as ALSA.

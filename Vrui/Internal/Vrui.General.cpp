@@ -1,7 +1,7 @@
 /***********************************************************************
 Environment-independent part of Vrui virtual reality development
 toolkit.
-Copyright (c) 2000-2025 Oliver Kreylos
+Copyright (c) 2000-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -3904,7 +3904,7 @@ class VruiJobCompleteCallback:public Threads::WorkerPool::JobCompleteCallback
 		FrameCallbackData* frameCb=static_cast<FrameCallbackData*>(userData);
 		
 		/* Call the caller-provided callback with the caller-provided job object: */
-		(*frameCb->completeCallback)(frameCb->job.getPointer());
+		(*frameCb->completeCallback)(*frameCb->job);
 		
 		/* Clean up: */
 		delete frameCb;
@@ -3921,16 +3921,16 @@ class VruiJobCompleteCallback:public Threads::WorkerPool::JobCompleteCallback
 		}
 	
 	/* Methods from class Threads::WorkerPool::JobCompleteCallback: */
-	virtual void operator()(Threads::WorkerPool::JobFunction* parameter) const
+	virtual void operator()(Threads::WorkerPool::JobFunction& parameter) const
 		{
 		/* This can't be done: */
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot call on const object");
 		}
-	virtual void operator()(Threads::WorkerPool::JobFunction* parameter)
+	virtual void operator()(Threads::WorkerPool::JobFunction& parameter)
 		{
 		/* Register a frame callback with the Vrui front end: */
 		FrameCallbackData* frameCb=new FrameCallbackData;
-		frameCb->job=parameter;
+		frameCb->job=&parameter;
 		frameCb->completeCallback=completeCallback;
 		addFrameCallback(frameCallback,frameCb);
 		
@@ -3941,7 +3941,7 @@ class VruiJobCompleteCallback:public Threads::WorkerPool::JobCompleteCallback
 
 }
 
-void submitJob(Threads::FunctionCall<int>& job,Threads::FunctionCall<Threads::FunctionCall<int>*>& completeCallback)
+void submitJob(Threads::FunctionCall<int>& job,Threads::FunctionCall<Threads::FunctionCall<int>&>& completeCallback)
 	{
 	/* Wrap the caller-provided completion callback in our own callback to signal the front end from a background thread: */
 	VruiJobCompleteCallback* backendCompleteCallback=new VruiJobCompleteCallback(completeCallback);

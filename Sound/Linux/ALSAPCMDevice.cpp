@@ -1,7 +1,7 @@
 /***********************************************************************
 ALSAPCMDevice - Simple wrapper class around PCM devices as represented
 by the Advanced Linux Sound Architecture (ALSA) library.
-Copyright (c) 2009-2024 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Basic Sound Library (Sound).
 
@@ -25,9 +25,51 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdio.h>
 #include <poll.h>
 #include <Misc/StdError.h>
+#include <Threads/FunctionCalls.h>
+#include <Threads/RunLoop.h>
 #include <Sound/SoundDataFormat.h>
 
 namespace Sound {
+
+/*****************************************************
+Declaration of class ALSAPCMDevice::PCMEventForwarder:
+*****************************************************/
+
+class ALSAPCMDevice::PCMEventForwarder:public Threads::FunctionCall<Threads::RunLoop::IOWatcher::Event&>
+	{
+	/* Elements: */
+	private:
+	ALSAPCMDevice& device; // Reference to the PCM device with which this forwarder is associated
+	struct pollfd& pcmEventPoll; // Reference to the poll request with which this forwarder is associated
+	Threads::RunLoop::IOWatcherOwner ioWatcher; // The I/O watcher registered for this file descriptors
+	Misc::Autopointer<PCMEventHandler> pcmEventHandler; // The user-supplied PCM event handler
+	
+	/* Constructors and destructors: */
+	public:
+	PCMEventForwarder(ALSAPCMDevice& sDevice,struct pollfd& sPCMEventPoll,Threads::RunLoop& runLoop,PCMEventHandler& sPcmEventHandler)
+		:device(sDevice),pcmEventPoll(sPCMEventPoll),
+		pcmEventHandler(&sPcmEventHandler)
+		{
+		/* Create an I/O watcher for the polled file descriptor: */
+		unsigned int eventMask=Threads::RunLoop::IOWatcher::pollEventsToEventMask(pcmEventPoll.events);
+		ioWatcher=runLoop.createIOWatcher(pcmEventPoll.fd,eventMask,true,*this);
+		}
+	
+	/* Methods from class Threads::FunctionCall<Threads::RunLoop::IOWatcher::Event&>: */
+	void operator()(Threads::RunLoop::IOWatcher::Event& event)
+		{
+		/* Update the poll request's output event mask: */
+		pcmEventPoll.revents=Threads::RunLoop::IOWatcher::eventMaskToPollEvents(event.getEventMask());
+		
+		/* Parse the event and check whether it indicates that data is available on the PCM device: */
+		unsigned short pcmEvent;
+		if(snd_pcm_poll_descriptors_revents(device.pcmDevice,device.pcmEventPolls,device.numPCMEventFds,&pcmEvent)==0&&(pcmEvent&(POLLIN|POLLOUT))!=0x0)
+			{
+			/* Call the event callback: */
+			(*pcmEventHandler)(device);
+			}
+		}
+	};
 
 /******************************
 Methods of class ALSAPCMDevice:
@@ -45,32 +87,6 @@ void ALSAPCMDevice::throwException(const char* prettyFunction,int error)
 		}
 	else
 		throw Misc::makeStdErr(prettyFunction,"ALSA error %d (%s)",-error,snd_strerror(error));
-	}
-
-void ALSAPCMDevice::pcmEventForwarder(Threads::EventDispatcher::IOEvent& event)
-	{
-	ALSAPCMDevice* thisPtr=static_cast<ALSAPCMDevice*>(event.getUserData());
-	
-	/* Find the poll structure on whose file descriptor this event occurred: */
-	int index;
-	for(index=0;index<thisPtr->numPCMEventFds&&thisPtr->pcmEventListenerKeys[index]!=event.getKey();++index)
-		;
-	struct pollfd& pfd=thisPtr->pcmEventPolls[index];
-		
-	/* Update the poll structure's event mask: */
-	pfd.revents=0x0;
-	if(event.getEventTypeMask()&Threads::EventDispatcher::Read)
-		pfd.revents|=POLLIN;
-	if(event.getEventTypeMask()&Threads::EventDispatcher::Write)
-		pfd.revents|=POLLOUT;
-	
-	/* Parse the event: */
-	unsigned short pcmEvent;
-	if(snd_pcm_poll_descriptors_revents(thisPtr->pcmDevice,thisPtr->pcmEventPolls,thisPtr->numPCMEventFds,&pcmEvent)==0&&(pcmEvent&(POLLIN|POLLOUT)))
-		{
-		/* Call the event callback: */
-		thisPtr->pcmEventCallback(*thisPtr,thisPtr->pcmEventCallbackUserData);
-		}
 	}
 
 ALSAPCMDevice::PCMList ALSAPCMDevice::enumeratePCMs(bool recording)
@@ -137,8 +153,7 @@ ALSAPCMDevice::ALSAPCMDevice(const char* pcmDeviceName,bool sRecording,bool nonB
 	 recording(sRecording),
 	 pcmSampleFormat(SND_PCM_FORMAT_UNKNOWN),pcmChannels(1),pcmRate(8000),pcmBufferFrames(0),pcmPeriodFrames(0),
 	 pcmConfigPending(true),
-	 pcmEventCallback(0),pcmEventCallbackUserData(0),
-	 numPCMEventFds(0),pcmEventPolls(0),pcmEventListenerKeys(0)
+	 numPCMEventFds(0),pcmEventPolls(0),pcmEventForwarders(0)
 	{
 	/* Open the PCM device: */
 	int error=snd_pcm_open(&pcmDevice,pcmDeviceName,recording?SND_PCM_STREAM_CAPTURE:SND_PCM_STREAM_PLAYBACK,nonBlocking?SND_PCM_NONBLOCK:0);
@@ -156,12 +171,13 @@ ALSAPCMDevice::ALSAPCMDevice(const char* pcmDeviceName,bool sRecording,bool nonB
 
 ALSAPCMDevice::~ALSAPCMDevice(void)
 	{
+	/* Close the PCM device: */
 	if(pcmDevice!=0)
 		snd_pcm_close(pcmDevice);
 	
-	/* Delete the poll structure and listener key array just in case: */
+	/* Delete the poll structure and PCM event forwarder arrays just in case: */
 	delete[] pcmEventPolls;
-	delete[] pcmEventListenerKeys;
+	delete[] pcmEventForwarders;
 	}
 
 snd_async_handler_t* ALSAPCMDevice::registerAsyncHandler(snd_async_callback_t callback,void* privateData)
@@ -323,53 +339,35 @@ void ALSAPCMDevice::unlink(void)
 		throwException(__PRETTY_FUNCTION__,result);
 	}
 
-void ALSAPCMDevice::addPCMEventListener(Threads::EventDispatcher& dispatcher,ALSAPCMDevice::PCMEventCallback eventCallback,void* eventCallbackUserData)
+void ALSAPCMDevice::watch(Threads::RunLoop& runLoop,ALSAPCMDevice::PCMEventHandler& newEventHandler)
 	{
-	/* Check if there is already a PCM event callback: */
-	if(pcmEventCallback!=0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"PCM event listener already registered");
-	
-	/* Store the callback: */
-	pcmEventCallback=eventCallback;
-	pcmEventCallbackUserData=eventCallbackUserData;
+	/* Check if this PCM device is already being watched: */
+	if(numPCMEventFds!=0)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"PCM device is already being watched");
 	
 	/* Retrieve the set of file descriptors that need to be watched: */
 	numPCMEventFds=snd_pcm_poll_descriptors_count(pcmDevice);
 	pcmEventPolls=new struct pollfd[numPCMEventFds];
 	numPCMEventFds=snd_pcm_poll_descriptors(pcmDevice,pcmEventPolls,numPCMEventFds);
 	
-	/* Create IO event listeners for all PCM file descriptors: */
-	pcmEventListenerKeys=new Threads::EventDispatcher::ListenerKey[numPCMEventFds];
+	/* Create PCM event forwarders for all PCM file descriptors: */
+	pcmEventForwarders=new Misc::Autopointer<PCMEventForwarder>[numPCMEventFds];
 	for(int i=0;i<numPCMEventFds;++i)
-		{
-		/* Assemble a proper event mask: */
-		int eventMask=0x0;
-		if(pcmEventPolls[i].events&POLLIN)
-			eventMask|=Threads::EventDispatcher::Read;
-		if(pcmEventPolls[i].events&POLLOUT)
-			eventMask|=Threads::EventDispatcher::Write;
-		pcmEventListenerKeys[i]=dispatcher.addIOEventListener(pcmEventPolls[i].fd,eventMask,pcmEventForwarder,this);
-		}
+		pcmEventForwarders[i]=new PCMEventForwarder(*this,pcmEventPolls[i],runLoop,newEventHandler);
 	}
 
-void ALSAPCMDevice::removePCMEventListener(Threads::EventDispatcher& dispatcher)
+void ALSAPCMDevice::unwatch(void)
 	{
 	/* Bail out if there is no PCM event callback: */
-	if(pcmEventCallback==0)
+	if(numPCMEventFds==0)
 		return;
 	
-	/* Remove the callback: */
-	pcmEventCallback=0;
-	pcmEventCallbackUserData=0;
-	
-	/* Remove all previously created IO event listeners: */
-	for(int i=0;i<numPCMEventFds;++i)
-		dispatcher.removeIOEventListener(pcmEventListenerKeys[i]);
-	numPCMEventFds=0;
+	/* Destroy all poll requests and PCM event forwarders: */
 	delete[] pcmEventPolls;
 	pcmEventPolls=0;
-	delete[] pcmEventListenerKeys;
-	pcmEventListenerKeys=0;
+	delete[] pcmEventForwarders;
+	pcmEventForwarders=0;
+	numPCMEventFds=0;
 	}
 
 void ALSAPCMDevice::start(void)

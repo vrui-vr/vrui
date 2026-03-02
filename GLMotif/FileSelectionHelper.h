@@ -1,7 +1,7 @@
 /***********************************************************************
 FileSelectionHelper - Helper class to simplify managing file selection
 dialogs and their callbacks.
-Copyright (c) 2013-2023 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -24,7 +24,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define GLMOTIF_FILESELECTIONHELPER_INCLUDED
 
 #include <string>
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 #include <IO/Directory.h>
 #include <GLMotif/FileSelectionDialog.h>
 
@@ -43,20 +43,10 @@ class FileSelectionHelper
 	{
 	/* Embedded classes: */
 	public:
-	typedef Misc::FunctionCall<FileSelectionDialog::OKCallbackData*> FileSelectedCallback; // Type for callback functions to be called when a file was selected
+	typedef Threads::FunctionCall<FileSelectionDialog::OKCallbackData*> FileSelectedCallback; // Type for callback functions to be called when a file was selected
 	
 	private:
-	struct CallbackState // Structure holding additional per-callback state
-		{
-		/* Elements: */
-		public:
-		CallbackState* succ; // Pointer to create a list of callback state objects
-		std::string dialogTitle; // Title for the file selection dialog
-		FileSelectedCallback* callback; // Callback to call when a file was selected
-		bool save; // Flag whether it is a load or a save callback
-		Button* button; // Button with which this callback is associated; 0 for one-shot temporary callbacks
-		FileSelectionDialog* dialog; // Pointer to the file selection dialog currently open for this callback
-		};
+	struct CallbackState; // Structure holding additional per-callback state
 	
 	/* Elements: */
 	private:
@@ -98,36 +88,36 @@ class FileSelectionHelper
 		return currentDirectory;
 		}
 	void setCurrentDirectory(IO::DirectoryPtr newCurrentDirectory); // Sets the initial directory for the next file selection dialog
-	void addSaveCallback(Button* button,FileSelectedCallback* callback); // Adds a "save file" callback to the given button's selection callback list
+	void addSaveCallback(Button* button,FileSelectedCallback& callback); // Adds a "save file" callback to the given button's selection callback list
 	template <class CalleeParam>
 	void addSaveCallback(Button* button,CalleeParam* callee,void (CalleeParam::*calleeMethod)(FileSelectionDialog::OKCallbackData*)) // Convenience method for same
 		{
-		addSaveCallback(button,Misc::createFunctionCall(callee,calleeMethod));
+		addSaveCallback(button,*Threads::createFunctionCall(callee,calleeMethod));
 		}
-	void addLoadCallback(Button* button,FileSelectedCallback* callback); // Adds a "load file" callback to the given button's selection callback list
+	void addLoadCallback(Button* button,FileSelectedCallback& callback); // Adds a "load file" callback to the given button's selection callback list
 	template <class CalleeParam>
 	void addLoadCallback(Button* button,CalleeParam* callee,void (CalleeParam::*calleeMethod)(FileSelectionDialog::OKCallbackData*)) // Convenience method for same
 		{
-		addLoadCallback(button,Misc::createFunctionCall(callee,calleeMethod));
+		addLoadCallback(button,*Threads::createFunctionCall(callee,calleeMethod));
 		}
 	void removeCallback(Button* button); // Removes a callback that was associated with the given button
-	void saveFile(const char* dialogTitle,FileSelectedCallback* callback); // Immediately shows a "save file" dialog
+	void saveFile(const char* dialogTitle,FileSelectedCallback& callback); // Immediately shows a "save file" dialog
 	template <class CalleeParam>
 	void saveFile(const char* dialogTitle,CalleeParam* callee,void (CalleeParam::*calleeMethod)(FileSelectionDialog::OKCallbackData*)) // Convenience method for same
 		{
-		saveFile(dialogTitle,Misc::createFunctionCall(callee,calleeMethod));
+		saveFile(dialogTitle,*Threads::createFunctionCall(callee,calleeMethod));
 		}
-	void saveFile(const char* dialogTitle,const char* initialFileName,FileSelectedCallback* callback); // Immediately shows a "save file" dialog with the given file name
+	void saveFile(const char* dialogTitle,const char* initialFileName,FileSelectedCallback& callback); // Immediately shows a "save file" dialog with the given file name
 	template <class CalleeParam>
 	void saveFile(const char* dialogTitle,const char* initialFileName,CalleeParam* callee,void (CalleeParam::*calleeMethod)(FileSelectionDialog::OKCallbackData*)) // Convenience method for same
 		{
-		saveFile(dialogTitle,initialFileName,Misc::createFunctionCall(callee,calleeMethod));
+		saveFile(dialogTitle,initialFileName,*Threads::createFunctionCall(callee,calleeMethod));
 		}
-	void loadFile(const char* dialogTitle,FileSelectedCallback* callback); // Immediately shows a "load file" dialog
+	void loadFile(const char* dialogTitle,FileSelectedCallback& callback); // Immediately shows a "load file" dialog
 	template <class CalleeParam>
 	void loadFile(const char* dialogTitle,CalleeParam* callee,void (CalleeParam::*calleeMethod)(FileSelectionDialog::OKCallbackData*)) // Convenience method for same
 		{
-		loadFile(dialogTitle,Misc::createFunctionCall(callee,calleeMethod));
+		loadFile(dialogTitle,*Threads::createFunctionCall(callee,calleeMethod));
 		}
 	void closeDialogs(void); // Closes all still-open file selection dialogs
 	};

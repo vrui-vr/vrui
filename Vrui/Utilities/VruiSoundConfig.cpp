@@ -1,7 +1,7 @@
 /***********************************************************************
 VruiSoundConfig - Simple Vrui application to configure audio output and
 input devices.
-Copyright (c) 2022-2024 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -172,7 +172,7 @@ class VruiSoundConfig:public Vrui::Application
 	#if SOUND_CONFIG_HAVE_ALSA
 	void playbackYesCallback(Misc::CallbackData* cbData); // Called when user can hear sound on the current output device
 	void playbackNoCallback(Misc::CallbackData* cbData); // Called when user can not hear sound on the current output device
-	void playbackCompleteCallback(Threads::FunctionCall<int>* job); // Callback called when the current output device is done playing the test sound
+	void playbackCompleteCallback(Threads::FunctionCall<int>& job); // Callback called when the current output device is done playing the test sound
 	void tryNextOutputDevice(void); // Plays the test sound on the next ALSA output device
 	#endif
 	#if SOUND_CONFIG_HAVE_PULSEAUDIO
@@ -227,7 +227,7 @@ void VruiSoundConfig::playbackNoCallback(Misc::CallbackData* cbData)
 		}
 	}
 
-void VruiSoundConfig::playbackCompleteCallback(Threads::FunctionCall<int>* job)
+void VruiSoundConfig::playbackCompleteCallback(Threads::FunctionCall<int>& job)
 	{
 	/* Check if the current ALSA output device is the headset's device, meaning playback testing is over: */
 	if(headsetDevice!=0)

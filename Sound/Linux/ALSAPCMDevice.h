@@ -1,7 +1,7 @@
 /***********************************************************************
 ALSAPCMDevice - Simple wrapper class around PCM devices as represented
 by the Advanced Linux Sound Architecture (ALSA) library.
-Copyright (c) 2009-2024 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Basic Sound Library (Sound).
 
@@ -23,14 +23,19 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef SOUND_LINUX_ALSAPCMDEVICE_INCLUDED
 #define SOUND_LINUX_ALSAPCMDEVICE_INCLUDED
 
-#include <alsa/asoundlib.h>
 #include <string>
 #include <stdexcept>
 #include <vector>
-#include <Threads/EventDispatcher.h>
+#include <Misc/Autopointer.h>
+#include <alsa/asoundlib.h>
 
 /* Forward declarations: */
 struct pollfd;
+namespace Threads {
+template <class ParameterParam>
+class FunctionCall;
+class RunLoop;
+}
 namespace Sound {
 class SoundDataFormat;
 }
@@ -81,10 +86,14 @@ class ALSAPCMDevice
 			}
 		};
 	
-	typedef void (*PCMEventCallback)(ALSAPCMDevice& device,void* userData); // Type for PCM event callback functions
+	typedef Threads::FunctionCall<ALSAPCMDevice&> PCMEventHandler; // Type for handlers for PCM events
+	
+	private:
+	class PCMEventForwarder; // Helper class to forward I/O watcher events to a PCM event handler
+	
+	friend class PCMEventForwarder;
 	
 	/* Elements: */
-	private:
 	snd_pcm_t* pcmDevice; // Handle to the ALSA PCM device
 	bool recording; // Flag whether the PCM device is recording
 	
@@ -95,15 +104,12 @@ class ALSAPCMDevice
 	snd_pcm_uframes_t pcmBufferFrames,pcmPeriodFrames;
 	bool pcmConfigPending; // Flag if hardware parameters were changed since the last time prepare() was called
 	
-	PCMEventCallback pcmEventCallback; // Function to be called when a PCM event occurs (ability to write for playback devices, ability to read for capture devices)
-	void* pcmEventCallbackUserData; // Extra user data passed to PCM event callback function
 	int numPCMEventFds; // Number of file descriptors that need to be watched for PCM events
-	struct pollfd* pcmEventPolls; // Array of poll structures to translate select events into poll events for ALSA API
-	Threads::EventDispatcher::ListenerKey* pcmEventListenerKeys; // Array of listener keys for the set of watched file descriptors
+	struct pollfd* pcmEventPolls; // Array of poll requests to translate I/O watcher events into poll events for ALSA API
+	Misc::Autopointer<PCMEventForwarder>* pcmEventForwarders; // Array of forwarders from I/O watcher events on event file descriptors to the user PCM event handler
 	
 	/* Private methods: */
 	void throwException(const char* prettyFunction,int error); // Throws an exception from the given method for the given error code
-	static void pcmEventForwarder(Threads::EventDispatcher::IOEvent& event); // Callback wrapper to parse event descriptors
 	
 	/* Constructors and destructors: */
 	public:
@@ -121,8 +127,8 @@ class ALSAPCMDevice
 	void setStartThreshold(size_t numStartFrames); // Sets automatic PCM start threshold for playback and capture devices
 	void link(ALSAPCMDevice& other); // Links this PCM with another such that status changes and frame clocks are synchronized; throws exception if devices cannot be linked due to being on different hardware
 	void unlink(void); // Unlinks this PCM from any other PCMs to which it was linked
-	void addPCMEventListener(Threads::EventDispatcher& dispatcher,PCMEventCallback eventCallback,void* eventCallbackUserData); // Adds a PCM event listener for this audio device to the given event dispatcher
-	void removePCMEventListener(Threads::EventDispatcher& dispatcher); // Removes a previously-added PCM event listener from the given event dispatcher
+	void watch(Threads::RunLoop& runLoop,PCMEventHandler& newPcmEventHandler); // Watches this PCM device from the given run loop and calls the given event handler when audio data can be read from or written to the PCM device
+	void unwatch(void); // Stops watching this PCM device from a run loop
 	void start(void); // Starts recording or playback on the PCM device
 	size_t getAvailableFrames(void) // Returns the number of audio frames that can be read from a recording device or written to a playback device without blocking
 		{

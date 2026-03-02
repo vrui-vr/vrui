@@ -1,7 +1,7 @@
 /***********************************************************************
 Vrui - Public kernel interface of the Vrui virtual reality development
 toolkit.
-Copyright (c) 2000-2025 Oliver Kreylos
+Copyright (c) 2000-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -391,7 +391,7 @@ Misc::CallbackList& getPostRenderingCallbacks(void); // Returns the list of call
 Misc::CommandDispatcher& getCommandDispatcher(void); // Returns a dispatcher for pipe and console commands
 void addSynchronousIOCallback(int fd,SynchronousIOCallback newIOCallback,void* newIOCallbackData); // Adds a callback that is called synchronously at the beginning of a Vrui frame if there is readable data on the given file descriptor
 void removeSynchronousIOCallback(int fd); // Removes a previously installed synchronous I/O callback for the given file descriptor
-void submitJob(Threads::FunctionCall<int>& job,Threads::FunctionCall<Threads::FunctionCall<int>*>& completeCallback); // Submits a job for asynchronous execution by a background thread; given callback is called from main thread, synchronously before an application's frame method
+void submitJob(Threads::FunctionCall<int>& job,Threads::FunctionCall<Threads::FunctionCall<int>&>& completeCallback); // Submits a job for asynchronous execution by a background thread; given callback is called from main thread, synchronously before an application's frame method
 
 /* Rendering management: */
 void updateContinuously(void); // Tells Vrui to continuously update its state (must be called before mainLoop)

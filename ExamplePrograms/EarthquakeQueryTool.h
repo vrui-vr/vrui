@@ -1,7 +1,7 @@
 /***********************************************************************
 EarthquakeQueryTool - Vrui tool class to query and display meta data
 about earthquake events.
-Copyright (c) 2013-2014 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -21,12 +21,16 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef EARTHQUAKEQUERYTOOL_INCLUDED
 #define EARTHQUAKEQUERYTOOL_INCLUDED
 
-#include <Misc/FunctionCalls.h>
+#include <Misc/Autopointer.h>
 #include <Vrui/Tool.h>
 
 #include "EarthquakeSet.h"
 
 /* Forward declarations: */
+namespace Threads {
+template <class ParameterParam>
+class FunctionCall;
+}
 namespace GLMotif {
 class PopupWindow;
 class TextField;
@@ -40,16 +44,17 @@ class EarthquakeQueryToolFactory:public Vrui::ToolFactory // Class for factories
 	
 	/* Embedded classes: */
 	public:
-	typedef Misc::FunctionCall<double> SetTimeFunction; // Function call to set an earthquake event's time in a caller
+	typedef Threads::FunctionCall<double> SetTimeFunction; // Function call to set an earthquake event's time in a caller
 	
 	/* Elements: */
 	private:
 	const std::vector<EarthquakeSet*>& earthquakeSets; // Reference to the list of earthquake sets queried by all tools created by this factory
-	SetTimeFunction* setTimeFunction; // Function called when a user selects a data dialog's "Set Time" button
+	Misc::Autopointer<SetTimeFunction> setTimeFunction; // Function called when a user selects a data dialog's "Set Time" button
 	
 	/* Constructors and destructors: */
 	public:
-	EarthquakeQueryToolFactory(Vrui::ToolManager& toolManager,const std::vector<EarthquakeSet*>& sEarthquakeSets,SetTimeFunction* sSetTimeFunction =0);
+	EarthquakeQueryToolFactory(Vrui::ToolManager& toolManager,const std::vector<EarthquakeSet*>& sEarthquakeSets,SetTimeFunction& sSetTimeFunction);
+	EarthquakeQueryToolFactory(Vrui::ToolManager& toolManager,const std::vector<EarthquakeSet*>& sEarthquakeSets);
 	static void factoryDestructor(Vrui::ToolFactory* factory)
 		{
 		delete factory;

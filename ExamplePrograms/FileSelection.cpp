@@ -1,7 +1,7 @@
 /***********************************************************************
 FileSelection - Example application for Vrui's file selection dialog and
 cluster-transparent file handling via the IO abstraction library.
-Copyright (c) 2014-2020 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -21,8 +21,8 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <string>
 #include <stdexcept>
 #include <Misc/SizedTypes.h>
-#include <Misc/FunctionCalls.h>
 #include <Misc/MessageLogger.h>
+#include <Threads/FunctionCalls.h>
 #include <IO/File.h>
 #include <GLMotif/PopupMenu.h>
 #include <GLMotif/Separator.h>
@@ -142,8 +142,8 @@ FileSelection::FileSelection(int& argc,char**& argv)
 	GLMotif::Button* saveFooButton=new GLMotif::Button("SaveFooButton",mainMenu,"Save Foo...");
 	
 	/* Hook the "foo" file selection helper into the pair of buttons: */
-	fooHelper.addLoadCallback(loadFooButton,Misc::createFunctionCall(this,&FileSelection::loadFileCallback,0));
-	fooHelper.addSaveCallback(saveFooButton,Misc::createFunctionCall(this,&FileSelection::saveFileCallback,0));
+	fooHelper.addLoadCallback(loadFooButton,*Threads::createFunctionCall(this,&FileSelection::loadFileCallback,0));
+	fooHelper.addSaveCallback(saveFooButton,*Threads::createFunctionCall(this,&FileSelection::saveFileCallback,0));
 	
 	new GLMotif::Separator("Sep1",mainMenu,GLMotif::Separator::HORIZONTAL,0.0f,GLMotif::Separator::LOWERED);
 	
@@ -152,8 +152,8 @@ FileSelection::FileSelection(int& argc,char**& argv)
 	GLMotif::Button* saveBarButton=new GLMotif::Button("SaveBarButton",mainMenu,"Save Bar...");
 	
 	/* Hook the "bar" file selection helper into the pair of buttons: */
-	barHelper.addLoadCallback(loadBarButton,Misc::createFunctionCall(this,&FileSelection::loadFileCallback,1));
-	barHelper.addSaveCallback(saveBarButton,Misc::createFunctionCall(this,&FileSelection::saveFileCallback,1));
+	barHelper.addLoadCallback(loadBarButton,*Threads::createFunctionCall(this,&FileSelection::loadFileCallback,1));
+	barHelper.addSaveCallback(saveBarButton,*Threads::createFunctionCall(this,&FileSelection::saveFileCallback,1));
 	
 	/* Finish and install the main menu: */
 	mainMenu->manageMenu();

@@ -30,6 +30,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/PrintInteger.h>
 #include <Misc/StdError.h>
 #include <Misc/SelfDestructArray.h>
+#include <Misc/FunctionCalls.h>
 #include <Misc/HashTable.h>
 #include <Misc/MessageLogger.h>
 #include <Threads/FunctionCalls.h>
@@ -616,9 +617,9 @@ GLMotif::PopupMenu* MeasurePoints::createMainMenu(void)
 	
 	/* Create buttons to manage point sets: */
 	GLMotif::Button* loadPointSetsButton=result->addEntry("Load Point Sets");
-	saveHelper.addLoadCallback(loadPointSetsButton,Misc::createFunctionCall(this,&MeasurePoints::loadPointSetsCallback));
+	saveHelper.addLoadCallback(loadPointSetsButton,this,&MeasurePoints::loadPointSetsCallback);
 	GLMotif::Button* savePointSetsButton=result->addEntry("Save Point Sets");
-	saveHelper.addSaveCallback(savePointSetsButton,Misc::createFunctionCall(this,&MeasurePoints::savePointSetsCallback));
+	saveHelper.addSaveCallback(savePointSetsButton,this,&MeasurePoints::savePointSetsCallback);
 	GLMotif::Button* showPointSetsDialogButton=result->addEntry("Show Point Sets Dialog");
 	showPointSetsDialogButton->getSelectCallbacks().add(this,&MeasurePoints::showPointSetsDialogCallback);
 	

@@ -155,6 +155,8 @@ class RunLoop
 		
 		/* Methods: */
 		public:
+		static int eventMaskToPollEvents(unsigned int eventMask); // Helper function to convert an event mask to an event set for the poll() system call
+		static unsigned int pollEventsToEventMask(int events); // Helper function to convert an event set from the poll() system call to an event mask
 		RunLoop& getRunLoop(void) // Returns a reference to the run loop with which this I/O watcher is associated
 			{
 			return runLoop;

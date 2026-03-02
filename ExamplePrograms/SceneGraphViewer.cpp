@@ -1,7 +1,7 @@
 /***********************************************************************
 SceneGraphViewer - Viewer for one or more scene graphs loaded from VRML
 2.0 or binary scene graph files.
-Copyright (c) 2010-2025 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -23,9 +23,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <stdio.h>
 #include <vector>
 #include <Misc/FileNameExtensions.h>
-#include <Misc/FunctionCalls.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/CommandLineParser.icpp>
+#include <Threads/FunctionCalls.h>
 #include <IO/File.h>
 #include <IO/OpenFile.h>
 #include <Math/Math.h>
@@ -340,7 +340,7 @@ void SceneGraphViewer::toolCreationCallback(Vrui::ToolManager::ToolCreationCallb
 	if(surfaceNavigationTool!=0)
 		{
 		/* Set the new tool's alignment function: */
-		surfaceNavigationTool->setAlignFunction(Misc::createFunctionCall(this,&SceneGraphViewer::alignSurfaceFrame));
+		surfaceNavigationTool->setAlignFunction(*Threads::createFunctionCall(this,&SceneGraphViewer::alignSurfaceFrame));
 		}
 	}
 

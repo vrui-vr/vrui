@@ -284,6 +284,65 @@ RunLoop::IOWatcher::IOWatcher(RunLoop& sRunLoop,int sFd,unsigned int sEventMask,
 		runLoop.enableIOWatcher(this);
 	}
 
+int RunLoop::IOWatcher::eventMaskToPollEvents(unsigned int eventMask)
+	{
+	/* Compile-time check if the event mask bits exposed at the interface match the POLL* macros defined in poll.h: */
+	#if POLLIN==0x1&&POLLPRI==0x2&&POLLOUT==0x4&&POLLERR==0x8&&POLLHUP==0x10&&POLLNVAL==0x20
+	
+	/* Return the event mask directly: */
+	return eventMask;
+	
+	#else
+	
+	/* Assemble the poll event set bit-by-bit: */
+	int events=0x0;
+	if(eventMask&IOWatcher::Read)
+		events|=POLLIN;
+	if(eventMask&IOWatcher::Exception)
+		events|=POLLPRI;
+	if(eventMask&IOWatcher::Write)
+		events|=POLLOUT;
+	if(eventMask&IOWatcher::Error)
+		events|=POLLERR;
+	if(eventMask&IOWatcher::HangUp)
+		events|=POLLHUP;
+	if(eventMask&IOWatcher::Invalid)
+		events|=POLLNVAL;
+	
+	return events;
+	#endif
+	}
+
+unsigned int RunLoop::IOWatcher::pollEventsToEventMask(int events)
+	{
+	/* Compile-time check if the event mask bits exposed at the interface match the POLL* macros defined in poll.h: */
+	#if POLLIN==0x1&&POLLPRI==0x2&&POLLOUT==0x4&&POLLERR==0x8&&POLLHUP==0x10&&POLLNVAL==0x20
+	
+	/* Return the poll revent set directly: */
+	return events;
+	
+	#else
+	
+	/* Assemble the event mask bit-by-bit: */
+	unsigned int result=0x0U;
+	if((events&POLLIN)!=0x0)
+		result|=IOWatcher::Read;
+	if((events&POLLPRI)!=0x0)
+		result|=IOWatcher::Exception;
+	if((events&POLLOUT)!=0x0)
+		result|=IOWatcher::Write;
+	if((events&POLLERR)!=0x0)
+		result|=IOWatcher::Error;
+	if((events&POLLHUP)!=0x0)
+		result|=IOWatcher::HangUp;
+	if((events&POLLNVAL)!=0x0)
+		result|=IOWatcher::Invalid;
+	
+	return result;
+	
+	#endif
+	}
+
 /**********************************************
 Declaration of struct RunLoop::ActiveIOWatcher:
 **********************************************/
@@ -513,6 +572,8 @@ inline unsigned int getPollRequestEvents(const struct pollfd& pollFd) // Retriev
 		result|=IOWatcher::HangUp;
 	if((pollFd.revents&POLLNVAL)!=0x0)
 		result|=IOWatcher::Invalid;
+	
+	return result;
 	
 	#endif
 	}

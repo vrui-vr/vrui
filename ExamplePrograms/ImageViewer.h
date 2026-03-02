@@ -1,6 +1,6 @@
 /***********************************************************************
 ImageViewer - Small image viewer using Vrui.
-Copyright (c) 2011-2022 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -128,7 +128,7 @@ class ImageViewer:public Vrui::Application
 	
 	/* Private methods: */
 	Color getPixel(unsigned int x,unsigned int y) const; // Returns an RGBA color for the given pixel position
-	void loadImageCompleteCallback(Threads::FunctionCall<int>* job); // Callback called when a new image has been loaded
+	void loadImageCompleteCallback(Threads::FunctionCall<int>& job); // Callback called when a new image has been loaded
 	void loadImageCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData); // Callback called when a new image is to be loaded
 	GLMotif::PopupMenu* createMainMenu(void); // Creates the application's main menu
 	

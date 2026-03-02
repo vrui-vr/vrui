@@ -1,7 +1,7 @@
 /***********************************************************************
 WorkerPool - Class to represent a set of worker pools that
 asynchronously execute submitted one-off jobs.
-Copyright (c) 2022-2024 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the Portable Threading Library (Threads).
 
@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stddef.h>
 #include <Misc/RingBuffer.h>
 #include <Threads/MutexCond.h>
-#include <Threads/EventDispatcher.h>
+#include <Threads/RunLoop.h>
 
 /* Forward declarations: */
 namespace Threads {
@@ -42,7 +42,7 @@ class WorkerPool
 	/* Embedded classes: */
 	public:
 	typedef Threads::FunctionCall<int> JobFunction; // Type for functions executing submitted jobs; the int parameter is bogus, but Threads::FunctionCall doesn't support void calls.
-	typedef Threads::FunctionCall<JobFunction*> JobCompleteCallback; // Type for callbacks called when a submitted job is finished; parameter is pointer to submitted job function
+	typedef Threads::FunctionCall<JobFunction&> JobCompleteCallback; // Type for callbacks called when a submitted job is finished; parameter is pointer to submitted job function
 	
 	private:
 	struct Submission; // Structure holding a pending submitted job
@@ -74,7 +74,7 @@ class WorkerPool
 	static void shutdown(void); // Shuts down the worker pool and blocks until all currently active jobs finish; no completion callbacks or signals will be emitted, and function objects will be destroyed
 	static void submitJob(JobFunction& job); // Executes the given job function asynchronously from a worker pool thread
 	static void submitJob(JobFunction& job,JobCompleteCallback& completeCallback); // Executes the given job function asynchronously from a worker pool thread; calls given callback from worker thread when job is finished
-	static void submitJob(JobFunction& job,EventDispatcher& dispatcher,EventDispatcher::ListenerKey signalKey); // Ditto, but raises a signal for the given listener key on the given event dispatcher with a plain pointer to the job function as signal data; the pointer will have an extra reference, the signal handler must unref() the object
+	static void submitJob(JobFunction& job,RunLoop::UserSignal& userSignal); // Ditto, but signals the given user signal on completion, passing the job function as signal data
 	};
 
 }

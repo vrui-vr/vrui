@@ -1,7 +1,7 @@
 /***********************************************************************
 VruiXine - A VR video player based on Vrui and the xine multimedia
 engine.
-Copyright (c) 2015-2024 Oliver Kreylos
+Copyright (c) 2015-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -31,6 +31,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Misc/MessageLogger.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <Threads/FunctionCalls.h>
 #include <Threads/TripleBuffer.h>
 #include <IO/File.h>
 #include <IO/VariableMemoryFile.h>
@@ -1253,7 +1254,7 @@ GLMotif::PopupWindow* VruiXine::createDvdNavigationDialog(void)
 	fileBox->setNumMinorWidgets(1);
 	
 	GLMotif::Button* ejectButton=new GLMotif::Button("EjectButton",fileBox,"Eject");
-	videoFileSelectionHelper.addLoadCallback(ejectButton,Misc::createFunctionCall(this,&VruiXine::loadVideoFileCallback));
+	videoFileSelectionHelper.addLoadCallback(ejectButton,*Threads::createFunctionCall(this,&VruiXine::loadVideoFileCallback));
 	
 	GLMotif::Button* saveConfigButton=new GLMotif::Button("SaveConfigButton",fileBox,"Save Configuration");
 	saveConfigButton->getSelectCallbacks().add(this,&VruiXine::saveConfigurationCallback);

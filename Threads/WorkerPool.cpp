@@ -1,7 +1,7 @@
 /***********************************************************************
 WorkerPool - Class to represent a set of worker pools that
 asynchronously execute submitted one-off jobs.
-Copyright (c) 2022-2024 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the Portable Threading Library (Threads).
 
@@ -40,28 +40,24 @@ struct WorkerPool::Submission
 	public:
 	Misc::Autopointer<JobFunction> job; // Job function to execute
 	Misc::Autopointer<JobCompleteCallback> completeCallback; // Callback to call from worker thread when job is finished
-	EventDispatcher* dispatcher; // Event dispatcher to which to send a signal when job is finished
-	EventDispatcher::ListenerKey signalKey; // Listener key of signal to send when job is finished
+	RunLoop::UserSignalPtr completeSignal; // Run loop user signal to raise when job is finished
 	
 	/* Constructors and destructors: */
 	Submission(void) // Dummy constructor
-		:dispatcher(0),signalKey(0)
 		{
 		}
 	Submission(JobFunction& sJob) // Creates a submission for a job without a completion callback
-		:job(&sJob),
-		 dispatcher(0),signalKey(0)
+		:job(&sJob)
 		{
 		}
 	Submission(JobFunction& sJob,JobCompleteCallback& sCompleteCallback) // Creates a submission for a job with a completion callback
 		:job(&sJob),
-		 completeCallback(&sCompleteCallback),
-		 dispatcher(0),signalKey(0)
+		 completeCallback(&sCompleteCallback)
 		{
 		}
-	Submission(JobFunction& sJob,EventDispatcher& sDispatcher,EventDispatcher::ListenerKey sSignalKey) // Creates a submission for a job with a completion signal on the given event dispatcher
+	Submission(JobFunction& sJob,RunLoop::UserSignal& sCompleteSignal) // Creates a submission for a job with a completion signal
 		:job(&sJob),
-		 dispatcher(&sDispatcher),signalKey(sSignalKey)
+		 completeSignal(&sCompleteSignal)
 		{
 		}
 	};
@@ -101,7 +97,7 @@ void* WorkerPool::workerThreadMethod(void)
 			break;
 		
 		/* Grab the next job submission from the queue: */
-		submission=submissionQueue.front();
+		submission=std::move(submissionQueue.front());
 		submissionQueue.pop_front();
 		}
 		
@@ -120,16 +116,15 @@ void* WorkerPool::workerThreadMethod(void)
 			if(signalCompletion)
 				{
 				/* Tell someone that the job has finished: */
-				if(submission.dispatcher!=0)
-					{
-					/* Add an additional reference to the job object and send a signal to the dispatcher: */
-					submission.job->ref();
-					submission.dispatcher->signal(submission.signalKey,submission.job.getPointer());
-					}
-				else if(submission.completeCallback!=0)
+				if(submission.completeCallback!=0)
 					{
 					/* Call the completion callback: */
-					(*submission.completeCallback)(submission.job.getPointer());
+					(*submission.completeCallback)(*submission.job);
+					}
+				else if(submission.completeSignal!=0)
+					{
+					/* Send the completion signal with the job object as signal data: */
+					submission.completeSignal->signal(*submission.job);
 					}
 				}
 			}
@@ -231,10 +226,10 @@ void WorkerPool::submitJob(WorkerPool::JobFunction& job,WorkerPool::JobCompleteC
 	theWorkerPool.submitJob(Submission(job,completeCallback));
 	}
 
-void WorkerPool::submitJob(WorkerPool::JobFunction& job,EventDispatcher& dispatcher,EventDispatcher::ListenerKey signalKey)
+void WorkerPool::submitJob(WorkerPool::JobFunction& job,RunLoop::UserSignal& completeSignal)
 	{
 	/* Submit the job: */
-	theWorkerPool.submitJob(Submission(job,dispatcher,signalKey));
+	theWorkerPool.submitJob(Submission(job,completeSignal));
 	}
 
 }

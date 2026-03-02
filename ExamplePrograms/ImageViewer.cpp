@@ -1,6 +1,6 @@
 /***********************************************************************
 ImageViewer - Small image viewer using Vrui.
-Copyright (c) 2011-2024 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -865,13 +865,13 @@ class ImageLoader:public Threads::WorkerPool::JobFunction // Class to load an im
 
 }
 
-void ImageViewer::loadImageCompleteCallback(Threads::FunctionCall<int>* job)
+void ImageViewer::loadImageCompleteCallback(Threads::FunctionCall<int>& job)
 	{
 	/* Don't delete the previous image, because Images::TextureSet is buggered beyond belief: */
 	// textures.deleteTexture(imageKey);
 	
 	/* Add the new image to the texture set: */
-	const Images::BaseImage& newImage=static_cast<ImageLoader*>(job)->getImage();
+	const Images::BaseImage& newImage=static_cast<ImageLoader&>(job).getImage();
 	Images::TextureSet::Texture& tex=textures.addTexture(newImage,GL_TEXTURE_2D,newImage.getInternalFormat());
 	imageKey=tex.getKey();
 	image=&tex.getImage();
@@ -901,7 +901,7 @@ GLMotif::PopupMenu* ImageViewer::createMainMenu(void)
 	GLMotif::Button* loadImageButton=new GLMotif::Button("LoadImageButton",mainMenu,"Load Image...");
 	
 	/* Hook the image file selection helper into the "load image" buttons: */
-	imageHelper.addLoadCallback(loadImageButton,Misc::createFunctionCall(this,&ImageViewer::loadImageCallback));
+	imageHelper.addLoadCallback(loadImageButton,*Threads::createFunctionCall(this,&ImageViewer::loadImageCallback));
 	
 	/* Finish and return the main menu: */
 	mainMenu->manageMenu();

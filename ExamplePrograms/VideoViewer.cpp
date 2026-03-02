@@ -1,7 +1,7 @@
 /***********************************************************************
 VideoViewer - A simple viewer for live video from a video source
 connected to the local computer.
-Copyright (c) 2013-2023 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -25,10 +25,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <utility>
 #include <iostream>
 #include <iomanip>
-#include <Misc/FunctionCalls.h>
 #include <Misc/Timer.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/CommandLineParser.h>
+#include <Threads/FunctionCalls.h>
 #include <Math/Math.h>
 #include <Geometry/Point.h>
 #include <Geometry/Vector.h>
@@ -382,9 +382,9 @@ VideoViewer::VideoViewer(int& argc,char**& argv)
 		viewer=new Video::ViewerComponent(0,vdfs,Vrui::getWidgetManager());
 	
 	/* Install callbacks: */
-	viewer->setVideoFrameCallback(Misc::createFunctionCall(this,&VideoViewer::videoFrameCallback),false);
-	viewer->setVideoFormatChangedCallback(Misc::createFunctionCall(this,&VideoViewer::videoFormatChangedCallback));
-	viewer->setVideoFormatSizeChangedCallback(Misc::createFunctionCall(this,&VideoViewer::videoFormatSizeChangedCallback));
+	viewer->setVideoFrameCallback(*Threads::createFunctionCall(this,&VideoViewer::videoFrameCallback),false);
+	viewer->setVideoFormatChangedCallback(*Threads::createFunctionCall(this,&VideoViewer::videoFormatChangedCallback));
+	viewer->setVideoFormatSizeChangedCallback(*Threads::createFunctionCall(this,&VideoViewer::videoFormatSizeChangedCallback));
 	
 	/* Create and install the main menu: */
 	mainMenu=createMainMenu();

@@ -1,7 +1,7 @@
 /***********************************************************************
 FileSelectionHelper - Helper class to simplify managing file selection
 dialogs and their callbacks.
-Copyright (c) 2013-2024 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -23,11 +23,28 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <GLMotif/FileSelectionHelper.h>
 
 #include <Misc/SelfDestructPointer.h>
+#include <Misc/Autopointer.h>
 #include <Misc/MessageLogger.h>
 #include <GLMotif/WidgetManager.h>
 #include <GLMotif/Button.h>
 
 namespace GLMotif {
+
+/********************************************************
+Declaration of struct FileSelectionHelper::CallbackState:
+********************************************************/
+
+struct FileSelectionHelper::CallbackState
+	{
+	/* Elements: */
+	public:
+	CallbackState* succ; // Pointer to create a list of callback state objects
+	std::string dialogTitle; // Title for the file selection dialog
+	Misc::Autopointer<FileSelectedCallback> callback; // Callback to call when a file was selected
+	bool save; // Flag whether it is a load or a save callback
+	Button* button; // Button with which this callback is associated; 0 for one-shot temporary callbacks
+	FileSelectionDialog* dialog; // Pointer to the file selection dialog currently open for this callback
+	};
 
 /************************************
 Methods of class FileSelectionHelper:
@@ -179,7 +196,6 @@ FileSelectionHelper::~FileSelectionHelper(void)
 		CallbackState* succ=head->succ;
 		if(head->dialog!=0)
 			head->dialog->close();
-		delete head->callback;
 		delete head;
 		head=succ;
 		}
@@ -195,14 +211,14 @@ void FileSelectionHelper::setCurrentDirectory(IO::DirectoryPtr newCurrentDirecto
 	currentDirectory=newCurrentDirectory;
 	}
 
-void FileSelectionHelper::addSaveCallback(Button* button,FileSelectionHelper::FileSelectedCallback* callback)
+void FileSelectionHelper::addSaveCallback(Button* button,FileSelectionHelper::FileSelectedCallback& callback)
 	{
 	/* Create a new callback state object: */
 	CallbackState* cs=new CallbackState;
 	cs->succ=head;
 	head=cs;
 	cs->dialogTitle=button->getString();
-	cs->callback=callback;
+	cs->callback=&callback;
 	cs->save=true;
 	cs->button=button;
 	cs->dialog=0;
@@ -211,14 +227,14 @@ void FileSelectionHelper::addSaveCallback(Button* button,FileSelectionHelper::Fi
 	button->getSelectCallbacks().add(this,&FileSelectionHelper::saveCallback,cs);
 	}
 
-void FileSelectionHelper::addLoadCallback(Button* button,FileSelectionHelper::FileSelectedCallback* callback)
+void FileSelectionHelper::addLoadCallback(Button* button,FileSelectionHelper::FileSelectedCallback& callback)
 	{
 	/* Create a new callback state object: */
 	CallbackState* cs=new CallbackState;
 	cs->succ=head;
 	head=cs;
 	cs->dialogTitle=button->getString();
-	cs->callback=callback;
+	cs->callback=&callback;
 	cs->save=false;
 	cs->button=button;
 	cs->dialog=0;
@@ -255,13 +271,13 @@ void FileSelectionHelper::removeCallback(Button* button)
 			}
 	}
 
-void FileSelectionHelper::saveFile(const char* dialogTitle,FileSelectionHelper::FileSelectedCallback* callback)
+void FileSelectionHelper::saveFile(const char* dialogTitle,FileSelectionHelper::FileSelectedCallback& callback)
 	{
 	/* Create a new callback state object: */
 	CallbackState* cs=new CallbackState;
 	cs->succ=0;
 	cs->dialogTitle=dialogTitle;
-	cs->callback=callback;
+	cs->callback=&callback;
 	cs->save=true;
 	cs->button=0;
 	cs->dialog=0;
@@ -293,13 +309,13 @@ void FileSelectionHelper::saveFile(const char* dialogTitle,FileSelectionHelper::
 		}
 	}
 
-void FileSelectionHelper::saveFile(const char* dialogTitle,const char* initialFileName,FileSelectionHelper::FileSelectedCallback* callback)
+void FileSelectionHelper::saveFile(const char* dialogTitle,const char* initialFileName,FileSelectionHelper::FileSelectedCallback& callback)
 	{
 	/* Create a new callback state object: */
 	CallbackState* cs=new CallbackState;
 	cs->succ=0;
 	cs->dialogTitle=dialogTitle;
-	cs->callback=callback;
+	cs->callback=&callback;
 	cs->save=true;
 	cs->button=0;
 	cs->dialog=0;
@@ -328,13 +344,13 @@ void FileSelectionHelper::saveFile(const char* dialogTitle,const char* initialFi
 		}
 	}
 
-void FileSelectionHelper::loadFile(const char* dialogTitle,FileSelectionHelper::FileSelectedCallback* callback)
+void FileSelectionHelper::loadFile(const char* dialogTitle,FileSelectionHelper::FileSelectedCallback& callback)
 	{
 	/* Create a new callback state object: */
 	CallbackState* cs=new CallbackState;
 	cs->succ=0;
 	cs->dialogTitle=dialogTitle;
-	cs->callback=callback;
+	cs->callback=&callback;
 	cs->save=false;
 	cs->button=0;
 	cs->dialog=0;

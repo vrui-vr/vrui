@@ -1,7 +1,7 @@
 /***********************************************************************
 SurfaceNavigationTool - Base class for navigation tools that are limited
 to navigate along an application-defined surface.
-Copyright (c) 2009-2021 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -24,12 +24,13 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #ifndef VRUI_SURFACENAVIGATIONTOOL_INCLUDED
 #define VRUI_SURFACENAVIGATIONTOOL_INCLUDED
 
+#include <Misc/Autopointer.h>
 #include <Math/Constants.h>
 #include <Geometry/OrthogonalTransformation.h>
 #include <Vrui/NavigationTool.h>
 
 /* Forward declarations: */
-namespace Misc {
+namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 }
@@ -79,11 +80,11 @@ class SurfaceNavigationTool:public NavigationTool
 			}
 		};
 	
-	typedef Misc::FunctionCall<AlignmentData&> AlignFunction; // Type for alignment function objects
+	typedef Threads::FunctionCall<AlignmentData&> AlignFunction; // Type for alignment function objects
 	
 	/* Elements: */
 	private:
-	AlignFunction* alignFunction; // Function call that aligns the passed local navigation frame to the application-defined surface
+	Misc::Autopointer<AlignFunction> alignFunction; // Function call that aligns the passed local navigation frame to the application-defined surface
 	AlignmentState* alignmentState; // Alignment object's most recent state
 	protected:
 	NavTransform physicalFrame; // Local navigation coordinate frame (x: right, y: forward, z: up) in physical coordinates
@@ -126,7 +127,7 @@ class SurfaceNavigationTool:public NavigationTool
 	void deactivate(void);
 	
 	/* New methods: */
-	void setAlignFunction(AlignFunction* newAlignFunction); // Sets a new align function; inherits function call object
+	void setAlignFunction(AlignFunction& newAlignFunction); // Sets a new align function; inherits function call object
 	};
 
 }

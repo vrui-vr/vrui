@@ -1,7 +1,7 @@
 /***********************************************************************
 EarthquakeQueryTool - Vrui tool class to query and display meta data
 about earthquake events.
-Copyright (c) 2013-2024 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include "EarthquakeQueryTool.h"
 
+#include <Threads/FunctionCalls.h>
 #include <Math/Constants.h>
 #include <Geometry/Ray.h>
 #include <Geometry/OrthogonalTransformation.h>
@@ -42,10 +43,28 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 Methods of class EarthquakeQueryToolFactory:
 *******************************************/
 
-EarthquakeQueryToolFactory::EarthquakeQueryToolFactory(Vrui::ToolManager& toolManager,const std::vector<EarthquakeSet*>& sEarthquakeSets,SetTimeFunction* sSetTimeFunction)
+EarthquakeQueryToolFactory::EarthquakeQueryToolFactory(Vrui::ToolManager& toolManager,const std::vector<EarthquakeSet*>& sEarthquakeSets,EarthquakeQueryToolFactory::SetTimeFunction& sSetTimeFunction)
 	:Vrui::ToolFactory("EarthquakeQueryTool",toolManager),
 	 earthquakeSets(sEarthquakeSets),
-	 setTimeFunction(sSetTimeFunction)
+	 setTimeFunction(&sSetTimeFunction)
+	{
+	/* Insert class into class hierarchy: */
+	#if 0
+	Vrui::TransformToolFactory* toolFactory=dynamic_cast<Vrui::ToolFactory*>(toolManager.loadClass("Tool"));
+	toolFactory->addChildClass(this);
+	addParentClass(toolFactory);
+	#endif
+	
+	/* Initialize tool layout: */
+	layout.setNumButtons(1);
+	
+	/* Set the custom tool class' factory pointer: */
+	EarthquakeQueryTool::factory=this;
+	}
+
+EarthquakeQueryToolFactory::EarthquakeQueryToolFactory(Vrui::ToolManager& toolManager,const std::vector<EarthquakeSet*>& sEarthquakeSets)
+	:Vrui::ToolFactory("EarthquakeQueryTool",toolManager),
+	 earthquakeSets(sEarthquakeSets)
 	{
 	/* Insert class into class hierarchy: */
 	#if 0
@@ -63,9 +82,6 @@ EarthquakeQueryToolFactory::EarthquakeQueryToolFactory(Vrui::ToolManager& toolMa
 
 EarthquakeQueryToolFactory::~EarthquakeQueryToolFactory(void)
 	{
-	/* Delete the set time function: */
-	delete setTimeFunction;
-	
 	/* Reset the custom tool class' factory pointer: */
 	EarthquakeQueryTool::factory=0;
 	}

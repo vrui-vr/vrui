@@ -1,7 +1,7 @@
 /***********************************************************************
 SurfaceNavigationTool - Base class for navigation tools that are limited
 to navigate along an application-defined surface.
-Copyright (c) 2009-2021 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -23,7 +23,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/SurfaceNavigationTool.h>
 
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 #include <Geometry/Vector.h>
 #include <Geometry/Rotation.h>
 #include <Geometry/Plane.h>
@@ -238,7 +238,7 @@ void SurfaceNavigationTool::align(SurfaceNavigationTool::AlignmentData& alignmen
 
 SurfaceNavigationTool::SurfaceNavigationTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
 	:NavigationTool(factory,inputAssignment),
-	 alignFunction(0),alignmentState(0)
+	 alignmentState(0)
 	{
 	}
 
@@ -246,14 +246,11 @@ SurfaceNavigationTool::~SurfaceNavigationTool(void)
 	{
 	/* Delete the alignment object's state: */
 	delete alignmentState;
-	
-	/* Delete the alignment function call object: */
-	delete alignFunction;
 	}
 
 void SurfaceNavigationTool::deactivate(void)
 	{
-	/* Delete the alignment state object: */
+	/* Delete the alignment object's state: */
 	delete alignmentState;
 	alignmentState=0;
 	
@@ -261,17 +258,14 @@ void SurfaceNavigationTool::deactivate(void)
 	NavigationTool::deactivate();
 	}
 
-void SurfaceNavigationTool::setAlignFunction(SurfaceNavigationTool::AlignFunction* newAlignFunction)
+void SurfaceNavigationTool::setAlignFunction(SurfaceNavigationTool::AlignFunction& newAlignFunction)
 	{
 	/* Delete the current alignment object's state: */
 	delete alignmentState;
-	
-	/* Delete the current alignment function call object: */
-	delete alignFunction;
-	
-	/* Install the new alignment function call object: */
-	alignFunction=newAlignFunction;
 	alignmentState=0;
+	
+	/* Replace the current alignment function call object: */
+	alignFunction=&newAlignFunction;
 	}
 
 }

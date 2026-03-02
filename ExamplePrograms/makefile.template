@@ -170,7 +170,7 @@ $(EXEDIR)/VruiEventToolDemo: $(OBJDIR)/VruiEventToolDemo.o
 
 $(EXEDIR)/VruiCustomToolDemo: $(OBJDIR)/VruiCustomToolDemo.o
 
-$(EXEDIR)/FileSelection: PACKAGES += MYGLMOTIF MYIO
+$(EXEDIR)/FileSelection: PACKAGES += MYGLMOTIF MYIO MYTHREADS
 $(EXEDIR)/FileSelection: $(OBJDIR)/FileSelection.o
 
 $(EXEDIR)/VruiCalibrator: $(OBJDIR)/VruiCalibrator.o
@@ -194,7 +194,7 @@ $(EXEDIR)/ImageViewer: $(OBJDIR)/ImageViewer.o
 $(EXEDIR)/ImageSequenceViewer: PACKAGES += MYGLMOTIF MYIMAGES MYIO MYTHREADS
 $(EXEDIR)/ImageSequenceViewer: $(OBJDIR)/ImageSequenceViewer.o
 
-$(EXEDIR)/VideoViewer: PACKAGES += MYVIDEO MYGLMOTIF MYIMAGES VIBE
+$(EXEDIR)/VideoViewer: PACKAGES += MYVIDEO MYGLMOTIF MYIMAGES MYTHREADS VIBE
 $(EXEDIR)/VideoViewer: $(OBJDIR)/VideoViewer.o
 
 $(EXEDIR)/Animation: PACKAGES += MYTHREADS
@@ -236,7 +236,7 @@ else
   $(OBJDIR)/ShowEarthModel.o:  CFLAGS += -DUSE_COLLABORATION=0
 endif
 
-$(EXEDIR)/ShowEarthModel: PACKAGES += MYSCENEGRAPH MYGLMOTIF MYIMAGES MYIO
+$(EXEDIR)/ShowEarthModel: PACKAGES += MYSCENEGRAPH MYGLMOTIF MYIMAGES MYIO MYTHREADS
 $(EXEDIR)/ShowEarthModel: $(SHOWEARTHMODEL_SOURCES:%.cpp=$(OBJDIR)/%.o)
 
 #
