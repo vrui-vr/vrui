@@ -902,7 +902,7 @@ int main(int argc,char* argv[])
 	catch(const std::runtime_error& err)
 		{
 		std::cerr<<"VRServerLauncher: "<<err.what()<<std::endl;
-		return 1;
+		return EXIT_FAILURE;
 		}
 	if(cmdLine.hadHelp())
 		return 0;
@@ -933,7 +933,7 @@ int main(int argc,char* argv[])
 		if(childPid<0)
 			{
 			std::cerr<<Misc::makeLibcErrMsg("VRServerLauncher",errno,"Cannot fork daemon")<<std::endl;
-			return 1; // Fork error
+			return EXIT_FAILURE; // Fork error
 			}
 		else if(childPid>0)
 			{
