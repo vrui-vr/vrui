@@ -1246,7 +1246,7 @@ int main(int argc,char* argv[])
 	else
 		{
 		/* Register a callback to display device data from the server's shared memory segment at regular intervals: */
-		updateTimer=runLoop.createTimer(Threads::RunLoop::Time(),Threads::RunLoop::Interval(0,200000),true,*Threads::createFunctionCall(updateDevicesCallback,trackerPrinter));
+		updateTimer=runLoop.createTimer(Threads::RunLoop::Time(),Threads::RunLoop::Interval(0,20000000),true,*Threads::createFunctionCall(updateDevicesCallback,trackerPrinter));
 		}
 	
 	/* Dispatch events: */
