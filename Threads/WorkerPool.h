@@ -42,7 +42,7 @@ class WorkerPool
 	/* Embedded classes: */
 	public:
 	typedef Threads::FunctionCall<int> JobFunction; // Type for functions executing submitted jobs; the int parameter is bogus, but Threads::FunctionCall doesn't support void calls.
-	typedef Threads::FunctionCall<JobFunction&> JobCompleteCallback; // Type for callbacks called when a submitted job is finished; parameter is pointer to submitted job function
+	typedef Threads::FunctionCall<JobFunction&> JobCompleteCallback; // Type for callbacks called when a submitted job is finished; parameter is reference to submitted job function
 	
 	private:
 	struct Submission; // Structure holding a pending submitted job
