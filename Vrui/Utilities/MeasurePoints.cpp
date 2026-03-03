@@ -30,7 +30,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/PrintInteger.h>
 #include <Misc/StdError.h>
 #include <Misc/SelfDestructArray.h>
-#include <Misc/FunctionCalls.h>
 #include <Misc/HashTable.h>
 #include <Misc/MessageLogger.h>
 #include <Threads/FunctionCalls.h>
@@ -1036,7 +1035,7 @@ MeasurePoints::MeasurePoints(int& argc,char**& argv)
 	addEventTool("Calibrate Probe Tip",0,3);
 	
 	/* Register a callback with the object snapper tool class: */
-	Vrui::ObjectSnapperTool::addSnapCallback(Misc::createFunctionCall(this,&MeasurePoints::objectSnapCallback));
+	Vrui::ObjectSnapperTool::addSnapCallback(*Threads::createFunctionCall(this,&MeasurePoints::objectSnapCallback));
 	}
 
 MeasurePoints::~MeasurePoints(void)

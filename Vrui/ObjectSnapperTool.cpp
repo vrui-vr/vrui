@@ -2,7 +2,7 @@
 ObjectSnapperTool - Tool class to snap a virtual input device's position
 and/or orientation to application-specified objects using a callback
 mechanism.
-Copyright (c) 2017-2018 Oliver Kreylos
+Copyright (c) 2017-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -24,7 +24,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/ObjectSnapperTool.h>
 
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 #include <Math/Constants.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/ToolManager.h>
@@ -96,10 +96,6 @@ ObjectSnapperToolFactory::ObjectSnapperToolFactory(ToolManager& toolManager)
 
 ObjectSnapperToolFactory::~ObjectSnapperToolFactory(void)
 	{
-	/* Delete all registered snap callbacks: */
-	for(SnapFunctionList::iterator scIt=snapCallbacks.begin();scIt!=snapCallbacks.end();++scIt)
-		delete *scIt;
-	
 	/* Reset tool class' factory pointer: */
 	ObjectSnapperTool::factory=0;
 	}
@@ -218,10 +214,10 @@ void ObjectSnapperTool::frame(void)
 		resetDevice();
 	}
 
-void ObjectSnapperTool::addSnapCallback(ObjectSnapperToolFactory::SnapFunction* newSnapFunction)
+void ObjectSnapperTool::addSnapCallback(ObjectSnapperToolFactory::SnapFunction& newSnapFunction)
 	{
 	/* Add the given callback to the factory object's callback list: */
-	factory->snapCallbacks.push_back(newSnapFunction);
+	factory->snapCallbacks.push_back(&newSnapFunction);
 	}
 
 }

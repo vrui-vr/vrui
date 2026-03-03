@@ -8613,3 +8613,8 @@ Vrui-15.0-001:
   Sound::AudioCaptureDevice callbacks.
 - Migrated VRDeviceDaemon and VRCompositingServer from
   Threads::EventDispatcher to Threads::RunLoop.
+- API changes: Moved Vrui::ObjectSnapperTool, NaturalPointClient in
+  Calibration package, and RazerHydra VRDevice class from
+  Misc::FunctionCall to Threads::FunctionCall.
+  - Updated client code in AlignPoints, MeasurePoints, and TrackingTest
+    Vrui utilities.

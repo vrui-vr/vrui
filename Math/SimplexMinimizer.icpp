@@ -2,7 +2,7 @@
 SimplexMinimizer - Generic class to minimize a set of equations in a
 least-squares sense using a simplex algorithm, templatized by a kernel
 class implementing a specific optimization problem.
-Copyright (c) 2014-2025 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This file is part of the Templatized Math Library (Math).
 
@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Math/SimplexMinimizer.h>
 
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 #include <Math/Math.h>
 #include <Math/Random.h>
 

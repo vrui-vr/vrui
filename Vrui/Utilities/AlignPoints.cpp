@@ -1,7 +1,7 @@
 /***********************************************************************
 AlignPoints - Utility to align two sets of measurements of the same set
 of points using one of several types of transformations.
-Copyright (c) 2009-2025 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -25,10 +25,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <vector>
 #include <iostream>
 #include <Misc/StdError.h>
-#include <Misc/FunctionCalls.h>
 #include <Misc/ValueCoder.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CommandLineParser.icpp>
+#include <Threads/FunctionCalls.h>
 #include <IO/ValueSource.h>
 #include <IO/OpenFile.h>
 #include <Math/Math.h>
@@ -591,7 +591,7 @@ AlignPoints::AlignPoints(int& argc,char**& argv)
 	aligner->align();
 	
 	/* Register a callback with the object snapper tool class: */
-	Vrui::ObjectSnapperTool::addSnapCallback(Misc::createFunctionCall(aligner,&AlignerBase::objectSnapCallback));
+	Vrui::ObjectSnapperTool::addSnapCallback(*Threads::createFunctionCall(aligner,&AlignerBase::objectSnapCallback));
 	}
 
 AlignPoints::~AlignPoints(void)

@@ -25,7 +25,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <vector>
 #include <stdexcept>
 #include <iostream>
-#include <Misc/FunctionCalls.h>
 #include <Realtime/Time.h>
 #include <Threads/MutexCond.h>
 #include <Threads/FunctionCalls.h>
@@ -483,7 +482,7 @@ TrackingTest::TrackingTest(int& argc,char**& argv)
 	Vrui::getCoordinateManager()->setUnit(trackingUnit);
 	
 	/* Register with the object snapper tool class: */
-	Vrui::ObjectSnapperTool::addSnapCallback(Misc::createFunctionCall(this,&TrackingTest::snapRequest));
+	Vrui::ObjectSnapperTool::addSnapCallback(*Threads::createFunctionCall(this,&TrackingTest::snapRequest));
 	
 	/* Create a tool class to clear the history buffer: */
 	addEventTool("Clear History",0,0);

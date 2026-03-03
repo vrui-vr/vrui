@@ -2,7 +2,7 @@
 ObjectSnapperTool - Tool class to snap a virtual input device's position
 and/or orientation to application-specified objects using a callback
 mechanism.
-Copyright (c) 2017-2018 Oliver Kreylos
+Copyright (c) 2017-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -26,13 +26,14 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #define VRUI_OBJECTSNAPPERTOOL_INCLUDED
 
 #include <vector>
+#include <Misc/Autopointer.h>
 #include <Geometry/Point.h>
 #include <Geometry/Ray.h>
 #include <Geometry/OrthonormalTransformation.h>
 #include <Vrui/TransformTool.h>
 
 /* Forward declarations: */
-namespace Misc {
+namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 }
@@ -66,9 +67,9 @@ class ObjectSnapperToolFactory:public ToolFactory // Class for factories that cr
 		bool snapPoint(const Point& p); // Convenience method to snap against a point; returns true if snap succeeded
 		};
 	
-	typedef Misc::FunctionCall<SnapRequest&> SnapFunction; // Type for snapping function calls
+	typedef Threads::FunctionCall<SnapRequest&> SnapFunction; // Type for snapping function calls
 	private:
-	typedef std::vector<SnapFunction*> SnapFunctionList; // Type for lists of snapping function calls
+	typedef std::vector<Misc::Autopointer<SnapFunction> > SnapFunctionList; // Type for lists of snapping function calls
 	
 	/* Elements: */
 	SnapFunctionList snapCallbacks; // List of currently registered snap callbacks
@@ -103,7 +104,7 @@ class ObjectSnapperTool:public TransformTool
 	virtual void frame(void);
 	
 	/* New methods: */
-	static void addSnapCallback(ObjectSnapperToolFactory::SnapFunction* newSnapFunction); // Registers additional snap callback with all object snapper tools; inherits function call object
+	static void addSnapCallback(ObjectSnapperToolFactory::SnapFunction& newSnapFunction); // Registers additional snap callback with all object snapper tools
 	};
 
 }

@@ -1,7 +1,7 @@
 /***********************************************************************
 Client to read tracking data from a NaturalPoint OptiTrack tracking
 system.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Vrui calibration utility package.
 
@@ -34,7 +34,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <iostream>
 #include <Misc/SizedTypes.h>
 #include <Misc/StdError.h>
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 
 namespace {
 
@@ -525,7 +525,6 @@ NaturalPointClient::NaturalPointClient(const char* serverHostName,int commandPor
 	:commandSocket(-1,serverHostName,commandPort),commandBuffer(1024,PacketBuffer::LittleEndian),
 	 commandReplyBuffer(65536,PacketBuffer::LittleEndian),
 	 dataSocketFd(0),dataBuffer(65536,PacketBuffer::LittleEndian),
-	 frameCallback(0),
 	 nextModelDef(0)
 	{
 	/* Create the data multicast UDP socket: */
@@ -646,8 +645,6 @@ NaturalPointClient::~NaturalPointClient(void)
 	dataHandlingThread.cancel();
 	dataHandlingThread.join();
 	close(dataSocketFd);
-	
-	delete frameCallback;
 	}
 
 NaturalPointClient::ModelDef& NaturalPointClient::queryModelDef(NaturalPointClient::ModelDef& modelDef)
@@ -668,10 +665,10 @@ NaturalPointClient::ModelDef& NaturalPointClient::queryModelDef(NaturalPointClie
 	return modelDef;
 	}
 
-void NaturalPointClient::setFrameCallback(NaturalPointClient::FrameCallback* newFrameCallback)
+void NaturalPointClient::setFrameCallback(NaturalPointClient::FrameCallback& newFrameCallback)
 	{
-	delete frameCallback;
-	frameCallback=newFrameCallback;
+	/* Replace the current frame callback: */
+	frameCallback=&newFrameCallback;
 	}
 
 const NaturalPointClient::Frame& NaturalPointClient::requestFrame(void)

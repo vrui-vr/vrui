@@ -1,7 +1,7 @@
 /***********************************************************************
 RazerHydra - Class to represent a Razer / Sixense Hydra dual-sensor
 desktop 6-DOF tracking device.
-Copyright (c) 2011-2024 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -28,7 +28,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <iostream>
 #include <Misc/SizedTypes.h>
 #include <Misc/StdError.h>
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 #include <USB/DeviceList.h>
 #include <Math/Math.h>
 
@@ -251,7 +251,7 @@ RazerHydra::RazerHydra(unsigned int index)
 	 applyInterleaveFilter(true), // Should always be applied
 	 applyLowpassFilter(true), // Should probably be applied
 	 lowpassFilterStrength(24),
-	 streaming(false),streamingCallback(0)
+	 streaming(false)
 	{
 	{
 	/* Get the list of all USB devices: */
@@ -335,9 +335,6 @@ RazerHydra::~RazerHydra(void)
 		/* Shut down streaming mode: */
 		streaming=false; // This will tell streaming thread to terminate at next opportunity
 		streamingThread.join();
-		
-		/* Release the streaming callback: */
-		delete streamingCallback;
 		}
 	
 	/* Check if the device was in gamepad emulation mode when initially opened: */
@@ -385,14 +382,14 @@ void RazerHydra::pollSensors(RazerHydra::SensorState states[2])
 		;
 	}
 
-void RazerHydra::startStreaming(RazerHydra::StreamingCallback* newStreamingCallback)
+void RazerHydra::startStreaming(RazerHydra::StreamingCallback& newStreamingCallback)
 	{
 	/* Throw an exception if the device is currently streaming: */
 	if(streaming)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Device is already streaming");
 	
-	/* Install the streaming callback: */
-	streamingCallback=newStreamingCallback;
+	/* Replace the current streaming callback: */
+	streamingCallback=&newStreamingCallback;
 	
 	/* Start the streaming thread: */
 	streaming=true;
@@ -410,5 +407,5 @@ void RazerHydra::stopStreaming(void)
 	streamingThread.join();
 	
 	/* Release the streaming callback: */
-	delete streamingCallback;
+	streamingCallback=0;
 	}

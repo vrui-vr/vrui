@@ -1,7 +1,7 @@
 /***********************************************************************
 Client to read tracking data from a NaturalPoint OptiTrack tracking
 system.
-Copyright (c) 2010-2015 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Vrui calibration utility package.
 
@@ -26,6 +26,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <string>
 #include <vector>
+#include <Misc/Autopointer.h>
 #include <Threads/Thread.h>
 #include <Threads/MutexCond.h>
 #include <Threads/TripleBuffer.h>
@@ -37,7 +38,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include "PacketBuffer.h"
 
 /* Forward declarations: */
-namespace Misc {
+namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 }
@@ -188,7 +189,7 @@ class NaturalPointClient
 			}
 		};
 	
-	typedef Misc::FunctionCall<const Frame&> FrameCallback; // Type for callbacks when a new frame arrives
+	typedef Threads::FunctionCall<const Frame&> FrameCallback; // Type for callbacks when a new frame arrives
 	
 	/* Elements: */
 	private:
@@ -202,7 +203,7 @@ class NaturalPointClient
 	std::string serverName; // Name of the server application
 	int serverVersion[4]; // Server application version number
 	int protocolVersion[4]; // Protocol version number
-	FrameCallback* frameCallback; // Function called from a background thread when a new tracking frame arrives
+	Misc::Autopointer<FrameCallback> frameCallback; // Function called from a background thread when a new tracking frame arrives
 	Threads::MutexCond pingCond; // Condition variable to allow a caller to block until a ping response
 	ModelDef* nextModelDef; // Pointer to next model definition structure to be filled by a ModelDef reply packet
 	Threads::MutexCond modelDefCond; // Condition variable to allow a caller to block until a model definition arrives
@@ -234,7 +235,7 @@ class NaturalPointClient
 		return protocolVersion;
 		}
 	ModelDef& queryModelDef(ModelDef& modelDef); // Queries the models currently defined in the tracking engine and fills in the given structure
-	void setFrameCallback(FrameCallback* newFrameCallback); // Sets a frame callback; adopts function object
+	void setFrameCallback(FrameCallback& newFrameCallback); // Sets a frame callback; adopts function object
 	const Frame& requestFrame(void); // Requests a data frame, blocks until it arrives, and locks it for querying
 	bool lockNewFrame(void) // Locks the most recently received frame for querying; returns true if the frame is new
 		{

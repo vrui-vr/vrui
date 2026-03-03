@@ -1,7 +1,7 @@
 /***********************************************************************
 RazerHydra - Class to represent a Razer / Sixense Hydra dual-sensor
 desktop 6-DOF tracking device.
-Copyright (c) 2011-2015 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -24,6 +24,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #ifndef RAZERHYDRA_INCLUDED
 #define RAZERHYDRA_INCLUDED
 
+#include <Misc/Autopointer.h>
 #include <Misc/ReadBuffer.h>
 #include <Threads/Thread.h>
 #include <USB/Device.h>
@@ -31,7 +32,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Geometry/Rotation.h>
 
 /* Forward declarations: */
-namespace Misc {
+namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 }
@@ -55,7 +56,7 @@ class RazerHydra
 		Scalar valuatorStates[3]; // Array of valuator (analog axis) states, in order joystick x, joystick y, shoulder
 		};
 	
-	typedef Misc::FunctionCall<const SensorState&> StreamingCallback; // Function call type for streaming state update callbacks
+	typedef Threads::FunctionCall<const SensorState&> StreamingCallback; // Function call type for streaming state update callbacks
 	
 	/* Elements: */
 	private:
@@ -71,7 +72,7 @@ class RazerHydra
 	Scalar lowpassFilterStrength; // Strength of low-pass filter; reasonable values are around 32.0
 	Scalar accumulators[14];// Accumulation buffers for the low-pass filter
 	volatile bool streaming; // Flag whether the device is currently in streaming mode
-	StreamingCallback* streamingCallback; // Callback to be called when a new update packet has been processed
+	Misc::Autopointer<StreamingCallback> streamingCallback; // Callback to be called when a new update packet has been processed
 	Threads::Thread streamingThread; // Background thread reading state update packets from the USB device
 	
 	/* Private methods: */
@@ -109,7 +110,7 @@ class RazerHydra
 	void pollSensors(SensorState states[2]); // Fills the given sensor state structures with values from the next update packet; blocks until next packet arrives
 	
 	/* Interrupt-driven interface: */
-	void startStreaming(StreamingCallback* newStreamingCallback); // Starts streaming mode; the given callback function will be called from a background thread with each sensor state update as it is received, and deleted when streaming is stopped
+	void startStreaming(StreamingCallback& newStreamingCallback); // Starts streaming mode; the given callback function will be called from a background thread with each sensor state update as it is received, and deleted when streaming is stopped
 	void stopStreaming(void); // Stops streaming mode
 	};
 
