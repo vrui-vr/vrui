@@ -1,7 +1,7 @@
 /***********************************************************************
 VRDeviceServer - Class encapsulating the VR device protocol's server
 side.
-Copyright (c) 2002-2025 Oliver Kreylos
+Copyright (c) 2002-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -24,7 +24,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <string>
 #include <vector>
 #include <Misc/SimpleObjectSet.h>
-#include <Threads/EventDispatcher.h>
+#include <Threads/RunLoop.h>
 #include <Comm/ListeningSocket.h>
 #include <Vrui/EnvironmentDefinition.h>
 #include <Vrui/Internal/VRDeviceProtocol.h>
@@ -51,21 +51,18 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 		{
 		/* Elements: */
 		public:
-		VRDeviceServer* server; // Pointer to server object handling this client, to simplify event handling
 		Comm::PipePtr pipe; // Pipe connected to the client
+		Threads::RunLoop::IOWatcherOwner pipeWatcher; // I/O watcher watching the client pipe
 		#ifdef VERBOSE
 		std::string clientName; // Name of the client, to keep track of connections in verbose mode
 		#endif
-		Threads::EventDispatcher::ListenerKey listenerKey; // Key with which this client is listening for I/O events
-		int state; // Client's current position in the VRDeviceServer protocol state machine
 		unsigned int protocolVersion; // Version of the VR device daemon protocol to use with this client
 		bool clientExpectsTimeStamps; // Flag whether the connected client expects to receive time stamp data
 		bool clientExpectsValidFlags; // Flag whether the connected client expects to receive tracker valid flags
-		bool active; // Flag whether the client is currently active
-		bool streaming; // Flag whether client is currently in streaming mode
+		int state; // Client's current position in the VRDeviceServer protocol state machine
 		
 		/* Constructors and destructors: */
-		ClientState(VRDeviceServer* sServer,Comm::PipePtr sPipe); // Connects to a VR client over the given pipe
+		ClientState(Comm::PipePtr sPipe); // Connects to a VR client over the given pipe
 		};
 	
 	typedef Misc::SimpleObjectSet<ClientState> ClientStateList; // Data type for sets of states of connected clients
@@ -103,23 +100,22 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	
 	/* Elements: */
 	private:
-	Threads::EventDispatcher& dispatcher; // Reference to shared event dispatcher to handle communication with multiple clients in parallel
+	Threads::RunLoop& runLoop; // Reference to the main run loop
 	Vrui::EnvironmentDefinition environmentDefinition; // Definition of physical environment that can be queried by clients
-	Threads::EventDispatcher::ListenerKey	environmentDefinitionUpdatedSignalKey; // Key for signal when a client updates the environment definition
 	
 	Comm::ListeningSocketPtr tcpListeningSocket; // Optional TCP socket on which the server accepts incoming client connections
-	Threads::EventDispatcher::ListenerKey tcpListeningSocketKey; // Key for IO events on the listening TCP socket
+	Threads::RunLoop::IOWatcherOwner tcpListeningSocketWatcher; // I/O watcher watching the TCP listening socket
 	Comm::ListeningSocketPtr unixListeningSocket; // Optional UNIX domain socket on which the server accepts incoming client connections
-	Threads::EventDispatcher::ListenerKey unixListeningSocketKey; // Key for IO events on the listening UNIX domain socket
+	Threads::RunLoop::IOWatcherOwner unixListeningSocketWatcher; // I/O watcher watching the UNIX listening socket
 	int deviceStateMemoryFd; // File descriptor to access the device manager's shared-memory device state
-	Comm::ListeningSocketPtr httpListeningSocket; // Optional TCP socket on which the server accepts requests and commands in HTML format
-	Threads::EventDispatcher::ListenerKey httpListeningSocketKey; // Key for IO events on the listening HTTP socket
+	Comm::ListeningSocketPtr httpListeningSocket; // Optional TCP socket on which the server accepts HTTP POST requests
+	Threads::RunLoop::IOWatcherOwner httpListeningSocketWatcher; // I/O watcher watching the HTTP listening socket
 	
 	ClientStateList clientStates; // List of currently connected clients
 	unsigned int numActiveClients; // Number of clients that are currently active
 	unsigned int numStreamingClients; // Number of clients that are currently streaming
-	Threads::EventDispatcher::Time suspendTime; // Inactivity interval after which VR devices will be suspended
-	Threads::EventDispatcher::ListenerKey suspendTimerKey; // Key for timer to suspend VR devices a certain time after the last client deactivated
+	Threads::RunLoop::Interval suspendInterval; // Inactivity interval after which VR devices will be suspended
+	Threads::RunLoop::TimerOwner suspendTimer; // Timer to suspend VR devices a certain time after the last client deactivated
 	
 	bool haveUpdates; // Flag if any device state components have been updated since last status update was sent
 	bool* trackerUpdateFlags; // Array of flags indicating which trackers have been updated since the last state update was sent
@@ -139,18 +135,17 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	HMDConfigurationVersions* hmdConfigurationVersions; // Array of HMD configuration version numbers
 	
 	/* Private methods: */
-	void connectNewClient(Comm::ListeningSocket& listeningSocket); // Connects a new client over the given listening socket
-	static void newTcpConnectionCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when an incoming connection is waiting at the TCP listening socket
-	static void newUnixConnectionCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when an incoming connection is waiting at the UNIX domain listening socket
-	void getServerStatus(IO::JsonObject& replyRoot); // Encodes the server's current state in the given JSON object
-	static void newHttpConnectionCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when an incoming connection is waiting at the TCP listening socket serving HTTP requests
-	static void suspendTimerCallback(Threads::EventDispatcher::TimerEvent& event); // Callback called after a period of inactivity
-	static void environmentDefinitionUpdatedCallback(Threads::EventDispatcher::SignalEvent& event); // Callback called when a client updates the environment definition
 	void goInactive(void); // Sets the server to inactive mode when the last client leaves active state
 	void goActive(void); // Sets the server to active mode when the first client enters active state
-	void disconnectClient(ClientState* client,bool removeListener,bool removeFromList); // Disconnects the given client due to a communication error; removes listener and/or dead client from list if respective flags are true
-	static void clientMessageCallback(Threads::EventDispatcher::IOEvent& event); // Callback called when a message from a client arrives
+	void disconnectClient(ClientState* client,bool removeFromList); // Disconnects the given client; removes the client's state from list if flag is true
 	void disconnectClientOnError(ClientStateList::iterator csIt,const std::runtime_error& err); // Forcefully disconnects a client after a communication error
+	void environmentDefinitionUpdated(ClientState* updatingClient); // Method called after a connected client or an HTTP client updated the server's environment definition
+	void clientMessage(Threads::RunLoop::IOWatcher::Event& event,ClientState* client); // Callback called when a message from a client arrives
+	void newClientConnection(Threads::RunLoop::IOWatcher::Event& event,Comm::ListeningSocket& listeningSocket); // Callback called when an incoming connection is waiting on the TCP or UNIX domain listening sockets
+	void getServerStatus(IO::JsonObject& replyRoot); // Encodes the server's current state in the given JSON object
+	void newHttpConnection(Threads::RunLoop::IOWatcher::Event& event); // Callback called when an incoming connection is waiting at the TCP listening socket serving HTTP POST requests
+	void suspendTimeout(Threads::RunLoop::Timer::Event& event); // Callback called after a period of inactivity
+	
 	bool writeStateUpdates(ClientStateList::iterator csIt); // Writes changes in the device manager's device state to the given client; returns false on error
 	bool writeServerState(ClientStateList::iterator csIt); // Writes the device manager's current (locked) state to the given client; returns false on error
 	bool writeBatteryState(ClientStateList::iterator csIt,unsigned int deviceIndex); // Writes the device manager's given battery state to the given client; returns false on error
@@ -158,7 +153,7 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	
 	/* Constructors and destructors: */
 	public:
-	VRDeviceServer(Threads::EventDispatcher& sDispatcher,VRDeviceManager* sDeviceManager,const Misc::ConfigurationFile& configFile); // Creates server associated with device manager
+	VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDeviceManager,const Misc::ConfigurationFile& configFile); // Creates server associated with device manager
 	virtual ~VRDeviceServer(void);
 	
 	/* Methods from VRDeviceManager::VRStreamer: */
@@ -173,7 +168,7 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	void run(void); // Runs the server state machine
 	void stop(void) // Stops the server state machine; can be called asynchronously
 		{
-		/* Stop the dispatcher's event handling: */
-		dispatcher.stop();
+		/* Stop the run loop's event handling: */
+		runLoop.stop();
 		}
 	};

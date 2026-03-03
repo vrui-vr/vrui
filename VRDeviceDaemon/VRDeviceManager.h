@@ -2,7 +2,7 @@
 VRDeviceManager - Class to gather position, button and valuator data
 from one or several VR devices and associate them with logical input
 devices.
-Copyright (c) 2002-2023 Oliver Kreylos
+Copyright (c) 2002-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -43,7 +43,7 @@ namespace Realtime {
 class SharedMemory;
 }
 namespace Threads {
-class EventDispatcher;
+class RunLoop;
 }
 namespace Vrui {
 class VRDeviceDescriptor;
@@ -132,7 +132,7 @@ class VRDeviceManager
 	
 	/* Elements: */
 	private:
-	Threads::EventDispatcher& dispatcher; // Reference to the server's event dispatcher
+	Threads::RunLoop& runLoop; // Reference to the main run loop
 	DeviceFactoryManager deviceFactories; // Factory manager to load VR device classes
 	CalibratorFactoryManager calibratorFactories; // Factory manager to load VR calibrator classes
 	int numDevices; // Number of managed devices
@@ -166,13 +166,13 @@ class VRDeviceManager
 	
 	/* Constructors and destructors: */
 	public:
-	VRDeviceManager(Threads::EventDispatcher& sDispatcher,Misc::ConfigurationFile& configFile); // Creates device manager by reading current section of configuration file
+	VRDeviceManager(Threads::RunLoop& sRunLoop,Misc::ConfigurationFile& configFile); // Creates device manager by reading current section of configuration file
 	~VRDeviceManager(void);
 	
 	/* Methods to communicate with device driver modules during initialization: */
-	Threads::EventDispatcher& getDispatcher(void) // Returns the shared event dispatcher
+	Threads::RunLoop& getRunLoop(void) // Returns the shared run loop
 		{
-		return dispatcher;
+		return runLoop;
 		}
 	int getTrackerIndexBase(void) const // Returns the tracker index base for the currently constructed device
 		{

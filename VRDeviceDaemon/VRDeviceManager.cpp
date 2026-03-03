@@ -2,7 +2,7 @@
 VRDeviceManager - Class to gather position, button and valuator data
 from one or several VR devices and associate them with logical input
 devices.
-Copyright (c) 2002-2023 Oliver Kreylos
+Copyright (c) 2002-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -34,7 +34,6 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Realtime/Time.h>
 #include <Realtime/SharedMemory.h>
 #include <Threads/Config.h>
-#include <Threads/EventDispatcher.h>
 #include <Vrui/Internal/VRDeviceDescriptor.h>
 #include <Vrui/Internal/HMDConfiguration.h>
 
@@ -64,8 +63,8 @@ void VRDeviceManager::postStateUpdate(void)
 	#endif
 	}
 
-VRDeviceManager::VRDeviceManager(Threads::EventDispatcher& sDispatcher,Misc::ConfigurationFile& configFile)
-	:dispatcher(sDispatcher),
+VRDeviceManager::VRDeviceManager(Threads::RunLoop& sRunLoop,Misc::ConfigurationFile& configFile)
+	:runLoop(sRunLoop),
 	 deviceFactories(configFile.retrieveString("./deviceDirectory",VRDEVICEDAEMON_CONFIG_VRDEVICESDIR),this),
 	 calibratorFactories(configFile.retrieveString("./calibratorDirectory",VRDEVICEDAEMON_CONFIG_VRCALIBRATORSDIR)),
 	 numDevices(0),

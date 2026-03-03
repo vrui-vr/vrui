@@ -1,7 +1,7 @@
 /***********************************************************************
 VRDeviceServer - Class encapsulating the VR device protocol's server
 side.
-Copyright (c) 2002-2025 Oliver Kreylos
+Copyright (c) 2002-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -33,7 +33,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/FileTests.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
-#include <Threads/EventDispatcher.h>
+#include <Threads/FunctionCalls.h>
 #include <IO/ValueSource.h>
 #include <IO/JsonEntityTypes.h>
 #include <IO/OStream.h>
@@ -60,7 +60,7 @@ Helper classes:
 
 enum State
 	{
-	START,CONNECTED,ACTIVE,STREAMING
+	START=0,CONNECTED,ACTIVE,STREAMING
 	};
 
 }
@@ -69,11 +69,10 @@ enum State
 Methods of class VRDeviceServer::ClientState:
 ********************************************/
 
-VRDeviceServer::ClientState::ClientState(VRDeviceServer* sServer,Comm::PipePtr sPipe)
-	:server(sServer),
-	 pipe(sPipe),
-	 state(START),protocolVersion(Vrui::VRDeviceProtocol::protocolVersionNumber),clientExpectsTimeStamps(true),
-	 active(false),streaming(false)
+VRDeviceServer::ClientState::ClientState(Comm::PipePtr sPipe)
+	:pipe(sPipe),
+	 protocolVersion(Vrui::VRDeviceProtocol::protocolVersionNumber),clientExpectsTimeStamps(true),
+	 state(START)
 	{
 	#ifdef VERBOSE
 	Comm::TCPPipe* tcpPipe=dynamic_cast<Comm::TCPPipe*>(pipe.getPointer());
@@ -97,14 +96,426 @@ VRDeviceServer::ClientState::ClientState(VRDeviceServer* sServer,Comm::PipePtr s
 Methods of class VRDeviceServer:
 *******************************/
 
-void VRDeviceServer::connectNewClient(Comm::ListeningSocket& listeningSocket)
+void VRDeviceServer::goInactive(void)
+	{
+	#ifdef VERBOSE
+	printf("VRDeviceServer: Entering inactive state\n");
+	fflush(stdout);
+	#endif
+	
+	/* Stop processing events in the device manager: */
+	deviceManager->stop();
+	
+	/* Set and re-enable the suspend timer if there is one: */
+	if(suspendTimer!=0)
+		suspendTimer->setTimeout(Threads::RunLoop::Time()+suspendInterval,true);
+	}
+
+void VRDeviceServer::goActive(void)
+	{
+	#ifdef VERBOSE
+	printf("VRDeviceServer: Entering active state\n");
+	fflush(stdout);
+	#endif
+	
+	/* Disable the suspend timer if there is one: */
+	if(suspendTimer!=0)
+		suspendTimer->disable();
+	
+	/* Start processing events in the device manager: */
+	deviceManager->start();
+	}
+
+void VRDeviceServer::disconnectClient(VRDeviceServer::ClientState* client,bool removeFromList)
+	{
+	/* Check if the client is still streaming or active: */
+	if(client->state>=STREAMING)
+		--numStreamingClients;
+	if(client->state>=ACTIVE)
+		{
+		/* Decrease the number of active clients and go to inactive state if the number reaches zero: */
+		if(--numActiveClients==0)
+			goInactive();
+		}
+	
+	if(removeFromList)
+		{
+		/* Remove the client from the client list and delete it: */
+		delete clientStates.remove(client);
+		}
+	}
+
+void VRDeviceServer::disconnectClientOnError(VRDeviceServer::ClientStateList::iterator csIt,const std::runtime_error& err)
+	{
+	/* Print error message to stderr: */
+	#ifdef VERBOSE
+	fprintf(stderr,"VRDeviceServer: Disconnecting client %s due to exception %s\n",csIt->clientName.c_str(),err.what());
+	#else
+	fprintf(stderr,"VRDeviceServer: Disconnecting client due to exception %s\n",err.what());
+	#endif
+	fflush(stderr);
+	
+	/* Disconnect the client, but don't remove it from the list (faster to do it through the iterator we have): */
+	disconnectClient(&*csIt,false);
+	
+	/* Remove the disconnected client from the list and delete it: */
+	delete clientStates.remove(csIt);
+	}
+
+void VRDeviceServer::environmentDefinitionUpdated(VRDeviceServer::ClientState* updatingClient)
+	{
+	/* Send the new environment definition to all clients except the one who updated it: */
+	for(ClientStateList::iterator csIt=clientStates.begin();csIt!=clientStates.end();++csIt)
+		{
+		ClientState& client=*csIt;
+		if(&client!=updatingClient&&client.protocolVersion>=13U)
+			{
+			try
+				{
+				/* Send environment definition update notification message: */
+				client.pipe->write(MessageIdType(ENVIRONMENTDEFINITION_UPDATE_NOTIFICATION));
+				environmentDefinition.write(*client.pipe);
+				client.pipe->flush();
+				}
+			catch(const std::runtime_error& err)
+				{
+				/* Disconnect the client and signal an error: */
+				disconnectClientOnError(csIt,err);
+				--csIt;
+				}
+			}
+		}
+	}
+
+void VRDeviceServer::clientMessage(Threads::RunLoop::IOWatcher::Event& event,VRDeviceServer::ClientState* client)
+	{
+	try
+		{
+		/* Read some data from the socket into the socket's read buffer and check if the client hung up: */
+		if(client->pipe->readSomeData()==0)
+			throw std::runtime_error("Client terminated connection");
+		
+		/* Process messages as long as there is data in the read buffer: */
+		while(client->pipe->canReadImmediately())
+			{
+			#if VRDEVICEDAEMON_DEBUG_PROTOCOL
+			printf("Reading message..."); fflush(stdout);
+			#endif
+			
+			/* Read the next message from the client: */
+			MessageIdType message=client->pipe->read<MessageIdType>();
+			
+			#if VRDEVICEDAEMON_DEBUG_PROTOCOL
+			printf(" done, %u\n",(unsigned int)message);
+			#endif
+			
+			/* Run the client state machine: */
+			if(message==CONNECT_REQUEST)
+				{
+				if(client->state!=START)
+					throw std::runtime_error("CONNECT_REQUEST outside START state");
+				
+				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
+				printf("Reading protocol version..."); fflush(stdout);
+				#endif
+				
+				/* Read client's protocol version number: */
+				client->protocolVersion=client->pipe->read<Misc::UInt32>();
+				
+				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
+				printf(" done, %u\n",client->protocolVersion);
+				#endif
+				
+				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
+				printf("Sending connect reply..."); fflush(stdout);
+				#endif
+				
+				/* Send connect reply message: */
+				client->pipe->write(MessageIdType(CONNECT_REPLY));
+				if(client->protocolVersion>protocolVersionNumber)
+					client->protocolVersion=protocolVersionNumber;
+				client->pipe->write(Misc::UInt32(client->protocolVersion));
+				
+				/* Send server layout: */
+				state.writeLayout(*client->pipe);
+				
+				/* Check if the client expects virtual device descriptors: */
+				if(client->protocolVersion>=2U)
+					{
+					/* Send the layout of all virtual devices: */
+					client->pipe->write(Misc::SInt32(deviceManager->getNumVirtualDevices()));
+					for(int deviceIndex=0;deviceIndex<deviceManager->getNumVirtualDevices();++deviceIndex)
+						deviceManager->getVirtualDevice(deviceIndex).write(*client->pipe,client->protocolVersion);
+					}
+				
+				/* Check if the client expects tracker state time stamps: */
+				client->clientExpectsTimeStamps=client->protocolVersion>=3U;
+				
+				/* Check if the client expects device battery states: */
+				if(client->protocolVersion>=5U)
+					{
+					/* Send all current device battery states: */
+					Threads::Mutex::Lock batteryStateLock(batteryStateMutex);
+					for(std::vector<Vrui::BatteryState>::const_iterator bsIt=batteryStates.begin();bsIt!=batteryStates.end();++bsIt)
+						bsIt->write(*client->pipe);
+					}
+				
+				/* Check if the client expects HMD configurations: */
+				if(client->protocolVersion>=4U)
+					{
+					/* Send all current HMD configurations to the new client: */
+					Threads::Mutex::Lock hmdConfigurationLock(hmdConfigurationMutex);
+					client->pipe->write(Misc::UInt32(hmdConfigurations.size()));
+					for(std::vector<Vrui::HMDConfiguration*>::const_iterator hcIt=hmdConfigurations.begin();hcIt!=hmdConfigurations.end();++hcIt)
+						{
+						/* Send the full configuration to the client: */
+						(*hcIt)->write(0U,0U,0U,*client->pipe);
+						}
+					
+					/* Check if the client expects eye rotations: */
+					if(client->protocolVersion>=10U)
+						{
+						for(std::vector<Vrui::HMDConfiguration*>::const_iterator hcIt=hmdConfigurations.begin();hcIt!=hmdConfigurations.end();++hcIt)
+							{
+							/* Send the eye rotation to the client: */
+							(*hcIt)->writeEyeRotation(*client->pipe);
+							}
+						}
+					}
+				
+				/* Check if the client expects tracker valid flags: */
+				client->clientExpectsValidFlags=client->protocolVersion>=5;
+				
+				/* Check if the client knows about power and haptic features: */
+				if(client->protocolVersion>=6U)
+					{
+					/* Send the number of power and haptic features: */
+					client->pipe->write(Misc::UInt32(deviceManager->getNumPowerFeatures()));
+					client->pipe->write(Misc::UInt32(deviceManager->getNumHapticFeatures()));
+					}
+				
+				/* Check if the client is connected via a UNIX socket and can use shared memory: */
+				Comm::UNIXPipe* unixPipePtr=dynamic_cast<Comm::UNIXPipe*>(client->pipe.getPointer());
+				if(unixPipePtr!=0&&client->protocolVersion>=12)
+					{
+					/* Send the file descriptor to access device state memory to the client: */
+					unixPipePtr->writeFd(deviceStateMemoryFd);
+					}
+				
+				/* Finish the reply message: */
+				client->pipe->flush();
+				
+				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
+				printf(" done\n");
+				#endif
+				
+				/* Go to connected state: */
+				client->state=CONNECTED;
+				}
+			else if(message==DISCONNECT_REQUEST)
+				{
+				if(client->state!=CONNECTED)
+					throw std::runtime_error("DISCONNECT_REQUEST outside CONNECTED state");
+				
+				/* Cleanly disconnect this client: */
+				#ifdef VERBOSE
+				printf("VRDeviceServer: Disconnecting client %s\n",client->clientName.c_str());
+				fflush(stdout);
+				#endif
+				disconnectClient(client,true);
+				
+				goto doneWithMessages;
+				}
+			else if(message==ACTIVATE_REQUEST)
+				{
+				if(client->state!=CONNECTED)
+					throw std::runtime_error("ACTIVATE_REQUEST outside CONNECTED state");
+				
+				/* Increase the number of active clients and go to active state if the number leaves zero: */
+				if(numActiveClients++==0)
+					goActive();
+				
+				/* Go to active state: */
+				client->state=ACTIVE;
+				}
+			else if(message==DEACTIVATE_REQUEST)
+				{
+				if(client->state!=ACTIVE)
+					throw std::runtime_error("DEACTIVATE_REQUEST outside ACTIVE state");
+				
+				/* Decrease the number of active clients and go to inactive state if the number reaches zero: */
+				if(--numActiveClients==0)
+					goInactive();
+				
+				/* Go to connected state: */
+				client->state=CONNECTED;
+				}
+			else if(message==PACKET_REQUEST)
+				{
+				if(client->state!=ACTIVE)
+					throw std::runtime_error("PACKET_REQUEST outside ACTIVE state");
+				
+				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
+				printf("Sending packet reply..."); fflush(stdout);
+				#endif
+				
+				/* Send a packet reply message: */
+				client->pipe->write(MessageIdType(PACKET_REPLY));
+				
+				/* Send the current server state to the client: */
+				{
+				Threads::Mutex::Lock stateLock(stateMutex);
+				state.write(*client->pipe,client->clientExpectsTimeStamps,client->clientExpectsValidFlags);
+				}
+				
+				/* Finish the reply message: */
+				client->pipe->flush();
+				
+				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
+				printf(" done\n");
+				#endif
+				}
+			else if(message==STARTSTREAM_REQUEST)
+				{
+				if(client->state!=ACTIVE)
+					throw std::runtime_error("STARTSTREAM_REQUEST outside ACTIVE state");
+				
+				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
+				printf("Sending packet reply..."); fflush(stdout);
+				#endif
+				
+				/* Send a packet reply message: */
+				client->pipe->write(MessageIdType(PACKET_REPLY));
+				
+				/* Send the current server state to the client: */
+				{
+				Threads::Mutex::Lock stateLock(stateMutex);
+				state.write(*client->pipe,client->clientExpectsTimeStamps,client->clientExpectsValidFlags);
+				}
+				
+				/* Finish the reply message: */
+				client->pipe->flush();
+				
+				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
+				printf(" done\n");
+				#endif
+				
+				/* Increase the number of streaming clients: */
+				++numStreamingClients;
+				
+				/* Go to streaming state: */
+				client->state=STREAMING;
+				}
+			else if(message==STOPSTREAM_REQUEST)
+				{
+				if(client->state!=STREAMING)
+					throw std::runtime_error("STOPSTREAM_REQUEST outside STREAMING state");
+				
+				/* Send stopstream reply message: */
+				client->pipe->write(MessageIdType(STOPSTREAM_REPLY));
+				client->pipe->flush();
+				
+				/* Decrease the number of streaming clients: */
+				--numStreamingClients;
+				
+				/* Go to active state: */
+				client->state=ACTIVE;
+				}
+			else if(message==POWEROFF_REQUEST)
+				{
+				if(client->state<ACTIVE)
+					throw std::runtime_error("POWEROFF_REQUEST outside ACTIVE state");
+				
+				/* Read the index of the power feature to power off: */
+				unsigned int powerFeatureIndex=client->pipe->read<Misc::UInt16>();
+				
+				/* Power off the requested feature: */
+				deviceManager->powerOff(powerFeatureIndex);
+				}
+			else if(message==HAPTICTICK_REQUEST)
+				{
+				if(client->state<ACTIVE)
+					throw std::runtime_error("HAPTICTICK_REQUEST outside ACTIVE state");
+				
+				/* Read the index of the haptic feature and the duration of the haptic tick: */
+				unsigned int hapticFeatureIndex=client->pipe->read<Misc::UInt16>();
+				unsigned int duration=client->pipe->read<Misc::UInt16>();
+				unsigned int frequency=1U;
+				unsigned int amplitude=255U;
+				if(client->protocolVersion>=8U)
+					{
+					/* Read the haptic tick's frequency and amplitude: */
+					frequency=client->pipe->read<Misc::UInt16>();
+					amplitude=client->pipe->read<Misc::UInt8>();
+					}
+				
+				/* Request a haptic tick on the requested feature: */
+				deviceManager->hapticTick(hapticFeatureIndex,duration,frequency,amplitude);
+				}
+			else if(message==BASESTATIONS_REQUEST)
+				{
+				if(client->state<CONNECTED)
+					throw std::runtime_error("BASESTATIONS_REQUEST outside CONNECTED state");
+					
+				/* Send the states of tracking base stations currently registered with the server: */
+				client->pipe->write(MessageIdType(BASESTATIONS_REPLY));
+				Threads::Mutex::Lock baseStationLock(baseStationMutex);
+				
+				client->pipe->write(Misc::UInt8(baseStations.size()));
+				for(std::vector<Vrui::VRBaseStation>::const_iterator bsIt=baseStations.begin();bsIt!=baseStations.end();++bsIt)
+					bsIt->write(*client->pipe);
+				
+				/* Finish the reply message: */
+				client->pipe->flush();
+				}
+			else if(message==ENVIRONMENTDEFINITION_REQUEST)
+				{
+				if(client->state<CONNECTED)
+					throw std::runtime_error("ENVIRONMENTDEFINITION_REQUEST outside CONNECTED state");
+				
+				/* Send the current environment definition: */
+				client->pipe->write(MessageIdType(ENVIRONMENTDEFINITION_REPLY));
+				environmentDefinition.write(*client->pipe);
+				
+				/* Finish the reply message: */
+				client->pipe->flush();
+				}
+			else if(message==ENVIRONMENTDEFINITION_UPDATE_REQUEST)
+				{
+				if(client->state<CONNECTED)
+					throw std::runtime_error("ENVIRONMENTDEFINITION_UPDATE_REQUEST outside CONNECTED state");
+				
+				/* Read the new environment definition: */
+				environmentDefinition.read(*client->pipe);
+				
+				/* Notify all other clients that the environment definition has been updated: */
+				environmentDefinitionUpdated(client);
+				}
+			else
+				throw std::runtime_error("Invalid message");
+			}
+		
+		doneWithMessages:
+		;
+		}
+	catch(const std::runtime_error& err)
+		{
+		#ifdef VERBOSE
+		printf("VRDeviceServer: Disconnecting client %s due to exception \"%s\"\n",client->clientName.c_str(),err.what());
+		fflush(stdout);
+		#endif
+		disconnectClient(client,true);
+		}
+	}
+
+void VRDeviceServer::newClientConnection(Threads::RunLoop::IOWatcher::Event& event,Comm::ListeningSocket& listeningSocket)
 	{
 	#if VRDEVICEDAEMON_DEBUG_PROTOCOL
 	printf("Creating new client state..."); fflush(stdout);
 	#endif
 	
 	/* Create a new client state object and add it to the list: */
-	ClientState* newClient=new ClientState(this,listeningSocket.accept());
+	ClientState* newClient=new ClientState(listeningSocket.accept());
 	
 	#if VRDEVICEDAEMON_DEBUG_PROTOCOL
 	printf(" done\n");
@@ -122,27 +533,15 @@ void VRDeviceServer::connectNewClient(Comm::ListeningSocket& listeningSocket)
 	clientStates.add(newClient);
 	
 	#if VRDEVICEDAEMON_DEBUG_PROTOCOL
-	printf("Adding listener for client's socket\n");
+	printf("Adding I/O watcher for client's socket\n");
 	#endif
 	
-	/* Add an event listener for incoming messages from the client: */
-	newClient->listenerKey=dispatcher.addIOEventListener(newClient->pipe->getFd(),Threads::EventDispatcher::Read,clientMessageCallback,newClient);
+	/* Create an I/O watcher for the client's communication pipe: */
+	newClient->pipeWatcher=runLoop.createIOWatcher(newClient->pipe->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::clientMessage,newClient));
 	
 	#if VRDEVICEDAEMON_DEBUG_PROTOCOL
 	printf("Client connected\n");
 	#endif
-	}
-
-void VRDeviceServer::newTcpConnectionCallback(Threads::EventDispatcher::IOEvent& event)
-	{
-	VRDeviceServer* thisPtr=static_cast<VRDeviceServer*>(event.getUserData());
-	thisPtr->connectNewClient(*thisPtr->tcpListeningSocket);
-	}
-
-void VRDeviceServer::newUnixConnectionCallback(Threads::EventDispatcher::IOEvent& event)
-	{
-	VRDeviceServer* thisPtr=static_cast<VRDeviceServer*>(event.getUserData());
-	thisPtr->connectNewClient(*thisPtr->unixListeningSocket);
 	}
 
 void VRDeviceServer::getServerStatus(IO::JsonObject& replyRoot)
@@ -307,14 +706,12 @@ void VRDeviceServer::getServerStatus(IO::JsonObject& replyRoot)
 		}
 	}
 
-void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent& event)
+void VRDeviceServer::newHttpConnection(Threads::RunLoop::IOWatcher::Event& event)
 	{
-	VRDeviceServer* thisPtr=static_cast<VRDeviceServer*>(event.getUserData());
-	
 	try
 		{
 		/* Open a new TCP connection to the HTTP client: */
-		Comm::PipePtr pipe(thisPtr->httpListeningSocket->accept());
+		Comm::PipePtr pipe(httpListeningSocket->accept());
 		
 		/* Parse an HTTP POST request: */
 		Comm::HttpPostRequest request(*pipe);
@@ -331,7 +728,7 @@ void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent
 			if(nvl.front().value=="getServerStatus")
 				{
 				/* Compose the JSON object representing the current server state: */
-				thisPtr->getServerStatus(*replyRoot);
+				getServerStatus(*replyRoot);
 				replyRoot->setProperty("status","Success");
 				}
 			else if(nvl.front().value=="getDeviceStates")
@@ -357,9 +754,9 @@ void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent
 					}
 				
 				/* Request a haptic tick: */
-				if(hapticFeatureIndex<thisPtr->deviceManager->getNumHapticFeatures())
+				if(hapticFeatureIndex<deviceManager->getNumHapticFeatures())
 					{
-					thisPtr->deviceManager->hapticTick(hapticFeatureIndex,duration,frequency,amplitude);
+					deviceManager->hapticTick(hapticFeatureIndex,duration,frequency,amplitude);
 					replyRoot->setProperty("status","Success");
 					}
 				else
@@ -371,9 +768,9 @@ void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent
 				unsigned int powerFeatureIndex(strtoul(nvl[1].value.c_str(),0,10));
 				
 				/* Power off the device: */
-				if(powerFeatureIndex<thisPtr->deviceManager->getNumPowerFeatures())
+				if(powerFeatureIndex<deviceManager->getNumPowerFeatures())
 					{
-					thisPtr->deviceManager->powerOff(powerFeatureIndex);
+					deviceManager->powerOff(powerFeatureIndex);
 					replyRoot->setProperty("status","Success");
 					}
 				else
@@ -390,9 +787,9 @@ void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent
 					Vrui::EnvironmentDefinition newEnvironmentDefinition;
 					newEnvironmentDefinition.configure(environmentFile.getCurrentSection());
 					
-					/* Replace the previous environment definition and signal that the environment definition has been updated: */
-					thisPtr->environmentDefinition=newEnvironmentDefinition;
-					thisPtr->dispatcher.signal(thisPtr->environmentDefinitionUpdatedSignalKey,0);
+					/* Replace the previous environment definition and notify all clients that the environment definition has been updated: */
+					environmentDefinition=newEnvironmentDefinition;
+					environmentDefinitionUpdated(0);
 					
 					replyRoot->setProperty("status","Success");
 					}
@@ -425,459 +822,22 @@ void VRDeviceServer::newHttpConnectionCallback(Threads::EventDispatcher::IOEvent
 		}
 	}
 
-void VRDeviceServer::suspendTimerCallback(Threads::EventDispatcher::TimerEvent& event)
+void VRDeviceServer::suspendTimeout(Threads::RunLoop::Timer::Event& event)
 	{
-	// VRDeviceServer* thisPtr=static_cast<VRDeviceServer*>(event.getUserData());
-	
 	#ifdef VERBOSE
 	printf("VRDeviceServer: Suspending devices due to inactivity\n");
 	fflush(stdout);
 	#endif
 	
-	/* Suspend the timer event until the devices are restarted: */
-	event.suspendListener();
-	}
-
-void VRDeviceServer::environmentDefinitionUpdatedCallback(Threads::EventDispatcher::SignalEvent& event)
-	{
-	VRDeviceServer* thisPtr=static_cast<VRDeviceServer*>(event.getUserData());
-	
-	/* Send the new environment definition to all clients except the one who updated it: */
-	for(ClientStateList::iterator csIt=thisPtr->clientStates.begin();csIt!=thisPtr->clientStates.end();++csIt)
-		{
-		ClientState& client=*csIt;
-		if(&client!=event.getSignalData()&&client.protocolVersion>=13U)
-			{
-			try
-				{
-				/* Send environment definition update notification message: */
-				client.pipe->write(MessageIdType(ENVIRONMENTDEFINITION_UPDATE_NOTIFICATION));
-				thisPtr->environmentDefinition.write(*client.pipe);
-				client.pipe->flush();
-				}
-			catch(const std::runtime_error& err)
-				{
-				/* Disconnect the client and signal an error: */
-				thisPtr->disconnectClientOnError(csIt,err);
-				--csIt;
-				}
-			}
-		}
-	}
-
-void VRDeviceServer::goInactive(void)
-	{
-	#ifdef VERBOSE
-	printf("VRDeviceServer: Entering inactive state\n");
-	fflush(stdout);
-	#endif
-	
-	/* Stop processing events in the device manager: */
-	deviceManager->stop();
-	
-	/* Resume the suspend timer if there is one: */
-	if(suspendTimerKey!=0)
-		{
-		Threads::EventDispatcher::Time eventTime=Threads::EventDispatcher::Time::now();
-		eventTime+=suspendTime;
-		dispatcher.resumeTimerEventListener(suspendTimerKey,eventTime);
-		}
-	}
-
-void VRDeviceServer::goActive(void)
-	{
-	#ifdef VERBOSE
-	printf("VRDeviceServer: Entering active state\n");
-	fflush(stdout);
-	#endif
-	
-	/* Suspend the suspend timer if there is one: */
-	if(suspendTimerKey!=0)
-		dispatcher.suspendTimerEventListener(suspendTimerKey);
-	
-	/* Start processing events in the device manager: */
-	deviceManager->start();
-	}
-
-void VRDeviceServer::disconnectClient(VRDeviceServer::ClientState* client,bool removeListener,bool removeFromList)
-	{
-	if(removeListener)
-		{
-		/* Stop listening on the client's pipe: */
-		dispatcher.removeIOEventListener(client->listenerKey);
-		}
-	
-	/* Check if the client is still streaming or active: */
-	if(client->streaming)
-		--numStreamingClients;
-	if(client->active)
-		{
-		/* Decrease the number of active clients and go to inactive state if the number reaches zero: */
-		if(--numActiveClients==0)
-			goInactive();
-		}
-	
-	if(removeFromList)
-		{
-		/* Remove the client from the client list and delete it: */
-		delete clientStates.remove(client);
-		}
-	}
-
-void VRDeviceServer::clientMessageCallback(Threads::EventDispatcher::IOEvent& event)
-	{
-	ClientState* client=static_cast<ClientState*>(event.getUserData());
-	VRDeviceServer* thisPtr=client->server;
-	
-	try
-		{
-		/* Read some data from the socket into the socket's read buffer and check if client hung up: */
-		if(client->pipe->readSomeData()==0)
-			throw std::runtime_error("Client terminated connection");
-		
-		/* Process messages as long as there is data in the read buffer: */
-		while(client->pipe->canReadImmediately())
-			{
-			#if VRDEVICEDAEMON_DEBUG_PROTOCOL
-			printf("Reading message..."); fflush(stdout);
-			#endif
-			
-			/* Read the next message from the client: */
-			MessageIdType message=client->pipe->read<MessageIdType>();
-			
-			#if VRDEVICEDAEMON_DEBUG_PROTOCOL
-			printf(" done, %u\n",(unsigned int)message);
-			#endif
-			
-			/* Run the client state machine: */
-			if(message==CONNECT_REQUEST)
-				{
-				if(client->state!=START)
-					throw std::runtime_error("CONNECT_REQUEST outside START state");
-				
-				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
-				printf("Reading protocol version..."); fflush(stdout);
-				#endif
-				
-				/* Read client's protocol version number: */
-				client->protocolVersion=client->pipe->read<Misc::UInt32>();
-				
-				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
-				printf(" done, %u\n",client->protocolVersion);
-				#endif
-				
-				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
-				printf("Sending connect reply..."); fflush(stdout);
-				#endif
-				
-				/* Send connect reply message: */
-				client->pipe->write(MessageIdType(CONNECT_REPLY));
-				if(client->protocolVersion>protocolVersionNumber)
-					client->protocolVersion=protocolVersionNumber;
-				client->pipe->write(Misc::UInt32(client->protocolVersion));
-				
-				/* Send server layout: */
-				thisPtr->state.writeLayout(*client->pipe);
-				
-				/* Check if the client expects virtual device descriptors: */
-				if(client->protocolVersion>=2U)
-					{
-					/* Send the layout of all virtual devices: */
-					client->pipe->write(Misc::SInt32(thisPtr->deviceManager->getNumVirtualDevices()));
-					for(int deviceIndex=0;deviceIndex<thisPtr->deviceManager->getNumVirtualDevices();++deviceIndex)
-						thisPtr->deviceManager->getVirtualDevice(deviceIndex).write(*client->pipe,client->protocolVersion);
-					}
-				
-				/* Check if the client expects tracker state time stamps: */
-				client->clientExpectsTimeStamps=client->protocolVersion>=3U;
-				
-				/* Check if the client expects device battery states: */
-				if(client->protocolVersion>=5U)
-					{
-					/* Send all current device battery states: */
-					Threads::Mutex::Lock batteryStateLock(thisPtr->batteryStateMutex);
-					for(std::vector<Vrui::BatteryState>::const_iterator bsIt=thisPtr->batteryStates.begin();bsIt!=thisPtr->batteryStates.end();++bsIt)
-						bsIt->write(*client->pipe);
-					}
-				
-				/* Check if the client expects HMD configurations: */
-				if(client->protocolVersion>=4U)
-					{
-					/* Send all current HMD configurations to the new client: */
-					Threads::Mutex::Lock hmdConfigurationLock(thisPtr->hmdConfigurationMutex);
-					client->pipe->write(Misc::UInt32(thisPtr->hmdConfigurations.size()));
-					for(std::vector<Vrui::HMDConfiguration*>::const_iterator hcIt=thisPtr->hmdConfigurations.begin();hcIt!=thisPtr->hmdConfigurations.end();++hcIt)
-						{
-						/* Send the full configuration to the client: */
-						(*hcIt)->write(0U,0U,0U,*client->pipe);
-						}
-					
-					/* Check if the client expects eye rotations: */
-					if(client->protocolVersion>=10U)
-						{
-						for(std::vector<Vrui::HMDConfiguration*>::const_iterator hcIt=thisPtr->hmdConfigurations.begin();hcIt!=thisPtr->hmdConfigurations.end();++hcIt)
-							{
-							/* Send the eye rotation to the client: */
-							(*hcIt)->writeEyeRotation(*client->pipe);
-							}
-						}
-					}
-				
-				/* Check if the client expects tracker valid flags: */
-				client->clientExpectsValidFlags=client->protocolVersion>=5;
-				
-				/* Check if the client knows about power and haptic features: */
-				if(client->protocolVersion>=6U)
-					{
-					/* Send the number of power and haptic features: */
-					client->pipe->write(Misc::UInt32(thisPtr->deviceManager->getNumPowerFeatures()));
-					client->pipe->write(Misc::UInt32(thisPtr->deviceManager->getNumHapticFeatures()));
-					}
-				
-				/* Check if the client is connected via a UNIX socket and can use shared memory: */
-				Comm::UNIXPipe* unixPipePtr=dynamic_cast<Comm::UNIXPipe*>(client->pipe.getPointer());
-				if(unixPipePtr!=0&&client->protocolVersion>=12)
-					{
-					/* Send the file descriptor to access device state memory to the client: */
-					unixPipePtr->writeFd(thisPtr->deviceStateMemoryFd);
-					}
-				
-				/* Finish the reply message: */
-				client->pipe->flush();
-				
-				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
-				printf(" done\n");
-				#endif
-				
-				/* Go to connected state: */
-				client->state=CONNECTED;
-				}
-			else if(message==DISCONNECT_REQUEST)
-				{
-				if(client->state!=CONNECTED)
-					throw std::runtime_error("DISCONNECT_REQUEST outside CONNECTED state");
-				
-				/* Cleanly disconnect this client: */
-				#ifdef VERBOSE
-				printf("VRDeviceServer: Disconnecting client %s\n",client->clientName.c_str());
-				fflush(stdout);
-				#endif
-				thisPtr->disconnectClient(client,false,true);
-				
-				/* Stop listening: */
-				event.removeListener();
-				goto doneWithMessages;
-				}
-			else if(message==ACTIVATE_REQUEST)
-				{
-				if(client->state!=CONNECTED)
-					throw std::runtime_error("ACTIVATE_REQUEST outside CONNECTED state");
-				
-				/* Increase the number of active clients and go to active state if the number leaves zero: */
-				if(thisPtr->numActiveClients++==0)
-					thisPtr->goActive();
-				
-				/* Go to active state: */
-				client->active=true;
-				client->state=ACTIVE;
-				}
-			else if(message==DEACTIVATE_REQUEST)
-				{
-				if(client->state!=ACTIVE)
-					throw std::runtime_error("DEACTIVATE_REQUEST outside ACTIVE state");
-				
-				/* Decrease the number of active clients and go to inactive state if the number reaches zero: */
-				if(--thisPtr->numActiveClients==0)
-					thisPtr->goInactive();
-				
-				/* Go to connected state: */
-				client->active=false;
-				client->state=CONNECTED;
-				}
-			else if(message==PACKET_REQUEST)
-				{
-				if(client->state!=ACTIVE)
-					throw std::runtime_error("PACKET_REQUEST outside ACTIVE state");
-				
-				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
-				printf("Sending packet reply..."); fflush(stdout);
-				#endif
-				
-				/* Send a packet reply message: */
-				client->pipe->write(MessageIdType(PACKET_REPLY));
-				
-				/* Send the current server state to the client: */
-				{
-				Threads::Mutex::Lock stateLock(thisPtr->stateMutex);
-				thisPtr->state.write(*client->pipe,client->clientExpectsTimeStamps,client->clientExpectsValidFlags);
-				}
-				
-				/* Finish the reply message: */
-				client->pipe->flush();
-				
-				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
-				printf(" done\n");
-				#endif
-				}
-			else if(message==STARTSTREAM_REQUEST)
-				{
-				if(client->state!=ACTIVE)
-					throw std::runtime_error("STARTSTREAM_REQUEST outside ACTIVE state");
-				
-				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
-				printf("Sending packet reply..."); fflush(stdout);
-				#endif
-				
-				/* Send a packet reply message: */
-				client->pipe->write(MessageIdType(PACKET_REPLY));
-				
-				/* Send the current server state to the client: */
-				{
-				Threads::Mutex::Lock stateLock(thisPtr->stateMutex);
-				thisPtr->state.write(*client->pipe,client->clientExpectsTimeStamps,client->clientExpectsValidFlags);
-				}
-				
-				/* Finish the reply message: */
-				client->pipe->flush();
-				
-				#if VRDEVICEDAEMON_DEBUG_PROTOCOL
-				printf(" done\n");
-				#endif
-				
-				/* Increase the number of streaming clients: */
-				++thisPtr->numStreamingClients;
-				
-				/* Go to streaming state: */
-				client->streaming=true;
-				client->state=STREAMING;
-				}
-			else if(message==STOPSTREAM_REQUEST)
-				{
-				if(client->state!=STREAMING)
-					throw std::runtime_error("STOPSTREAM_REQUEST outside STREAMING state");
-				
-				/* Send stopstream reply message: */
-				client->pipe->write(MessageIdType(STOPSTREAM_REPLY));
-				client->pipe->flush();
-				
-				/* Decrease the number of streaming clients: */
-				--thisPtr->numStreamingClients;
-				
-				/* Go to active state: */
-				client->streaming=false;
-				client->state=ACTIVE;
-				}
-			else if(message==POWEROFF_REQUEST)
-				{
-				if(!client->active)
-					throw std::runtime_error("POWEROFF_REQUEST outside ACTIVE state");
-				
-				/* Read the index of the power feature to power off: */
-				unsigned int powerFeatureIndex=client->pipe->read<Misc::UInt16>();
-				
-				/* Power off the requested feature: */
-				thisPtr->deviceManager->powerOff(powerFeatureIndex);
-				}
-			else if(message==HAPTICTICK_REQUEST)
-				{
-				if(!client->active)
-					throw std::runtime_error("HAPTICTICK_REQUEST outside ACTIVE state");
-				
-				/* Read the index of the haptic feature and the duration of the haptic tick: */
-				unsigned int hapticFeatureIndex=client->pipe->read<Misc::UInt16>();
-				unsigned int duration=client->pipe->read<Misc::UInt16>();
-				unsigned int frequency=1U;
-				unsigned int amplitude=255U;
-				if(client->protocolVersion>=8U)
-					{
-					/* Read the haptic tick's frequency and amplitude: */
-					frequency=client->pipe->read<Misc::UInt16>();
-					amplitude=client->pipe->read<Misc::UInt8>();
-					}
-				
-				/* Request a haptic tick on the requested feature: */
-				thisPtr->deviceManager->hapticTick(hapticFeatureIndex,duration,frequency,amplitude);
-				}
-			else if(message==BASESTATIONS_REQUEST)
-				{
-				if(client->state==START)
-					throw std::runtime_error("BASESTATIONS_REQUEST outside CONNECTED state");
-					
-				/* Send the states of tracking base stations currently registered with the server: */
-				client->pipe->write(MessageIdType(BASESTATIONS_REPLY));
-				Threads::Mutex::Lock baseStationLock(thisPtr->baseStationMutex);
-				
-				client->pipe->write(Misc::UInt8(thisPtr->baseStations.size()));
-				for(std::vector<Vrui::VRBaseStation>::const_iterator bsIt=thisPtr->baseStations.begin();bsIt!=thisPtr->baseStations.end();++bsIt)
-					bsIt->write(*client->pipe);
-				
-				/* Finish the reply message: */
-				client->pipe->flush();
-				}
-			else if(message==ENVIRONMENTDEFINITION_REQUEST)
-				{
-				if(client->state==START)
-					throw std::runtime_error("ENVIRONMENTDEFINITION_REQUEST outside CONNECTED state");
-				
-				/* Send the current environment definition: */
-				client->pipe->write(MessageIdType(ENVIRONMENTDEFINITION_REPLY));
-				thisPtr->environmentDefinition.write(*client->pipe);
-				
-				/* Finish the reply message: */
-				client->pipe->flush();
-				}
-			else if(message==ENVIRONMENTDEFINITION_UPDATE_REQUEST)
-				{
-				if(client->state==START)
-					throw std::runtime_error("ENVIRONMENTDEFINITION_UPDATE_REQUEST outside CONNECTED state");
-				
-				/* Read the new environment definition: */
-				thisPtr->environmentDefinition.read(*client->pipe);
-				
-				/* Signal that the environment definition has been updated: */
-				thisPtr->dispatcher.signal(thisPtr->environmentDefinitionUpdatedSignalKey,client);
-				}
-			else
-				throw std::runtime_error("Invalid message");
-			}
-		doneWithMessages:
-		;
-		}
-	catch(const std::runtime_error& err)
-		{
-		#ifdef VERBOSE
-		printf("VRDeviceServer: Disconnecting client %s due to exception \"%s\"\n",client->clientName.c_str(),err.what());
-		fflush(stdout);
-		#endif
-		thisPtr->disconnectClient(client,false,true);
-		
-		/* Stop listening: */
-		event.removeListener();
-		}
-	}
-
-void VRDeviceServer::disconnectClientOnError(VRDeviceServer::ClientStateList::iterator csIt,const std::runtime_error& err)
-	{
-	/* Print error message to stderr: */
-	#ifdef VERBOSE
-	fprintf(stderr,"VRDeviceServer: Disconnecting client %s due to exception %s\n",csIt->clientName.c_str(),err.what());
-	#else
-	fprintf(stderr,"VRDeviceServer: Disconnecting client due to exception %s\n",err.what());
-	#endif
-	fflush(stderr);
-	
-	/* Disconnect the client: */
-	disconnectClient(&*csIt,true,false);
-	
-	/* Remove the disconnected client from the list and delete it: */
-	delete clientStates.remove(csIt);
+	/* Suspend the devices: */
+	// Not actually doing that until we find out how it works...
 	}
 
 bool VRDeviceServer::writeStateUpdates(VRDeviceServer::ClientStateList::iterator csIt)
 	{
 	/* Bail out if the client is not streaming or does not understand incremental state updates: */
 	ClientState& client=*csIt;
-	if(!client.streaming||client.protocolVersion<7U)
+	if(client.state<STREAMING||client.protocolVersion<7U)
 		return true;
 	
 	/* Send state updates to client: */
@@ -929,7 +889,7 @@ bool VRDeviceServer::writeServerState(VRDeviceServer::ClientStateList::iterator 
 	{
 	/* Bail out if the client is not streaming or understands incremental state updates: */
 	ClientState& client=*csIt;
-	if(client.protocolVersion>=7U||!client.streaming)
+	if(client.state<STREAMING||client.protocolVersion>=7U)
 		return true;
 	
 	/* Send state to client: */
@@ -956,7 +916,7 @@ bool VRDeviceServer::writeBatteryState(VRDeviceServer::ClientStateList::iterator
 	{
 	/* Bail out if the client is not active or can't handle battery states: */
 	ClientState& client=*csIt;
-	if(!client.active||client.protocolVersion<5U)
+	if(client.state<ACTIVE||client.protocolVersion<5U)
 		return true;
 	
 	/* Send battery state to client: */
@@ -986,7 +946,7 @@ bool VRDeviceServer::writeHmdConfiguration(VRDeviceServer::ClientStateList::iter
 	{
 	/* Bail out if the client is not active or can't handle HMD configurations: */
 	ClientState& client=*csIt;
-	if(!client.active||client.protocolVersion<4U)
+	if(client.state<ACTIVE||client.protocolVersion<4U)
 		return true;
 	
 	try
@@ -1008,13 +968,12 @@ bool VRDeviceServer::writeHmdConfiguration(VRDeviceServer::ClientStateList::iter
 	return true;
 	}
 
-VRDeviceServer::VRDeviceServer(Threads::EventDispatcher& sDispatcher,VRDeviceManager* sDeviceManager,const Misc::ConfigurationFile& configFile)
-	:VRDeviceManager::VRStreamer(sDeviceManager),
-	 dispatcher(sDispatcher),
-	 environmentDefinitionUpdatedSignalKey(0),
-	 tcpListeningSocketKey(0),unixListeningSocketKey(0),deviceStateMemoryFd(-1),httpListeningSocketKey(0),
+VRDeviceServer::VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDeviceManager,const Misc::ConfigurationFile& configFile)
+	:VRDeviceManager::VRStreamer(&sDeviceManager),
+	 runLoop(sRunLoop),
+	 deviceStateMemoryFd(-1),
 	 numActiveClients(0),numStreamingClients(0),
-	 suspendTime(0,0),suspendTimerKey(0),
+	 suspendInterval(0,0),
 	 haveUpdates(false),trackerUpdateFlags(0),buttonUpdateFlags(0),valuatorUpdateFlags(0),
 	 managerTrackerStateVersion(0U),streamingTrackerStateVersion(0U),
 	 managerBatteryStateVersion(0U),streamingBatteryStateVersion(0U),batteryStateVersions(0),
@@ -1050,7 +1009,7 @@ VRDeviceServer::VRDeviceServer(Threads::EventDispatcher& sDispatcher,VRDeviceMan
 		userEnvironmentDefinitionFileName.append(Misc::getFileName(environmentDefinitionFileName.c_str()));
 		
 		/* Merge the per-user environment configuration file if it exists: */
-		if(Misc::doesPathExist(userEnvironmentDefinitionFileName.c_str()))
+		if(Misc::isFileReadable(userEnvironmentDefinitionFileName.c_str()))
 			environmentDefinitionFile.merge(userEnvironmentDefinitionFileName.c_str());
 		}
 	#endif
@@ -1058,43 +1017,39 @@ VRDeviceServer::VRDeviceServer(Threads::EventDispatcher& sDispatcher,VRDeviceMan
 	/* Configure the environment: */
 	environmentDefinition.configure(environmentDefinitionFile.getCurrentSection());
 	
-	/* Register a signal callback when a client updates the environment definition: */
-	environmentDefinitionUpdatedSignalKey=dispatcher.addSignalListener(environmentDefinitionUpdatedCallback,this);
-	
 	/* Check if the server should listen for client connection on a TCP socket: */
 	if(configFile.hasTag("serverPort"))
 		{
-		/* Create a listening TCP socket and add an event listener for it: */
+		/* Create a listening TCP socket and an I/O watcher for it: */
 		tcpListeningSocket=new Comm::ListeningTCPSocket(configFile.retrieveValue<int>("serverPort"),5);
-		tcpListeningSocketKey=dispatcher.addIOEventListener(tcpListeningSocket->getFd(),Threads::EventDispatcher::Read,newTcpConnectionCallback,this);
+		tcpListeningSocketWatcher=runLoop.createIOWatcher(tcpListeningSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::newClientConnection,*tcpListeningSocket));
 		}
 	
 	/* Check if the server should listen for client connection on a UNIX domain socket: */
 	if(configFile.hasTag("serverSocketName"))
 		{
-		/* Create a listening UNIX socket and add an event listener for it: */
+		/* Create a listening UNIX socket and an I/O watcher for it: */
 		unixListeningSocket=new Comm::ListeningUNIXSocket(configFile.retrieveString("serverSocketName").c_str(),5,configFile.retrieveValue<bool>("serverSocketAbstract",true));
-		unixListeningSocketKey=dispatcher.addIOEventListener(unixListeningSocket->getFd(),Threads::EventDispatcher::Read,newUnixConnectionCallback,this);
+		unixListeningSocketWatcher=runLoop.createIOWatcher(unixListeningSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::newClientConnection,*unixListeningSocket));
 		
 		/* Tell the device manager to use a shared memory block for device states: */
 		deviceStateMemoryFd=deviceManager->useSharedMemory(configFile.retrieveString("deviceStateMemoryName","/VRDeviceManagerDeviceState.shmem").c_str());
 		}
 	
-	/* Check if the server should listen for HTTP requests and commands on a TCP socket: */
+	/* Check if the server should listen for HTTP POST requests on a TCP socket: */
 	if(configFile.hasTag("./httpPort"))
 		{
-		/* Create a listening TCP socket for HTTP requests and add an event listener for it: */
+		/* Create a listening TCP socket for HTTP POST requests and an I/O watcher for it: */
 		httpListeningSocket=new Comm::ListeningTCPSocket(configFile.retrieveValue<int>("httpPort"),5);
-		httpListeningSocketKey=dispatcher.addIOEventListener(httpListeningSocket->getFd(),Threads::EventDispatcher::Read,newHttpConnectionCallback,this);
+		httpListeningSocketWatcher=runLoop.createIOWatcher(httpListeningSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::newHttpConnection));
 		}
 	
-	/* Create a timer event listener to suspend VR devices after a certain period of inactivity: */
-	suspendTime=Threads::EventDispatcher::Time(configFile.retrieveValue<int>("suspendTimeout",0),0);
-	if(suspendTime.tv_sec!=0)
+	/* Create an inactive timer event listener to suspend VR devices after a certain period of inactivity: */
+	suspendInterval=Threads::RunLoop::Interval(configFile.retrieveValue<int>("suspendTimeout",0),0);
+	if(suspendInterval.tv_sec!=0)
 		{
-		Threads::EventDispatcher::Time eventTime=Threads::EventDispatcher::Time::now();
-		eventTime+=suspendTime;
-		suspendTimerKey=dispatcher.addTimerEventListener(eventTime,suspendTime,suspendTimerCallback,this);
+		suspendTimer=runLoop.createTimer(Threads::RunLoop::Time()+suspendInterval,*Threads::createFunctionCall(this,&VRDeviceServer::suspendTimeout));
+		suspendTimer->disable();
 		}
 	
 	/* Initialize the update tracking arrays: */
@@ -1132,16 +1087,6 @@ VRDeviceServer::~VRDeviceServer(void)
 	/* Forcefully disconnect all clients: */
 	clientStates.clear();
 	
-	/* Remove listeners from the event dispatcher: */
-	dispatcher.removeSignalListener(environmentDefinitionUpdatedSignalKey);
-	if(tcpListeningSocket!=0)
-		dispatcher.removeIOEventListener(tcpListeningSocketKey);
-	if(unixListeningSocket!=0)
-		dispatcher.removeIOEventListener(unixListeningSocketKey);
-	if(httpListeningSocket!=0)
-		dispatcher.removeIOEventListener(httpListeningSocketKey);
-	dispatcher.removeTimerEventListener(suspendTimerKey);
-	
 	/* Clean up: */
 	delete[] trackerUpdateFlags;
 	delete[] buttonUpdateFlags;
@@ -1159,7 +1104,7 @@ void VRDeviceServer::trackerUpdated(int trackerIndex)
 		trackerUpdateFlags[trackerIndex]=true;
 		updatedTrackers.push_back(trackerIndex);
 		}
-	dispatcher.interrupt();
+	runLoop.wakeUp();
 	}
 
 void VRDeviceServer::buttonUpdated(int buttonIndex)
@@ -1171,7 +1116,7 @@ void VRDeviceServer::buttonUpdated(int buttonIndex)
 		buttonUpdateFlags[buttonIndex]=true;
 		updatedButtons.push_back(buttonIndex);
 		}
-	dispatcher.interrupt();
+	runLoop.wakeUp();
 	}
 
 void VRDeviceServer::valuatorUpdated(int valuatorIndex)
@@ -1183,14 +1128,14 @@ void VRDeviceServer::valuatorUpdated(int valuatorIndex)
 		valuatorUpdateFlags[valuatorIndex]=true;
 		updatedValuators.push_back(valuatorIndex);
 		}
-	dispatcher.interrupt();
+	runLoop.wakeUp();
 	}
 
 void VRDeviceServer::updateCompleted(void)
 	{
 	/* Update the version number of the device manager's tracking state and wake up the run loop: */
 	++managerTrackerStateVersion;
-	dispatcher.interrupt();
+	runLoop.wakeUp();
 	}
 
 void VRDeviceServer::batteryStateUpdated(unsigned int deviceIndex)
@@ -1198,14 +1143,14 @@ void VRDeviceServer::batteryStateUpdated(unsigned int deviceIndex)
 	/* Update the version number of the device manager's device battery state and wake up the run loop: */
 	++batteryStateVersions[deviceIndex].managerVersion;
 	++managerBatteryStateVersion;
-	dispatcher.interrupt();
+	runLoop.wakeUp();
 	}
 
 void VRDeviceServer::hmdConfigurationUpdated(const Vrui::HMDConfiguration* hmdConfiguration)
 	{
 	/* Update the version number of the device manager's HMD configuration state and wake up the run loop: */
 	++managerHmdConfigurationVersion;
-	dispatcher.interrupt();
+	runLoop.wakeUp();
 	}
 
 void VRDeviceServer::run(void)
@@ -1216,7 +1161,7 @@ void VRDeviceServer::run(void)
 	if(unixListeningSocket!=0)
 		printf("VRDeviceServer: Listening for incoming connections on UNIX domain socket %s\n",static_cast<Comm::ListeningUNIXSocket*>(unixListeningSocket.getPointer())->getAddress().c_str());
 	if(httpListeningSocket!=0)
-		printf("VRDeviceServer: Listening for HTTP requests on TCP port %d\n",static_cast<Comm::ListeningTCPSocket*>(httpListeningSocket.getPointer())->getPortId());
+		printf("VRDeviceServer: Listening for HTTP POST requests on TCP port %d\n",static_cast<Comm::ListeningTCPSocket*>(httpListeningSocket.getPointer())->getPortId());
 	fflush(stdout);
 	#endif
 	
@@ -1224,7 +1169,7 @@ void VRDeviceServer::run(void)
 	deviceManager->setStreamer(this);
 	
 	/* Run the main loop and dispatch events until stopped: */
-	while(dispatcher.dispatchNextEvent())
+	while(runLoop.dispatchNextEvents())
 		{
 		/* Check whether there are incremental or complete device state updates: */
 		if(haveUpdates||streamingTrackerStateVersion!=managerTrackerStateVersion)

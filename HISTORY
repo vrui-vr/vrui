@@ -8611,3 +8611,5 @@ Vrui-15.0-001:
   works.
 - API change: Pass reference to frame buffer instead of pointer in
   Sound::AudioCaptureDevice callbacks.
+- Migrated VRDeviceDaemon and VRCompositingServer from
+  Threads::EventDispatcher to Threads::RunLoop.

@@ -37,6 +37,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/ArrayValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <Threads/FunctionCalls.h>
 #include <IO/OpenFile.h>
 #include <Geometry/GeometryValueCoders.h>
 #include <Geometry/OutputOperators.h>
@@ -664,13 +665,10 @@ void OpenVRHost::log(int messageLevel,const char* formatString,...) const
 		}
 	}
 
-void OpenVRHost::runFrameTimerCallback(Threads::EventDispatcher::TimerEvent& event)
+void OpenVRHost::runFrameTimerCallback(Threads::RunLoop::Timer::Event& event)
 	{
-	/* Get a pointer to the device object: */
-	OpenVRHost* thisPtr=static_cast<OpenVRHost*>(event.getUserData());
-	
 	/* Call the driver's RunFrame method: */
-	thisPtr->openvrTrackedDeviceProvider->RunFrame();
+	openvrTrackedDeviceProvider->RunFrame();
 	}
 
 void OpenVRHost::setDeviceIndex(OpenVRHost::DeviceState& deviceState,int newDeviceIndex)
@@ -804,7 +802,6 @@ OpenVRHost::OpenVRHost(VRDevice::Factory* sFactory,VRDeviceManager* sDeviceManag
 	 pathHandles(17),nextPathHandle(0x10002afc0000003cUL),
 	 openvrTrackedDeviceProvider(0),
 	 ioBufferMap(17),lastIOBufferHandle(0),
-	 runFrameTimerKey(0),
 	 openvrSettingsSection(configFile.getSection("Settings")),
 	 driverHandle(0x200000003UL),deviceHandleBase(0x100000000UL),
 	 printLogMessages(configFile.retrieveValue<bool>("./printLogMessages",false)),
@@ -1110,7 +1107,7 @@ OpenVRHost::~OpenVRHost(void)
 	
 	/* Remove the RunFrame timer event: */
 	log(1,"Stopping event processing\n");
-	deviceManager->getDispatcher().removeTimerEventListener(runFrameTimerKey);
+	runFrameTimer=0;
 	
 	/* Delete VRDeviceManager association tables: */
 	delete[] configuredPostTransformations;
@@ -1137,8 +1134,8 @@ void OpenVRHost::initialize(void)
 	
 	/* Start the RunFrame timer: */
 	log(1,"Starting event processing\n");
-	Threads::EventDispatcher::Time runFrameInterval(0,100000); // 10 Hz; it doesn't really even need that
-	runFrameTimerKey=deviceManager->getDispatcher().addTimerEventListener(Threads::EventDispatcher::Time::now(),runFrameInterval,runFrameTimerCallback,this);
+	Threads::RunLoop::Interval interval(0,100000000); // 10Hz is more than enough
+	runFrameTimer=deviceManager->getRunLoop().createTimer(Threads::RunLoop::Time(),interval,true,*Threads::createFunctionCall(this,&OpenVRHost::runFrameTimerCallback));
 	
 	/* Initialize the server-side driver object: */
 	log(1,"Initializing OpenVR driver module\n");

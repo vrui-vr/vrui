@@ -34,7 +34,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/HashTable.h>
 #include <Misc/ConfigurationFile.h>
 #include <Threads/Mutex.h>
-#include <Threads/EventDispatcher.h>
+#include <Threads/RunLoop.h>
 #include <Plugins/DsoHandle.h>
 #include <Vrui/Internal/BatteryState.h>
 #include <VRDeviceDaemon/VRDevice.h>
@@ -320,7 +320,7 @@ class OpenVRHost:public VRDevice,public vr::IVRSettings,public vr::IVRDriverCont
 	vr::IServerTrackedDeviceProvider* openvrTrackedDeviceProvider; // Pointer to the tracked device provider, i.e., the tracking driver object
 	IOBufferMap ioBufferMap; // Map of opened I/O buffers
 	vr::IOBufferHandle_t lastIOBufferHandle; // Last assigned I/O buffer handle
-	Threads::EventDispatcher::ListenerKey runFrameTimerKey; // Timer event listener key to run the driver's main loop
+	Threads::RunLoop::TimerOwner runFrameTimer; // Timer to run the driver's main loop
 	
 	/* OpenVRHost driver module configuration: */
 	Misc::ConfigurationFileSection openvrSettingsSection; // Configuration file section containing driver settings
@@ -357,7 +357,7 @@ class OpenVRHost:public VRDevice,public vr::IVRSettings,public vr::IVRDriverCont
 	
 	/* Private methods: */
 	void log(int messageLevel,const char* formatString,...) const; // Prints a log message for at least the given verbosity level
-	static void runFrameTimerCallback(Threads::EventDispatcher::TimerEvent& event); // Calls the driver's RunFrame method once
+	void runFrameTimerCallback(Threads::RunLoop::Timer::Event& event); // Calls the driver's RunFrame method once
 	void setDeviceIndex(DeviceState& deviceState,int newDeviceIndex); // Sets the index of the given device state among its device class and assigned tracker, button, valuator, haptic feature indices
 	void updateHMDConfiguration(DeviceState& deviceState) const; // If the device is an HMD, update its configuration
 	
