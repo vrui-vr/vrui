@@ -1,6 +1,6 @@
 /***********************************************************************
 AudioCaptureDevice - Base class for audio capture devices.
-Copyright (c) 2010-2018 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Sound Library (Sound).
 
@@ -21,7 +21,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Sound/AudioCaptureDevice.h>
 
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 #include <Sound/Config.h>
 #if SOUND_CONFIG_HAVE_ALSA
 #include <Sound/Linux/ALSAAudioCaptureDevice.h>
@@ -67,32 +67,31 @@ AudioCaptureDevice* AudioCaptureDevice::openDevice(const char* name)
 	}
 
 AudioCaptureDevice::AudioCaptureDevice(void)
-	:streamingCallback(0),streaming(false)
+	:streaming(false)
 	{
 	}
 
 AudioCaptureDevice::~AudioCaptureDevice(void)
 	{
-	delete streamingCallback;
 	}
 
 void AudioCaptureDevice::startStreaming(void)
 	{
-	delete streamingCallback;
+	/* Destroy the current streaming callback and start streaming: */
 	streamingCallback=0;
 	streaming=true;
 	}
 
-void AudioCaptureDevice::startStreaming(AudioCaptureDevice::StreamingCallback* newStreamingCallback)
+void AudioCaptureDevice::startStreaming(AudioCaptureDevice::StreamingCallback& newStreamingCallback)
 	{
-	delete streamingCallback;
-	streamingCallback=newStreamingCallback;
+	/* Replace the current streaming callback and start streaming: */
+	streamingCallback=&newStreamingCallback;
 	streaming=true;
 	}
 
 void AudioCaptureDevice::stopStreaming(void)
 	{
-	delete streamingCallback;
+	/* Destroy the current streaming callback and stop streaming: */
 	streamingCallback=0;
 	streaming=false;
 	}

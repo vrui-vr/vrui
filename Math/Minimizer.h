@@ -2,7 +2,7 @@
 Minimizer - Generic base class to minimize a set of equations in a
 least-squares sense, templatized by a kernel class implementing a
 specific optimization problem.
-Copyright (c) 2018 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the Templatized Math Library (Math).
 
@@ -25,9 +25,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define MATH_MINIMIZER_INCLUDED
 
 #include <stddef.h>
+#include <Misc/Autopointer.h>
 
 /* Forward declarations: */
-namespace Misc {
+namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 }
@@ -94,7 +95,7 @@ class Minimizer
 			}
 		};
 	
-	typedef Misc::FunctionCall<const ProgressCallbackData&> ProgressCallback; // Type for functions called with current minimization estimates during minimization
+	typedef Threads::FunctionCall<const ProgressCallbackData&> ProgressCallback; // Type for functions called with current minimization estimates during minimization
 	
 	/* Elements: */
 	
@@ -104,19 +105,20 @@ class Minimizer
 	
 	protected:
 	size_t progressFrequency; // Number of minimization steps between calls to the progress function
-	ProgressCallback* progressCallback; // Function called at regular intervals during minimization
+	Misc::Autopointer<ProgressCallback> progressCallback; // Function called at regular intervals during minimization
 	
 	/* Constructors and destructors: */
 	public:
 	Minimizer(size_t sMaxNumIterations) // Creates a minimizer for the given maximum number of iterations
 		:maxNumIterations(sMaxNumIterations),
-		 progressFrequency(0),progressCallback(0)
+		 progressFrequency(0)
 		{
 		}
 	~Minimizer(void); // Destroys the minimizer
 	
 	/* Methods: */
-	void setProgressCallback(size_t newProgressFrequency,ProgressCallback* newProgressCallback); // Registers a progress callback with the minimizer
+	void setProgressCallback(size_t newProgressFrequency,ProgressCallback& newProgressCallback); // Registers a progress callback with the minimizer
+	void unsetProgressCallback(void); // Unregisters a current progress callback
 	};
 
 }

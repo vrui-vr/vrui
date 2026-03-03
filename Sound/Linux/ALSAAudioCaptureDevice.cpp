@@ -1,7 +1,7 @@
 /***********************************************************************
 ALSAAudioCaptureDevice - Wrapper class around audio capture devices as
 represented by the ALSA sound library.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Sound Library (Sound).
 
@@ -24,7 +24,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <stdio.h>
 #include <Misc/StdError.h>
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 #include <Sound/SoundDataFormat.h>
 #include <Sound/FrameBuffer.h>
 
@@ -59,7 +59,7 @@ void* ALSAAudioCaptureDevice::streamingThreadMethod(void)
 			FrameBuffer buffer;
 			buffer.start=frameBuffers[nextFrameBufferIndex];
 			buffer.size=result;
-			(*streamingCallback)(&buffer);
+			(*streamingCallback)(buffer);
 			}
 		else if(result==-EPIPE)
 			{
@@ -347,7 +347,7 @@ void ALSAAudioCaptureDevice::startStreaming(void)
 	AudioCaptureDevice::startStreaming();
 	}
 
-void ALSAAudioCaptureDevice::startStreaming(AudioCaptureDevice::StreamingCallback* newStreamingCallback)
+void ALSAAudioCaptureDevice::startStreaming(AudioCaptureDevice::StreamingCallback& newStreamingCallback)
 	{
 	/* Check if frame buffers have been allocated: */
 	if(frameBuffers==0)

@@ -2,7 +2,7 @@
 FileMonitor - Class to monitor a set of files and/or directories and
 send callbacks on any changes to any of the monitored files or
 directories.
-Copyright (c) 2012-2024 Oliver Kreylos
+Copyright (c) 2012-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -25,14 +25,70 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <errno.h>
 #include <unistd.h>
+#include <limits.h>
 #include <fcntl.h>
 #ifdef __linux__
 #include <sys/inotify.h>
 #endif
+#include <Misc/Autopointer.h>
 #include <Misc/StdError.h>
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 
 namespace IO {
+
+/************************************
+Methods of struct FileMonitor::Event:
+************************************/
+
+FileMonitor::Event::Event(FileMonitor& sFileMonitor,FileMonitor::Cookie sCookie,uint32_t sEventMask,bool sDirectory,unsigned int sMoveCookie,const char* sName)
+	:fileMonitor(sFileMonitor),cookie(sCookie),eventMask(0x0U),directory(sDirectory),moveCookie(sMoveCookie),name(sName)
+	{
+	/* Convert the raw inotify event mask: */
+	if(sEventMask&IN_ACCESS)
+		eventMask|=FileMonitor::Accessed;
+	if(sEventMask&IN_MODIFY)
+		eventMask|=FileMonitor::Modified;
+	if(sEventMask&IN_ATTRIB)
+		eventMask|=FileMonitor::AttributesChanged;
+	if(sEventMask&IN_OPEN)
+		eventMask|=FileMonitor::Opened;
+	if(sEventMask&IN_CLOSE_WRITE)
+		eventMask|=FileMonitor::ClosedWrite;
+	if(sEventMask&IN_CLOSE_NOWRITE)
+		eventMask|=FileMonitor::ClosedNoWrite;
+	if(sEventMask&IN_CREATE)
+		eventMask|=FileMonitor::Created;
+	if(sEventMask&IN_MOVED_FROM)
+		eventMask|=FileMonitor::MovedFrom;
+	if(sEventMask&IN_MOVED_TO)
+		eventMask|=FileMonitor::MovedTo;
+	if(sEventMask&IN_DELETE)
+		eventMask|=FileMonitor::Deleted;
+	if(sEventMask&IN_MOVE_SELF)
+		eventMask|=FileMonitor::SelfMoved;
+	if(sEventMask&IN_DELETE_SELF)
+		eventMask|=FileMonitor::SelfDeleted;
+	if(sEventMask&IN_UNMOUNT)
+		eventMask|=FileMonitor::Unmounted;
+	}
+
+/*********************************************
+Declaration of class FileMonitor::WatchedPath:
+*********************************************/
+
+struct FileMonitor::WatchedPath
+	{
+	/* Elements: */
+	public:
+	std::string path; // The watched path, as given to the addPath method
+	Misc::Autopointer<EventCallback> eventCallback; // The callback to be called when an event occurs for the watched path
+	
+	/* Constructors and destructors: */
+	WatchedPath(const char* sPath,EventCallback& sEventCallback) // Elementwise constructor
+		:path(sPath),eventCallback(&sEventCallback)
+		{
+		}
+	};
 
 /****************************
 Methods of class FileMonitor:
@@ -50,10 +106,59 @@ void* FileMonitor::eventHandlingThreadMethod(void)
 	return 0;
 	}
 
+void FileMonitor::processEventsCallback(Threads::RunLoop::IOWatcher::Event& event)
+	{
+	#ifdef __linux__
+	
+	/* Try reading into the event buffer and check for errors: */
+	ssize_t readResult=read(fd,eventBuffer,eventBufferSize);
+	if(readResult<0)
+		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot read from event file");
+	
+	/* Handle all returned events: */
+	char* ebPtr=eventBuffer;
+	while(readResult>0)
+		{
+		/* Get a pointer to the next event structure in the buffer: */
+		inotify_event* eventStruct=reinterpret_cast<inotify_event*>(ebPtr);
+		
+		/* Check if the event needs to be reported: */
+		if(eventStruct->wd>=0&&(eventStruct->mask&IN_IGNORED)==0x0)
+			{
+			/* Create an event reporting structure for the event: */
+			Event event(*this,eventStruct->wd,eventStruct->mask,(eventStruct->mask&IN_ISDIR)!=0x0,eventStruct->cookie,eventStruct->len!=0?ebPtr+sizeof(inotify_event):0);
+			
+			/* Take a temporary reference to the event callback registered for this watched path: */
+			Misc::Autopointer<EventCallback> eventCallback;
+			{
+			/* Lock the watched path map: */
+			Threads::Mutex::Lock watchedPathsLock(watchedPathsMutex);
+			
+			/* Retrieve the watched path's event callback if it's still in the map: */
+			WatchedPathMap::Iterator wpIt=watchedPaths.findEntry(eventStruct->wd);
+			if(!wpIt.isFinished())
+				eventCallback=wpIt->getDest().eventCallback;
+			}
+			
+			/* Call the event callback: */
+			if(eventCallback!=0)
+				(*eventCallback)(event);
+			}
+		
+		/* Go to the next event in the buffer: */
+		size_t eventSize=sizeof(inotify_event)+eventStruct->len;
+		readResult-=eventSize;
+		ebPtr+=eventSize;
+		}
+	
+	#endif
+	}
+
 FileMonitor::FileMonitor(void)
 	:fd(-1),
-	 eventCallbacks(17),
-	 eventBufferSize(256),eventBuffer(new char[eventBufferSize])
+	 watchedPaths(17),
+	 eventBufferSize(sizeof(struct inotify_event)+NAME_MAX+1),eventBuffer(new char[eventBufferSize]),
+	 eventHandlingThread(0)
 	{
 	#ifdef __linux__
 	
@@ -72,15 +177,19 @@ FileMonitor::FileMonitor(void)
 
 FileMonitor::~FileMonitor(void)
 	{
-	/* Shut down the background event handling thread: */
-	stopEventHandling();
+	/* Shut down the background event handling thread if one is running: */
+	if(eventHandlingThread!=0)
+		{
+		eventHandlingThread->cancel();
+		eventHandlingThread->join();
+		delete eventHandlingThread;
+		}
+	
+	/* Stop watching the file monitor from a run loop: */
+	ioWatcher=0;
 	
 	/* Delete the event buffer: */
 	delete[] eventBuffer;
-	
-	/* Delete all event callbacks: */
-	for(EventCallbackMap::Iterator ecIt=eventCallbacks.begin();!ecIt.isFinished();++ecIt)
-		delete ecIt->getDest();
 	
 	#ifdef __linux__
 	
@@ -92,32 +201,63 @@ FileMonitor::~FileMonitor(void)
 
 void FileMonitor::startEventHandling(void)
 	{
-	/* Disable polling if it was enabled: */
-	stopPolling();
-	
-	/* Start the background thread if it is not already running: */
-	if(eventHandlingThread.isJoined())
-		eventHandlingThread.start(this,&FileMonitor::eventHandlingThreadMethod);
+	/* Start event handling if it's not already running: */
+	if(eventHandlingThread==0)
+		{
+		/* Stop watching the file monitor from a run loop: */
+		ioWatcher=0;
+		
+		/* Disable polling: */
+		stopPolling();
+		
+		/* Start the background event handling thread: */
+		eventHandlingThread=new Threads::Thread(this,&FileMonitor::eventHandlingThreadMethod);
+		}
 	}
 
 void FileMonitor::stopEventHandling(void)
 	{
-	/* Shut down the background event handling thread if it is running: */
-	if(!eventHandlingThread.isJoined())
+	/* Stop event handling if it is running: */
+	if(eventHandlingThread!=0)
 		{
-		eventHandlingThread.cancel();
-		eventHandlingThread.join();
+		/* Stop the event handling thread: */
+		eventHandlingThread->cancel();
+		eventHandlingThread->join();
+		delete eventHandlingThread;
+		eventHandlingThread=0;
 		}
+	}
+
+void FileMonitor::watch(Threads::RunLoop& runLoop)
+	{
+	/* Start watching if it's not already being watched: */
+	if(ioWatcher==0)
+		{
+		/* Stop event handling: */
+		stopEventHandling();
+		
+		/* Disable polling: */
+		stopPolling();
+		
+		/* Create an I/O watcher for the inotify instance's file descriptor: */
+		ioWatcher=runLoop.createIOWatcher(fd,Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&FileMonitor::processEventsCallback));
+		}
+	}
+
+void FileMonitor::unwatch(void)
+	{
+	/* Stop watching the inotify instance's file descriptor: */
+	ioWatcher=0;
 	}
 
 void FileMonitor::startPolling(void)
 	{
-	/* Ignore if background event handling thread is running: */
-	if(eventHandlingThread.isJoined())
+	/* Ignore if event handling is running or the file monitor is being watched from a run loop: */
+	if(eventHandlingThread==0&&ioWatcher==0)
 		{
 		#ifdef __linux__
 		
-		/* Set the file descriptor to non-blocking: */
+		/* Set the inotify instance's file descriptor to non-blocking: */
 		int fileFlags=fcntl(fd,F_GETFL);
 		if(fileFlags<0)
 			throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot read inotify instance's flags");
@@ -131,12 +271,12 @@ void FileMonitor::startPolling(void)
 
 void FileMonitor::stopPolling(void)
 	{
-	/* Ignore if background event handling thread is running: */
-	if(eventHandlingThread.isJoined())
+	/* Ignore if event handling is running or the file monitor is being watched from a run loop: */
+	if(eventHandlingThread==0&&ioWatcher==0)
 		{
 		#ifdef __linux__
 		
-		/* Set the file descriptor to blocking: */
+		/* Set the inotify instance's file descriptor to blocking: */
 		int fileFlags=fcntl(fd,F_GETFL);
 		if(fileFlags<0)
 			throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot read inotify instance's flags");
@@ -152,26 +292,12 @@ bool FileMonitor::processEvents(void)
 	{
 	#ifdef __linux__
 	
-	/* Wait for the next event: */
-	ssize_t readResult;
-	while(true)
-		{
-		/* Try reading into the current event buffer: */
-		readResult=read(fd,eventBuffer,eventBufferSize);
-		
-		/* Check if the event buffer was too small to hold the next pending event: */
-		if(readResult==0||(readResult<0&&errno==EINVAL))
-			{
-			/* Resize the event buffer and try again: */
-			delete[] eventBuffer;
-			eventBufferSize=(eventBufferSize*3)/2;
-			eventBuffer=new char[eventBufferSize];
-			}
-		else
-			break;
-		}
+	/* Try reading into the event buffer and check for errors: */
+	ssize_t readResult=read(fd,eventBuffer,eventBufferSize);
+	if(readResult<0)
+		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot read from event file");
 	
-	/* Read and handle all event structures just read: */
+	/* Handle all returned events: */
 	bool dispatchedEvent=false;
 	char* ebPtr=eventBuffer;
 	while(readResult>0)
@@ -182,63 +308,27 @@ bool FileMonitor::processEvents(void)
 		/* Check if the event needs to be reported: */
 		if(eventStruct->wd>=0&&(eventStruct->mask&IN_IGNORED)==0x0)
 			{
-			/* Lock the event callback list and find the recipient for this event: */
-			Threads::Mutex::Lock eventCallbacksLock(eventCallbacksMutex);
-			EventCallbackMap::Iterator ecIt=eventCallbacks.findEntry(eventStruct->wd);
-			if(!ecIt.isFinished())
-				{
-				/***********************************************************
-				Assemble an event reporting structure and call the callback:
-				***********************************************************/
-				
-				Event event;
-				
-				/* Copy the watch identifer: */
-				event.cookie=eventStruct->wd;
-				
-				/* Convert inotify's internal event types and flags to FileMonitor's: */
-				event.eventMask=0x0;
-				if(eventStruct->mask&IN_ACCESS)
-					event.eventMask|=Accessed;
-				if(eventStruct->mask&IN_MODIFY)
-					event.eventMask|=Modified;
-				if(eventStruct->mask&IN_ATTRIB)
-					event.eventMask|=AttributesChanged;
-				if(eventStruct->mask&IN_OPEN)
-					event.eventMask|=Opened;
-				if(eventStruct->mask&IN_CLOSE_WRITE)
-					event.eventMask|=ClosedWrite;
-				if(eventStruct->mask&IN_CLOSE_NOWRITE)
-					event.eventMask|=ClosedNoWrite;
-				if(eventStruct->mask&IN_CREATE)
-					event.eventMask|=Created;
-				if(eventStruct->mask&IN_MOVED_FROM)
-					event.eventMask|=MovedFrom;
-				if(eventStruct->mask&IN_MOVED_TO)
-					event.eventMask|=MovedTo;
-				if(eventStruct->mask&IN_DELETE)
-					event.eventMask|=Deleted;
-				if(eventStruct->mask&IN_MOVE_SELF)
-					event.eventMask|=SelfMoved;
-				if(eventStruct->mask&IN_DELETE_SELF)
-					event.eventMask|=SelfDeleted;
-				if(eventStruct->mask&IN_UNMOUNT)
-					event.eventMask|=Unmounted;
-				
-				/* Check if the event is for a directory: */
-				event.directory=(eventStruct->mask&IN_ISDIR)!=0x0;
-				
-				/* Copy the move cookie: */
-				event.moveCookie=eventStruct->cookie;
-				
-				/* Copy the optional file name: */
-				if(eventStruct->len!=0)
-					event.name=ebPtr+sizeof(inotify_event);
-				
-				/* Call the callback: */
-				(*ecIt->getDest())(event);
-				dispatchedEvent=true;
-				}
+			/* Create an event reporting structure for the event: */
+			Event event(*this,eventStruct->wd,eventStruct->mask,(eventStruct->mask&IN_ISDIR)!=0x0,eventStruct->cookie,eventStruct->len!=0?ebPtr+sizeof(inotify_event):0);
+			
+			/* Take a temporary reference to the event callback registered for this watched path: */
+			Misc::Autopointer<EventCallback> eventCallback;
+			{
+			/* Lock the watched path map: */
+			Threads::Mutex::Lock watchedPathsLock(watchedPathsMutex);
+			
+			/* Retrieve the watched path's event callback if it's still in the map: */
+			WatchedPathMap::Iterator wpIt=watchedPaths.findEntry(eventStruct->wd);
+			if(!wpIt.isFinished())
+				eventCallback=wpIt->getDest().eventCallback;
+			}
+			
+			/* Call the event callback: */
+			if(eventCallback!=0)
+				(*eventCallback)(event);
+			
+			/* Remember that an event was dispatched: */
+			dispatchedEvent=true;
 			}
 		
 		/* Go to the next event in the buffer: */
@@ -257,7 +347,7 @@ bool FileMonitor::processEvents(void)
 	#endif
 	}
 
-FileMonitor::Cookie FileMonitor::addPath(const char* pathName,int eventMask,FileMonitor::EventCallback* eventCallback)
+FileMonitor::Cookie FileMonitor::addPath(const char* pathName,FileMonitor::EventMask eventMask,FileMonitor::EventCallback& eventCallback)
 	{
 	#ifdef __linux__
 	
@@ -290,51 +380,49 @@ FileMonitor::Cookie FileMonitor::addPath(const char* pathName,int eventMask,File
 	
 	if(eventMask&DontFollowLinks)
 		em|=IN_DONT_FOLLOW;
-	#if 0 // Not supported on older Linux kernels
+	#ifdef IN_EXCL_UNLINK // Not supported on older Linux kernels
 	if(eventMask&IgnoreUnlinkedFiles)
 		em|=IN_EXCL_UNLINK;
 	#endif
 	
-	/* Lock the event callback list: */
-	Threads::Mutex::Lock eventCallbacksLock(eventCallbacksMutex);
-	
-	/* Add the given path to inotify's watch list: */
+	/* Add the given path to inotify's watch map: */
 	Cookie cookie=inotify_add_watch(fd,pathName,eventMask);
 	if(cookie<0)
 		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot monitor path %s",pathName);
 	
-	/* Enter the cookie and event callback into the callback list: */
-	EventCallbackMap::Iterator ecIt=eventCallbacks.findEntry(cookie);
-	if(!ecIt.isFinished())
+	/* Enter the new watch into the watched path map: */
+	{
+	Threads::Mutex::Lock watchedPathsLock(watchedPathsMutex);
+	WatchedPathMap::Iterator wpIt=watchedPaths.findEntry(cookie);
+	if(!wpIt.isFinished())
 		{
 		/*******************************************************************
 		Someone else already registered a watch for the given path. This
 		could be handled using a multi-value hash table and stored masks;
-		for now, simply delete the old callback and remember the new one:
+		for now, simply replace the old callback with the new one:
 		*******************************************************************/
 		
-		delete ecIt->getDest();
-		ecIt->getDest()=eventCallback;
+		wpIt->getDest().eventCallback=&eventCallback;
 		}
 	else
 		{
 		/* Add the new event callback to the list: */
-		eventCallbacks[cookie]=eventCallback;
+		watchedPaths.setEntry(WatchedPathMap::Entry(cookie,WatchedPath(pathName,eventCallback)));
 		}
+	}
 	
 	/* Return the OS-supplied cookie to the caller: */
 	return cookie;
 	
 	#else
 	
-	/* Lock the event callback list: */
-	Threads::Mutex::Lock eventCallbacksLock(eventCallbacksMutex);
+	/* Lock the watched path map: */
+	Threads::Mutex::Lock watchedPathsLock(watchedPathsMutex);
 	
-	/* Store the callback with a new dummy cookie in the callback map: */
+	/* Store the callback with a new dummy cookie in the watched path map: */
 	Cookie cookie=nextCookie;
 	++nextCookie;
-	
-	eventCallbacks[cookie]=eventCallback;
+	watchedPaths.setEntry(WatchedPathMap::Entry(cookie,WatchedPath(pathName,eventCallback));
 	
 	/* Return the dummy cookie: */
 	return cookie;
@@ -342,18 +430,37 @@ FileMonitor::Cookie FileMonitor::addPath(const char* pathName,int eventMask,File
 	#endif
 	}
 
+std::string FileMonitor::getWatchedPath(Cookie pathCookie)
+	{
+	std::string result;
+	
+	{
+	/* Lock the watched path map: */
+	Threads::Mutex::Lock watchedPathsLock(watchedPathsMutex);
+	
+	/* Find the watched path associated with the given cookie: */
+	WatchedPathMap::Iterator wpIt=watchedPaths.findEntry(pathCookie);
+	if(!wpIt.isFinished())
+		{
+		/* Return the watched path: */
+		result=wpIt->getDest().path;
+		}
+	}
+	
+	return result;
+	}
+
 void FileMonitor::removePath(FileMonitor::Cookie pathCookie)
 	{
-	/* Lock the event callback list: */
-	Threads::Mutex::Lock eventCallbacksLock(eventCallbacksMutex);
+	/* Lock the watched path map: */
+	Threads::Mutex::Lock watchedPathsLock(watchedPathsMutex);
 	
-	/* Find the event callback associated with the given cookie: */
-	EventCallbackMap::Iterator ecIt=eventCallbacks.findEntry(pathCookie);
-	if(!ecIt.isFinished())
+	/* Find the watched path associated with the given cookie: */
+	WatchedPathMap::Iterator wpIt=watchedPaths.findEntry(pathCookie);
+	if(!wpIt.isFinished())
 		{
 		/* Remove the event callback from the event callback list: */
-		delete ecIt->getDest();
-		eventCallbacks.removeEntry(ecIt);
+		watchedPaths.removeEntry(wpIt);
 		
 		#ifdef __linux__
 		

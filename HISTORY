@@ -8596,3 +8596,18 @@ Vrui-15.0-001:
 - Added static pollEventsToEventMask and eventMaskToPollEvents methods
   to Threads::RunLoop::IOWatcher to simplify adapting to APIs designed
   for using poll(), such as ALSA.
+- API change: PCM event handler function parameter for
+  Sound::ALSAPCMDevice changed from pointer to reference.
+- API change: Changed event handler parameter in IO::FileMonitor from
+  const IO::FileMonitor::Event& to IO::FileMonitor::Event&.
+  - Added IO::FileMonitor reference to Event structure.
+  - Changed type of name element from std::string to const char* to
+    avoid unnecessary heap allocation.
+- Added ability to watch IO::FileMonitor from Threads::RunLoop.
+- Added unsetProgressCallback method to Math::Minimizer.
+- Added inline-dependency on MYMISC library to MYTHREADS in
+  BuildRoot/Packages.Vrui.
+- API change: RawHID::DeviceMonitor has entirely new API that actually
+  works.
+- API change: Pass reference to frame buffer instead of pointer in
+  Sound::AudioCaptureDevice callbacks.

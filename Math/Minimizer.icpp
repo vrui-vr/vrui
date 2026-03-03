@@ -2,7 +2,7 @@
 Minimizer - Generic base class to minimize a set of equations in a
 least-squares sense, templatized by a kernel class implementing a
 specific optimization problem.
-Copyright (c) 2018 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the Templatized Math Library (Math).
 
@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Math/Minimizer.h>
 
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 
 namespace Math {
 
@@ -38,8 +38,6 @@ inline
 Minimizer<KernelParam>::~Minimizer(
 	void)
 	{
-	/* Delete the progress callback: */
-	delete progressCallback;
 	}
 
 template <class KernelParam>
@@ -47,14 +45,26 @@ inline
 void
 Minimizer<KernelParam>::setProgressCallback(
 	size_t newProgressFrequency,
-	typename Minimizer<KernelParam>::ProgressCallback* newProgressCallback)
+	typename Minimizer<KernelParam>::ProgressCallback& newProgressCallback)
 	{
 	/* Set the new progress callback frequency: */
 	progressFrequency=newProgressFrequency;
 	
-	/* Delete the current progress callback and install the new one: */
-	delete progressCallback;
-	progressCallback=newProgressCallback;
+	/* Replace the current progress callback with the new one: */
+	progressCallback=&newProgressCallback;
+	}
+
+template <class KernelParam>
+inline
+void
+Minimizer<KernelParam>::unsetProgressCallback(
+	void)
+	{
+	/* Reset the new progress callback frequency: */
+	progressFrequency=0;
+	
+	/* Destroy the current progress callback: */
+	progressCallback=0;
 	}
 
 }

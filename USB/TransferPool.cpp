@@ -1,7 +1,7 @@
 /***********************************************************************
 TransferPool - Class to manage a pool of USB transfer buffers for
 asynchronous bulk or isochronous transmission.
-Copyright (c) 2014-2024 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This file is part of the USB Support Library (USB).
 
@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdexcept>
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
-#include <Misc/FunctionCalls.h>
+#include <Threads/FunctionCalls.h>
 #include <USB/Config.h>
 #include <USB/Device.h>
 
@@ -101,7 +101,7 @@ void TransferPool::transferCallback(libusb_transfer* transfer)
 	if(transfer->status==LIBUSB_TRANSFER_COMPLETED&&!thisPtr->cancelling)
 		{
 		/* Call the end-user callback: */
-		(*thisPtr->userTransferCallback)(tli);
+		(*thisPtr->userTransferCallback)(*tli);
 		}
 	}
 
@@ -111,8 +111,7 @@ TransferPool::TransferPool(unsigned int sNumTransfers,size_t sTransferSize)
 	 transferSize(sTransferSize),
 	 buffer(0),transfers(0),
 	 activeDeficit(0),
-	 cancelling(false),
-	 userTransferCallback(0)
+	 cancelling(false)
 	{
 	if(!allocateTransfers())
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot allocate USB transfer objects");
@@ -124,8 +123,7 @@ TransferPool::TransferPool(unsigned int sNumTransfers,unsigned int sNumPackets,s
 	 transferSize(size_t(numPackets)*packetSize),
 	 buffer(0),transfers(0),
 	 activeDeficit(0),
-	 cancelling(false),
-	 userTransferCallback(0)
+	 cancelling(false)
 	{
 	if(!allocateTransfers())
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot allocate USB transfer objects");
@@ -145,7 +143,7 @@ TransferPool::~TransferPool(void)
 	delete[] buffer;
 	}
 
-void TransferPool::submit(Device& device,unsigned int endpoint,unsigned int numActiveTransfers,TransferPool::UserTransferCallback* newUserTransferCallback)
+void TransferPool::submit(Device& device,unsigned int endpoint,unsigned int numActiveTransfers,TransferPool::UserTransferCallback& newUserTransferCallback)
 	{
 	/* Prepare all transfer objects: */
 	unsigned char* bufferPtr=buffer;
@@ -164,8 +162,8 @@ void TransferPool::submit(Device& device,unsigned int endpoint,unsigned int numA
 			}
 		}
 	
-	/* Store the user transfer callback: */
-	userTransferCallback=newUserTransferCallback;
+	/* Replace the user transfer callback: */
+	userTransferCallback=&newUserTransferCallback;
 	
 	/* Submit the given number of transfer objects: */
 	unsigned int numSubmittedTransfers=0;
@@ -227,8 +225,7 @@ void TransferPool::cancel(void)
 	
 	activeDeficit=0;
 	
-	/* Delete the user transfer callback: */
-	delete userTransferCallback;
+	/* Release the user transfer callback: */
 	userTransferCallback=0;
 	}
 

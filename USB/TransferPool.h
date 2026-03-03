@@ -1,7 +1,7 @@
 /***********************************************************************
 TransferPool - Class to manage a pool of USB transfer buffers for
 asynchronous bulk or isochronous transmission.
-Copyright (c) 2014-2018 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This file is part of the USB Support Library (USB).
 
@@ -25,10 +25,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <stddef.h>
 #include <libusb-1.0/libusb.h>
+#include <Misc/Autopointer.h>
 #include <Threads/Spinlock.h>
 
 /* Forward declarations: */
-namespace Misc {
+namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 }
@@ -186,7 +187,7 @@ class TransferPool
 			}
 		};
 	
-	typedef Misc::FunctionCall<Transfer*> UserTransferCallback; // Type for functions called when a USB transfer completes
+	typedef Threads::FunctionCall<Transfer&> UserTransferCallback; // Type for functions called when a USB transfer completes
 	
 	/* Elements: */
 	private:
@@ -201,7 +202,7 @@ class TransferPool
 	TransferQueue unused; // List of transfer objects available to receive data
 	size_t activeDeficit; // Amount by which the current active transfer pool is smaller than the requested size
 	bool cancelling; // Flag to indicate that a transfer request is being cancelled
-	UserTransferCallback* userTransferCallback; // Function called when a USB transfer completes
+	Misc::Autopointer<UserTransferCallback> userTransferCallback; // Function called when a USB transfer completes
 	
 	/* Private methods: */
 	bool allocateTransfers(void);
@@ -214,7 +215,7 @@ class TransferPool
 	~TransferPool(void); // Releases all allocated resources
 	
 	/* Methods: */
-	void submit(Device& device,unsigned int endpoint,unsigned int numActiveTransfers,UserTransferCallback* newUserTransferCallback); // Submits the given number of transfer objects for the given endpoint on the given device
+	void submit(Device& device,unsigned int endpoint,unsigned int numActiveTransfers,UserTransferCallback& newUserTransferCallback); // Submits the given number of transfer objects for the given endpoint on the given device
 	void cancel(void); // Cancels all active transfer requests and resets the pool for another submit(...) call
 	void release(Transfer* transfer); // Releases a locked transfer object back to the unused list
 	};

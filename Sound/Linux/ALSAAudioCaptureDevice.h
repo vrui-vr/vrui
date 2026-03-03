@@ -1,7 +1,7 @@
 /***********************************************************************
 ALSAAudioCaptureDevice - Wrapper class around audio capture devices as
 represented by the ALSA sound library.
-Copyright (c) 2010-2018 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Sound Library (Sound).
 
@@ -80,7 +80,7 @@ class ALSAAudioCaptureDevice:public AudioCaptureDevice
 	virtual SoundDataFormat setAudioFormat(const SoundDataFormat& newFormat);
 	virtual unsigned int allocateFrameBuffers(unsigned int requestedFrameBufferSize,unsigned int requestedNumFrameBuffers);
 	virtual void startStreaming(void);
-	virtual void startStreaming(StreamingCallback* newStreamingCallback);
+	virtual void startStreaming(StreamingCallback& newStreamingCallback);
 	virtual FrameBuffer dequeueFrame(void);
 	virtual void enqueueFrame(const FrameBuffer& frame);
 	virtual void stopStreaming(void);

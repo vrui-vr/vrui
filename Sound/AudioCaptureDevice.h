@@ -1,6 +1,6 @@
 /***********************************************************************
 AudioCaptureDevice - Base class for audio capture devices.
-Copyright (c) 2010-2018 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Sound Library (Sound).
 
@@ -28,7 +28,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Threads/RefCounted.h>
 
 /* Forward declarations: */
-namespace Misc {
+namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 }
@@ -69,11 +69,11 @@ class AudioCaptureDevice
 	
 	typedef Misc::Autopointer<DeviceId> DeviceIdPtr; // Type for smart pointers to device ID objects
 	typedef std::vector<DeviceIdPtr> DeviceList; // Type for lists of device IDs
-	typedef Misc::FunctionCall<const FrameBuffer*> StreamingCallback; // Function call type for streaming capture callback
+	typedef Threads::FunctionCall<const FrameBuffer&> StreamingCallback; // Function call type for streaming capture callback
 	
 	/* Elements: */
 	protected:
-	StreamingCallback* streamingCallback; // Function called when a frame buffer becomes ready in streaming capture mode
+	Misc::Autopointer<StreamingCallback> streamingCallback; // Function called when a frame buffer becomes ready in streaming capture mode
 	bool streaming; // Flag whether the device is currently streaming audio data
 	
 	/* Device enumeration method: */
@@ -92,7 +92,7 @@ class AudioCaptureDevice
 	/* Streaming capture interface methods: */
 	virtual unsigned int allocateFrameBuffers(unsigned int requestedFrameBufferSize,unsigned int requestedNumFrameBuffers) =0; // Allocates the given number of streaming frame buffers of the given sizes in frames; returns actual number of buffers allocated by device
 	virtual void startStreaming(void); // Starts streaming audio capture using a previously allocated set of frame buffers
-	virtual void startStreaming(StreamingCallback* newStreamingCallback); // Ditto; calls callback from separate thread whenever a new frame buffer becomes ready
+	virtual void startStreaming(StreamingCallback& newStreamingCallback); // Ditto; calls callback from separate thread whenever a new frame buffer becomes ready
 	virtual FrameBuffer dequeueFrame(void) =0; // Returns the next frame buffer captured from the audio device; blocks if no frames are ready
 	virtual void enqueueFrame(const FrameBuffer& frame) =0; // Returns the given frame buffer to the capturing queue after the caller is done with it
 	virtual void stopStreaming(void); // Stops streaming audio capture

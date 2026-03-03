@@ -1,7 +1,7 @@
 /***********************************************************************
 UdevMonitor - Class to represent a udev event monitor, to receive
 notification of device plug-in/removal.
-Copyright (c) 2014-2024 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This file is part of the Raw HID Support Library (RawHID).
 
@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <fcntl.h>
 #include <libudev.h>
 #include <Misc/StdError.h>
+#include <Threads/FunctionCalls.h>
 #include <RawHID/Internal/UdevContext.h>
 #include <RawHID/Internal/UdevDevice.h>
 
@@ -34,6 +35,19 @@ namespace RawHID {
 /****************************
 Methods of class UdevMonitor:
 ****************************/
+
+void UdevMonitor::ioEventHandler(Threads::RunLoop::IOWatcher::Event& event)
+	{
+	/* Wait for and receive a device event: */
+	UdevDevice eventDevice(udev_monitor_receive_device(monitor));
+	
+	/* Throw an exception if the device event is not valid: */
+	if(!eventDevice.isValid())
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot read device event");
+	
+	/* Call the device event handler: */
+	(*deviceEventHandler)(eventDevice);
+	}
 
 UdevMonitor::UdevMonitor(void)
 	:monitor(0),fd(-1),listening(false)
@@ -138,6 +152,33 @@ void UdevMonitor::listen(void)
 	int fdFlags=fcntl(fd,F_GETFL);
 	fdFlags&=~O_NONBLOCK;
 	fcntl(fd,F_SETFL,fdFlags);
+	}
+
+void UdevMonitor::watch(Threads::RunLoop& runLoop,DeviceEventHandler& newDeviceEventHandler)
+	{
+	/* Create an I/O watcher for the monitor's event file descriptor if there isn't one yet: */
+	if(ioWatcher==0)
+		ioWatcher=runLoop.createIOWatcher(fd,Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&UdevMonitor::ioEventHandler));
+	
+	/* Replace the current device event handler: */
+	deviceEventHandler=&newDeviceEventHandler;
+	}
+
+void UdevMonitor::watch(Threads::RunLoop& runLoop,Threads::RunLoop::IOWatcher::EventHandler& newIoEventHandler)
+	{
+	/* Create an I/O watcher for the monitor's event file descriptor if there isn't one yet: */
+	if(ioWatcher==0)
+		ioWatcher=runLoop.createIOWatcher(fd,Threads::RunLoop::IOWatcher::Read,true,newIoEventHandler);
+	
+	/* Destroy the current device event handler: */
+	deviceEventHandler=0;
+	}
+
+void UdevMonitor::unwatch(void)
+	{
+	/* Destroy the current I/O watcher and device event handler: */
+	ioWatcher=0;
+	deviceEventHandler=0;
 	}
 
 UdevDevice UdevMonitor::receiveDeviceEvent(void)
