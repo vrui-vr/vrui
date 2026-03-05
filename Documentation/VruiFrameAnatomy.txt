@@ -80,3 +80,28 @@ ank               vblank               vblank               vblank              
                   |                       ^
                   +-----------------------+
                        exposure delay
+
+Vrui Inner Loop
+===============
+
+- Let the run loop block until something happens
+  - or don't
+    - in runContinuously mode
+    - if there are unhandled X events in any of the display event queues
+
+- Tell cluster nodes that new frame is starting
+  - If Vrui was shut down during the previous frame, now is the time to tell everyone
+
+- Sample the application timer
+  - Distribute time to cluster nodes
+
+- Let the run loop handle events (timers, I/O events, OS signals, user signals, process functions)
+
+- Do Vrui frame stuff
+
+- Render all views to all windows
+
+- Call the post-rendering callbacks
+
+- Wait for vsync
+  - or don't
