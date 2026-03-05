@@ -8618,3 +8618,4 @@ Vrui-15.0-001:
   Misc::FunctionCall to Threads::FunctionCall.
   - Updated client code in AlignPoints, MeasurePoints, and TrackingTest
     Vrui utilities.
+- Fixed the top of the README file to reflect reality.
