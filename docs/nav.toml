@@ -1,0 +1,7 @@
+# docs/Vrui/nav.toml
+nav = [
+    { "Vrui" = [
+        # "index.md",
+        { "Getting started" = "installation/index.md" }
+    ]}
+]
