@@ -16,47 +16,49 @@ itself.
 Overview
 ========
 
-Vrui is a C++ software development toolkit for highly interactive
-virtual reality applications, with a focus on portability between vastly
-different virtual reality environments, from laptop or desktop computers
-to CAVEs and other fully immersive systems such as head-mounted
-displays. More information about Vrui can be found at
-http://idav.ucdavis.edu/~okreylos/ResDev/Vrui or
-http://www.keckcaves.org.
+Vrui (rhymes with "gooey") is a C++ software development toolkit for
+highly interactive virtual reality applications, with a focus on
+portability between vastly different virtual reality environments, from
+laptop or desktop computers to tiled walls, CAVEs, and other fully
+immersive systems such as head-mounted displays. More information about
+Vrui can be found at https://web.cs.ucdavis.edu/~okreylos/ResDev/Vrui.
 
 Vrui's development was supported by the University of California, Davis,
-by the UC Davis W.M. Keck Center for Active Visualization in the Earth
-Sciences (KeckCAVES, http://www.keckcaves.org), the W.M. Keck
-Foundation, and the National Science Foundation.
+by Lawrence Berkeley National Laboratory, by the UC Davis W.M. Keck
+Center for Active Visualization in the Earth Sciences (KeckCAVES), by
+the W.M. Keck Foundation, by NASA, by the National Science Foundation,
+by UC Davis DataLab, and by the Alfred P. Sloan Foundation.
 
 Requirements
 ============
 
-On all operating systems, Vrui is based on the X Window System (X11) and
-OpenGL. On Mac OS X, X11 is an optional component and can be installed
-from the installation media. To build Vrui from source on Mac OS X, it
-is necessary to install the optional X11/Xquartz and xcode components
-from the installation media. On Linux, we strongly recommend installing
-appropriate vendor-supplied OpenGL drivers (such as those released by
-Nvidia or ATI/AMD) for optimal 3D graphics performance.
+Vrui runs on UNIX-like operating systems, specifically on Linux, and is
+supported and tested on the major Linux distributions (Fedora, Red Hat, 
+Ubuntu, Mint). On all operating systems, Vrui is based on the X Window
+System (X11), OpenGL, and (partially) Vulkan. On Linux, we strongly
+recommend installing appropriate vendor-supplied OpenGL drivers (such as
+those released by Nvidia or ATI/AMD) for optimal 3D graphics
+performance.
 
-Vrui uses additional libraries if it detects them on the local system,
-such as libpng, libjpeg, and libtiff to read/write images in PNG, JPEG,
-and TIFF formats, respectively, and OpenAL to render three-dimensional
-sound. On Mac OS X, libpng, libjpeg, and libtiff need to be downloaded
-from their respective repositories and built from source. On Linux,
-OpenAL might not be installed by default and needs to be installed via
-the distribution's package manager.
+Vrui requires some system libraries such as g++ and zlib, and uses
+additional system libraries if it detects them on the local system, such
+as libpng, libjpeg, and libtiff to read/write images in PNG, JPEG, and
+TIFF formats, respectively, and OpenAL to render three-dimensional
+sound.
 
-The full list of libraries used by Vrui on Linux:
--------------------------------------------------
+The full list of system libraries used by Vrui on Linux:
+--------------------------------------------------------
 
 Required:
 * essentials   (Essential building tools such as find and make)
-* G++          (The GNU C++ compiler)
+* g++          (The GNU C++ compiler)
 * zlib         (zlib compression/decompression library)
 * GL           (OpenGL 3D graphics library)
 * GLU          (OpenGL utility package)
+
+Required to support commodity VR head-mounted displays (HTC Vive (Pro),
+Valve Index, ...):
+* Vulkan       (Vulkan 3D graphics library)
 
 Recommended:
 * libudev      (udev event notification library)
@@ -80,7 +82,7 @@ Recommended:
 
 Optional:
 * bluez-libs   (user-space bluetooth library to talk to Wiimote
-                devices)
+                or PS Move controllers or other input devices)
 * libdc1394    (FireWire video capture library)
 * speex        (low-latency audio compression library)
 * libogg       (Ogg audio/video container library)
@@ -90,23 +92,28 @@ Optional:
 Quick Installation Guide for the Impatient
 ==========================================
 
-(Replace <build> by the current Vrui build number.)
-
-0. (Install required packages, if necessary or desired.)
+0. (Install required and/or optional packages, if necessary.)
 
 1. Create src directory in home directory and change into it:
    > mkdir ~/src
    > cd ~/src
 
-2. Download and unpack the Vrui tarball:
-   > wget -O - <download path>/Vrui-<version>-<build>.tar.gz | tar xfz -
+2a. Clone the Vrui git repository:
+    > git clone git@github.com/vrui-vr/vrui.git Vrui
 
-3. Change into Vrui base directory:
-   > cd Vrui-<version>-<build>
+*or*
+
+2b. Download the Vrui git repository as a zip file:
+    (download from GitHub web page to local file)
+    > unzip <download directory>/vrui-main.zip
+    > mv vrui-main Vrui
+
+3. Change into the Vrui base directory:
+   > cd Vrui
 
 4. Build Vrui inside the Vrui base directory:
    > make
-   or, for multi-processor machines
+   or, for multi-processor machines,
    > make -j<number of CPUs>
 
 5. Install Vrui into /usr/local
@@ -117,18 +124,16 @@ Quick Installation Guide for the Impatient
 Building and Running Vrui Example Applications
 ----------------------------------------------
 
-1. Change into example application directory:
-   > cd ~/src/Vrui-<version>-<build>/ExamplePrograms
+1. Change into the example application directory:
+   > cd ExamplePrograms
 
-2. Build example applications:
+2. Build the example applications:
    > make
 
-3. (On MacOS X: Start X11.)
-
-4. Run Earth renderer:
+3. Run Earth renderer:
    > ./bin/ShowEarthModel
 
-5. Read about Vrui's default user interface in HTML documentation in
+4. Read about Vrui's default user interface in HTML documentation in
    /usr/local/share/doc/Vrui-<version>
 
 Detailed Installation notes
