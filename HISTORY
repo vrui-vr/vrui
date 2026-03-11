@@ -8619,3 +8619,5 @@ Vrui-15.0-001:
   - Updated client code in AlignPoints, MeasurePoints, and TrackingTest
     Vrui utilities.
 - Fixed the top of the README file to reflect reality.
+- Added IO::FileMonitor::getBlockFd method to integrate file monitor
+  with multiplexing systems not using Threads::RunLoop.

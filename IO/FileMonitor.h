@@ -133,6 +133,10 @@ class FileMonitor
 	void watch(Threads::RunLoop& runLoop); // Watches the file monitor from the given run loop
 	void unwatch(void); // Stops watching the file monitor
 	void startPolling(void); // Sets the file monitor to allow polling; ignored if background event handling is active
+	int getBlockFd(void) // Returns a file descriptor which to check for readability before calling processEvents() to avoid blocking
+		{
+		return fd;
+		}
 	void stopPolling(void); // Resets the file monitor to block on empty event queue
 	bool processEvents(void); // Processes all pending events that have occurred; blocks until at least one event occurred if not in polling mode; returns true if any event callbacks were called
 	Cookie addPath(const char* pathName,EventMask eventMask,EventCallback& eventCallback); // Adds a file or directory to the monitor's watch list with the given event mask; given callback is called from background thread when event occurs; returns cookie unique for the given path inside this FileMonitor object
