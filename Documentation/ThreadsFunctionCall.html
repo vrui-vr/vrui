@@ -15,7 +15,7 @@
 
 <H2>The <TT>Threads::FunctionCall</TT> Class</H2>
 
-<P><TT>Threads::FunctionCall</TT> is the base class for function call objects. It is templatized by the single parameter that is passed to the functions that it represents:
+<P><TT>Threads::FunctionCall</TT> is the base class for function call objects. It is templatized by the type of the single parameter that is passed to the functions that it represents:
 
 <PRE><TT>namespace Threads {
 template &lt;class ParameterParam&gt;
@@ -50,7 +50,6 @@ class FunctionCall:public RefCounted
 	typedef ParameterParam Parameter; // Function call parameter type
 	
 	/* Constructors and destructors: */
-	public:
 	virtual ~FunctionCall(void);
 	
 	/* Methods: */
@@ -69,7 +68,7 @@ class FunctionCall:public RefCounted
 
 <P>Classes that emit events typically have methods to register callbacks for said events, or take a callback object as an argument to their class constructor. In either case, the typical pattern to register a callback is to do so with a non-const reference to an object of a class derived from the template version of <TT>Threads::FunctionCall</TT> that reflects the emitted event's event data type. The reason for expecting a reference to an event object instead of a pointer is to minimize potential mistakes when managing the lifetimes of callback objects. Concretely, the procedure goes like this:
 
-<PRE></TT>/* Create a new callback object on the heap, following one of the approaches from the following sections: */
+<PRE></TT>/* Create a new callback object on the heap, following wrapper or functor approaches described in the following sections: */
 Threads::FunctionCall&lt;CallbackParameter&gt;* callback=...;
 
 /* Pass the callback object to the registration method: */
@@ -78,22 +77,22 @@ eventSource.registerCallback(*callback); // Note: de-reference the callback obje
 /* Do whatever with the callback object / pointer: */
 ...</TT></PRE>
 
-Note that the callback object created in the first step is a reference-counted object with an initial reference count of zero. Meaning, if the object needs to be held any extended time beyond its initial creation and registration with an event source, it must be wrapped in a smart pointer such as <TT>Misc::Autopointer</TT>, for example:
+Note that the callback object created in the first step is a reference-counted object with an initial reference count of zero. Meaning, if the object needs to be held any period of time beyond its initial creation and registration with an event source, it must be held by a smart pointer such as <TT>Misc::Autopointer</TT>, for example:
 
 <PRE></TT>/* Create a new callback object on the heap, following one of the approaches from the following sections: */
 Misc::Autopointer&lt;Threads::FunctionCall&lt;CallbackParameter&gt; &gt; callback=...;</TT></PRE>
 
 This is a lot of typing for the simple task of creating a callback, so please read on to find out why it is hardly ever necessary.</P>
 
-<P>In most scenarios, the client will have no further use for the freshly registered callback object in a &quot;fire-and-forget&quot; scenario. Maybe the callback object will be destroyed when the callback emitter itself is destroyed, or maybe there is another method that will cancel the event for which the callback was registered, in which case the callback object is destroyed at that time. Either way, the typical client-side pattern for this, assuming for simplicity that the client uses a derived functor object, is:
+<P>In most scenarios, the client will have no further use for the freshly registered callback object; i.e., the most common use case is a &quot;fire-and-forget&quot; scenario where maybe the callback object will be destroyed when the event-emitting object itself is destroyed, or maybe the event-emitting object has another method that will cancel the event for which the callback was registered, in which case the callback object is destroyed by the emitting object at that time. Either way, this is implemented by the event source object holding the callback function with a reference-counting smart pointer. The typical client-side pattern for this use case, assuming for simplicity that the client uses a derived functor object, is:
 
-<PRE></TT>eventSource.registerCallback(*new CustomCallback); // Note: de-reference the result from new here!</TT></PRE>
+<PRE></TT>eventSource.registerCallback(*new CallbackFunctor); // Note: de-reference the result from new here!</TT></PRE>
 
-The fact that <TT>Threads::FunctionCall</TT> is derived from <TT>Threads::RefCounted</TT>, and that the event source will hold the passed callback object via a <TT>Misc::Autopointer</TT>, guarantees that the newly-created callback object will be destroyed at the appropriate moment and not leak memory or other held resources past its expected lifetime. Not that this call pattern makes it unnecessary to wrap the pointer to the newly-created callback object in a smart pointer. The pointer only exists between the time the object is created, and then immediately registered with the event source.</P>
+The facts that <TT>Threads::FunctionCall</TT> is derived from <TT>Threads::RefCounted</TT>, and that the event source will hold the passed callback object via a <TT>Misc::Autopointer</TT>, guarantee that the newly-created callback object will be destroyed at the appropriate moment and not leak memory or other held resources past its expected lifetime. Note that this call pattern makes it unnecessary to wrap the pointer to the newly-created callback object in a smart pointer: the pointer only exists between the time the object is created, and then immediately registered with the event source, where it will be held with a smart pointer.</P>
 
 <H3>Creating Function Wrappers</H3>
 
-<P>The <TT>Threads/FunctionCalls.h</TT> header file provides several pre-made classes derived from <TT>Threads::FunctionCall</TT> to wrap several types of existing functions, such as global functions with or without additional arguments; class methods with or without additional arguments, functions taking const or non-const references, etc. The header also provides a templatized namespace-global helper function
+<P>The <TT>Threads/FunctionCalls.h</TT> header file provides several pre-made classes derived from <TT>Threads::FunctionCall</TT> to wrap several types of existing functions, such as global functions with or without additional arguments, class methods with or without additional arguments, functions taking const or non-const references, etc. The header also provides a templatized namespace-global helper function
 
 <PRE><TT>namespace Threads {
 template &lt;class ParameterParam&gt;
@@ -109,13 +108,13 @@ that simplifies the process of creating appropriate wrappers for existing functi
 	/* Do something with the EventData object... */
 	}</TT></PRE>
 
-In this case, the client would create a wrapper for that callback function via
+In this case, the client would create a wrapper for that <TT>eventCallback</TT> function via
 
 <PRE><TT>Threads::FunctionCall&lt;const EventData&amp;&gt;* callback=Threads::createFunctionCall(eventCallback);</TT></PRE>
 
 or, typically, directly pass the newly-created wrapper to the appropriate registration method via
 
-<PRE><TT>eventSource.registerCallback(*Threads::createFunctionCall(eventCallback)); // Note: de-reference the callback pointer here!</TT></PRE>
+<PRE><TT>eventSource.registerCallback(*Threads::createFunctionCall(eventCallback)); // Note: de-reference the result pointer here!</TT></PRE>
 
 The template arguments for the <TT>Threads::createFunctionCall</TT> function are determined automatically by the compiler.</P>
 
@@ -129,9 +128,149 @@ The template arguments for the <TT>Threads::createFunctionCall</TT> function are
 then the wrapper would instead be created thus, assuming that it is created from inside another method of class <TT>Client</TT>:
 
 <PRE><TT>Threads::FunctionCall&lt;const EventData&amp;&gt;* callback=Threads::createFunctionCall(this,&Client::eventCallback);</TT></PRE>
+
+or
+
+<PRE><TT>eventSource.registerCallback(*Threads::createFunctionCall(this,&Client::eventCallback)); // Note: de-reference the result pointer here!</TT></PRE>
 </P>
 
+<H4>Passing Additional Arguments to Wrapped Functions</H4>
+
+<P>In many cases, the per-event data provided by a callback's main parameter is not sufficient to handle the callback. Callbacks often have additional state associated with them that is outside the purview of the event source and has to be communicated separately. For this common use case, the <TT>Threads/FunctionCalls.h</TT> header file defines a category of wrappers for functions or non-static class methods that take one additional, event-independent, argument of an arbitrary type. This is the analog of the C-style callback pattern where callback functions receive an opaque <TT>void* userData</TT> pointer. Concretely, this might look like this:
+<PRE><TT>
+void eventCallback(const EventData&amp; eventData,int eventId)
+	{
+	/* The eventId will always be 42 in this example, regardless of the event or content of eventData: */
+	std::cout&lt;&lt;&quot;Event callback with ID &quot;&lt;&lt;eventId&lt;&lt;std::endl;
+	}
+
+...
+
+
+/* Register a callback that receives a fixed additional argument of type int: */
+eventSource.registerCallback(*Threads::createFunctionCall(eventCallback,42)); // Note: de-reference the result pointer here!</TT></PRE>
+
+Importantly, the additional argument is passed <EM>by value</EM> to the callback function. Meaning, if the argument type is a compound and potentially complex data type and should be passed by reference or pointer, then the additional argument must be declared as a reference or a pointer, and passed to the <TT>Threads::createFunctionCall</TT> function in a compatible type. Specifically, the <TT>Threads::createFunctionCall</TT> takes the additional argument as a const reference, <EM>unless</EM> the argument is of a non-const reference type in the callback function, in which case the argument is expected in that same type.</P>
+
+<P>In detail, the type correspondences are as follows:
+<UL>
+	<LI>Callback function takes the additional argument as <TT>const ArgumentParam&amp;</TT>: <TT>Threads::createFunctionCall</TT> takes the additional argument as <TT>const ArgumentParam&amp;</TT> and passes it to the callback function directly as that.</LI>
+	
+	<LI>Callback function takes the additional argument as <TT>ArgumentParam&amp;</TT>: <TT>Threads::createFunctionCall</TT> takes the additional argument as <TT>ArgumentParam&amp;</TT> and passes it to the callback function directly as that.</LI>
+	
+	<LI>Callback function takes the additional argument as a const pointer <TT>const ArgumentParam*</TT>: <TT>Threads::createFunctionCall</TT> takes the additional argument as <EM> a const reference to</EM> <TT>const ArgumentParam*</TT> and passes it to the callback function by value as <TT>const ArgumentParam*</TT>.
+	
+	<LI>Callback function takes the additional argument as a non-const pointer <TT>ArgumentParam*</TT>: <TT>Threads::createFunctionCall</TT> takes the additional argument as <EM> a const reference to</EM> <TT>ArgumentParam*</TT> and passes it to the callback function by value as <TT>ArgumentParam*</TT>.
+	
+	<LI>Callback function takes the additional argument as anything else: <TT>Threads::createFunctionCall</TT> takes the additional argument as <EM> a const reference to</EM> <TT>ArgumentParam</TT>, i.e., as <TT>const ArgumentParam&amp;</TT>, stores it internally <EM>as a copy</EM> of type <TT>ArgumentParam</TT>, and passes that copy to the callback function by value as <TT>ArgumentParam</TT>.
+</UL>
+In practice, this &quot;just works,&quot; and the client developer does not have to worry about the exact details of <EM>how</EM> it works.</P>
+
+<H4>Managing the Lifetime of Additional Function Arguments</H4>
+
+<P>If a callback function requires a complex data structure as additional argument that cannot, or should not, be copied inside the callback wrapper and passed to the callback function by value, and therefore needs to be passed as a reference or pointer, this raises the question of who is responsible for disposing of that additional argument once it is no longer needed. In C-style callbacks, outside of simple use cases, this either leads to excessively complicated code managing the lifetimes of all those per-callback structures, or to memory and other resource leaks. With <TT>Threads::FunctionCall</TT>, this problem is elegantly solved by deriving reference-passed additional argument data structures from the <TT>Threads::RefCounted</TT> base class, and passing them to callback functions as smart pointers. Concretely,
+
+<PRE><TT>class AdditionalArgument:public Threads::RefCounted
+	{
+	...
+	};
+
+void eventCallback(const EventData&amp; eventData,Misc::Autopointer&lt;AdditionalArgument&gt; argument)
+	{
+	...
+	}
+
+...
+
+
+eventSource.registerCallback(*Threads::createFunctionCall(eventCallback,Misc::Autopointer&lt;AdditionalArgument&gt;(new AdditionalArgument))); // Note: de-reference the result pointer here!</TT></PRE>
+
+Note that, as always, the additional argument is passed <EM>by value</EM>, in this case as a value of type <TT>Misc::Autopointer</TT>, and that the additional argument <EM>must be</EM> explicitly wrapped in a <TT>Misc::Autopointer</TT> when passed to <TT>Threads::createFunctionCall</TT>.</P>
+
+<P>Some future version of the <TT>Threads</TT> library will have an additional category of wrapper classes where <TT>Threads::createFunctionCall</TT> will accept a naked pointer, such as from <TT>new ArgumentParam</TT>, hold it internally using a smart pointer, and then pass it to the callback function by reference as an <TT>ArgumentParam&amp;</TT>. Stay tuned.</P>
+
+<P>In general, if the additional argument structures become more complicated to define and to manage, it might be time to switch to handling callbacks by creating custom functor classes, which have none of those issues.</P>
+
 <H3>Creating Functor Classes</H3>
+
+<P>Implementing callbacks as functor classes is straightforward. One simply has to declare a new class derived from the appropriate <TT>Threads::FunctionCall</TT> template, declare all state necessary to handle callbacks as elements, and finally implement the const and/or non-const version of the virtual <TT>operator()(ParameterParam parameter)</TT> method:
+
+<PRE><TT>class EventCallback:public Threads::FunctionCall&lt;const EventData&amp;&gt;
+	{
+	/* Elements: */
+	private:
+	... // All state that is needed to handle callbacks...
+	
+	/* Constructors and destructors: */
+	public:
+	EventCallback(...) // Takes all state that is needed to later handle callbacks
+	virtual ~EventCallback(void); // Releases all resources held by the callback object
+	
+	/* Methods from class Threads::FunctionCall&lt;const EventData&amp;&gt;: */
+	void operator()(const EventData& eventData) const
+		{
+		/* Handle the callback; <B>cannot</B> modify the internal state of the callback object: */
+		...
+		}
+	void operator()(const EventData& eventData)
+		{
+		/* Handle the callback; <B>can</B> modify the internal state of the callback object: */
+		...
+		}
+	};
+
+...
+
+/* Register a new callback, passing necessary state to the EventCallback constructor: */
+eventSource.registerCallback(*new EventCallback(...)); // Note: de-reference the result from new here!</TT></PRE>
+</P>
+
+<P>As <TT>Threads::FunctionCall</TT> is itself derived from <TT>Threads::RefCounted</TT>, the lifetimes of such function objects will be managed automatically.</P>
+
+<P>In the common case where function objects need to interact closely with objects of some class, the functor class is typically declared as a sub-class of that class, declared friend, and holds as part of its state a reference to an object of the parent class, which is passed as an argument to its constructor:
+
+
+<PRE><TT>class EventSink
+	{
+	/* Embedded classes: */
+	private:
+	class EventCallback:public Threads::FunctionCall&lt;const EventData&amp;&gt;
+		{
+		/* Elements: */
+		private:
+		EventSink& eventSink; // Reference to the object to which this callback belongs
+		... // All state that is needed to handle callbacks...
+		
+		/* Constructors and destructors: */
+		public:
+		EventCallback(EventSink& sEventSink,...) // Takes a reference to the owning object and all state that is needed to later handle callbacks
+			:eventSink(sEventSink),...
+			{
+			}
+		virtual ~EventCallback(void); // Releases all resources held by the callback object
+		
+		/* Methods from class Threads::FunctionCall&lt;const EventData&amp;&gt;: */
+		void operator()(const EventData& eventData) const
+			{
+			/* Handle the callback; <B>cannot</B> modify the internal state of the callback object: */
+			...
+			}
+		void operator()(const EventData& eventData)
+			{
+			/* Handle the callback; <B>can</B> modify the internal state of the callback object: */
+			...
+			}
+		};
+	
+	...
+	
+	void registerForEvent(EventSource& eventSource) // Register a callback with the given event source
+		{
+		/* Register a new callback, passing a reference to this object and necessary state to the EventCallback constructor: */
+		eventSource.registerCallback(*new EventCallback(*this,...)); // Note: de-reference the result from new here!
+		}
+	};</TT></PRE>
+</P>
 
 </BODY>
 
