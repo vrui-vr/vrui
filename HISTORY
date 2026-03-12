@@ -8621,3 +8621,4 @@ Vrui-15.0-001:
 - Fixed the top of the README file to reflect reality.
 - Added IO::FileMonitor::getBlockFd method to integrate file monitor
   with multiplexing systems not using Threads::RunLoop.
+- Added new ThreadsFunctionCall.html in HTML Documentation folder.
