@@ -30,7 +30,7 @@ In other words, any object derived from <TT>Threads::FunctionCall&lt;ParameterPa
 <PRE><TT>void function(ParameterParam parameter);</TT></PRE>
 </P>
 
-<P>Note that <TT>ParameterParam</TT> is the <EM>direct, call-by-value</EM> type of the argument of the represented C/C++ function. In other words, if a function expects a pointer or a reference to an object, such as
+<P>Note that <TT>ParameterParam</TT> is the <EM>direct, call-by-value</EM> type of the argument of the represented C/C++ function. In other words, if a function expects a pointer or a reference to an object, then the template parameter must include that reference or pointer. For example, if a function is declared as
 
 <PRE><TT>void function(const SomeClass&amp; someObject);</TT></PRE>
 
@@ -66,7 +66,7 @@ class FunctionCall:public RefCounted
 
 <H3>Registering Callbacks</H3>
 
-<P>Classes that emit events typically have methods to register callbacks for said events, or take a callback object as an argument to their class constructor. In either case, the typical pattern to register a callback is to do so with a non-const reference to an object of a class derived from the template version of <TT>Threads::FunctionCall</TT> that reflects the emitted event's event data type. The reason for expecting a reference to an event object instead of a pointer is to minimize potential mistakes when managing the lifetimes of callback objects. Concretely, the procedure goes like this:
+<P>Classes that emit events typically have methods to register callbacks for said events, or take a callback object as an argument to their class constructor. In either case, the typical pattern to register a callback is to do so with a non-const reference to an object of a class derived from the template version of <TT>Threads::FunctionCall</TT> that reflects the emitted event's event data type. The reason for registration methods expecting a reference to a function object instead of a pointer is to minimize potential mistakes when managing the lifetimes of function objects. Concretely, the procedure goes like this:
 
 <PRE></TT>/* Create a new callback object on the heap, following wrapper or functor approaches described in the following sections: */
 Threads::FunctionCall&lt;CallbackParameter&gt;* callback=...;
@@ -137,15 +137,14 @@ or
 <H4>Passing Additional Arguments to Wrapped Functions</H4>
 
 <P>In many cases, the per-event data provided by a callback's main parameter is not sufficient to handle the callback. Callbacks often have additional state associated with them that is outside the purview of the event source and has to be communicated separately. For this common use case, the <TT>Threads/FunctionCalls.h</TT> header file defines a category of wrappers for functions or non-static class methods that take one additional, event-independent, argument of an arbitrary type. This is the analog of the C-style callback pattern where callback functions receive an opaque <TT>void* userData</TT> pointer. Concretely, this might look like this:
-<PRE><TT>
-void eventCallback(const EventData&amp; eventData,int eventId)
+
+<PRE><TT>void eventCallback(const EventData&amp; eventData,int eventId)
 	{
 	/* The eventId will always be 42 in this example, regardless of the event or content of eventData: */
 	std::cout&lt;&lt;&quot;Event callback with ID &quot;&lt;&lt;eventId&lt;&lt;std::endl;
 	}
 
 ...
-
 
 /* Register a callback that receives a fixed additional argument of type int: */
 eventSource.registerCallback(*Threads::createFunctionCall(eventCallback,42)); // Note: de-reference the result pointer here!</TT></PRE>
@@ -168,22 +167,23 @@ In practice, this &quot;just works,&quot; and the client developer does not have
 
 <H4>Managing the Lifetime of Additional Function Arguments</H4>
 
-<P>If a callback function requires a complex data structure as additional argument that cannot, or should not, be copied inside the callback wrapper and passed to the callback function by value, and therefore needs to be passed as a reference or pointer, this raises the question of who is responsible for disposing of that additional argument once it is no longer needed. In C-style callbacks, outside of simple use cases, this either leads to excessively complicated code managing the lifetimes of all those per-callback structures, or to memory and other resource leaks. With <TT>Threads::FunctionCall</TT>, this problem is elegantly solved by deriving reference-passed additional argument data structures from the <TT>Threads::RefCounted</TT> base class, and passing them to callback functions as smart pointers. Concretely,
+<P>If a callback function requires a complex data structure as additional argument that cannot, or should not, be copied inside the callback wrapper and passed to the callback function by value, and therefore needs to be passed as a reference or pointer, it raises the question of who is responsible for disposing of that additional argument once it is no longer needed. In C-style callbacks, outside of simple use cases, this either leads to excessively complicated code managing the lifetimes of all those per-callback structures, or to memory and other resource leaks. With <TT>Threads::FunctionCall</TT>, this problem is elegantly solved by deriving reference-passed additional argument data structures from the <TT>Threads::RefCounted</TT> base class, and passing them to callback functions as smart pointers. Concretely,
 
 <PRE><TT>class AdditionalArgument:public Threads::RefCounted
 	{
 	...
 	};
 
-void eventCallback(const EventData&amp; eventData,Misc::Autopointer&lt;AdditionalArgument&gt; argument)
+typedef Misc::Autopointer&lt;AdditionalArgument&gt; AdditionalArgumentPointer; // Type for smart pointers to AdditionalArgument objects
+
+void eventCallback(const EventData&amp; eventData,AdditionalArgumentPointer argument) // Note: the smart pointer is passed by value
 	{
 	...
 	}
 
 ...
 
-
-eventSource.registerCallback(*Threads::createFunctionCall(eventCallback,Misc::Autopointer&lt;AdditionalArgument&gt;(new AdditionalArgument))); // Note: de-reference the result pointer here!</TT></PRE>
+eventSource.registerCallback(*Threads::createFunctionCall(eventCallback,AdditionalArgumenPtr(new AdditionalArgument))); // Note: wrap the additional argument in a smart pointer and de-reference the result pointer here!</TT></PRE>
 
 Note that, as always, the additional argument is passed <EM>by value</EM>, in this case as a value of type <TT>Misc::Autopointer</TT>, and that the additional argument <EM>must be</EM> explicitly wrapped in a <TT>Misc::Autopointer</TT> when passed to <TT>Threads::createFunctionCall</TT>.</P>
 
@@ -207,12 +207,12 @@ Note that, as always, the additional argument is passed <EM>by value</EM>, in th
 	virtual ~EventCallback(void); // Releases all resources held by the callback object
 	
 	/* Methods from class Threads::FunctionCall&lt;const EventData&amp;&gt;: */
-	void operator()(const EventData& eventData) const
+	virtual void operator()(const EventData& eventData) const
 		{
 		/* Handle the callback; <B>cannot</B> modify the internal state of the callback object: */
 		...
 		}
-	void operator()(const EventData& eventData)
+	virtual void operator()(const EventData& eventData)
 		{
 		/* Handle the callback; <B>can</B> modify the internal state of the callback object: */
 		...
@@ -250,17 +250,19 @@ eventSource.registerCallback(*new EventCallback(...)); // Note: de-reference the
 		virtual ~EventCallback(void); // Releases all resources held by the callback object
 		
 		/* Methods from class Threads::FunctionCall&lt;const EventData&amp;&gt;: */
-		void operator()(const EventData& eventData) const
+		virtual void operator()(const EventData& eventData) const
 			{
 			/* Handle the callback; <B>cannot</B> modify the internal state of the callback object: */
 			...
 			}
-		void operator()(const EventData& eventData)
+		virtual void operator()(const EventData& eventData)
 			{
 			/* Handle the callback; <B>can</B> modify the internal state of the callback object: */
 			...
 			}
 		};
+	
+	friend class EventCallback; // Declare the functor class as a friend
 	
 	...
 	
