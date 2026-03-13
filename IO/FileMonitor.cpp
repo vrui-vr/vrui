@@ -386,7 +386,7 @@ FileMonitor::Cookie FileMonitor::addPath(const char* pathName,FileMonitor::Event
 	#endif
 	
 	/* Add the given path to inotify's watch map: */
-	Cookie cookie=inotify_add_watch(fd,pathName,eventMask);
+	Cookie cookie=inotify_add_watch(fd,pathName,em);
 	if(cookie<0)
 		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot monitor path %s",pathName);
 	

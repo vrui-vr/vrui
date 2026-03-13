@@ -8622,3 +8622,5 @@ Vrui-15.0-001:
 - Added IO::FileMonitor::getBlockFd method to integrate file monitor
   with multiplexing systems not using Threads::RunLoop.
 - Added new ThreadsFunctionCall.html in HTML Documentation folder.
+- Fixed bug in IO::FileMonitor: input event masks were not translated
+  into kernel event masks.
