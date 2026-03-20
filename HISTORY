@@ -8624,3 +8624,6 @@ Vrui-15.0-001:
 - Added new ThreadsFunctionCall.html in HTML Documentation folder.
 - Fixed bug in IO::FileMonitor: input event masks were not translated
   into kernel event masks.
+- API changes: internal overhaul of Vrui's main loop to use
+  Threads::RunLoop and replace ad-hoc event notifications and frame
+  callbacks with Threads::RunLoop events and process functions.
