@@ -257,6 +257,7 @@ SceneGraphViewer::SceneGraphViewer(int& argc,char**& argv)
 	bool enable=true;
 	cmdLine.addEnableOption("enable","e",enable,"Initially enable all following scene graphs.");
 	cmdLine.addDisableOption("disable","d",enable,"Initially disable all following scene graphs.");
+	cmdLine.stopOnArguments();
 	
 	// DEBUGGING
 	// Realtime::TimePointMonotonic loadTimer;
