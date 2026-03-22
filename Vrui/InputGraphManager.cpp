@@ -265,6 +265,7 @@ bool InputGraphManager::ToolSlot::deactivate(void)
 				/* Detach the tool stack from the device's scene graph: */
 				igm->sceneGraphManager->removePhysicalNode(*igm->toolStackNode);
 				igm->toolStackNode=0;
+				igm->toolStackBaseFeature=InputDeviceFeature();
 				}
 			
 			/* Delete the tool deletion candidate if this was the feature that selected it and the input device is still in the tool kill zone: */

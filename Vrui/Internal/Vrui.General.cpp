@@ -3366,7 +3366,7 @@ UIManager* getUiManager(void)
 void popupPrimaryWidget(GLMotif::Widget* topLevel)
 	{
 	/* Check if the widget is already popped up: */
-	GLMotif::WidgetManager* wm=getWidgetManager();
+	GLMotif::WidgetManager* wm=vruiState->widgetManager;
 	if(wm->isManaged(topLevel))
 		{
 		/* Check if the widget is visible or hidden: */

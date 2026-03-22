@@ -8628,3 +8628,6 @@ Vrui-15.0-001:
   behavior.
 - Added InteractionDemo to ExamplePrograms, showing how to pick and drag
   objects with a 6-DOF input device.
+- Small shortcut in Vrui/Internal/Vrui.General.cpp
+- Fixed bug in Vrui::InputGraphManager that crashed the program when an
+  unbound input device button was clicked in the tool kill zone.
