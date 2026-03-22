@@ -1,6 +1,6 @@
 /***********************************************************************
 RayMenuTool - Class for menu selection tools using ray selection.
-Copyright (c) 2004-2016 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -23,8 +23,14 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #ifndef VRUI_RAYMENUTOOL_INCLUDED
 #define VRUI_RAYMENUTOOL_INCLUDED
 
+#include <string>
 #include <Vrui/GUIInteractor.h>
 #include <Vrui/MenuTool.h>
+
+/* Forward declarations: */
+namespace Vrui {
+class VRScreen;
+}
 
 namespace Vrui {
 
@@ -34,17 +40,33 @@ class RayMenuToolFactory:public ToolFactory
 	{
 	friend class RayMenuTool;
 	
-	/* Elements: */
+	/* Embedded classes: */
 	private:
-	Scalar initialMenuOffset; // Offset of initial menu position along selection ray
-	bool interactWithWidgets; // Flag if the menu tool doubles as a widget interaction tool
+	struct Configuration // Structure containing tool settings
+		{
+		/* Elements: */
+		public:
+		Scalar initialMenuOffset; // Offset of initial menu position along selection ray
+		bool interactWithWidgets; // Flag if the menu tool doubles as a widget interaction tool
+		std::string alignmentScreen; // Optional name of a screen with which to align a newly popped-up menu; if empty (default), use standard UI alignment
+		
+		/* Constructors and destructors: */
+		Configuration(void); // Creates default configuration
+		
+		/* Methods: */
+		void read(const Misc::ConfigurationFileSection& cfs); // Overrides configuration from configuration file section
+		void write(Misc::ConfigurationFileSection& cfs) const; // Writes configuration to configuration file section
+		};
+	
+	/* Elements: */
+	Configuration configuration; // Default configuration for all tools
 	
 	/* Constructors and destructors: */
 	public:
 	RayMenuToolFactory(ToolManager& toolManager);
 	virtual ~RayMenuToolFactory(void);
 	
-	/* Methods from ToolFactory: */
+	/* Methods from class ToolFactory: */
 	virtual const char* getName(void) const;
 	virtual Tool* createTool(const ToolInputAssignment& inputAssignment) const;
 	virtual void destroyTool(Tool* tool) const;
@@ -57,18 +79,23 @@ class RayMenuTool:public MenuTool,public GUIInteractor
 	/* Elements: */
 	private:
 	static RayMenuToolFactory* factory; // Pointer to the factory object for this class
+	RayMenuToolFactory::Configuration configuration; // Private configuration of this tool
+	VRScreen* alignmentScreen; // Optional screen with which to align a newly popped-up menu; if null, use standard UI alignment
 	
 	/* Constructors and destructors: */
 	public:
 	RayMenuTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment);
 	
-	/* Methods from Tool: */
+	/* Methods from class Tool: */
+	virtual void configure(const Misc::ConfigurationFileSection& configFileSection);
+	virtual void storeState(Misc::ConfigurationFileSection& configFileSection) const;
+	virtual void initialize(void);
 	virtual const ToolFactory* getFactory(void) const;
 	virtual void buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData);
 	virtual void frame(void);
 	virtual void display(GLContextData& contextData) const;
 	
-	/* Methods from GUIInteractor: */
+	/* Methods from class GUIInteractor: */
 	virtual Point calcHotSpot(void) const;
 	};
 

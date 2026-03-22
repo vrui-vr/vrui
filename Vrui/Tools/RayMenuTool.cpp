@@ -1,6 +1,6 @@
 /***********************************************************************
 RayMenuTool - Class for menu selection tools using ray selection.
-Copyright (c) 2004-2021 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -22,6 +22,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/Tools/RayMenuTool.h>
 
+#include <Misc/MessageLogger.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Geometry/Vector.h>
@@ -29,20 +30,42 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <GLMotif/PopupMenu.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/MutexMenu.h>
-#include <Vrui/Viewer.h>
+#include <Vrui/VRScreen.h>
 #include <Vrui/UIManager.h>
 #include <Vrui/ToolManager.h>
 
 namespace Vrui {
+
+/**********************************************************
+Methods of class RayMenuToolFactory::Configuration:
+**********************************************************/
+
+RayMenuToolFactory::Configuration::Configuration(void)
+	:initialMenuOffset(getInchFactor()*Scalar(6)),
+	 interactWithWidgets(false)
+	{
+	}
+
+void RayMenuToolFactory::Configuration::read(const Misc::ConfigurationFileSection& cfs)
+	{
+	cfs.updateValue("./initialMenuOffset",initialMenuOffset);
+	cfs.updateValue("./interactWithWidgets",interactWithWidgets);
+	cfs.updateString("./alignmentScreen",alignmentScreen);
+	}
+
+void RayMenuToolFactory::Configuration::write(Misc::ConfigurationFileSection& cfs) const
+	{
+	cfs.storeValue("./initialMenuOffset",initialMenuOffset);
+	cfs.storeValue("./interactWithWidgets",interactWithWidgets);
+	cfs.storeString("./alignmentScreen",alignmentScreen);
+	}
 
 /***********************************
 Methods of class RayMenuToolFactory:
 ***********************************/
 
 RayMenuToolFactory::RayMenuToolFactory(ToolManager& toolManager)
-	:ToolFactory("RayMenuTool",toolManager),
-	 initialMenuOffset(getInchFactor()*Scalar(6)),
-	 interactWithWidgets(false)
+	:ToolFactory("RayMenuTool",toolManager)
 	{
 	/* Initialize tool layout: */
 	layout.setNumButtons(1);
@@ -54,8 +77,7 @@ RayMenuToolFactory::RayMenuToolFactory(ToolManager& toolManager)
 	
 	/* Load class settings: */
 	Misc::ConfigurationFileSection cfs=toolManager.getToolClassSection(getClassName());
-	cfs.updateValue("./initialMenuOffset",initialMenuOffset);
-	cfs.updateValue("./interactWithWidgets",interactWithWidgets);
+	configuration.read(cfs);
 	
 	/* Set tool class' factory pointer: */
 	RayMenuTool::factory=this;
@@ -117,8 +139,36 @@ Methods of class RayMenuTool:
 
 RayMenuTool::RayMenuTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
 	:MenuTool(factory,inputAssignment),
-	 GUIInteractor(false,0,getButtonDevice(0))
+	 GUIInteractor(false,0,getButtonDevice(0)),
+	 configuration(RayMenuTool::factory->configuration),
+	 alignmentScreen(0)
 	{
+	}
+
+void RayMenuTool::configure(const Misc::ConfigurationFileSection& configFileSection)
+	{
+	/* Override private configuration data from given configuration file section: */
+	configuration.read(configFileSection);
+	}
+
+void RayMenuTool::storeState(Misc::ConfigurationFileSection& configFileSection) const
+	{
+	/* Write private configuration data to given configuration file section: */
+	configuration.write(configFileSection);
+	}
+
+void RayMenuTool::initialize(void)
+	{
+	/* Check if popped-up menus should be aligned with a specific screen: */
+	if(!configuration.alignmentScreen.empty())
+		{
+		/* Retrieve the alignment screen: */
+		alignmentScreen=findScreen(configuration.alignmentScreen.c_str());
+		
+		/* Show a warning if the requested screen does not exist: */
+		if(alignmentScreen==0)
+			Misc::sourcedUserWarning(__PRETTY_FUNCTION__,"Alignment screen %s not found",configuration.alignmentScreen.c_str());
+		}
 	}
 
 const ToolFactory* RayMenuTool::getFactory(void) const
@@ -132,7 +182,7 @@ void RayMenuTool::buttonCallback(int,InputDevice::ButtonCallbackData* cbData)
 		{
 		/* Check if the GUI interactor refuses the event: */
 		GUIInteractor::updateRay();
-		if(!(factory->interactWithWidgets&&GUIInteractor::buttonDown(false)))
+		if(!(configuration.interactWithWidgets&&GUIInteractor::buttonDown(false)))
 			{
 			/* Try activating this tool: */
 			if(GUIInteractor::canActivate()&&activate())
@@ -142,12 +192,30 @@ void RayMenuTool::buttonCallback(int,InputDevice::ButtonCallbackData* cbData)
 				if(!getButtonDevice(0)->isRayDevice())
 					{
 					/* For 6-DOF devices, offset the menu by some amount: */
-					rayOrigin+=getRay().getDirection()*factory->initialMenuOffset;
+					rayOrigin+=getRay().getDirection()*configuration.initialMenuOffset;
 					}
 				Point hotSpot=getUiManager()->projectRay(Ray(rayOrigin,getRay().getDirection()));
 				
 				/* Pop up the menu: */
-				popupPrimaryWidget(menu->getPopup(),hotSpot,false);
+				if(alignmentScreen!=0)
+					{
+					/* Align the menu with the requested screen: */
+					ONTransform menuTransform=ONTransform::translateFromOriginTo(hotSpot);
+					menuTransform*=ONTransform::rotate(alignmentScreen->getScreenTransformation().getRotation());
+					
+					/* Align the widget's hot spot with the transformation center: */
+					GLMotif::Vector menuHotSpot=menu->getPopup()->calcHotSpot();
+					menuTransform*=ONTransform::translate(-ONTransform::Vector(menuHotSpot.getXyzw()));
+					
+					/* Pop up the menu with the calculated transformation: */
+					menuTransform.renormalize();
+					getWidgetManager()->popupPrimaryWidget(menu->getPopup(),menuTransform);
+					}
+				else
+					{
+					/* Use a default menu alignment: */
+					popupPrimaryWidget(menu->getPopup(),hotSpot,false);
+					}
 				
 				/* Explicity grab the pointer in case the initial event misses the menu: */
 				getWidgetManager()->grabPointer(menu->getPopup());
@@ -183,7 +251,7 @@ void RayMenuTool::buttonCallback(int,InputDevice::ButtonCallbackData* cbData)
 
 void RayMenuTool::frame(void)
 	{
-	if(factory->interactWithWidgets||GUIInteractor::isActive())
+	if(configuration.interactWithWidgets||GUIInteractor::isActive())
 		{
 		/* Update the GUI interactor: */
 		GUIInteractor::updateRay();
@@ -193,7 +261,7 @@ void RayMenuTool::frame(void)
 
 void RayMenuTool::display(GLContextData& contextData) const
 	{
-	if(isDrawRay()&&(factory->interactWithWidgets||GUIInteractor::isActive()))
+	if(isDrawRay()&&(configuration.interactWithWidgets||GUIInteractor::isActive()))
 		{
 		/* Draw the GUI interactor's state: */
 		GUIInteractor::glRenderAction(getRayWidth(),getRayColor(),contextData);
@@ -207,7 +275,7 @@ Point RayMenuTool::calcHotSpot(void) const
 	if(!getButtonDevice(0)->isRayDevice())
 		{
 		/* For 6-DOF devices, offset the menu by some amount: */
-		rayOrigin+=getRay().getDirection()*factory->initialMenuOffset;
+		rayOrigin+=getRay().getDirection()*configuration.initialMenuOffset;
 		}
 	return getUiManager()->projectRay(Ray(rayOrigin,getRay().getDirection()));
 	}
