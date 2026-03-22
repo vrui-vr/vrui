@@ -42,7 +42,8 @@ Methods of class RayMenuToolFactory::Configuration:
 
 RayMenuToolFactory::Configuration::Configuration(void)
 	:initialMenuOffset(getInchFactor()*Scalar(6)),
-	 interactWithWidgets(false)
+	 interactWithWidgets(false),
+	 alignmentOffset(getInchFactor()*Scalar(12))
 	{
 	}
 
@@ -51,6 +52,7 @@ void RayMenuToolFactory::Configuration::read(const Misc::ConfigurationFileSectio
 	cfs.updateValue("./initialMenuOffset",initialMenuOffset);
 	cfs.updateValue("./interactWithWidgets",interactWithWidgets);
 	cfs.updateString("./alignmentScreen",alignmentScreen);
+	cfs.updateValue("./alignmentOffset",alignmentOffset);
 	}
 
 void RayMenuToolFactory::Configuration::write(Misc::ConfigurationFileSection& cfs) const
@@ -58,6 +60,7 @@ void RayMenuToolFactory::Configuration::write(Misc::ConfigurationFileSection& cf
 	cfs.storeValue("./initialMenuOffset",initialMenuOffset);
 	cfs.storeValue("./interactWithWidgets",interactWithWidgets);
 	cfs.storeString("./alignmentScreen",alignmentScreen);
+	cfs.storeValue("./alignmentOffset",alignmentOffset);
 	}
 
 /***********************************
@@ -188,7 +191,7 @@ void RayMenuTool::buttonCallback(int,InputDevice::ButtonCallbackData* cbData)
 			if(GUIInteractor::canActivate()&&activate())
 				{
 				/* Calculate the initial menu position: */
-				Point rayOrigin=getButtonDevicePosition(0);
+				Point rayOrigin=getRay().getOrigin();
 				if(!getButtonDevice(0)->isRayDevice())
 					{
 					/* For 6-DOF devices, offset the menu by some amount: */
@@ -199,6 +202,9 @@ void RayMenuTool::buttonCallback(int,InputDevice::ButtonCallbackData* cbData)
 				/* Pop up the menu: */
 				if(alignmentScreen!=0)
 					{
+					/* Offset the hot spot along the interaction ray direction: */
+					hotSpot+=getRay().getDirection()*configuration.alignmentOffset;
+					
 					/* Align the menu with the requested screen: */
 					ONTransform menuTransform=ONTransform::translateFromOriginTo(hotSpot);
 					menuTransform*=ONTransform::rotate(alignmentScreen->getScreenTransformation().getRotation());

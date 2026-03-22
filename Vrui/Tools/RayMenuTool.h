@@ -49,6 +49,7 @@ class RayMenuToolFactory:public ToolFactory
 		Scalar initialMenuOffset; // Offset of initial menu position along selection ray
 		bool interactWithWidgets; // Flag if the menu tool doubles as a widget interaction tool
 		std::string alignmentScreen; // Optional name of a screen with which to align a newly popped-up menu; if empty (default), use standard UI alignment
+		Scalar alignmentOffset; // Additional menu offset along selection ray when the menu is aligned to a screen
 		
 		/* Constructors and destructors: */
 		Configuration(void); // Creates default configuration
