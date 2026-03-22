@@ -102,6 +102,7 @@ EXECUTABLES = $(EXEDIR)/HelloVrui \
               $(EXEDIR)/VruiLocatorDemo \
               $(EXEDIR)/VruiEventToolDemo \
               $(EXEDIR)/VruiCustomToolDemo \
+              $(EXEDIR)/InteractionDemo \
               $(EXEDIR)/FileSelection \
               $(EXEDIR)/VruiCalibrator \
               $(EXEDIR)/DrawEnvironment \
@@ -169,6 +170,9 @@ $(EXEDIR)/VruiLocatorDemo: $(OBJDIR)/VruiLocatorDemo.o
 $(EXEDIR)/VruiEventToolDemo: $(OBJDIR)/VruiEventToolDemo.o
 
 $(EXEDIR)/VruiCustomToolDemo: $(OBJDIR)/VruiCustomToolDemo.o
+
+$(EXEDIR)/InteractionDemo: PACKAGES += MYSCENEGRAPH
+$(EXEDIR)/InteractionDemo: $(OBJDIR)/InteractionDemo.o
 
 $(EXEDIR)/FileSelection: PACKAGES += MYGLMOTIF MYIO MYTHREADS
 $(EXEDIR)/FileSelection: $(OBJDIR)/FileSelection.o

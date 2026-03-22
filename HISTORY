@@ -8626,3 +8626,5 @@ Vrui-15.0-001:
   into kernel event masks.
 - Adapt SceneGraphViewer example program to new Misc::CommandLineParser
   behavior.
+- Added InteractionDemo to ExamplePrograms, showing how to pick and drag
+  objects with a 6-DOF input device.
