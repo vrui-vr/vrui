@@ -633,7 +633,7 @@ void VRDeviceServer::getServerStatus(IO::JsonObject& replyRoot)
 			IO::JsonArrayPointer valuators=new IO::JsonArray;
 			device->setProperty("valuators",*valuators);
 			
-			for(int valuatorIndex=0;valuatorIndex<vrd.numButtons;++valuatorIndex)
+			for(int valuatorIndex=0;valuatorIndex<vrd.numValuators;++valuatorIndex)
 				{
 				IO::JsonObjectPointer valuator=new IO::JsonObject;
 				valuators->addItem(*valuator);

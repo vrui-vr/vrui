@@ -8633,3 +8633,4 @@ Vrui-15.0-001:
   unbound input device button was clicked in the tool kill zone.
 - Added optional alignment screen to Vrui::RayMenuTool to improve mouse
   interaction in secondary windows in VR environments.
+- Fixed copypasta bug in VRDeviceDaemon's HTTP interface.
