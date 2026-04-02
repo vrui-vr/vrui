@@ -8634,3 +8634,8 @@ Vrui-15.0-001:
 - Added optional alignment screen to Vrui::RayMenuTool to improve mouse
   interaction in secondary windows in VR environments.
 - Fixed copypasta bug in VRDeviceDaemon's HTTP interface.
+- Added new Comm::HttpRequestHeader class to parse HTTP request headers
+  (GET, POST, ...) in a non-blocking fashion.
+- Started moving VRServerLauncher's HTTP communication code to non-
+  blocking and using persistent TCP connections, also start support for
+  OPTION requests to support CORS.
