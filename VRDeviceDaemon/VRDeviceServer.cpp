@@ -36,7 +36,6 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Threads/FunctionCalls.h>
 #include <IO/ValueSource.h>
 #include <IO/JsonEntityTypes.h>
-#include <IO/OStream.h>
 #include <Comm/TCPPipe.h>
 #include <Comm/UNIXPipe.h>
 #include <Comm/ListeningTCPSocket.h>
@@ -706,119 +705,97 @@ void VRDeviceServer::getServerStatus(IO::JsonObject& replyRoot)
 		}
 	}
 
-void VRDeviceServer::newHttpConnection(Threads::RunLoop::IOWatcher::Event& event)
+void VRDeviceServer::handlePostRequest(Comm::HttpServer::PostRequest& postRequest)
 	{
-	try
+	/* Check that the POST request is for the correct URL and has exactly one command in the body: */
+	const Comm::HttpServer::RequestParameterList& ps=postRequest.parameters;
+	if(postRequest.requestUri=="/VRDeviceServer.cgi"&&ps.size()>=1&&ps.front().name=="command")
 		{
-		/* Open a new TCP connection to the HTTP client: */
-		Comm::PipePtr pipe(httpListeningSocket->accept());
+		const std::string& command=ps.front().value;
 		
-		/* Parse an HTTP POST request: */
-		Comm::HttpPostRequest request(*pipe);
-		const Comm::HttpPostRequest::NameValueList& nvl=request.getNameValueList();
+		/* Compose the server's reply as a JSON-encoded object: */
+		IO::JsonObjectPointer replyRoot=new IO::JsonObject;
+		replyRoot->setProperty("command",command);
 		
-		/* Check that there is a command in the POST request: */
-		if(request.getActionUrl()=="/VRDeviceServer.cgi"&&nvl.size()>=1&&nvl.front().name=="command")
+		/* Process the command: */
+		if(command=="getServerStatus")
 			{
-			/* Compose the server's reply as a JSON-encoded object: */
-			IO::JsonObjectPointer replyRoot=new IO::JsonObject;
-			replyRoot->setProperty("command",nvl.front().value);
+			/* Compose the JSON object representing the current server state: */
+			getServerStatus(*replyRoot);
+			replyRoot->setProperty("status","Success");
+			}
+		else if(command=="getDeviceStates")
+			{
+			}
+		else if(command=="hapticTick"&&ps.size()>1&&ps[1].name=="hapticFeatureIndex")
+			{
+			/* Extract the haptic feature index: */
+			unsigned int hapticFeatureIndex(strtoul(ps[1].value.c_str(),0,10));
 			
-			/* Process the command: */
-			if(nvl.front().value=="getServerStatus")
+			/* Extract optional haptic tick duration, frequency, and amplitude: */
+			unsigned int duration=100;
+			unsigned int frequency=100;
+			unsigned int amplitude=255;
+			for(unsigned int i=2;i<ps.size();++i)
 				{
-				/* Compose the JSON object representing the current server state: */
-				getServerStatus(*replyRoot);
+				if(ps[i].name=="duration")
+					duration=(unsigned int)(strtoul(ps[i].value.c_str(),0,10));
+				else if(ps[i].name=="frequency")
+					frequency=(unsigned int)(strtoul(ps[i].value.c_str(),0,10));
+				else if(ps[i].name=="amplitude")
+					amplitude=Math::clamp((unsigned int)(strtoul(ps[i].value.c_str(),0,10)),0U,255U);
+				}
+			
+			/* Request a haptic tick: */
+			if(hapticFeatureIndex<deviceManager->getNumHapticFeatures())
+				{
+				deviceManager->hapticTick(hapticFeatureIndex,duration,frequency,amplitude);
 				replyRoot->setProperty("status","Success");
 				}
-			else if(nvl.front().value=="getDeviceStates")
+			else
+				replyRoot->setProperty("status","Invalid hapticFeatureIndex");
+			}
+		else if(command=="powerOff"&&ps.size()>1&&ps[1].name=="powerFeatureIndex")
+			{
+			/* Extract the power feature index: */
+			unsigned int powerFeatureIndex(strtoul(ps[1].value.c_str(),0,10));
+			
+			/* Power off the device: */
+			if(powerFeatureIndex<deviceManager->getNumPowerFeatures())
 				{
-				}
-			else if(nvl.front().value=="hapticTick"&&nvl.size()>1&&nvl[1].name=="hapticFeatureIndex")
-				{
-				/* Extract the haptic feature index: */
-				unsigned int hapticFeatureIndex(strtoul(nvl[1].value.c_str(),0,10));
-				
-				/* Extract optional haptic tick duration, frequency, and amplitude: */
-				unsigned int duration=100;
-				unsigned int frequency=100;
-				unsigned int amplitude=255;
-				for(unsigned int i=2;i<nvl.size();++i)
-					{
-					if(nvl[i].name=="duration")
-						duration=(unsigned int)(strtoul(nvl[i].value.c_str(),0,10));
-					else if(nvl[i].name=="frequency")
-						frequency=(unsigned int)(strtoul(nvl[i].value.c_str(),0,10));
-					else if(nvl[i].name=="amplitude")
-						amplitude=Math::clamp((unsigned int)(strtoul(nvl[i].value.c_str(),0,10)),0U,255U);
-					}
-				
-				/* Request a haptic tick: */
-				if(hapticFeatureIndex<deviceManager->getNumHapticFeatures())
-					{
-					deviceManager->hapticTick(hapticFeatureIndex,duration,frequency,amplitude);
-					replyRoot->setProperty("status","Success");
-					}
-				else
-					replyRoot->setProperty("status","Invalid hapticFeatureIndex");
-				}
-			else if(nvl.front().value=="powerOff"&&nvl.size()>1&&nvl[1].name=="powerFeatureIndex")
-				{
-				/* Extract the power feature index: */
-				unsigned int powerFeatureIndex(strtoul(nvl[1].value.c_str(),0,10));
-				
-				/* Power off the device: */
-				if(powerFeatureIndex<deviceManager->getNumPowerFeatures())
-					{
-					deviceManager->powerOff(powerFeatureIndex);
-					replyRoot->setProperty("status","Success");
-					}
-				else
-					replyRoot->setProperty("status","Invalid powerFeatureIndex");
-				}
-			else if(nvl.front().value=="uploadEnvironment"&&nvl.size()>1&&nvl[1].name=="environmentFilePath")
-				{
-				try
-					{
-					/* Open the environment definition configuration file: */
-					Misc::ConfigurationFile environmentFile(nvl[1].value.c_str());
-					
-					/* Read an environment definition from the file's root section: */
-					Vrui::EnvironmentDefinition newEnvironmentDefinition;
-					newEnvironmentDefinition.configure(environmentFile.getCurrentSection());
-					
-					/* Replace the previous environment definition and notify all clients that the environment definition has been updated: */
-					environmentDefinition=newEnvironmentDefinition;
-					environmentDefinitionUpdated(0);
-					
-					replyRoot->setProperty("status","Success");
-					}
-				catch(const std::runtime_error& err)
-					{
-					replyRoot->setProperty("status","Invalid environmentFilePath");
-					}
+				deviceManager->powerOff(powerFeatureIndex);
+				replyRoot->setProperty("status","Success");
 				}
 			else
-				replyRoot->setProperty("status","Invalid command");
-			
-			/* Send the server's reply as a json file embedded in an HTTP reply: */
-			IO::OStream reply(pipe);
-			reply<<"HTTP/1.1 200 OK\n";
-			reply<<"Content-Type: application/json\n";
-			reply<<"Access-Control-Allow-Origin: *\n";
-			reply<<"\n";
-			reply<<*replyRoot<<std::endl;
-			
-			/* Send the reply: */
-			pipe->flush();
+				replyRoot->setProperty("status","Invalid powerFeatureIndex");
 			}
-		}
-	catch(const std::runtime_error& err)
-		{
-		#ifdef VERBOSE
-		// printf("VRDeviceServer: Ignoring HTTP request due to exception %s\n",err.what());
-		// fflush(stdout);
-		#endif
+		else if(command=="uploadEnvironment"&&ps.size()>1&&ps[1].name=="environmentFilePath")
+			{
+			try
+				{
+				/* Open the environment definition configuration file: */
+				Misc::ConfigurationFile environmentFile(ps[1].value.c_str());
+				
+				/* Read an environment definition from the file's root section: */
+				Vrui::EnvironmentDefinition newEnvironmentDefinition;
+				newEnvironmentDefinition.configure(environmentFile.getCurrentSection());
+				
+				/* Replace the previous environment definition and notify all clients that the environment definition has been updated: */
+				environmentDefinition=newEnvironmentDefinition;
+				environmentDefinitionUpdated(0);
+				
+				replyRoot->setProperty("status","Success");
+				}
+			catch(const std::runtime_error& err)
+				{
+				replyRoot->setProperty("status","Invalid environmentFilePath");
+				}
+			}
+		else
+			replyRoot->setProperty("status","Invalid command");
+		
+		/* Pass the reply to the POST request: */
+		postRequest.setJsonResult(*replyRoot);
 		}
 	}
 
@@ -972,6 +949,7 @@ VRDeviceServer::VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDevi
 	:VRDeviceManager::VRStreamer(&sDeviceManager),
 	 runLoop(sRunLoop),
 	 deviceStateMemoryFd(-1),
+	 httpServer(0),
 	 numActiveClients(0),numStreamingClients(0),
 	 suspendInterval(0,0),
 	 haveUpdates(false),trackerUpdateFlags(0),buttonUpdateFlags(0),valuatorUpdateFlags(0),
@@ -1039,9 +1017,9 @@ VRDeviceServer::VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDevi
 	/* Check if the server should listen for HTTP POST requests on a TCP socket: */
 	if(configFile.hasTag("./httpPort"))
 		{
-		/* Create a listening TCP socket for HTTP POST requests and an I/O watcher for it: */
-		httpListeningSocket=new Comm::ListeningTCPSocket(configFile.retrieveValue<int>("httpPort"),5);
-		httpListeningSocketWatcher=runLoop.createIOWatcher(httpListeningSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::newHttpConnection));
+		/* Create an HTTP server and register an HTTP POST request handler: */
+		httpServer=new Comm::HttpServer(runLoop,configFile.retrieveValue<int>("httpPort"));
+		httpServer->setPostRequestHandler(*Threads::createFunctionCall(this,&VRDeviceServer::handlePostRequest));
 		}
 	
 	/* Create an inactive timer event listener to suspend VR devices after a certain period of inactivity: */
@@ -1086,6 +1064,9 @@ VRDeviceServer::~VRDeviceServer(void)
 	
 	/* Forcefully disconnect all clients: */
 	clientStates.clear();
+	
+	/* Delete an HTTP server: */
+	delete httpServer;
 	
 	/* Clean up: */
 	delete[] trackerUpdateFlags;
@@ -1160,8 +1141,8 @@ void VRDeviceServer::run(void)
 		printf("VRDeviceServer: Listening for incoming connections on TCP port %d\n",static_cast<Comm::ListeningTCPSocket*>(tcpListeningSocket.getPointer())->getPortId());
 	if(unixListeningSocket!=0)
 		printf("VRDeviceServer: Listening for incoming connections on UNIX domain socket %s\n",static_cast<Comm::ListeningUNIXSocket*>(unixListeningSocket.getPointer())->getAddress().c_str());
-	if(httpListeningSocket!=0)
-		printf("VRDeviceServer: Listening for HTTP POST requests on TCP port %d\n",static_cast<Comm::ListeningTCPSocket*>(httpListeningSocket.getPointer())->getPortId());
+	if(httpServer!=0)
+		printf("VRDeviceServer: Listening for HTTP POST requests on TCP port %d\n",httpServer->getPort());
 	fflush(stdout);
 	#endif
 	

@@ -37,6 +37,9 @@ namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 }
+namespace IO {
+class JsonEntity;
+}
 namespace Comm {
 class HttpRequestHeader;
 }
@@ -71,6 +74,9 @@ class HttpServer
 			:requestUri(sRequestUri),parameters(sParameters),resultValid(false),resultFile(sResultFile)
 			{
 			}
+		
+		/* Methods: */
+		void setJsonResult(const IO::JsonEntity& json); // Sends the given JSON entity as the request's result
 		};
 	
 	typedef Threads::FunctionCall<PostRequest&> PostRequestHandler; // Type for functions handling complete HTTP POST requests
@@ -129,6 +135,7 @@ class HttpServer
 	~HttpServer(void); // Destroys the HTTP server
 	
 	/* Methods: */
+	int getPort(void) const; // Returns the TCP port on which the HTTP server is listening for incoming connections
 	void setPostRequestHandler(PostRequestHandler& newPostRequestHandler); // Sets the function to be called to handle complete HTTP POST requests
 	};
 

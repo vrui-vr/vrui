@@ -261,6 +261,20 @@ bool HttpRequestHeader::read(IO::File& file)
 	return parserState==Finished;
 	}
 
+bool HttpRequestHeader::hasHeaderField(const char* headerFieldName) const
+	{
+	/* Find the header field of the given name: */
+	for(NameValueList::const_iterator hfIt=headerFields.begin();hfIt!=headerFields.end();++hfIt)
+		if(hfIt->name==headerFieldName)
+			{
+			/* Found it: */
+			return true;
+			}
+	
+	/* Didn't find it: */
+	return false;
+	}
+
 const std::string& HttpRequestHeader::getHeaderFieldValue(const char* headerFieldName) const
 	{
 	/* Find the header field of the given name: */

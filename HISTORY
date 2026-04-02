@@ -8643,3 +8643,5 @@ Vrui-15.0-001:
   more active HTTP connections in a non-blocking fashion.
   - Removed HTTP server code from VRServerLauncher and replaced with new
     class.
+  - Replaced HTTP code in VRDeviceDaemon and VRCompositingServer with
+    new class.

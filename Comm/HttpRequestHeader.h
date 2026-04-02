@@ -98,6 +98,7 @@ class HttpRequestHeader
 		{
 		return headerFields;
 		}
+	bool hasHeaderField(const char* headerFieldName) const; // Returns true if the request has a header field of the given name
 	const std::string& getHeaderFieldValue(const char* headerFieldName) const; // Returns the value of the header field of the given name, which is in lowercase; throws exception if header field doesn't exist
 	bool getKeepAlive(void) const // Returns true if the client wants to keep the underlying TCP connection alive beyond this request
 		{

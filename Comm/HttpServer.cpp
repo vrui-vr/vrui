@@ -29,6 +29,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Threads/FunctionCalls.h>
 #include <IO/VariableMemoryFile.h>
 #include <IO/OStream.h>
+#include <IO/JsonEntity.h>
 #include <Comm/ListeningTCPSocket.h>
 #include <Comm/HttpRequestHeader.h>
 
@@ -36,6 +37,21 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <iostream>
 
 namespace Comm {
+
+/*****************************************
+Methods of struct HttpServer::PostRequest:
+*****************************************/
+
+void HttpServer::PostRequest::setJsonResult(const IO::JsonEntity& json)
+	{
+	/* Mark the result as valid and set the appropriate content type: */
+	resultValid=true;
+	resultContentType="application/json";
+	
+	/* Write the JSON entity to the result file using an IO::OStream layer: */
+	IO::OStream result(&resultFile);
+	result<<json;
+	}
 
 /***************************************
 Methods of class HttpServer::Connection:
@@ -55,18 +71,6 @@ void HttpServer::Connection::close(void)
 
 bool HttpServer::Connection::processRequest(bool valid)
 	{
-	/* Take care of CORS: */
-	std::string allowOrigin;
-	try
-		{
-		/* Retrieve the request's origin field: */
-		allowOrigin=requestHeader->getHeaderFieldValue("origin");
-		}
-	catch(const std::runtime_error&)
-		{
-		/* Don't do CORS and carry on... */
-		}
-	
 	/* Check if the current request is a valid POST request: */
 	if(valid)
 		{
@@ -89,12 +93,16 @@ bool HttpServer::Connection::processRequest(bool valid)
 			reply<<"Content-Type: "<<postRequest.resultContentType<<"\r\n";
 			reply<<"Content-Length: "<<resultFile.getDataSize()<<"\r\n";
 			reply<<"Connection: "<<(requestHeader->getKeepAlive()?"keep-alive":"close")<<"\r\n";
-			if(!allowOrigin.empty())
-				reply<<"Access-Control-Allow-Origin: "<<allowOrigin<<"\r\n";
+			
+			/* Take care of CORS: */
+			if(requestHeader->hasHeaderField("origin"))
+				reply<<"Access-Control-Allow-Origin: "<<requestHeader->getHeaderFieldValue("origin")<<"\r\n";
+			
 			reply<<"\r\n";
 			}
 			
 			/* Append the result file to the HTTP reply: */
+			resultFile.flush();
 			resultFile.rewind();
 			resultFile.writeToSink(*pipe);
 			}
@@ -419,6 +427,11 @@ HttpServer::HttpServer(Threads::RunLoop& sRunLoop,int listenPort)
 
 HttpServer::~HttpServer(void)
 	{
+	}
+
+int HttpServer::getPort(void) const
+	{
+	return static_cast<Comm::ListeningTCPSocket*>(listenSocket.getPointer())->getPortId();
 	}
 
 void HttpServer::setPostRequestHandler(PostRequestHandler& newPostRequestHandler)

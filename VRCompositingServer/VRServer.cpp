@@ -34,13 +34,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Threads/Thread.h>
 #include <Threads/RunLoop.h>
 #include <IO/JsonEntityTypes.h>
-#include <IO/OStream.h>
 #include <Comm/Pipe.h>
 #include <Comm/ListeningUNIXSocket.h>
 #include <Comm/UNIXPipe.h>
-#include <Comm/ListeningTCPSocket.h>
-#include <Comm/TCPPipe.h>
-#include <Comm/HttpPostRequest.h>
+#include <Comm/HttpServer.h>
 #include <vulkan/vulkan.h>
 #include <Vulkan/Common.h>
 #include <Vulkan/ApplicationInfo.h>
@@ -67,20 +64,21 @@ class VRServer
 	/* A UNIX socket and pipe to communicate with VR application clients: */
 	Comm::ListeningUNIXSocket listenSocket; // UNIX socket listening for incoming client connections
 	Comm::UNIXPipe* clientPipe; // UNIX pipe connected to the current client
-	Comm::ListeningSocketPtr httpListenSocket; // Optional TCP socket listening for incoming HTTP requests
 	Threads::RunLoop::IOWatcherOwner stdioWatcher; // Watcher for standard input
 	Threads::RunLoop::IOWatcherOwner listenSocketWatcher; // Watcher for the listening UNIX socket
-	Threads::RunLoop::IOWatcherOwner httpListenSocketWatcher; // Watcher for the listening TCP socket for HTTP POST requests
 	Threads::RunLoop::IOWatcherOwner clientPipeWatcher; // Watcher for the pipe connected to the current client
 	Threads::RunLoop::UserSignalOwner vsyncSignal; // User signal for vsync events from the compositing thread
+	
+	/* An optional HTTP server to process HTTP POST requests from a web interface: */
+	Comm::HttpServer* httpServer;
 	
 	/* Private methods: */
 	void stdioHandler(Threads::RunLoop::IOWatcher::Event& event);
 	void listenSocketHandler(Threads::RunLoop::IOWatcher::Event& event);
-	void httpListenSocketHandler(Threads::RunLoop::IOWatcher::Event& event);
 	void clientPipeHandler(Threads::RunLoop::IOWatcher::Event& event);
 	void vsyncSignalHandler(Threads::RunLoop::UserSignal::Event& event);
 	void* compositorThreadMethod(void);
+	void handlePostRequest(Comm::HttpServer::PostRequest& postRequest);
 	
 	/* Constructors and destructors: */
 	public:
@@ -199,56 +197,6 @@ void VRServer::listenSocketHandler(Threads::RunLoop::IOWatcher::Event& event)
 		}
 	}
 
-void VRServer::httpListenSocketHandler(Threads::RunLoop::IOWatcher::Event& event)
-	{
-	try
-		{
-		/* Open a new TCP connection to the HTTP client: */
-		Comm::PipePtr pipe(httpListenSocket->accept());
-		
-		/* Parse an HTTP POST request: */
-		Comm::HttpPostRequest request(*pipe);
-		const Comm::HttpPostRequest::NameValueList& nvl=request.getNameValueList();
-		
-		/* Check that there is a command in the POST request: */
-		if(request.getActionUrl()=="/VRCompositingServer.cgi"&&nvl.size()>=1&&nvl.front().name=="command")
-			{
-			/* Compose the server's reply as a JSON-encoded object: */
-			IO::JsonObjectPointer replyRoot=new IO::JsonObject;
-			replyRoot->setProperty("command",nvl.front().value);
-			
-			/* Process the command: */
-			if(nvl.front().value=="getServerStatus")
-				{
-				/* Compose the JSON object representing the current server state: */
-				// Let's do that later
-				
-				replyRoot->setProperty("status","Success");
-				}
-			else
-				replyRoot->setProperty("status","Invalid command");
-			
-			/* Send the server's reply as a json file embedded in an HTTP reply: */
-			IO::OStream reply(pipe);
-			reply<<"HTTP/1.1 200 OK\n";
-			reply<<"Content-Type: application/json\n";
-			reply<<"Access-Control-Allow-Origin: *\n";
-			reply<<"\n";
-			reply<<*replyRoot<<std::endl;
-			
-			/* Send the reply: */
-			pipe->flush();
-			}
-		}
-	catch(const std::runtime_error& err)
-		{
-		#if 0 // No, actually, don't :)
-		/* Print an error message and carry on: */
-		std::cout<<"Ignoring HTTP request due to exception "<<err.what()<<std::endl;
-		#endif
-		}
-	}
-
 void VRServer::clientPipeHandler(Threads::RunLoop::IOWatcher::Event& event)
 	{
 	/* Read data and close the client connection if the client hung up: */
@@ -318,11 +266,38 @@ void* VRServer::compositorThreadMethod(void)
 	return 0;
 	}
 
+void VRServer::handlePostRequest(Comm::HttpServer::PostRequest& postRequest)
+	{
+	/* Check that the POST request is for the correct URL and has exactly one command in the body: */
+	if(postRequest.requestUri=="/VRCompositingServer.cgi"&&postRequest.parameters.size()==1&&postRequest.parameters.front().name=="command")
+		{
+		const std::string& command=postRequest.parameters.front().value;
+		
+		/* Compose the server's reply as a JSON-encoded object: */
+		IO::JsonObjectPointer replyRoot=new IO::JsonObject;
+		replyRoot->setProperty("command",command);
+		
+		/* Process the command: */
+		if(command=="getServerStatus")
+			{
+			/* Compose the JSON object representing the current server state: */
+			// Let's do that later
+			
+			replyRoot->setProperty("status","Success");
+			}
+		else
+			replyRoot->setProperty("status","Invalid command");
+		
+		/* Pass the reply to the POST request: */
+		postRequest.setJsonResult(*replyRoot);
+		}
+	}
+
 VRServer::VRServer(const std::string& vrDeviceServerSocketName,bool vrDeviceServerSocketAbstract,int httpListenPortId,Vulkan::Instance& instance,const std::string& hmdName,double hmdFrameRate)
 	:vrDeviceClient(runLoop,vrDeviceServerSocketName.c_str(),vrDeviceServerSocketAbstract),
 	 compositor(runLoop,vrDeviceClient,instance,hmdName,hmdFrameRate),compositorCrashed(false),
 	 listenSocket(VRSERVER_SOCKET_NAME,5,VRSERVER_SOCKET_ABSTRACT),
-	 clientPipe(0)
+	 clientPipe(0),httpServer(0)
 	{
 	/* Set up the event dispatcher: */
 	stdioWatcher=runLoop.createIOWatcher(STDIN_FILENO,Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::stdioHandler));
@@ -332,9 +307,9 @@ VRServer::VRServer(const std::string& vrDeviceServerSocketName,bool vrDeviceServ
 	/* Check if we should listen for HTTP POST requests: */
 	if(httpListenPortId>=0)
 		{
-		/* Create the HTTP socket and start listening on it: */
-		httpListenSocket=new Comm::ListeningTCPSocket(httpListenPortId,5);
-		httpListenSocketWatcher=runLoop.createIOWatcher(httpListenSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::httpListenSocketHandler));
+		/* Create an HTTP server and register an HTTP POST request handler: */
+		httpServer=new Comm::HttpServer(runLoop,httpListenPortId);
+		httpServer->setPostRequestHandler(*Threads::createFunctionCall(this,&VRServer::handlePostRequest));
 		}
 	
 	/* Ignore SIGPIPE and leave handling of pipe errors to TCP sockets: */
@@ -357,6 +332,9 @@ VRServer::~VRServer(void)
 	
 	/* Close a potentially remaining client connection: */
 	delete clientPipe;
+	
+	/* Delete a potential HTTP server: */
+	delete httpServer;
 	}
 
 void VRServer::run(void)

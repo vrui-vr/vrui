@@ -26,6 +26,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/SimpleObjectSet.h>
 #include <Threads/RunLoop.h>
 #include <Comm/ListeningSocket.h>
+#include <Comm/HttpServer.h>
 #include <Vrui/EnvironmentDefinition.h>
 #include <Vrui/Internal/VRDeviceProtocol.h>
 
@@ -108,8 +109,7 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	Comm::ListeningSocketPtr unixListeningSocket; // Optional UNIX domain socket on which the server accepts incoming client connections
 	Threads::RunLoop::IOWatcherOwner unixListeningSocketWatcher; // I/O watcher watching the UNIX listening socket
 	int deviceStateMemoryFd; // File descriptor to access the device manager's shared-memory device state
-	Comm::ListeningSocketPtr httpListeningSocket; // Optional TCP socket on which the server accepts HTTP POST requests
-	Threads::RunLoop::IOWatcherOwner httpListeningSocketWatcher; // I/O watcher watching the HTTP listening socket
+	Comm::HttpServer* httpServer; // Optional HTTP server to accept HTTP POST requests from a web interface
 	
 	ClientStateList clientStates; // List of currently connected clients
 	unsigned int numActiveClients; // Number of clients that are currently active
@@ -143,7 +143,7 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	void clientMessage(Threads::RunLoop::IOWatcher::Event& event,ClientState* client); // Callback called when a message from a client arrives
 	void newClientConnection(Threads::RunLoop::IOWatcher::Event& event,Comm::ListeningSocket& listeningSocket); // Callback called when an incoming connection is waiting on the TCP or UNIX domain listening sockets
 	void getServerStatus(IO::JsonObject& replyRoot); // Encodes the server's current state in the given JSON object
-	void newHttpConnection(Threads::RunLoop::IOWatcher::Event& event); // Callback called when an incoming connection is waiting at the TCP listening socket serving HTTP POST requests
+	void handlePostRequest(Comm::HttpServer::PostRequest& postRequest); // Handles an HTTP POST request received from a web interface
 	void suspendTimeout(Threads::RunLoop::Timer::Event& event); // Callback called after a period of inactivity
 	
 	bool writeStateUpdates(ClientStateList::iterator csIt); // Writes changes in the device manager's device state to the given client; returns false on error

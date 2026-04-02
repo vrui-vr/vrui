@@ -315,14 +315,15 @@ bool VRServerLauncher::startServer(VRServerLauncher::Server& server)
 				httpPipe.ref();
 				
 				/* Send a malformed HTTP request: */
+				{
 				IO::OStream request(&httpPipe);
-				request<<"POST /Foo.cgi HTTP/1.1\n";
-				request<<"Host: localhost:"<<server.httpPort<<"\n";
-				request<<"Content-Type: application/x-www-form-urlencoded\n";
-				request<<"Content-Length: 0\n";
-				request<<"\n";
-				request<<std::endl;
-				
+				request<<"POST /Foo.cgi HTTP/1.1\r\n";
+				request<<"Host: localhost:"<<server.httpPort<<"\r\n";
+				request<<"Content-Type: application/x-www-form-urlencoded\r\n";
+				request<<"Connection: close\r\n";
+				request<<"Content-Length: 0\r\n";
+				request<<"\r\n";
+				}
 				httpPipe.flush();
 				
 				/* Read the HTTP reply: */
@@ -489,11 +490,8 @@ void VRServerLauncher::handlePostRequest(Comm::HttpServer::PostRequest& postRequ
 		else
 			replyRoot->setProperty("status","Invalid command");
 		
-		/* Write the reply to the POST request's result file: */
-		postRequest.resultValid=true;
-		postRequest.resultContentType="application/json";
-		IO::OStream result(&postRequest.resultFile);
-		result<<*replyRoot;
+		/* Pass the reply to the POST request: */
+		postRequest.setJsonResult(*replyRoot);
 		}
 	else
 		std::cout<<"VRServerLauncher: Malformed POST request"<<std::endl;
