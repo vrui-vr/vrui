@@ -36,7 +36,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <iostream>
 #include <Misc/Autopointer.h>
 #include <Misc/StdError.h>
-#include <Misc/SimpleObjectSet.h>
 #include <Misc/PrintInteger.h>
 #include <Misc/FileTests.h>
 #include <Misc/CommandLineParser.h>
@@ -48,11 +47,8 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <DBus/Connection.h>
 #include <IO/OStream.h>
 #include <IO/JsonEntityTypes.h>
-#include <Comm/UNIXPipe.h>
 #include <Comm/TCPPipe.h>
-#include <Comm/ListeningTCPSocket.h>
-#include <Comm/HttpRequestHeader.h>
-#include <Comm/HttpPostRequest.h>
+#include <Comm/HttpServer.h>
 #include <Vrui/Internal/Config.h>
 
 class VRServerLauncher // Class representing a VR server launcher entity
@@ -90,51 +86,6 @@ class VRServerLauncher // Class representing a VR server launcher entity
 			}
 		};
 	
-	struct HttpConnection // Structure representing a currently active HTTP connection
-		{
-		/* Embedded classes: */
-		public:
-		struct NameValue // Structure representing a name=value pair in a POST request's body
-			{
-			/* Elements: */
-			public:
-			std::string name,value;
-			};
-		
-		typedef std::vector<NameValue> NameValueList; // Types for lists of name=value pairs, i.e., a POST request's body
-		
-		enum State // Enumerated type for states of an active HTTP connection
-			{
-			Start,
-			ReadingHttpRequestHeader,
-			ParsePostName,ParsePostValue,
-			SkippingRequestContents
-			};
-		
-		/* Elements: */
-		public:
-		VRServerLauncher& serverLauncher; // Reference to the VR server launcher owning this HTTP connection
-		Comm::TCPPipe pipe; // The active HTTP connection
-		Threads::RunLoop::IOWatcherOwner pipeWatcher; // I/O watcher for the active HTTP connection
-		State state; // Current state of this connection
-		Comm::HttpRequestHeader* requestHeader; // Pointer to an HTTP request header currently being read from the connection
-		NameValue nameValue; // The currently parsed name=value pair in an HTTP POST request's body
-		NameValueList postBody; // The body of a currently parsed HTTP POST request
-		size_t contentLength; // Remaining length of the current HTTP request's content
-		
-		/* Private methods: */
-		void close(void); // Closes the connection
-		bool finishRequest(bool isValidPost); // Finishes processing a valid or invalid HTTP request; returns true if the I/O callback needs to bail out immediately
-		bool ignoreRequest(void); // Ignores the current HTTP request; returns true if the I/O callback needs to bail out immediately
-		void ioCallback(Threads::RunLoop::IOWatcher::Event& event); // Handles I/O on the active HTTP connection
-		
-		/* Constructors and destructors: */
-		HttpConnection(VRServerLauncher& sServerLauncher); // Creates a new HTTP connection by accepting a connection request from the given server launcher's HTTP listening socket
-		~HttpConnection(void); // Closes the HTTP connection
-		};
-	
-	friend class HttpConnection;
-	
 	/* Elements: */
 	private:
 	Threads::RunLoop& runLoop; // Reference to the main thread's run loop
@@ -143,12 +94,10 @@ class VRServerLauncher // Class representing a VR server launcher entity
 	std::string activeSessionPath; // The DBus path for the currently active session
 	std::string activeDisplay; // The X11 display string for the display attached with the current session
 	int sleepInhibitorFd; // A UNIX file descriptor inhibiting the system from going to sleep
-	Misc::Autopointer<Comm::ListeningTCPSocket> httpListenSocket; // Socket listening for incoming HTTP connections
-	Threads::RunLoop::IOWatcherOwner httpListenSocketWatcher; // I/O watcher for the HTTP listening socket
+	Comm::HttpServer* httpServer; // An HTTP server handling HTTP POST requests from a web interface
 	Threads::RunLoop::SignalHandlerOwner sigChldHandler; // Signal handler for SIGCHLD signals
 	Server servers[2]; // Array of server tracking structures
 	std::vector<Environment> environments; // A list of pre-defined spatial environments that can be loaded into VRDeviceDaemon at run-time
-	Misc::SimpleObjectSet<HttpConnection> httpConnections; // Set of currently active HTTP connections
 	
 	/* Private methods: */
 	bool collectServer(Server& server,bool noWait);
@@ -156,8 +105,7 @@ class VRServerLauncher // Class representing a VR server launcher entity
 	void sendServerStatus(IO::JsonObject& replyRoot);
 	void sendEnvironments(IO::JsonObject& replyRoot);
 	void stopServers(void);
-	void handlePostRequest(HttpConnection& connection); // Handles a completed HTTP POST request received on an active HTTP connection
-	void newHttpConnectionCallback(Threads::RunLoop::IOWatcher::Event& event); // Callback called when a new connection is available on the HTTP listening socket
+	void handlePostRequest(Comm::HttpServer::PostRequest& postRequest); // Handles an HTTP POST request received by the HTTP server
 	void childTerminatedCallback(Threads::RunLoop::SignalHandler::Event& event); // Callback called when a child process terminates
 	
 	/* DBus method calls and message handlers: */
@@ -174,273 +122,6 @@ class VRServerLauncher // Class representing a VR server launcher entity
 	VRServerLauncher(Threads::RunLoop& sRunLoop,int httpPort,const std::string& homeDir,const std::string& defaultPidFileDir,const std::string& defaultLogFileDir);
 	~VRServerLauncher(void);
 	};
-
-/*************************************************
-Methods of class VRServerLauncher::HttpConnection:
-*************************************************/
-
-void VRServerLauncher::HttpConnection::close(void)
-	{
-	/* Remove this connection from the server launcher's set of active connections: */
-	serverLauncher.httpConnections.remove(this);
-	
-	/* Destroy this connection, which will clean up everything: */
-	delete this;
-	}
-
-bool VRServerLauncher::HttpConnection::finishRequest(bool isValidPost)
-	{
-	std::cout<<"VRServerLauncher: Finishing HTTP POST request"<<std::endl;
-	
-	/* Check if the current request is a valid POST request: */
-	if(isValidPost)
-		{
-		/* Pass the POST request to the server launcher: */
-		serverLauncher.handlePostRequest(*this);
-		}
-	else
-		{
-		/* Send a bogus HTTP acknowledgement: */
-		IO::OStream reply(&pipe);
-		reply<<"HTTP/1.1 400 Bad Request\n";
-		reply<<"\n";
-		reply<<std::endl;
-		pipe.flush();
-		}
-	
-	/* Check if the client wants to keep the TCP connection alive: */
-	if(false) // requestHeader->getKeepAlive())
-		{
-		/* Delete the request header and body and go back to Start state: */
-		delete requestHeader;
-		requestHeader=0;
-		postBody.clear();
-		state=Start;
-		
-		return false;
-		}
-	else
-		{
-		/* Close the connection and tell the caller to bail out: */
-		std::cout<<"VRServerLauncher: Closing HTTP connection"<<std::endl;
-		close();
-		
-		return true;
-		}
-	}
-
-bool VRServerLauncher::HttpConnection::ignoreRequest(void)
-	{
-	/* Check if the current request has a body: */
-	if(requestHeader->hasContentLength())
-		{
-		/* Skip the request's body: */
-		state=SkippingRequestContents;
-		contentLength=requestHeader->getContentLength();
-		
-		return false;
-		}
-	else
-		{
-		/* Finish the request immediately: */
-		return finishRequest(false);
-		}
-	}
-
-void VRServerLauncher::HttpConnection::ioCallback(Threads::RunLoop::IOWatcher::Event& event)
-	{
-	try
-		{
-		/* Read more data from the pipe: */
-		pipe.readSomeData();
-		
-		/* Check if the client hung up and all sent data has been read: */
-		if(pipe.eof())
-			{
-			/* Check if there is unfinished business: */
-			if(state!=Start)
-				std::cout<<"VRServerLauncher: Client terminated HTTP connection unexpectedly"<<std::endl;
-			else
-				std::cout<<"VRServerLauncher: Closing HTTP connection"<<std::endl;
-			
-			/* Close the connection and bail out: */
-			close();
-			return;
-			}
-		
-		/* Handle the HTTP connection state machine while there is unread data in the pipe's read buffer: */
-		while(pipe.canReadImmediately())
-			{
-			switch(state)
-				{
-				case Start:
-					/* Create a new HTTP request header: */
-					requestHeader=new Comm::HttpRequestHeader;
-					
-					/* Start reading the HTTP request header: */
-					state=ReadingHttpRequestHeader;
-					
-					break;
-				
-				case ReadingHttpRequestHeader:
-					/* Continue reading the current HTTP request header and check if it's done: */
-					if(requestHeader->read(pipe))
-						{
-						switch(requestHeader->getRequestType())
-							{
-							case Comm::HttpRequestHeader::Options:
-								{
-								/* Print the OPTIONS request for posterity: */
-								std::cout<<"VRServerLauncher: Received OPTIONS request with header fields:"<<std::endl;
-								const Comm::HttpRequestHeader::NameValueList& headerFields=requestHeader->getHeaderFields();
-								for(Comm::HttpRequestHeader::NameValueList::const_iterator hfIt=headerFields.begin();hfIt!=headerFields.end();++hfIt)
-									std::cout<<'\t'<<hfIt->name<<": "<<hfIt->value<<std::endl;
-								
-								/* Ignore the request otherwise: */
-								if(ignoreRequest())
-									return;
-								
-								break;
-								}
-							
-							case Comm::HttpRequestHeader::Post:
-								/* Check that the POST request is for the correct resource and has the correct encoding: */
-								if(requestHeader->getRequestUri()!="/VRServerLauncher.cgi")
-									throw Misc::makeStdErr(0,"Wrong request URI %s in POST request",requestHeader->getRequestUri().c_str());
-								if(requestHeader->getHeaderFieldValue("content-type")!="application/x-www-form-urlencoded")
-									throw Misc::makeStdErr(0,"Wrong content type %s in POST request",requestHeader->getHeaderFieldValue("content-type").c_str());
-								
-								std::cout<<"VRServerLauncher: Parsing POST request"<<std::endl;
-								
-								/* Parse the POST request's name=value pairs if it has any: */
-								if(!requestHeader->hasContentLength())
-									throw Misc::makeStdErr(0,"No Content-Length header field in POST request");
-								contentLength=requestHeader->getContentLength();
-								if(contentLength>0)
-									state=ParsePostName;
-								else if(finishRequest(true))
-									return;
-								
-								break;
-							
-							default:
-								/* Ignore the unknown request: */
-								if(ignoreRequest())
-									return;
-							}
-						}
-					
-					break;
-				
-				case ParsePostName:
-					{
-					/* Read the next character from the pipe: */
-					int c=pipe.getChar();
-					--contentLength;
-					
-					/* Check if the name is finished: */
-					if(c=='=')
-						{
-						/* Check if there is no more content: */
-						if(contentLength==0)
-							{
-							/* Store the current name=value pair with an empty value and finish the POST request: */
-							postBody.push_back(nameValue);
-							nameValue.name.clear();
-							if(finishRequest(true))
-								return;
-							}
-						else
-							{
-							/* Start parsing a post value: */
-							state=ParsePostValue;
-							}
-						}
-					else
-						{
-						/* Append the character to the name: */
-						nameValue.name.push_back(c);
-						
-						/* Check if the POST request is truncated: */
-						if(contentLength==0)
-							throw Misc::makeStdErr(0,"Truncated POST request");
-						}
-					
-					break;
-					}
-				
-				case ParsePostValue:
-					{
-					/* Read the next character from the pipe: */
-					int c=pipe.getChar();
-					--contentLength;
-					
-					/* Check if the value is finished: */
-					if(c=='&')
-						{
-						/* Store the current name=value pair and read another one: */
-						postBody.push_back(nameValue);
-						nameValue.name.clear();
-						nameValue.value.clear();
-						state=ParsePostName;
-						}
-					else
-						{
-						/* Append the character to the value: */
-						nameValue.value.push_back(c);
-						
-						/* Check if the POST request is finished: */
-						if(contentLength==0)
-							{
-							/* Store the current name=value pair and finish the POST request: */
-							postBody.push_back(nameValue);
-							nameValue.name.clear();
-							nameValue.value.clear();
-							if(finishRequest(true))
-								return;
-							}
-						}
-					break;
-					}
-				
-				case SkippingRequestContents:
-					{
-					/* Skip content inside the pipe's read buffer: */
-					void* buffer;
-					contentLength-=pipe.readInBuffer(buffer,contentLength);
-					
-					/* Finish the request if all content has been skipped: */
-					if(contentLength==0&&finishRequest(false))
-						return;
-					
-					break;
-					}
-				}
-			}
-		}
-	catch(const std::runtime_error& err)
-		{
-		/* Print an error message, then close this connection: */
-		std::cout<<"VRServerLauncher: Closing HTTP connection due to exception "<<err.what()<<std::endl;
-		close();
-		}
-	}
-
-VRServerLauncher::HttpConnection::HttpConnection(VRServerLauncher& sServerLauncher)
-	:serverLauncher(sServerLauncher),
-	 pipe(*serverLauncher.httpListenSocket),
-	 pipeWatcher(serverLauncher.runLoop.createIOWatcher(pipe.getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServerLauncher::HttpConnection::ioCallback))),
-	 state(Start),requestHeader(0),contentLength(0)
-	{
-	/* Reference the pipe object: */
-	pipe.ref();
-	}
-
-VRServerLauncher::HttpConnection::~HttpConnection(void)
-	{
-	/* Delete a potential HTTP request header: */
-	delete requestHeader;
-	}
 
 namespace {
 
@@ -745,13 +426,12 @@ void VRServerLauncher::stopServers(void)
 		}
 	}
 
-void VRServerLauncher::handlePostRequest(VRServerLauncher::HttpConnection& connection)
+void VRServerLauncher::handlePostRequest(Comm::HttpServer::PostRequest& postRequest)
 	{
-	/* Check that there is exactly one command in the POST request: */
-	const HttpConnection::NameValueList& postBody=connection.postBody;
-	if(postBody.size()==1&&postBody.front().name=="command")
+	/* Check that the POST request is for the correct URL and has exactly one command in the body: */
+	if(postRequest.requestUri=="/VRServerLauncher.cgi"&&postRequest.parameters.size()==1&&postRequest.parameters.front().name=="command")
 		{
-		const std::string& command=postBody.front().value;
+		const std::string& command=postRequest.parameters.front().value;
 		
 		std::cout<<"VRServerLauncher: Handling "<<command<<" request"<<std::endl;
 		
@@ -809,42 +489,14 @@ void VRServerLauncher::handlePostRequest(VRServerLauncher::HttpConnection& conne
 		else
 			replyRoot->setProperty("status","Invalid command");
 		
-		/* Send the server's reply as a json file embedded in an HTTP reply: */
-		IO::OStream reply(&connection.pipe);
-		reply<<"HTTP/1.1 200 OK\n";
-		reply<<"Content-Type: application/json\n";
-		reply<<"Access-Control-Allow-Origin: *\n";
-		reply<<"\n";
-		reply<<*replyRoot<<std::endl;
+		/* Write the reply to the POST request's result file: */
+		postRequest.resultValid=true;
+		postRequest.resultContentType="application/json";
+		IO::OStream result(&postRequest.resultFile);
+		result<<*replyRoot;
 		}
 	else
-		{
 		std::cout<<"VRServerLauncher: Malformed POST request"<<std::endl;
-		
-		/* Send an HTTP error code: */
-		IO::OStream reply(&connection.pipe);
-		reply<<"HTTP/1.1 400 Bad Request\n";
-		reply<<"\n";
-		reply<<std::endl;
-		}
-	
-	/* Send the reply: */
-	connection.pipe.flush();
-	}
-
-void VRServerLauncher::newHttpConnectionCallback(Threads::RunLoop::IOWatcher::Event& event)
-	{
-	try
-		{
-		/* Create a new HTTP connection and add it to the active connections set: */
-		std::cout<<"VRServerLauncher: Accepting HTTP connection request"<<std::endl;
-		httpConnections.add(new HttpConnection(*this));
-		}
-	catch(const std::runtime_error& err)
-		{
-		/* Print an error message and carry on: */
-		std::cout<<"VRServerLauncher: Ignoring HTTP connection request due to exception "<<err.what()<<std::endl;
-		}
 	}
 
 void VRServerLauncher::childTerminatedCallback(Threads::RunLoop::SignalHandler::Event& event)
@@ -1052,7 +704,8 @@ void VRServerLauncher::systemBusSignalHandler(DBus::Message& message)
 VRServerLauncher::VRServerLauncher(Threads::RunLoop& sRunLoop,int httpPort,const std::string& homeDir,const std::string& defaultPidFileDir,const std::string& defaultLogFileDir)
 	:runLoop(sRunLoop),
 	 systemBus(DBUS_BUS_SYSTEM),
-	 sleepInhibitorFd(-1)
+	 sleepInhibitorFd(-1),
+	 httpServer(0)
 	{
 	/* Watch the system bus connection using the run loop: */
 	systemBus.watchConnection(runLoop);
@@ -1178,12 +831,9 @@ VRServerLauncher::VRServerLauncher(Threads::RunLoop& sRunLoop,int httpPort,const
 			std::cerr<<"VRServerLauncher: Format error in spatial environment configuration"<<std::endl;
 		}
 	
-	/* Open the HTTP listening socket: */
-	httpListenSocket=new Comm::ListeningTCPSocket(httpPort,5);
-	
-	/* Register an I/O watcher for the HTTP listening socket: */
-	httpListenSocketWatcher=runLoop.createIOWatcher(httpListenSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServerLauncher::newHttpConnectionCallback));
-	
+	/* Create the HTTP server: */
+	httpServer=new Comm::HttpServer(runLoop,httpPort);
+	httpServer->setPostRequestHandler(*Threads::createFunctionCall(this,&VRServerLauncher::handlePostRequest));
 	std::cout<<"VRServerLauncher: Servicing HTTP POST requests on TCP port "<<httpPort<<std::endl;
 	
 	/* Install a handler for SIGCHLD to receive a notification when one of the sub-processes dies: */
@@ -1194,6 +844,9 @@ VRServerLauncher::~VRServerLauncher(void)
 	{
 	/* Stop the servers in case they are still running: */
 	stopServers();
+	
+	/* Delete the HTTP server: */
+	delete httpServer;
 	
 	/* Release any sleep inhibitors: */
 	if(sleepInhibitorFd>=0)

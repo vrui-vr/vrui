@@ -8639,3 +8639,7 @@ Vrui-15.0-001:
 - Started moving VRServerLauncher's HTTP communication code to non-
   blocking and using persistent TCP connections, also start support for
   OPTION requests to support CORS.
+- Added new Comm::HttpServer class to handle HTTP requests from one or
+  more active HTTP connections in a non-blocking fashion.
+  - Removed HTTP server code from VRServerLauncher and replaced with new
+    class.
