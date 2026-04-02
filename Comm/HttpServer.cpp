@@ -119,7 +119,6 @@ bool HttpServer::Connection::processRequest(bool valid)
 		IO::OStream reply(pipe);
 		reply<<"HTTP/1.1 400 Bad Request\r\n";
 		reply<<"\r\n";
-		reply<<std::endl;
 		}
 	
 	/* Send the reply: */
