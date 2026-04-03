@@ -8646,3 +8646,7 @@ Vrui-15.0-001:
   - Replaced HTTP code in VRDeviceDaemon and VRCompositingServer with
     new class.
 - Added support for HTTP SSE (server-sent events) to Comm::HttpServer.
+- Added server-sent events to VRServerLauncher and VRDeviceDaemon to
+  remove need for polling in the web interface.
+- Changed internal APIs in VRDeviceManager and VRDeviceServer to
+  properly track and handle state changes in virtual devices.

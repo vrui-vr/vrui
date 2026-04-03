@@ -110,6 +110,8 @@ class VRDeviceManager
 		/* Methods: */
 		
 		/* Individual state component update notification methods; device state mutex will be locked during calls: */
+		virtual void deviceConnectedUpdated(int deviceIndex,bool newConnected) =0; // Notifies the VR streamer that a virtual device connected or disconnected
+		virtual void deviceTrackedUpdated(int deviceIndex,bool newTracked) =0; // Notifies the VR streamer that a virtual device changed its tracking state
 		virtual void trackerUpdated(int trackerIndex) =0; // Notifies the VR streamer that a single tracker has been updated
 		virtual void buttonUpdated(int buttonIndex) =0; // Notifies the VR streamer that a single button has been updated
 		virtual void valuatorUpdated(int valuatorIndex) =0; // Notifies the VR streamer that a single valuator has been updated
@@ -148,6 +150,7 @@ class VRDeviceManager
 	Vrui::VRDeviceState state; // Current state of all managed devices
 	Realtime::SharedMemory* stateMemory; // Pointer to an optional shared memory segment from which clients can directly read device states
 	std::vector<Vrui::VRDeviceDescriptor*> virtualDevices; // List of virtual devices combining selected trackers, buttons, and valuators
+	std::vector<int> trackerVirtualDeviceIndices; // Map from tracker indices to the indices of the virtual devices associated with them; -1 indicates unassociated tracker
 	std::vector<bool> deviceConnecteds; // List of flags if each virtual device is currently connected
 	Threads::Mutex batteryStateMutex; // Mutex serializing access to the list of virtual device battery states
 	std::vector<Vrui::BatteryState> batteryStates; // List of current battery states for all virtual devices

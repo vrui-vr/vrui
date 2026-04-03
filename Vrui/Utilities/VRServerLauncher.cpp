@@ -465,6 +465,14 @@ void VRServerLauncher::handlePostRequest(Comm::HttpServer::PostRequest& postRequ
 			sendServerStatus(*replyRoot);
 			
 			replyRoot->setProperty("status",success?"Success":"Failed");
+			
+			/* Send the new server status to clients who registered for events: */
+			if(httpServer!=0)
+				{
+				IO::JsonObjectPointer eventRoot=new IO::JsonObject;
+				sendServerStatus(*eventRoot);
+				httpServer->sendEvent("serverStatusUpdated",*eventRoot);
+				}
 			}
 		else if(command=="stopServers")
 			{
@@ -472,6 +480,14 @@ void VRServerLauncher::handlePostRequest(Comm::HttpServer::PostRequest& postRequ
 			stopServers();
 			
 			replyRoot->setProperty("status","Success");
+			
+			/* Send the new server status to clients who registered for events: */
+			if(httpServer!=0)
+				{
+				IO::JsonObjectPointer eventRoot=new IO::JsonObject;
+				sendServerStatus(*eventRoot);
+				httpServer->sendEvent("serverStatusChanged",*eventRoot);
+				}
 			}
 		else if(command=="getServerStatus")
 			{
@@ -504,6 +520,14 @@ void VRServerLauncher::childTerminatedCallback(Threads::RunLoop::SignalHandler::
 		{
 		if(servers[serverIndex].pid!=pid_t(0))
 			collectServer(servers[serverIndex],true);
+		}
+	
+	/* Send the new server status to clients who registered for events: */
+	if(httpServer!=0)
+		{
+		IO::JsonObjectPointer eventRoot=new IO::JsonObject;
+		sendServerStatus(*eventRoot);
+		httpServer->sendEvent("serverStatusUpdated",*eventRoot);
 		}
 	}
 

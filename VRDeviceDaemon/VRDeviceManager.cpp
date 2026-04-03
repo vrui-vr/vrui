@@ -217,6 +217,9 @@ int VRDeviceManager::addTracker(const char* name)
 	/* Update the tracker report mask: */
 	fullTrackerReportMask=(0x1U<<(result+1))-1U;
 	
+	/* Create an entry for the tracker in the tracker->virtual devices map: */
+	trackerVirtualDeviceIndices.push_back(-1);
+	
 	return result;
 	}
 
@@ -270,6 +273,13 @@ unsigned int VRDeviceManager::addVirtualDevice(Vrui::VRDeviceDescriptor* newVirt
 	unsigned int result=virtualDevices.size();
 	virtualDevices.push_back(newVirtualDevice);
 	
+	/* Check if the virtual device has a tracker: */
+	if(newVirtualDevice->trackerIndex>=0)
+		{
+		/* Associate the new virtual device with its tracker in the tracker->virtual device map: */
+		trackerVirtualDeviceIndices[newVirtualDevice->trackerIndex]=result;
+		}
+	
 	/* New devices are connected by default to keep legacy intact: */
 	deviceConnecteds.push_back(true);
 	
@@ -314,12 +324,23 @@ int VRDeviceManager::addHapticFeature(VRDevice* device,int deviceFeatureIndex)
 
 void VRDeviceManager::setVirtualDeviceConnected(int deviceIndex,bool newConnected)
 	{
+	Threads::Mutex::Lock stateLock(stateMutex);
+	
+	/* Update the device's connected state: */
 	deviceConnecteds[deviceIndex]=newConnected;
+	
+	/* Notify a potential streamer of the device state change: */
+	if(streamer!=0)
+		streamer->deviceConnectedUpdated(deviceIndex,newConnected);
 	}
 
 void VRDeviceManager::disableTracker(int trackerIndex)
 	{
 	Threads::Mutex::Lock stateLock(stateMutex);
+	
+	/* Bail out if nothing changed: */
+	if(!state.getTrackerValid(trackerIndex))
+		return;
 	
 	/* Update the device state: */
 	state.setTrackerValid(trackerIndex,false);
@@ -342,6 +363,10 @@ void VRDeviceManager::disableTracker(int trackerIndex)
 			/* Reset the tracker report mask: */
 			trackerReportMask=0x0;
 			}
+		
+		/* If the tracker is associated with a virtual device, notify the streamer of that device's tracking state change: */
+		if(trackerVirtualDeviceIndices[trackerIndex]>=0)
+			streamer->deviceTrackedUpdated(trackerVirtualDeviceIndices[trackerIndex],false);
 		}
 	}
 
@@ -352,6 +377,7 @@ void VRDeviceManager::setTrackerState(int trackerIndex,const Vrui::VRDeviceState
 	/* Update the device state: */
 	state.setTrackerState(trackerIndex,newTrackerState);
 	state.setTrackerTimeStamp(trackerIndex,newTimeStamp);
+	bool validChanged=!state.getTrackerValid(trackerIndex);
 	state.setTrackerValid(trackerIndex,true);
 	if(stateMemory!=0)
 		postStateUpdate();
@@ -372,6 +398,10 @@ void VRDeviceManager::setTrackerState(int trackerIndex,const Vrui::VRDeviceState
 			/* Reset the tracker report mask: */
 			trackerReportMask=0x0;
 			}
+		
+		/* If the tracker changed its valid state and is associated with a virtual device, notify the streamer of that device's tracking state change: */
+		if(validChanged&&trackerVirtualDeviceIndices[trackerIndex]>=0)
+			streamer->deviceTrackedUpdated(trackerVirtualDeviceIndices[trackerIndex],true);
 		}
 	}
 

@@ -68,6 +68,20 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	
 	typedef Misc::SimpleObjectSet<ClientState> ClientStateList; // Data type for sets of states of connected clients
 	
+	struct VirtualDeviceUpdated // Structure to keep track of updates to the states of virtual devices
+		{
+		/* Elements: */
+		public:
+		bool updated; // Flag if the virtual device state was updated since the last time it was checked
+		const std::string* name; // Pointer to the virtual device's name
+		bool connected; // Flag if the virtual device is connected
+		bool hasTracker; // Flag if the virtual device has a tracker
+		bool tracked; // Flag if the virtual device is tracked
+		bool hasBattery; // Flag if the virtual device has a battery
+		unsigned int batteryLevel; // Virtual device's battery level in percent
+		bool charging; // Flag if the virtual device's battery is currently being charged
+		};
+	
 	struct BatteryStateVersions // Structure to hold version numbers for a device battery state
 		{
 		/* Elements: */
@@ -119,13 +133,15 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	
 	bool haveUpdates; // Flag if any device state components have been updated since last status update was sent
 	bool* trackerUpdateFlags; // Array of flags indicating which trackers have been updated since the last state update was sent
-	bool* buttonUpdateFlags; // Array of flags indicating which trackers have been updated since the last state update was sent
-	bool* valuatorUpdateFlags; // Array of flags indicating which trackers have been updated since the last state update was sent
+	bool* buttonUpdateFlags; // Array of flags indicating which buttons have been updated since the last state update was sent
+	bool* valuatorUpdateFlags; // Array of flags indicating which valuators have been updated since the last state update was sent
 	std::vector<int> updatedTrackers; // List of trackers that have been updated since last status update was sent
 	std::vector<int> updatedButtons; // List of buttons that have been updated since last status update was sent
 	std::vector<int> updatedValuators; // List of valuators that have been updated since last status update was sent
 	unsigned int managerTrackerStateVersion; // Version number of tracker states in device manager
 	unsigned int streamingTrackerStateVersion; // Version number of tracker states most recently sent to streaming clients
+	bool haveVirtualDeviceUpdates; // Flag if any virtual devices changed their states since last status update was sent
+	VirtualDeviceUpdated* virtualDeviceUpdateds; // Array of structures keeping track of updates to virtual devices
 	unsigned int managerBatteryStateVersion; // Version number of device battery states in device manager
 	unsigned int streamingBatteryStateVersion; // Version number of device battery states most recently sent to streaming clients
 	BatteryStateVersions* batteryStateVersions; // Array of battery state version numbers
@@ -156,7 +172,9 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDeviceManager,const Misc::ConfigurationFile& configFile); // Creates server associated with device manager
 	virtual ~VRDeviceServer(void);
 	
-	/* Methods from VRDeviceManager::VRStreamer: */
+	/* Methods from class VRDeviceManager::VRStreamer: */
+	virtual void deviceConnectedUpdated(int deviceIndex,bool newConnected);
+	virtual void deviceTrackedUpdated(int deviceIndex,bool newTracked);
 	virtual void trackerUpdated(int trackerIndex);
 	virtual void buttonUpdated(int buttonIndex);
 	virtual void valuatorUpdated(int valuatorIndex);

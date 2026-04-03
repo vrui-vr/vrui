@@ -954,6 +954,7 @@ VRDeviceServer::VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDevi
 	 suspendInterval(0,0),
 	 haveUpdates(false),trackerUpdateFlags(0),buttonUpdateFlags(0),valuatorUpdateFlags(0),
 	 managerTrackerStateVersion(0U),streamingTrackerStateVersion(0U),
+	 haveVirtualDeviceUpdates(false),virtualDeviceUpdateds(0),
 	 managerBatteryStateVersion(0U),streamingBatteryStateVersion(0U),batteryStateVersions(0),
 	 managerHmdConfigurationVersion(0U),streamingHmdConfigurationVersion(0U),
 	 numHmdConfigurations(hmdConfigurations.size()),hmdConfigurationVersions(0)
@@ -1045,6 +1046,33 @@ VRDeviceServer::VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDevi
 	valuatorUpdateFlags=new bool[state.getNumValuators()];
 	for(int i=0;i<state.getNumValuators();++i)
 		valuatorUpdateFlags[i]=false;
+	
+	{
+	Threads::Mutex::Lock batteryStateLock(batteryStateMutex);
+	
+	/* Initialize the array of virtual device update trackers: */
+	virtualDeviceUpdateds=new VirtualDeviceUpdated[deviceManager->getNumVirtualDevices()];
+	for(int i=0;i<deviceManager->getNumVirtualDevices();++i)
+		{
+		VirtualDeviceUpdated& vdu=virtualDeviceUpdateds[i];
+		const Vrui::VRDeviceDescriptor& vrd=deviceManager->getVirtualDevice(i);
+		vdu.updated=false;
+		vdu.name=&vrd.name;
+		vdu.connected=deviceManager->isVirtualDeviceConnected(i);
+		vdu.tracked=vrd.trackerIndex>=0&&state.getTrackerValid(vrd.trackerIndex);
+		vdu.hasBattery=vrd.hasBattery;
+		if(vdu.hasBattery)
+			{
+			vdu.batteryLevel=batteryStates[i].batteryLevel;
+			vdu.charging=batteryStates[i].charging;
+			}
+		else
+			{
+			vdu.batteryLevel=0U;
+			vdu.charging=false;
+			}
+		}
+	}
 	}
 	
 	/* Initialize the array of battery state version numbers: */
@@ -1072,8 +1100,27 @@ VRDeviceServer::~VRDeviceServer(void)
 	delete[] trackerUpdateFlags;
 	delete[] buttonUpdateFlags;
 	delete[] valuatorUpdateFlags;
+	delete[] virtualDeviceUpdateds;
 	delete[] batteryStateVersions;
 	delete[] hmdConfigurationVersions;
+	}
+
+void VRDeviceServer::deviceConnectedUpdated(int deviceIndex,bool newConnected)
+	{
+	/* Remember the changed device's index and state and wake up the run loop: */
+	haveVirtualDeviceUpdates=true;
+	virtualDeviceUpdateds[deviceIndex].updated=true;
+	virtualDeviceUpdateds[deviceIndex].connected=newConnected;
+	runLoop.wakeUp();
+	}
+
+void VRDeviceServer::deviceTrackedUpdated(int deviceIndex,bool newTracked)
+	{
+	/* Remember the changed device's index and state and wake up the run loop: */
+	haveVirtualDeviceUpdates=true;
+	virtualDeviceUpdateds[deviceIndex].updated=true;
+	virtualDeviceUpdateds[deviceIndex].tracked=newTracked;
+	runLoop.wakeUp();
 	}
 
 void VRDeviceServer::trackerUpdated(int trackerIndex)
@@ -1121,7 +1168,11 @@ void VRDeviceServer::updateCompleted(void)
 
 void VRDeviceServer::batteryStateUpdated(unsigned int deviceIndex)
 	{
-	/* Update the version number of the device manager's device battery state and wake up the run loop: */
+	/* Remember the changed device's index and new state, update the version number of the device manager's device battery state, and wake up the run loop: */
+	haveVirtualDeviceUpdates=true;
+	virtualDeviceUpdateds[deviceIndex].updated=true;
+	virtualDeviceUpdateds[deviceIndex].batteryLevel=batteryStates[deviceIndex].batteryLevel;
+	virtualDeviceUpdateds[deviceIndex].charging=batteryStates[deviceIndex].charging;
 	++batteryStateVersions[deviceIndex].managerVersion;
 	++managerBatteryStateVersion;
 	runLoop.wakeUp();
@@ -1190,6 +1241,41 @@ void VRDeviceServer::run(void)
 				/* Mark streaming state as up-to-date: */
 				streamingTrackerStateVersion=managerTrackerStateVersion;
 				}
+			}
+		
+		/* Check whether there is an HTTP server and any virtual devices changed their states: */
+		if(httpServer!=0&&haveVirtualDeviceUpdates)
+			{
+			/* Send update events for all changed devices: */
+			for(int i=0;i<deviceManager->getNumVirtualDevices();++i)
+				{
+				VirtualDeviceUpdated& vdu=virtualDeviceUpdateds[i];
+				if(vdu.updated)
+					{
+					/* Create a JSON event data structure: */
+					IO::JsonObjectPointer device=new IO::JsonObject;
+					device->setProperty("name",*vdu.name);
+					device->setProperty("isConnected",vdu.connected);
+					device->setProperty("hasTracker",vdu.hasTracker);
+					if(vdu.hasTracker)
+						device->setProperty("isTracked",vdu.tracked);
+					device->setProperty("hasBattery",vdu.hasBattery);
+					if(vdu.hasBattery)
+						{
+						device->setProperty("batteryLevel",vdu.batteryLevel);
+						device->setProperty("isCharging",vdu.charging);
+						}
+					
+					/* Send the event data structure to clients: */
+					httpServer->sendEvent("deviceStateChanged",*device);
+					
+					/* Mark the virtual device as up-to-date: */
+					vdu.updated=false;
+					}
+				}
+			
+			/* Mark virtual device state as up-to-date: */
+			haveVirtualDeviceUpdates=false;
 			}
 		
 		/* Check if any device battery states need to be sent: */
