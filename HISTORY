@@ -8650,3 +8650,10 @@ Vrui-15.0-001:
   remove need for polling in the web interface.
 - Changed internal APIs in VRDeviceManager and VRDeviceServer to
   properly track and handle state changes in virtual devices.
+- Add protocol version and Vrui version string to getServerStatus reply
+  in VRServerLauncher.
+  - Initial protocol version is 1.
+- Add HTTP protocol version to VRDeviceDaemon.
+  - Initial protocol version is 1.
+- Add HTTP protocol version to VRCompositingServer.
+  - Initial protocol version is 1.

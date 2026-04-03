@@ -115,6 +115,7 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	
 	/* Elements: */
 	private:
+	static const unsigned int httpProtocolVersion; // Version number of the HTTP protocol spoken by the server
 	Threads::RunLoop& runLoop; // Reference to the main run loop
 	Vrui::EnvironmentDefinition environmentDefinition; // Definition of physical environment that can be queried by clients
 	

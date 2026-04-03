@@ -53,6 +53,7 @@ class VRServer
 	{
 	/* Elements: */
 	private:
+	static const unsigned int httpProtocolVersion; // Version number of the HTTP protocol spoken by the server
 	Threads::RunLoop runLoop; // A run loop to handle I/O events
 	Vrui::VRDeviceClient vrDeviceClient; // Client connected to a Vrui VR device server
 	
@@ -93,6 +94,12 @@ class VRServer
 		return compositorCrashed;
 		}
 	};
+
+/*********************************
+Static elements of class VRServer:
+*********************************/
+
+const unsigned int VRServer::httpProtocolVersion=1U;
 
 /*************************
 Methods of class VRServer:
@@ -280,6 +287,9 @@ void VRServer::handlePostRequest(Comm::HttpServer::PostRequest& postRequest)
 		/* Process the command: */
 		if(command=="getServerStatus")
 			{
+			/* Write versioning information: */
+			replyRoot->setProperty("protocolVersion",httpProtocolVersion);
+	
 			/* Compose the JSON object representing the current server state: */
 			// Let's do that later
 			

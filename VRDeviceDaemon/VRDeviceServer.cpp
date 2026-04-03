@@ -91,6 +91,12 @@ VRDeviceServer::ClientState::ClientState(Comm::PipePtr sPipe)
 	#endif
 	}
 
+/***************************************
+Static elements of class VRDeviceServer:
+***************************************/
+
+const unsigned int VRDeviceServer::httpProtocolVersion=1U;
+
 /*******************************
 Methods of class VRDeviceServer:
 *******************************/
@@ -545,6 +551,9 @@ void VRDeviceServer::newClientConnection(Threads::RunLoop::IOWatcher::Event& eve
 
 void VRDeviceServer::getServerStatus(IO::JsonObject& replyRoot)
 	{
+	/* Write versioning information: */
+	replyRoot.setProperty("protocolVersion",httpProtocolVersion);
+	
 	/* Lock affected server state: */
 	Threads::Mutex::Lock stateLock(stateMutex);
 	Threads::Mutex::Lock batteryStateLock(batteryStateMutex);

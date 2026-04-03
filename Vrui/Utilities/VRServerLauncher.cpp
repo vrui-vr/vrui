@@ -24,6 +24,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>
@@ -88,6 +89,7 @@ class VRServerLauncher // Class representing a VR server launcher entity
 	
 	/* Elements: */
 	private:
+	static const unsigned int protocolVersion; // The version of the HTTP protocol spoken by this server
 	Threads::RunLoop& runLoop; // Reference to the main thread's run loop
 	DBus::Connection systemBus; // A connection to the system DBus to track active sessions and manage sleep inhibition locks
 	std::string seatPath; // The DBus path for the seat to which this launcher server is attached
@@ -122,6 +124,12 @@ class VRServerLauncher // Class representing a VR server launcher entity
 	VRServerLauncher(Threads::RunLoop& sRunLoop,int httpPort,const std::string& homeDir,const std::string& defaultPidFileDir,const std::string& defaultLogFileDir);
 	~VRServerLauncher(void);
 	};
+
+/*****************************************
+Static elements of class VRServerLauncher:
+*****************************************/
+
+const unsigned int VRServerLauncher::protocolVersion=1U;
 
 namespace {
 
@@ -361,6 +369,20 @@ bool VRServerLauncher::startServer(VRServerLauncher::Server& server)
 
 void VRServerLauncher::sendServerStatus(IO::JsonObject& replyRoot)
 	{
+	/* Add versioning information to the reply structure: */
+	replyRoot.setProperty("protocolVersion",protocolVersion);
+	
+	/* Convert the numeric Vrui version number into a major.minor-build string: */
+	unsigned int vruiVersion=VRUI_INTERNAL_CONFIG_VERSION;
+	unsigned int build=vruiVersion%1000;
+	vruiVersion/=1000;
+	unsigned int minor=vruiVersion%1000;
+	vruiVersion/=1000;
+	unsigned int major=vruiVersion;
+	char vruiVersionString[33];
+	snprintf(vruiVersionString,sizeof(vruiVersionString),"%u.%u-%03u",major,minor,build);
+	replyRoot.setProperty("vruiVersion",vruiVersionString);
+	
 	/* Add an array with server running flags and PIDs to the reply structure: */
 	IO::JsonArrayPointer serverStates=new IO::JsonArray;
 	replyRoot.setProperty("servers",*serverStates);
