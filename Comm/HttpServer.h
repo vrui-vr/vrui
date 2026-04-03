@@ -84,6 +84,8 @@ class HttpServer
 	private:
 	class Connection // Class representing an active HTTP connection
 		{
+		friend class HttpServer;
+		
 		/* Embedded classes: */
 		private:
 		enum State // Enumerated type for states of an active HTTP connection
@@ -99,6 +101,7 @@ class HttpServer
 		HttpServer& server; // Reference to the HTTP server owning this connection
 		PipePtr pipe; // Pipe connected to the client on the other end of this connection
 		Threads::RunLoop::IOWatcherOwner pipeWatcher; // I/O watcher for the pipe
+		bool eventSink; // Flag if this connection can be used to send server-sent events to a client
 		State state; // Current state of this connection
 		HttpRequestHeader* requestHeader; // Pointer to an HTTP request header currently being read from the connection
 		RequestParameter parameter; // The currently parsed parameter in an HTTP POST request's body
@@ -137,6 +140,7 @@ class HttpServer
 	/* Methods: */
 	int getPort(void) const; // Returns the TCP port on which the HTTP server is listening for incoming connections
 	void setPostRequestHandler(PostRequestHandler& newPostRequestHandler); // Sets the function to be called to handle complete HTTP POST requests
+	void sendEvent(const char* eventName,const IO::JsonEntity& eventData); // Sends an event of the given name with the given JSON payload to all clients that registered to receive events
 	};
 
 }

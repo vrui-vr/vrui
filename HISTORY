@@ -8645,3 +8645,4 @@ Vrui-15.0-001:
     class.
   - Replaced HTTP code in VRDeviceDaemon and VRCompositingServer with
     new class.
+- Added support for HTTP SSE (server-sent events) to Comm::HttpServer.

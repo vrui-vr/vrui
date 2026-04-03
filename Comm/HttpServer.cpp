@@ -216,6 +216,45 @@ void HttpServer::Connection::pipeCallback(Threads::RunLoop::IOWatcher::Event& ev
 								break;
 								}
 							
+							case HttpRequestHeader::Get:
+								/* Check if this GET request is for the special /Events.cgi resource, indicating that the client wants to receive server-sent events: */
+								if(requestHeader->getRequestUri()=="/Events.cgi")
+									{
+									/* Send a reply header with content type text/event-stream and keep-alive set: */
+									{
+									IO::OStream reply(pipe);
+									reply<<"HTTP/1.1 200 OK\r\n";
+									reply<<"Content-Type: text/event-stream\r\n";
+									reply<<"Connection: keep-alive\r\n";
+									
+									/* Take care of CORS: */
+									if(requestHeader->hasHeaderField("origin"))
+										reply<<"Access-Control-Allow-Origin: "<<requestHeader->getHeaderFieldValue("origin")<<"\r\n";
+									
+									reply<<"\r\n";
+									}
+									pipe->flush();
+									
+									/* Mark this connection as an event sink: */
+									eventSink=true;
+									
+									// DEBUGGING
+									std::cout<<"Comm::HttpServer: Connection marked as event sink"<<std::endl;
+									
+									/* Go back to Start state: */
+									delete requestHeader;
+									requestHeader=0;
+									state=Start;
+									}
+								else
+									{
+									/* Ignore the unknown request: */
+									if(ignoreRequest())
+										return;
+									}
+								
+								break;
+							
 							case HttpRequestHeader::Post:
 								/* Check that the POST request has the correct encoding: */
 								if(requestHeader->getHeaderFieldValue("content-type")!="application/x-www-form-urlencoded")
@@ -385,6 +424,7 @@ HttpServer::Connection::Connection(HttpServer& sServer)
 	:server(sServer),
 	 pipe(server.listenSocket->accept()),
 	 pipeWatcher(server.runLoop.createIOWatcher(pipe->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&HttpServer::Connection::pipeCallback))),
+	 eventSink(false),
 	 state(Start),requestHeader(0),contentLength(0)
 	{
 	// DEBUGGING
@@ -437,6 +477,25 @@ void HttpServer::setPostRequestHandler(PostRequestHandler& newPostRequestHandler
 	{
 	/* Replace the current HTTP POST request handler: */
 	postRequestHandler=&newPostRequestHandler;
+	}
+
+void HttpServer::sendEvent(const char* eventName,const IO::JsonEntity& eventData)
+	{
+	/* Send the event to all active connections marked as event sinks: */
+	for(Misc::SimpleObjectSet<Connection>::iterator cIt=connections.begin();cIt!=connections.end();++cIt)
+		if(cIt->eventSink)
+			{
+			/* Write an event to the connection's pipe: */
+			{
+			IO::OStream event(cIt->pipe);
+			event<<"event: "<<eventName<<"\r\n";
+			event<<"data: "<<eventData<<"\r\n";
+			event<<"\r\n";
+			}
+			
+			/* Send it: */
+			cIt->pipe->flush();
+			}
 	}
 
 }
