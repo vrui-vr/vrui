@@ -8657,3 +8657,4 @@ Vrui-15.0-001:
   - Initial protocol version is 1.
 - Add HTTP protocol version to VRCompositingServer.
   - Initial protocol version is 1.
+- Add missing inline dependency on Geometry library to Video library.
