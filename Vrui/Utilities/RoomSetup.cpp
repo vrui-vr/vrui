@@ -637,7 +637,7 @@ void RoomSetup::saveButtonCallback(Misc::CallbackData* cbData)
 					configFile<<"\t\t\twidth "<<Misc::ValueCoder<double>::encode(screenSize[0])<<std::endl;
 					configFile<<"\t\t\theight "<<Misc::ValueCoder<double>::encode(screenSize[1])<<std::endl;
 					configFile<<"\t\t\toffAxis "<<Misc::ValueCoder<bool>::encode(true)<<std::endl;
-					configFile<<"\t\t\thomography "<<Misc::ValueCoder<Homography>::encode(screenHomography)<<std::endl;
+					configFile<<"\t\t\thomography "<<Misc::ValueCoder<Homography>::encode(clipHomography)<<std::endl;
 					
 					configFile<<"\t\tendsection"<<std::endl;
 					
