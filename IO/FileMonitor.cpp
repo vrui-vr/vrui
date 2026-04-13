@@ -112,7 +112,7 @@ void FileMonitor::processEventsCallback(Threads::RunLoop::IOWatcher::Event& even
 	
 	/* Try reading into the event buffer and check for errors: */
 	ssize_t readResult=read(fd,eventBuffer,eventBufferSize);
-	if(readResult<0)
+	if(readResult<0&&errno!=EAGAIN&&errno!=EWOULDBLOCK)
 		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot read from event file");
 	
 	/* Handle all returned events: */
@@ -294,7 +294,7 @@ bool FileMonitor::processEvents(void)
 	
 	/* Try reading into the event buffer and check for errors: */
 	ssize_t readResult=read(fd,eventBuffer,eventBufferSize);
-	if(readResult<0)
+	if(readResult<0&&errno!=EAGAIN&&errno!=EWOULDBLOCK)
 		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot read from event file");
 	
 	/* Handle all returned events: */
