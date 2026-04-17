@@ -2620,11 +2620,14 @@ ExamplePrograms/VRMLViewer/makefile: ExamplePrograms/VRMLViewer/makefile.templat
 BUILDROOT_FILES = $(VRUI_MAKEDIR)/SystemDefinitions \
                   $(VRUI_MAKEDIR)/Packages.System \
                   $(VRUI_MAKEDIR)/Packages.Vrui \
+                  $(VRUI_MAKEDIR)/Configuration.Vrui \
                   $(VRUI_MAKEDIR)/FindInHeader.sh \
                   $(VRUI_MAKEDIR)/FindLibrary.sh \
                   $(VRUI_MAKEDIR)/StripPackages \
                   $(VRUI_MAKEDIR)/BasicMakefile \
                   $(VRUI_MAKEDIR)/BackupIfNEqual.sh \
+                  $(VRUI_MAKEDIR)/InstallUnlessExists.sh \
+                  $(VRUI_MAKEDIR)/InstallLink.sh \
                   $(VRUI_MAKEDIR)/CleanDir.sh \
                   $(VRUI_MAKEDIR)/CleanDirIfEqual.sh \
                   $(VRUI_MAKEDIR)/makefile
@@ -2725,30 +2728,32 @@ endif
 	@install $(VRDEVICES) $(PLUGININSTALLDIR)/$(VRDEVICESDIREXT)
 	@install -d $(PLUGININSTALLDIR)/$(VRCALIBRATORSDIREXT)
 	@install $(VRCALIBRATORS) $(PLUGININSTALLDIR)/$(VRCALIBRATORSDIREXT)
-# Install all configuration files in ETCINSTALLDIR while keeping backups of existing files:
+# Install all configuration files in ETCINSTALLDIR unless they already exist:
 	@echo Installing configuration files in $(ETCINSTALLDIR)...
-	@echo Existing configuration files in $(ETCINSTALLDIR) will be backed up
+	@echo Existing configuration files in $(ETCINSTALLDIR) will be kept and new
+	@echo versions will have a .new suffix
 	@install -d $(ETCINSTALLDIR)
-	@$(VRUI_MAKEDIR)/BackupIfNEqual.sh $(ETCINSTALLDIR) $(VRUI_ETCDIR)/*.cfg
-	@install -m u=rw,go=r $(VRUI_ETCDIR)/*.cfg $(ETCINSTALLDIR)
+	@$(VRUI_MAKEDIR)/InstallUnlessExists.sh $(ETCINSTALLDIR) $(VRUI_ETCDIR)/*.cfg
 ifeq ($(SYSTEM),DARWIN)
 	@install -m u=rw,go=r $(VRUI_SCRIPTDIR)/MacOSX/Vrui.xinitrc $(ETCINSTALLDIR)
 endif
-# Install all shared files in SHAREINSTALLDIR:
+# Install all shared files in SHAREINSTALLDIR unless they already exist:
 	@echo Installing shared files in $(SHAREINSTALLDIR)...
+	@echo Existing shared files in $(SHAREINSTALLDIR) will be kept and new
+	@echo versions will have a .new suffix
 	@install -d $(SHAREINSTALLDIR)/GLFonts
-	@install -m u=rw,go=r $(VRUI_SHAREDIR)/GLFonts/* $(SHAREINSTALLDIR)/GLFonts
+	@$(VRUI_MAKEDIR)/InstallUnlessExists.sh $(SHAREINSTALLDIR)/GLFonts $(VRUI_SHAREDIR)/GLFonts/*
 	@install -d $(SHAREINSTALLDIR)/Textures
-	@install -m u=rw,go=r $(VRUI_SHAREDIR)/Textures/* $(SHAREINSTALLDIR)/Textures
+	@$(VRUI_MAKEDIR)/InstallUnlessExists.sh $(SHAREINSTALLDIR)/Textures $(VRUI_SHAREDIR)/Textures/*
 	@install -d $(SHAREINSTALLDIR)/Shaders
 	@install -d $(SHAREINSTALLDIR)/Shaders/GLSupport
-	@install -m u=rw,go=r $(VRUI_SHAREDIR)/Shaders/GLSupport/* $(SHAREINSTALLDIR)/Shaders/GLSupport
+	@$(VRUI_MAKEDIR)/InstallUnlessExists.sh $(SHAREINSTALLDIR)/Shaders/GLSupport $(VRUI_SHAREDIR)/Shaders/GLSupport/*
 	@install -d $(SHAREINSTALLDIR)/Shaders/SceneGraph
-	@install -m u=rw,go=r $(VRUI_SHAREDIR)/Shaders/SceneGraph/* $(SHAREINSTALLDIR)/Shaders/SceneGraph
+	@$(VRUI_MAKEDIR)/InstallUnlessExists.sh $(SHAREINSTALLDIR)/Shaders/SceneGraph $(VRUI_SHAREDIR)/Shaders/SceneGraph/*
 	@install -d $(SHAREINSTALLDIR)/Resources
-	@install -m u=rw,go=r $(VRUI_SHAREDIR)/Resources/*.wrl $(SHAREINSTALLDIR)/Resources
+	@$(VRUI_MAKEDIR)/InstallUnlessExists.sh $(SHAREINSTALLDIR)/Resources $(VRUI_SHAREDIR)/Resources/*.wrl
 	@install -d $(SHAREINSTALLDIR)/Resources/IKAvatar
-	@install -m u=rw,go=r $(VRUI_SHAREDIR)/Resources/IKAvatar/* $(SHAREINSTALLDIR)/Resources/IKAvatar
+	@$(VRUI_MAKEDIR)/InstallUnlessExists.sh $(SHAREINSTALLDIR)/Resources/IKAvatar $(VRUI_SHAREDIR)/Resources/IKAvatar/*
 ifneq ($(SYSTEM_HAVE_VULKAN),0)
 	@install -d $(SHAREINSTALLDIR)/spirv
 	@install -d $(SHAREINSTALLDIR)/spirv/vertex
@@ -2762,10 +2767,8 @@ endif
 # Install full build system in MAKEINSTALLDIR:
 	@echo Installing build system in $(MAKEINSTALLDIR)...
 	@install -d $(MAKEINSTALLDIR)
-	@install -m u=rw,go=r $(BUILDROOT_FILES) $(MAKEINSTALLDIR)
 	@chmod a+x $(MAKEINSTALLDIR)/StripPackages $(MAKEINSTALLDIR)/*.sh
-	@cp $(MAKECONFIGFILE) $(MAKEINSTALLDIR)/Configuration.Vrui
-	@chmod u=rw,go=r $(MAKEINSTALLDIR)/Configuration.Vrui
+	@install -m u=rw,go=r $(BUILDROOT_FILES) $(MAKEINSTALLDIR)
 # Install pkg-config metafile in PKGCONFIGINSTALLDIR:
 	@echo Installing pkg-config metafile in $(PKGCONFIGINSTALLDIR)...
 	@install -d $(PKGCONFIGINSTALLDIR)
@@ -2779,6 +2782,112 @@ installudevrules:
 # Copy device udev rule into rules directory:
 	@echo Installing udev rules into $(UDEVRULEDIR)...
 	@install -m u=rw,go=r $(VRUI_SCRIPTDIR)/69-3d-inputdevices-acl.rules $(UDEVRULEDIR)/69-Vrui-devices.rules
+
+#
+# Target to install a "live" version of Vrui in the chosen installation
+# directory that automatically reflects changes made to the Vrui sources.
+#
+
+devinstall:
+# Install all header files in HEADERINSTALLDIR:
+	@echo Installing header files in $(HEADERINSTALLDIR)...
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Misc $(MISC_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Realtime $(REALTIME_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Threads $(THREADS_HEADERS)
+ifneq ($(SYSTEM_HAVE_LIBDBUS),0)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/DBus $(DBUS_HEADERS)
+endif
+ifneq ($(SYSTEM_HAVE_LIBUSB1),0)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/USB $(USB_HEADERS)
+endif
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/RawHID $(RAWHID_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/IO $(IO_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Plugins $(PLUGINS_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Comm $(COMM_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Cluster $(CLUSTER_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Math $(MATH_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Geometry $(GEOMETRY_HEADERS)
+ifeq ($(SYSTEM),DARWIN)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/MacOSX $(MACOSX_HEADERS)
+endif
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/GL $(GLWRAPPERS_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/GL $(GLSUPPORT_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/GL/Extensions $(GLSUPPORTEXTENSION_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/GL $(GLXSUPPORT_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/GL $(GLGEOMETRY_HEADERS)
+ifneq ($(SYSTEM_HAVE_VULKAN),0)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Vulkan $(VULKAN_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/VulkanXlib $(VULKANXLIB_HEADERS)
+endif
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Images $(IMAGES_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/GLMotif $(GLMOTIF_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Sound $(SOUND_HEADERS)
+ifeq ($(SYSTEM),LINUX)
+  ifneq ($(strip $(SOUND_LINUX_HEADERS)),)
+    @$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Sound/Linux $(SOUND_LINUX_HEADERS)
+  endif
+endif
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Video $(VIDEO_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/AL $(ALSUPPORT_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/SceneGraph $(SCENEGRAPH_HEADERS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Vrui $(VRUI_HEADERS)
+# Install all library files in LIBINSTALLDIR:
+	@echo Installing libraries in $(LIBINSTALLDIR)...
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(LIBINSTALLDIR) $(LIBRARIES)
+	@echo Configuring run-time linker...
+	$(foreach LIBNAME,$(LIBRARY_NAMES),$(call CREATE_SYMLINK,$(LIBNAME)))
+# Install all binaries in EXECUTABLEINSTALLDIR:
+	@echo Installing executables in $(EXECUTABLEINSTALLDIR)...
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(EXECUTABLEINSTALLDIR) $(EXECUTABLES)
+ifeq ($(SYSTEM),DARWIN)
+# Install a Mac OS X helper script:
+	@cp $(VRUI_SCRIPTDIR)/MacOSX/runwithx $(VRUI_SCRIPTDIR)/MacOSX/runwithx.tmp
+	@sed -i -e "s:_VRUIETCDIR_:$(ETCINSTALLDIR):" $(VRUI_SCRIPTDIR)/MacOSX/runwithx.tmp
+	@sed -i -e "s:_VRUIBINDIR_:$(EXECUTABLEINSTALLDIR):" $(VRUI_SCRIPTDIR)/MacOSX/runwithx.tmp
+	@cp $(VRUI_SCRIPTDIR)/MacOSX/runwithx.tmp $(EXECUTABLEINSTALLDIR)/runwithx
+	@rm $(VRUI_SCRIPTDIR)/MacOSX/runwithx.tmp
+endif
+# Install all plug-ins in PLUGININSTALLDIR:
+	@echo Installing plug-ins in $(PLUGININSTALLDIR)...
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(PLUGININSTALLDIR)/$(VRTOOLSDIREXT) $(VRTOOLS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(PLUGININSTALLDIR)/$(VRVISLETSDIREXT) $(VRVISLETS)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(PLUGININSTALLDIR)/$(VRDEVICESDIREXT) $(VRDEVICES)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(PLUGININSTALLDIR)/$(VRCALIBRATORSDIREXT) $(VRCALIBRATORS)
+# Install all configuration files in ETCINSTALLDIR unless they already exist:
+	@echo Installing configuration files in $(ETCINSTALLDIR)...
+	@echo Existing configuration files in $(ETCINSTALLDIR) will be kept and new
+	@echo versions will have a .new suffix
+	@$(VRUI_MAKEDIR)/InstallLinksUnlessExists.sh $(ETCINSTALLDIR) $(VRUI_ETCDIR)/*.cfg
+ifeq ($(SYSTEM),DARWIN)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(ETCINSTALLDIR) $(VRUI_SCRIPTDIR)/MacOSX/Vrui.xinitrc
+endif
+# Install all shared files in SHAREINSTALLDIR unless they already exist:
+	@echo Installing shared files in $(SHAREINSTALLDIR)...
+	@echo Existing shared files in $(SHAREINSTALLDIR) will be kept and new
+	@echo versions will have a .new suffix
+	@$(VRUI_MAKEDIR)/InstallLinksUnlessExists.sh $(SHAREINSTALLDIR)/GLFonts $(VRUI_SHAREDIR)/GLFonts/*
+	@$(VRUI_MAKEDIR)/InstallLinksUnlessExists.sh $(SHAREINSTALLDIR)/Textures $(VRUI_SHAREDIR)/Textures/*
+	@$(VRUI_MAKEDIR)/InstallLinksUnlessExists.sh $(SHAREINSTALLDIR)/Shaders/GLSupport $(VRUI_SHAREDIR)/Shaders/GLSupport/*
+	@$(VRUI_MAKEDIR)/InstallLinksUnlessExists.sh $(SHAREINSTALLDIR)/Shaders/SceneGraph $(VRUI_SHAREDIR)/Shaders/SceneGraph/*
+	@$(VRUI_MAKEDIR)/InstallLinksUnlessExists.sh $(SHAREINSTALLDIR)/Resources $(VRUI_SHAREDIR)/Resources/*.wrl
+	@$(VRUI_MAKEDIR)/InstallLinksUnlessExists.sh $(SHAREINSTALLDIR)/Resources/IKAvatar $(VRUI_SHAREDIR)/Resources/IKAvatar/*
+ifneq ($(SYSTEM_HAVE_VULKAN),0)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(SHAREINSTALLDIR)/spirv/vertex $(VRUI_SHAREDIR)/spirv/vertex/*
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(SHAREINSTALLDIR)/spirv/fragment $(VRUI_SHAREDIR)/spirv/fragment/*
+endif	
+# Install makefile fragment in SHAREINSTALLDIR:
+	@echo Installing application makefile fragment in $(SHAREINSTALLDIR)...
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(SHAREINSTALLDIR) $(MAKEFILEFRAGMENT)
+# Install full build system in MAKEINSTALLDIR:
+	@echo Installing build system in $(MAKEINSTALLDIR)...
+	@chmod a+x $(MAKEINSTALLDIR)/StripPackages $(MAKEINSTALLDIR)/*.sh
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(MAKEINSTALLDIR) $(BUILDROOT_FILES)
+# Install pkg-config metafile in PKGCONFIGINSTALLDIR:
+	@echo Installing pkg-config metafile in $(PKGCONFIGINSTALLDIR)...
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(PKGCONFIGINSTALLDIR) $(PKGCONFIGFILE)
+# Install documentation in DOCINSTALLDIR:
+	@echo Installing documentation in $(DOCINSTALLDIR)...
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(DOCINSTALLDIR) $(VRUI_DOCDIR)/*
 
 uninstall:
 # Remove documentation from DOCINSTALLDIR:
@@ -2868,154 +2977,3 @@ uninstalludevrules:
 # Remove device udev rule from rules directory:
 	@echo Removing udev rules from $(UDEVRULEDIR)...
 	@rm $(UDEVRULEDIR)/69-Vrui-devices.rules
-
-#
-# Target to install a "live" version of Vrui in the chosen installation
-# directory that automatically reflects changes made to the Vrui sources.
-#
-
-devinstall:
-# Install all header files in HEADERINSTALLDIR:
-	@echo Installing header files in $(HEADERINSTALLDIR)...
-	@mkdir -p $(HEADERINSTALLDIR)/Misc
-	@ln -sf $(MISC_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Misc
-	@mkdir -p $(HEADERINSTALLDIR)/Realtime
-	@ln -sf $(REALTIME_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Realtime
-	@mkdir -p $(HEADERINSTALLDIR)/Threads
-	@ln -sf $(THREADS_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Threads
-ifneq ($(SYSTEM_HAVE_LIBDBUS),0)
-	@mkdir -p $(HEADERINSTALLDIR)/DBus
-	@ln -sf $(DBUS_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/DBus
-endif
-ifneq ($(SYSTEM_HAVE_LIBUSB1),0)
-	@mkdir -p $(HEADERINSTALLDIR)/USB
-	@ln -sf $(USB_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/USB
-endif
-	@mkdir -p $(HEADERINSTALLDIR)/RawHID
-	@ln -sf $(RAWHID_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/RawHID
-	@mkdir -p $(HEADERINSTALLDIR)/IO
-	@ln -sf $(IO_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/IO
-	@mkdir -p $(HEADERINSTALLDIR)/Plugins
-	@ln -sf $(PLUGINS_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Plugins
-	@mkdir -p $(HEADERINSTALLDIR)/Comm
-	@ln -sf $(COMM_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Comm
-	@mkdir -p $(HEADERINSTALLDIR)/Cluster
-	@ln -sf $(CLUSTER_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Cluster
-	@mkdir -p $(HEADERINSTALLDIR)/Math
-	@ln -sf $(MATH_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Math
-	@mkdir -p $(HEADERINSTALLDIR)/Geometry
-	@ln -sf $(GEOMETRY_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Geometry
-ifeq ($(SYSTEM),DARWIN)
-	@mkdir -p $(HEADERINSTALLDIR)/MacOSX
-	@ln -sf $(MACOSX_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/MacOSX
-endif
-	@mkdir -p $(HEADERINSTALLDIR)/GL
-	@ln -sf $(GLWRAPPERS_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/GL
-	@ln -sf $(GLSUPPORT_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/GL
-	@mkdir -p $(HEADERINSTALLDIR)/GL/Extensions
-	@ln -sf $(GLSUPPORTEXTENSION_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/GL/Extensions
-	@ln -sf $(GLXSUPPORT_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/GL
-	@ln -sf $(GLGEOMETRY_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/GL
-ifneq ($(SYSTEM_HAVE_VULKAN),0)
-	@mkdir -p $(HEADERINSTALLDIR)/Vulkan
-	@ln -sf $(VULKAN_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Vulkan
-	@mkdir -p $(HEADERINSTALLDIR)/VulkanXlib
-	@ln -sf $(VULKANXLIB_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/VulkanXlib
-endif
-	@mkdir -p $(HEADERINSTALLDIR)/Images
-	@ln -sf $(IMAGES_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Images
-	@mkdir -p $(HEADERINSTALLDIR)/GLMotif
-	@ln -sf $(GLMOTIF_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/GLMotif
-	@mkdir -p $(HEADERINSTALLDIR)/Sound
-	@ln -sf $(SOUND_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Sound
-ifeq ($(SYSTEM),LINUX)
-  ifneq ($(strip $(SOUND_LINUX_HEADERS)),)
-	@mkdir -p $(HEADERINSTALLDIR)/Sound/Linux
-	@ln -sf $(SOUND_LINUX_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Sound/Linux
-  endif
-endif
-	@mkdir -p $(HEADERINSTALLDIR)/Video
-	@ln -sf $(VIDEO_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Video
-	@mkdir -p $(HEADERINSTALLDIR)/AL
-	@ln -sf $(ALSUPPORT_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/AL
-	@mkdir -p $(HEADERINSTALLDIR)/SceneGraph
-	@ln -sf $(SCENEGRAPH_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/SceneGraph
-	@mkdir -p $(HEADERINSTALLDIR)/Vrui
-	@ln -sf $(VRUI_HEADERS:%=$(PROJECT_ROOT)/%) $(HEADERINSTALLDIR)/Vrui
-# Install all library files in LIBINSTALLDIR:
-	@echo Installing libraries in $(LIBINSTALLDIR)...
-	@mkdir -p $(LIBINSTALLDIR)
-	@ln -sf $(LIBRARIES) $(LIBINSTALLDIR)
-	@echo Configuring run-time linker...
-	$(foreach LIBNAME,$(LIBRARY_NAMES),$(call CREATE_SYMLINK,$(LIBNAME)))
-# Install all binaries in EXECUTABLEINSTALLDIR:
-	@echo Installing executables in $(EXECUTABLEINSTALLDIR)...
-	@mkdir -p $(EXECUTABLEINSTALLDIR)
-	@ln -sf $(EXECUTABLES:%=$(PROJECT_ROOT)/%) $(EXECUTABLEINSTALLDIR)
-ifeq ($(SYSTEM),DARWIN)
-# Install a Mac OS X helper script:
-	@cp $(VRUI_SCRIPTDIR)/MacOSX/runwithx $(VRUI_SCRIPTDIR)/MacOSX/runwithx.tmp
-	@sed -i -e "s:_VRUIETCDIR_:$(ETCINSTALLDIR):" $(VRUI_SCRIPTDIR)/MacOSX/runwithx.tmp
-	@sed -i -e "s:_VRUIBINDIR_:$(EXECUTABLEINSTALLDIR):" $(VRUI_SCRIPTDIR)/MacOSX/runwithx.tmp
-	@cp $(VRUI_SCRIPTDIR)/MacOSX/runwithx.tmp $(EXECUTABLEINSTALLDIR)/runwithx
-	@rm $(VRUI_SCRIPTDIR)/MacOSX/runwithx.tmp
-endif
-# Install all plug-ins in PLUGININSTALLDIR:
-	@echo Installing plug-ins in $(PLUGININSTALLDIR)...
-	@mkdir -p $(PLUGININSTALLDIR)/$(VRTOOLSDIREXT)
-	@ln -sf $(VRTOOLS) $(PLUGININSTALLDIR)/$(VRTOOLSDIREXT)
-	@mkdir -p $(PLUGININSTALLDIR)/$(VRVISLETSDIREXT)
-	@ln -sf $(VRVISLETS) $(PLUGININSTALLDIR)/$(VRVISLETSDIREXT)
-	@mkdir -p $(PLUGININSTALLDIR)/$(VRDEVICESDIREXT)
-	@ln -sf $(VRDEVICES) $(PLUGININSTALLDIR)/$(VRDEVICESDIREXT)
-	@mkdir -p $(PLUGININSTALLDIR)/$(VRCALIBRATORSDIREXT)
-	@ln -sf $(VRCALIBRATORS) $(PLUGININSTALLDIR)/$(VRCALIBRATORSDIREXT)
-# Install all configuration files in ETCINSTALLDIR while keeping backups of existing files:
-	@echo Installing configuration files in $(ETCINSTALLDIR)...
-	@echo Existing configuration files in $(ETCINSTALLDIR) will be backed up
-	@mkdir -p $(ETCINSTALLDIR)
-	@$(VRUI_MAKEDIR)/BackupIfNEqual.sh $(ETCINSTALLDIR) $(VRUI_ETCDIR)/*.cfg
-	@ln -sf $(VRUI_ETCDIR)/*.cfg $(ETCINSTALLDIR)
-ifeq ($(SYSTEM),DARWIN)
-	@ln -sf $(VRUI_SCRIPTDIR)/MacOSX/Vrui.xinitrc $(ETCINSTALLDIR)
-endif
-# Install all shared files in SHAREINSTALLDIR:
-	@echo Installing shared files in $(SHAREINSTALLDIR)...
-	@mkdir -p $(SHAREINSTALLDIR)/GLFonts
-	@ln -sf $(VRUI_SHAREDIR)/GLFonts/* $(SHAREINSTALLDIR)/GLFonts
-	@mkdir -p $(SHAREINSTALLDIR)/Textures
-	@ln -sf $(VRUI_SHAREDIR)/Textures/* $(SHAREINSTALLDIR)/Textures
-	@mkdir -p $(SHAREINSTALLDIR)/Shaders
-	@mkdir -p $(SHAREINSTALLDIR)/Shaders/GLSupport
-	@ln -sf $(VRUI_SHAREDIR)/Shaders/GLSupport/* $(SHAREINSTALLDIR)/Shaders/GLSupport
-	@mkdir -p $(SHAREINSTALLDIR)/Shaders/SceneGraph
-	@ln -sf $(VRUI_SHAREDIR)/Shaders/SceneGraph/* $(SHAREINSTALLDIR)/Shaders/SceneGraph
-	@mkdir -p $(SHAREINSTALLDIR)/Resources
-	@ln -sf $(VRUI_SHAREDIR)/Resources/*.wrl $(SHAREINSTALLDIR)/Resources
-	@mkdir -p $(SHAREINSTALLDIR)/Resources/IKAvatar
-	@ln -sf $(VRUI_SHAREDIR)/Resources/IKAvatar/* $(SHAREINSTALLDIR)/Resources/IKAvatar
-ifneq ($(SYSTEM_HAVE_VULKAN),0)
-	@mkdir -p $(SHAREINSTALLDIR)/spirv
-	@mkdir -p $(SHAREINSTALLDIR)/spirv/vertex
-	@ln -sf $(VRUI_SHAREDIR)/spirv/vertex/* $(SHAREINSTALLDIR)/spirv/vertex
-	@mkdir -p $(SHAREINSTALLDIR)/spirv/fragment
-	@ln -sf $(VRUI_SHAREDIR)/spirv/fragment/* $(SHAREINSTALLDIR)/spirv/fragment
-endif	
-# Install makefile fragment in SHAREINSTALLDIR:
-	@echo Installing application makefile fragment in $(SHAREINSTALLDIR)...
-	@ln -sf $(MAKEFILEFRAGMENT) $(SHAREINSTALLDIR)
-# Install full build system in MAKEINSTALLDIR:
-	@echo Installing build system in $(MAKEINSTALLDIR)...
-	@mkdir -p $(MAKEINSTALLDIR)
-	@ln -sf $(BUILDROOT_FILES) $(MAKEINSTALLDIR)
-	@chmod a+x $(MAKEINSTALLDIR)/StripPackages $(MAKEINSTALLDIR)/*.sh
-	@ln -sf $(MAKECONFIGFILE) $(MAKEINSTALLDIR)/Configuration.Vrui
-	@chmod u=rw,go=r $(MAKEINSTALLDIR)/Configuration.Vrui
-# Install pkg-config metafile in PKGCONFIGINSTALLDIR:
-	@echo Installing pkg-config metafile in $(PKGCONFIGINSTALLDIR)...
-	@mkdir -p $(PKGCONFIGINSTALLDIR)
-	@ln -sf $(PKGCONFIGFILE) $(PKGCONFIGINSTALLDIR)
-# Install documentation in DOCINSTALLDIR:
-	@echo Installing documentation in $(DOCINSTALLDIR)...
-	@mkdir -p $(DOCINSTALLDIR)
-	@ln -sf $(VRUI_DOCDIR)/* $(DOCINSTALLDIR)

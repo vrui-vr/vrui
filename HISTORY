@@ -8665,3 +8665,10 @@ Vrui-15.0-001:
   - Add per-shader version number arrays to keep track of state changes
     of dynamic shaders.
   - Added Namespace::useShader and Namespace::disableShaders methods.
+- Changed makefile behavior on install/devinstall: if a configuration or
+  shared file exists, it will not be replaced, but the new version will
+  be installed with a .new suffix.
+- Simplified installation section of makefile by creating new scripts in
+  BuildRoot: InstallUnlessExists.sh, InstallLinks.sh, and
+  InstallLinksUnlessExists.sh.
+- Created etc/OpenVRDevices.conf.template.
