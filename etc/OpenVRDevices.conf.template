@@ -6,10 +6,10 @@
 # Type of head-mounted display; name matches the HMD's actual Vulkan
 # display name and the name of a patch configuration file containing HMD
 # settings:
-HMD_TYPE="Valve Index"
+HMD_TYPE=""
 
 # For HMDs that offer multiple refresh rates, refresh rate in Hz:
 HMD_REFRESH="90"
 
 # Name of a patch configuration file containing controller settings:
-CONTROLLER_TYPE="Valve Index Controllers"
+CONTROLLER_TYPE=""

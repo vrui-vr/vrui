@@ -8672,3 +8672,4 @@ Vrui-15.0-001:
   BuildRoot: InstallUnlessExists.sh, InstallLinks.sh, and
   InstallLinksUnlessExists.sh.
 - Created etc/OpenVRDevices.conf.template.
+  - Added BuildRoot/ConfigureOpenVRDevices.sh script.

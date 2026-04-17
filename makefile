@@ -533,7 +533,10 @@ EXECUTABLES += $(EXEDIR)/VruiSoundConfig \
 # A helper script to run Vrui applications on an OpenVR-supported HMD:
 #
 
-EXECUTABLES += $(EXEDIR)/OnHMD
+ifneq ($(SYSTEM_HAVE_OPENVR),0)
+  EXECUTABLES += $(EXEDIR)/OnHMD
+  RESOURCES += $(VRUI_ETCDIR)/OpenVRDevices.conf
+endif
 
 #
 # The Vrui eye calibration program:
@@ -2308,6 +2311,15 @@ $(EXEDIR)/OnHMD: $(VRUI_SCRIPTDIR)/OnHMD $(DEPDIR)/Configure-Vrui
 	@chmod a+x $(EXEDIR)/OnHMD
 
 #
+# The configuration file for the OnHMD script:
+#
+
+$(VRUI_ETCDIR)/OpenVRDevices.conf: | $(DEPDIR)/config $(EXEDIR)/FindHMD
+$(VRUI_ETCDIR)/OpenVRDevices.conf: $(VRUI_ETCDIR)/OpenVRDevices.conf.template
+	@echo Creating configuration file for OnHMD script...
+	@$(VRUI_MAKEDIR)/ConfigureOpenVRDevices.sh $(EXEDIR) $(VRUI_ETCDIR) OpenVRDevices.conf
+
+#
 # The Vrui eye calibration program:
 #
 
@@ -2625,6 +2637,7 @@ BUILDROOT_FILES = $(VRUI_MAKEDIR)/SystemDefinitions \
                   $(VRUI_MAKEDIR)/FindLibrary.sh \
                   $(VRUI_MAKEDIR)/StripPackages \
                   $(VRUI_MAKEDIR)/BasicMakefile \
+                  $(VRUI_MAKEDIR)/ConfigureOpenVRDevices.sh \
                   $(VRUI_MAKEDIR)/BackupIfNEqual.sh \
                   $(VRUI_MAKEDIR)/InstallUnlessExists.sh \
                   $(VRUI_MAKEDIR)/InstallLink.sh \
@@ -2734,6 +2747,9 @@ endif
 	@echo versions will have a .new suffix
 	@install -d $(ETCINSTALLDIR)
 	@$(VRUI_MAKEDIR)/InstallUnlessExists.sh $(ETCINSTALLDIR) $(VRUI_ETCDIR)/*.cfg
+ifneq ($(SYSTEM_HAVE_OPENVR),0)
+	@$(VRUI_MAKEDIR)/InstallUnlessExists.sh $(ETCINSTALLDIR) $(VRUI_ETCDIR)/OpenVRDevices.conf
+endif
 ifeq ($(SYSTEM),DARWIN)
 	@install -m u=rw,go=r $(VRUI_SCRIPTDIR)/MacOSX/Vrui.xinitrc $(ETCINSTALLDIR)
 endif
@@ -2767,7 +2783,7 @@ endif
 # Install full build system in MAKEINSTALLDIR:
 	@echo Installing build system in $(MAKEINSTALLDIR)...
 	@install -d $(MAKEINSTALLDIR)
-	@chmod a+x $(MAKEINSTALLDIR)/StripPackages $(MAKEINSTALLDIR)/*.sh
+	@chmod a+x $(VRUI_MAKEDIR)/StripPackages $(VRUI_MAKEDIR)/*.sh
 	@install -m u=rw,go=r $(BUILDROOT_FILES) $(MAKEINSTALLDIR)
 # Install pkg-config metafile in PKGCONFIGINSTALLDIR:
 	@echo Installing pkg-config metafile in $(PKGCONFIGINSTALLDIR)...
@@ -2823,9 +2839,9 @@ endif
 	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/GLMotif $(GLMOTIF_HEADERS)
 	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Sound $(SOUND_HEADERS)
 ifeq ($(SYSTEM),LINUX)
-  ifneq ($(strip $(SOUND_LINUX_HEADERS)),)
-    @$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Sound/Linux $(SOUND_LINUX_HEADERS)
-  endif
+ifneq ($(strip $(SOUND_LINUX_HEADERS)),)
+	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Sound/Linux $(SOUND_LINUX_HEADERS)
+endif
 endif
 	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/Video $(VIDEO_HEADERS)
 	@$(VRUI_MAKEDIR)/InstallLinks.sh $(HEADERINSTALLDIR)/AL $(ALSUPPORT_HEADERS)
@@ -2858,6 +2874,9 @@ endif
 	@echo Existing configuration files in $(ETCINSTALLDIR) will be kept and new
 	@echo versions will have a .new suffix
 	@$(VRUI_MAKEDIR)/InstallLinksUnlessExists.sh $(ETCINSTALLDIR) $(VRUI_ETCDIR)/*.cfg
+ifneq ($(SYSTEM_HAVE_OPENVR),0)
+	@$(VRUI_MAKEDIR)/InstallLinksUnlessExists.sh $(ETCINSTALLDIR) $(VRUI_ETCDIR)/OpenVRDevices.conf
+endif
 ifeq ($(SYSTEM),DARWIN)
 	@$(VRUI_MAKEDIR)/InstallLinks.sh $(ETCINSTALLDIR) $(VRUI_SCRIPTDIR)/MacOSX/Vrui.xinitrc
 endif
@@ -2880,7 +2899,7 @@ endif
 	@$(VRUI_MAKEDIR)/InstallLinks.sh $(SHAREINSTALLDIR) $(MAKEFILEFRAGMENT)
 # Install full build system in MAKEINSTALLDIR:
 	@echo Installing build system in $(MAKEINSTALLDIR)...
-	@chmod a+x $(MAKEINSTALLDIR)/StripPackages $(MAKEINSTALLDIR)/*.sh
+	@chmod a+x $(VRUI_MAKEDIR)/StripPackages $(VRUI_MAKEDIR)/*.sh
 	@$(VRUI_MAKEDIR)/InstallLinks.sh $(MAKEINSTALLDIR) $(BUILDROOT_FILES)
 # Install pkg-config metafile in PKGCONFIGINSTALLDIR:
 	@echo Installing pkg-config metafile in $(PKGCONFIGINSTALLDIR)...

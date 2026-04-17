@@ -33,12 +33,8 @@
 DIR="$1"
 shift
 
-# Get the current user name and group:
-USER=$(id -u)
-GROUP=$(id -g)
-
 # Ensure that the target directory exists:
-install -m "$USER:$GROUP" -d "$DIR"
+install -m u=rwx,go=rx -d "$DIR"
 
 # Create symbolic links to all source files in the target directory:
 while [ $# -gt 0 ]; do
