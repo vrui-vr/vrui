@@ -46,7 +46,7 @@ while [ $# -gt 0 ]; do
 		# Check if the source file is an absolute or relative path:
 		case "$1" in
 			/*) ln -sf "$1" "$DIR/$FILE" ;;
-			*) ln -sf "$CWD/$1" "$DIR/$FILE" ;;
+			*) ln -sf "$PWD/$1" "$DIR/$FILE" ;;
 		esac
 	fi
 	
