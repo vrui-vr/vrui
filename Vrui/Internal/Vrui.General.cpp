@@ -53,6 +53,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Cluster/MulticastPipe.h>
 #include <Math/Math.h>
 #include <Math/Constants.h>
+#include <Geometry/Box.h>
 #include <Geometry/GeometryValueCoders.h>
 #include <GL/gl.h>
 #include <GL/GLColorTemplates.h>
@@ -3641,6 +3642,60 @@ void setNavigationTransformation(const Point& center,Scalar radius,const Vector&
 	t*=NavTransform::scale(vruiState->environmentDefinition.radius/radius);
 	t*=NavTransform::rotate(NavTransform::Rotation::rotateFromTo(up,vruiState->environmentDefinition.up));
 	t*=NavTransform::translateToOriginFrom(center);
+	
+	if(vruiState->delayNavigationTransformation)
+		{
+		/* Schedule a change in navigation transformation for the next frame: */
+		vruiState->newNavigationTransformation=t;
+		if(vruiState->newNavigationTransformation!=vruiState->navigationTransformation)
+			{
+			vruiState->navigationTransformationChangedMask|=0x1;
+			requestUpdate();	
+			}
+		}
+	else
+		{
+		/* Change the navigation transformation right away: */
+		vruiState->updateNavigationTransformation(t);
+		}
+	}
+
+void setNavigationTransformation(const Point& center,Scalar radius,const Vector& up,const Vector& right)
+	{
+	/* Assemble the new navigation transformation: */
+	NavTransform t=NavTransform::translateFromOriginTo(vruiState->environmentDefinition.center);
+	t*=NavTransform::scale(vruiState->environmentDefinition.radius/radius);
+	Rotation inFrame=Rotation::fromBaseVectors(right,up);
+	Rotation outFrame=Rotation::fromBaseVectors(vruiState->environmentDefinition.forward^vruiState->environmentDefinition.up,vruiState->environmentDefinition.up);
+	t*=NavTransform::rotate(outFrame/inFrame);
+	t*=NavTransform::translateToOriginFrom(center);
+	
+	if(vruiState->delayNavigationTransformation)
+		{
+		/* Schedule a change in navigation transformation for the next frame: */
+		vruiState->newNavigationTransformation=t;
+		if(vruiState->newNavigationTransformation!=vruiState->navigationTransformation)
+			{
+			vruiState->navigationTransformationChangedMask|=0x1;
+			requestUpdate();	
+			}
+		}
+	else
+		{
+		/* Change the navigation transformation right away: */
+		vruiState->updateNavigationTransformation(t);
+		}
+	}
+
+void setNavigationTransformation(const Box& box,const Vector& up,const Vector& right)
+	{
+	/* Assemble the new navigation transformation: */
+	NavTransform t=NavTransform::translateFromOriginTo(vruiState->environmentDefinition.center);
+	t*=NavTransform::scale(vruiState->environmentDefinition.radius/Math::div2(Geometry::dist(box.min,box.max)));
+	Rotation inFrame=Rotation::fromBaseVectors(right,up);
+	Rotation outFrame=Rotation::fromBaseVectors(vruiState->environmentDefinition.forward^vruiState->environmentDefinition.up,vruiState->environmentDefinition.up);
+	t*=NavTransform::rotate(outFrame/inFrame);
+	t*=NavTransform::translateToOriginFrom(Geometry::mid(box.min,box.max));
 	
 	if(vruiState->delayNavigationTransformation)
 		{

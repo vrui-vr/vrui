@@ -8684,3 +8684,8 @@ Vrui-15.0-001:
     there is no protection concern.
 - Fixed type size bug in Video::TheoraPacket::write, due to the Ogg
   library having changed data types.
+- Added Vrui::Box for 3D axis-aligned bounding boxes to Vrui kernel
+  interface.
+- Added new versions of Vrui::setNavigationTransformation functions:
+  - With center, radius, up vector, and right vector
+  - With box, up vector, and right vector
