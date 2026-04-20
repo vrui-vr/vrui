@@ -51,6 +51,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <IO/OpenFile.h>
 #include <Cluster/Multiplexer.h>
 #include <Cluster/MulticastPipe.h>
+#include <Math/Math.h>
 #include <Math/Constants.h>
 #include <Geometry/GeometryValueCoders.h>
 #include <GL/gl.h>
@@ -421,10 +422,11 @@ GLMotif::PopupMenu* VruiState::buildDevicesMenu(void)
 	showToolKillZoneToggle->setToggle(getToolManager()->getToolKillZone()->getRender());
 	showToolKillZoneToggle->getValueChangedCallbacks().add(this,&VruiState::showToolKillZoneCallback);
 	
-	if(protectScreens)
+	/* Add toggles for screen protection if there are screen protector areas and devices: */
+	if(numProtectorAreas>0&&numProtectorDevices>0)
 		{
 		GLMotif::ToggleButton* protectScreensToggle=new GLMotif::ToggleButton("ProtectScreensToggle",devicesMenu,"Protect Screens");
-		protectScreensToggle->setToggle(true);
+		protectScreensToggle->setToggle(protectScreens);
 		protectScreensToggle->getValueChangedCallbacks().add(this,&VruiState::protectScreensCallback);
 		
 		GLMotif::ToggleButton* alwaysProtectScreensToggle=new GLMotif::ToggleButton("AlwaysProtectScreensToggle",devicesMenu,"Show Protection Grids");
@@ -603,7 +605,7 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 	 numViewers(0),viewers(0),mainViewer(0),
 	 numScreens(0),screens(0),mainScreen(0),
 	 numProtectorAreas(0),protectorAreas(0),numProtectorDevices(0),protectorDevices(0),
-	 protectScreens(false),alwaysRenderProtection(false),renderProtection(0),protectorGridColor(0.0f,1.0f,0.0f),protectorGridSpacing(12),
+	 protectScreens(false),alwaysRenderProtection(false),protectionAlpha(0.333f),renderProtection(0),protectorGridColor(0.0f,1.0f,0.0f),protectorGridSpacing(12),
 	 numHapticDevices(0),hapticDevices(0),
 	 numListeners(0),listeners(0),mainListener(0),
 	 frontplaneDist(1.0),
@@ -1122,10 +1124,17 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 	
 	/* Check whether screen protection is used: */
 	protectScreens=numProtectorAreas>0&&numProtectorDevices>0;
-	
-	/* Read protector grid color and spacing: */
-	configFileSection.updateValue("./screenProtectorGridColor",protectorGridColor);
-	protectorGridSpacing=configFileSection.retrieveValue("./screenProtectorGridSpacing",Scalar(12)*inchFactor);
+	if(protectScreens)
+		{
+		configFileSection.updateValue("./protectScreens",protectScreens);
+		configFileSection.updateValue("./alwaysRenderProtection",alwaysRenderProtection);
+		configFileSection.updateValue("./protectionAlpha",protectionAlpha);
+		protectionAlpha=Math::clamp(protectionAlpha,0.0f,1.0f);
+		
+		/* Read protector grid color and spacing: */
+		configFileSection.updateValue("./screenProtectorGridColor",protectorGridColor);
+		protectorGridSpacing=configFileSection.retrieveValue("./screenProtectorGridSpacing",Scalar(12)*inchFactor);
+		}
 	
 	/* Initialize the listeners: */
 	StringList listenerNames;
@@ -1502,7 +1511,7 @@ DisplayState* VruiState::registerContext(GLContext& context) const
 			GLEXTTextureSRGB::initExtension();
 			}
 		
-		if(protectScreens)
+		if(numProtectorAreas>0&&numProtectorDevices>0)
 			{
 			/* Create a display list to render the screen protector grids: */
 			dataItem->screenProtectorDisplayListId=glGenLists(1);
@@ -2026,12 +2035,12 @@ void VruiState::display(DisplayState* displayState,GLContextData& contextData) c
 		/* Access the display state mapper's context data item: */
 		DisplayStateMapper::DataItem* dsmDataItem=contextData.retrieveDataItem<DisplayStateMapper::DataItem>(&displayStateMapper);
 		
-		float alpha=alwaysRenderProtection?0.333f:0.0f;
+		float alpha=alwaysRenderProtection?protectionAlpha:0.0f;
 		if(renderProtection>Scalar(0))
 			{
 			/* Draw the screen protection grids overlaying any other geometry and with variable opacity: */
 			glDisable(GL_DEPTH_TEST);
-			alpha+=float(renderProtection);
+			alpha=Math::min(alpha+float(renderProtection),1.0f);
 			}
 		
 		/* Execute the screen protector display list: */

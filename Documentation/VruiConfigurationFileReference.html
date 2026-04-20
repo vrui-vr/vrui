@@ -303,6 +303,21 @@ The floor plane is used by some navigation tools or applications to lock the vir
 </TR>
 
 <TR>
+<TD>protectScreens</TD><TD><A HREF="VruiCFGTypes.html#boolean">boolean</A></TD>
+<TD>Flag whether to activate screen protection, i.e., checking all screen protector devices against all screen protector areas on every frame. Defaults to true if any screen protector devices and screen protector areas are defined.</TD>
+</TR>
+
+<TR>
+<TD>alwaysRenderProtection</TD><TD><A HREF="VruiCFGTypes.html#boolean">boolean</A></TD>
+<TD>Flag whether to always render all screen protection areas. Unless screen protection becomes active, the protection areas are rendered semi-transparent and in correct Z order.</TD>
+</TR>
+
+<TR>
+<TD>protectionAlpha</TD><TD><A HREF="VruiCFGTypes.html#number">number</A></TD>
+<TD>Alpha value in [0, 1] to render the screen protection areas when screen protection is inactive.</TD>
+</TR>
+
+<TR>
 <TD>screenProtectorGridSize</TD><TD><A HREF="VruiCFGTypes.html#number">number</A></TD>
 <TD>Spacing between grid lines when drawing screen protectors in physical coordinate units.</TD>
 </TR>

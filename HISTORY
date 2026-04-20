@@ -8673,3 +8673,12 @@ Vrui-15.0-001:
   InstallLinksUnlessExists.sh.
 - Created etc/OpenVRDevices.conf.template.
   - Added BuildRoot/ConfigureOpenVRDevices.sh script.
+- Added new screen protection configuration file options:
+  - protectScreens to disable screen protection even if screen
+    protection areas and devices are defined.
+  - alwaysRenderProtection to render the protection areas even when
+    there is no protection concern, in which case they will be rendered
+    semi-transparently and at the appropriate Z order.
+  - protectionAlpha to set the opacity value (in [0, 1]) at which screen
+    protection areas are rendered if alwaysRenderProtection is true and
+    there is no protection concern.
