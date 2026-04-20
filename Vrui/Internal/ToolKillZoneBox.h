@@ -1,7 +1,7 @@
 /***********************************************************************
 ToolKillZoneBox - Class for box-shaped "kill zones" for tools and input
 devices.
-Copyright (c) 2004-2023 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -37,10 +37,6 @@ namespace Vrui {
 
 class ToolKillZoneBox:public ToolKillZone
 	{
-	/* Embedded classes: */
-	public:
-	typedef Geometry::Box<Scalar,3> Box;
-	
 	/* Elements: */
 	private:
 	Box box; // Position and size of the kill zone's box

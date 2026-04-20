@@ -1093,7 +1093,7 @@ void ImageViewer::resetNavigation(void)
 	Vrui::Scalar h(image.getSize(1));
 	Vrui::Point center(Math::div2(w),Math::div2(h),Vrui::Scalar(0.05));
 	Vrui::Scalar size=Math::sqrt(Math::sqr(w)+Math::sqr(h));
-	Vrui::setNavigationTransformation(center,size,Vrui::Vector(0,1,0));
+	Vrui::setNavigationTransformation(center,size,Vrui::Vector(0,1,0),Vrui::Vector(1,0,0));
 	}
 
 /* Create and execute an application object: */

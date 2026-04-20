@@ -8689,3 +8689,4 @@ Vrui-15.0-001:
 - Added new versions of Vrui::setNavigationTransformation functions:
   - With center, radius, up vector, and right vector
   - With box, up vector, and right vector
+  - Adapted several Vrui classes and example applications.

@@ -490,8 +490,8 @@ void VideoViewer::resetNavigation(void)
 		}
 	center[2]=Vrui::Scalar(0.01);
 	
-	/* Center and size the video frame, and rotate it so that Y points up: */
-	Vrui::setNavigationTransformation(center,Math::sqrt(size),Vrui::Vector(0,1,0));
+	/* Center and size the video frame, and rotate it so that Y points up and X points to the right: */
+	Vrui::setNavigationTransformation(center,Math::sqrt(size),Vrui::Vector(0,1,0),Vrui::Vector(1,0,0));
 	}
 
 void VideoViewer::eventCallback(Vrui::Application::EventID eventId,Vrui::InputDevice::ButtonCallbackData* cbData)

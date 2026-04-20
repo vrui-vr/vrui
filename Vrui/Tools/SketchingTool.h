@@ -1,6 +1,6 @@
 /***********************************************************************
 SketchingTool - Tool to create and edit 3D curves.
-Copyright (c) 2009-2023 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -84,7 +84,6 @@ class SketchingTool:public UtilityTool
 	/* Embedded classes: */
 	private:
 	typedef GLColor<GLubyte,4> Color; // Type for colors
-	typedef Geometry::Box<Scalar,3> Box; // Type for bounding boxes
 	
 	struct SketchObject // Base class for sketching objects
 		{

@@ -3,7 +3,7 @@ Animation - Example program demonstrating data exchange between a
 background animation thread and the foreground rendering thread using
 a triple buffer, and retained-mode OpenGL rendering using vertex and
 index buffers.
-Copyright (c) 2014-2025 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -256,7 +256,7 @@ void Animation::display(GLContextData& contextData) const
 void Animation::resetNavigation(void)
 	{
 	/* Center and scale the object: */
-	Vrui::setNavigationTransformation(Vrui::Point::origin,9.0*Math::Constants<double>::pi,Vrui::Vector(0,1,0));
+	Vrui::setNavigationTransformation(Vrui::Point::origin,9.0*Math::Constants<double>::pi,Vrui::Vector(0,1,0),Vrui::Vector(1,0,0));
 	}
 
 VRUI_APPLICATION_RUN(Animation)

@@ -2386,7 +2386,7 @@ void VruiXine::resetNavigation(void)
 			Vrui::Scalar screenSize=Math::sqrt(Math::sqr(screenHeight)+Math::sqr(screenHeight*aspectRatio));
 			
 			/* Center the current display screen in the display: */
-			Vrui::setNavigationTransformation(screenCenter,Math::div2(screenSize),Vrui::Vector(0,0,1));
+			Vrui::setNavigationTransformation(screenCenter,Math::div2(screenSize),Vrui::Vector(0,0,1),Vrui::Vector(1,0,0));
 			
 			break;
 			}

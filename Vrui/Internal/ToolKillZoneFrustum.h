@@ -2,7 +2,7 @@
 ToolKillZoneFrustum - Class for "kill zones" for tools and input devices
 that use projection onto a plane to detect whether tools are inside the
 zone.
-Copyright (c) 2007-2023 Oliver Kreylos
+Copyright (c) 2007-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -42,10 +42,6 @@ namespace Vrui {
 
 class ToolKillZoneFrustum:public ToolKillZone
 	{
-	/* Embedded classes: */
-	public:
-	typedef Geometry::Box<Scalar,3> Box;
-	
 	/* Elements: */
 	private:
 	Viewer* viewer; // Viewer whose head position defines the frustum
