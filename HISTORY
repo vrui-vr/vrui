@@ -8682,3 +8682,5 @@ Vrui-15.0-001:
   - protectionAlpha to set the opacity value (in [0, 1]) at which screen
     protection areas are rendered if alwaysRenderProtection is true and
     there is no protection concern.
+- Fixed type size bug in Video::TheoraPacket::write, due to the Ogg
+  library having changed data types.
