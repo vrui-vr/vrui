@@ -1,6 +1,3 @@
-*[XR]:extended reality
-*[VR]:virtual reality
-
 # Vrui 
 
 Vrui is the `C++` software development toolkit upon which applications that provide specific XR experiences are built. Vrui provides a base level of computational elements that provide abstracted access to specific computational, display, and input/output hardware devices. User experiences are managed and delivered via Vrui applications, which pass information between the Vrui Developer Toolkit and XR devices.
