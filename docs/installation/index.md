@@ -5,9 +5,17 @@ Follow these instructions to install Vrui with standard settings in a standard l
 ??? info "Heads up!"
     Angle brackets `<>` in commands below are placeholders, meaning that you have to replace everything between, and including, the angle brackets with some text that depends on your specific circumstances.
 
-    For example, if your host has eight CPUs, instead of entering `-j<number of CPUs>` as part of some command, you would enter `-j8`.
+## Option 1: Installing with PullPackage (easy)
 
-## Step 1: Download the Vrui repository from GitHub
+{%
+    include-markdown "../../shared/pullpackage_install.md"
+%}
+
+You're done!
+
+## Option 2: Manual install (advanced)
+
+### Step 1: Download the Vrui repository from GitHub
 
 The Vrui code repository can be downloaded either by:
 
@@ -17,7 +25,7 @@ The Vrui code repository can be downloaded either by:
 !!! warning
     If you are unfamiliar with git and/or GitHub, you should probably go the zip file route.
 
-### Option 1: Downloading and unpacking a zip file from GitHub
+#### Option 1: Downloading and unpacking a zip file from GitHub
 
 On [the Vrui repository's main page](https://github.com/vrui-vr/vrui), click on the green "<> Code" button, and then click on "Download ZIP" in the menu that pops up in response.
 
@@ -59,7 +67,7 @@ cd <Vrui directory>
 
 where you replace `<Vrui directory>` with the name of the directory where you cloned/unpacked the Vrui in the previous step, as printed by `ls`.
 
-### Option 2: Clone the repository from GitHub
+#### Option 2: Clone the repository from GitHub
 
 First, create a directory in your terminal where the Vrui code will live:
 
@@ -95,7 +103,7 @@ cd <Vrui directory>
 where you replace `<Vrui directory>` with the name of the directory where you cloned/unpacked the Vrui in the previous step, as printed by `ls`.
 
 
-## Step 2: Install prerequisite packages
+### Step 2: Install prerequisite packages
 
 Vrui uses a relatively large set of system-provided packages to implement its functionality. Some of these are essential, some are optional, some are *very* optional. See the README file for the complete list of prerequisite system packages. Ideally, you should install the full set of packages to unlock all of Vrui's functionality.
 
@@ -107,7 +115,7 @@ bash ./InstallPrerequisites.sh
 
 which will ask you to enter your user account's password when necessary, and will print a green completion message at the end if at least all required system packages were successfully installed. Do not proceed if the script ends with a red error message.
 
-## Step 3: Build Vrui
+### Step 3: Build Vrui
 
 To build Vrui inside the Vrui base directory, enter into the same terminal window:
 
@@ -115,9 +123,7 @@ To build Vrui inside the Vrui base directory, enter into the same terminal windo
 make
 ```
 
-You can modify the install location of Vrui by passing the VRUI_MAKEDIR=<Vrui build system location> argument to `make`: `make VRUI_MAKEDIR=<Vrui build system location>`, replacing `<Vrui build system location>` with the location you want to install Vrui's build system to.
-
-
+You can modify the installation location of Vrui by passing the VRUI_MAKEDIR=<Vrui build system location> argument to `make`: `make VRUI_MAKEDIR=<Vrui build system location>`, replacing `<Vrui build system location>` with the location you want to install Vrui's build system to.
 
 ???+ tip
     You can **speed up the build process** if your host has multiple CPUs or CPU cores. Instead of the above, enter into the same terminal:
@@ -171,7 +177,7 @@ Build system installation directory: /usr/local/share/VRUI-13.1/make
 
 showing the location of VRUI's build system, and this is the location you will need to use to build add-on packages or VRUI applications later. Take note of the precise location, in this example `/usr/local/share/VRUI-13.1/make`.
 
-## Step 4: Install Vrui
+### Step 4: Install Vrui
 
 After building Vrui successfully, you can install it in the configured location by entering the following into the same terminal window:
 
@@ -183,18 +189,18 @@ which will ask you for your user account's password to install Vrui in a system 
 
 If there were no errors, you are done! 🎉
 
-## Optional: Build Vrui's example applications
+### Optional: Build Vrui's example applications
 
 Vrui comes packaged with a few example applications demonstrating how to create Vrui-based VR applications. You can build these now to get a feel for how to build other Vrui applications later, or to test whether Vrui is working properly.
 
-### Step 1: Enter the `ExamplePrograms` directory
+#### Step 1: Enter the `ExamplePrograms` directory
 
 Enter into the same terminal window:
 ```
 cd ExamplePrograms
 ```
 
-### Step 2: Build the example applications
+#### Step 2: Build the example applications
 
 Run `make` to build the example programs. During building Vrui itself, the build procedure automatically configured the `makefile` in the `ExamplePrograms` directory to find the Vrui installation. But to practice for building other Vrui applications later, you should still pass the location of Vrui's build system, mentioned above, to `make`. Enter into the same terminal window to use the default install location:
 
@@ -230,7 +236,7 @@ where you replace `<Vrui build system location>` with the location of Vrui's bui
 
 If there were no errors, you should now see a new `bin` directory in the `ExamplePrograms` directory.
 
-### Step 3: Run an example application
+#### Step 3: Run an example application
 
 To run one of the example applications, enter into the same terminal window:
 
