@@ -2,18 +2,21 @@
 
 Follow these instructions to install Vrui with standard settings in a standard location, to simplify building and installing add-on packages and Vrui applications.
 
-??? info "Heads up!"
-    Angle brackets `<>` in commands below are placeholders, meaning that you have to replace everything between, and including, the angle brackets with some text that depends on your specific circumstances.
+You can either use PullPackage to install Vrui and some of its applications (RECOMMENDED), or you can install Vrui manually, which is recommended *only if you want to develop Vrui*.
 
 ## Option 1: Installing with PullPackage (easy)
 
-{%
-    include-markdown "../../shared/pullpackage_install.md"
-%}
+--8<--
+pullpackage.md
+pullpackage_vrui.md
+--8<--
 
 You're done!
 
 ## Option 2: Manual install (advanced)
+
+??? info "Heads up!"
+    Angle brackets `<>` in commands below are placeholders, meaning that you have to replace everything between, and including, the angle brackets with some text that depends on your specific circumstances.
 
 ### Step 1: Download the Vrui repository from GitHub
 
