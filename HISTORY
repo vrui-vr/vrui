@@ -8692,3 +8692,4 @@ Vrui-15.0-001:
   - Adapted several Vrui classes and example applications.
 - Fixed VruiSoundConfig and VruiSoundTest utilities in case ALSA,
   OpenAL, or PulseAudio are not supported on the host.
+- Added isValid() method to Geometry::AffineCombiner.
