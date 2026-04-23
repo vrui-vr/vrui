@@ -658,8 +658,12 @@ VruiSoundConfig::~VruiSoundConfig(void)
 				std::string tagPath="Vrui/";
 				tagPath.append(rootSectionName);
 				tagPath.push_back('/');
+				#if SOUND_CONFIG_HAVE_ALSA
 				Misc::ConfigurationFile::patchFile(configFilePath.c_str(),(tagPath+"/SoundContext/deviceName").c_str(),headsetDeviceName.c_str());
+				#endif
+				#if SOUND_CONFIG_HAVE_PULSEAUDIO
 				Misc::ConfigurationFile::patchFile(configFilePath.c_str(),(tagPath+"/SoundContext/recordingDeviceName").c_str(),headsetSourceName.c_str());
+				#endif
 				}
 			else
 				{

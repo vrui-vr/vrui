@@ -8690,3 +8690,5 @@ Vrui-15.0-001:
   - With center, radius, up vector, and right vector
   - With box, up vector, and right vector
   - Adapted several Vrui classes and example applications.
+- Fixed VruiSoundConfig and VruiSoundTest utilities in case ALSA,
+  OpenAL, or PulseAudio are not supported on the host.
