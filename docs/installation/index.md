@@ -28,82 +28,82 @@ The Vrui code repository can be downloaded either by:
 !!! warning
     If you are unfamiliar with git and/or GitHub, you should probably go the zip file route.
 
-#### Option 1: Downloading and unpacking a zip file from GitHub
+=== "1. Downloading and unpacking a zip file from GitHub"
 
-On [the Vrui repository's main page](https://github.com/vrui-vr/vrui), click on the green "<> Code" button, and then click on "Download ZIP" in the menu that pops up in response.
+    On [the Vrui repository's main page](https://github.com/vrui-vr/vrui), click on the green "<> Code" button, and then click on "Download ZIP" in the menu that pops up in response.
 
-<!-- ![Downloading a ZIP from a GitHub repo](download_zip.png) -->
+    <!-- ![Downloading a ZIP from a GitHub repo](download_zip.png) -->
 
-Depending on your browser settings, you may be asked where to store the file being downloaded, or it might be stored in a default location, such as your `Downloads` directory. Take note of what the zip file is called and where it is stored.
+    Depending on your browser settings, you may be asked where to store the file being downloaded, or it might be stored in a default location, such as your `Downloads` directory. Take note of what the zip file is called and where it is stored.
 
-Then, once the file is completely downloaded, enter the following multiple lines into a terminal window:
+    Then, once the file is completely downloaded, enter the following multiple lines into a terminal window:
 
-```sh
-cd ~
-mkdir src
-cd src
-```
+    ```sh
+    cd ~
+    mkdir src
+    cd src
+    ```
 
-```sh
-cd ~/src
-```
+    ```sh
+    cd ~/src
+    ```
 
-Then enter into the same terminal window:
+    Then enter into the same terminal window:
 
-```sh
-unzip <path to downloaded zip file>
-```
+    ```sh
+    unzip <path to downloaded zip file>
+    ```
 
-Replace `<path to downloaded zip file>` with the full path to the zip file, for example `~/Downloads/vrui-main.zip`.
+    Replace `<path to downloaded zip file>` with the full path to the zip file, for example `~/Downloads/vrui-main.zip`.
 
-Finally, check for the name of your new Vrui directory by entering:
+    Finally, check for the name of your new Vrui directory by entering:
 
-```sh
-ls
-```
+    ```sh
+    ls
+    ```
 
-which will list all files in the `src` directory, which should include a new directory called `Vrui-main`. Take note of this name, and then enter into that directory by typing this command into the terminal window:
+    which will list all files in the `src` directory, which should include a new directory called `Vrui-main`. Take note of this name, and then enter into that directory by typing this command into the terminal window:
 
-```sh
-cd <Vrui directory>
-```
+    ```sh
+    cd <Vrui directory>
+    ```
 
-where you replace `<Vrui directory>` with the name of the directory where you cloned/unpacked the Vrui in the previous step, as printed by `ls`.
+    where you replace `<Vrui directory>` with the name of the directory where you cloned/unpacked the Vrui in the previous step, as printed by `ls`.
 
-#### Option 2: Clone the repository from GitHub
+=== "2. Clone the repository from GitHub"
 
-First, create a directory in your terminal where the Vrui code will live:
+    First, create a directory in your terminal where the Vrui code will live:
 
-```sh
-cd ~
-mkdir src
-cd src
-```
-Then, navigate to this directory:
+    ```sh
+    cd ~
+    mkdir src
+    cd src
+    ```
+    Then, navigate to this directory:
 
-```sh
-cd ~/src
-```
+    ```sh
+    cd ~/src
+    ```
 
-Now, we can clone the repository from GitHub:
+    Now, we can clone the repository from GitHub:
 
-```sh
-git clone https://github.com/vrui-vr/vrui.git
-```
+    ```sh
+    git clone https://github.com/vrui-vr/vrui.git
+    ```
 
-Finally, check for the name of your new Vrui directory by entering:
+    Finally, check for the name of your new Vrui directory by entering:
 
-```sh
-ls
-```
+    ```sh
+    ls
+    ```
 
-which will list all files in the `src` directory, which should include a new directory called `Vrui`. Take note of this name, and then enter into that directory by typing this command into the terminal window:
+    which will list all files in the `src` directory, which should include a new directory called `Vrui`. Take note of this name, and then enter into that directory by typing this command into the terminal window:
 
-```sh
-cd <Vrui directory>
-```
+    ```sh
+    cd <Vrui directory>
+    ```
 
-where you replace `<Vrui directory>` with the name of the directory where you cloned/unpacked the Vrui in the previous step, as printed by `ls`.
+    where you replace `<Vrui directory>` with the name of the directory where you cloned/unpacked the Vrui in the previous step, as printed by `ls`.
 
 
 ### Step 2: Install prerequisite packages
