@@ -28,11 +28,7 @@ The Vrui code repository can be downloaded either by:
 !!! warning
     If you are unfamiliar with git and/or GitHub, you should probably go the zip file route.
 
-<<<<<<< Updated upstream
-#### Option 1: Downloading and unpacking a zip file from GitHub
-=======
 === "Option 1: Downloading and unpacking a zip file from GitHub"
->>>>>>> Stashed changes
 
     On [the Vrui repository's main page](https://github.com/vrui-vr/vrui), click on the green "<> Code" button, and then click on "Download ZIP" in the menu that pops up in response.
 
@@ -74,11 +70,7 @@ The Vrui code repository can be downloaded either by:
 
     where you replace `<Vrui directory>` with the name of the directory where you cloned/unpacked the Vrui in the previous step, as printed by `ls`.
 
-<<<<<<< Updated upstream
-#### Option 2: Clone the repository from GitHub
-=======
 === "Option 2: Clone the repository from GitHub"
->>>>>>> Stashed changes
 
     First, create a directory in your terminal where the Vrui code will live:
 
