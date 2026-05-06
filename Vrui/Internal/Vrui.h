@@ -256,6 +256,7 @@ struct VruiState
 	ScreenProtectorDevice* protectorDevices;
 	bool protectScreens;
 	bool alwaysRenderProtection; // Flag to request always rendering the screen protectors
+	float protectionAlpha; // Alpha value to render the screen protectors when there is not protection intrusion
 	Scalar renderProtection; // If >0.0, screen protectors need to be drawn during the current frame
 	Color protectorGridColor; // Color to draw screen protectors
 	Scalar protectorGridSpacing; // Spacing between grid lines when drawing screen protectors

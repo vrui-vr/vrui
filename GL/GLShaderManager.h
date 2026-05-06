@@ -1,7 +1,7 @@
 /***********************************************************************
 GLShaderManager - Class to manage OpenGL shader programs used by
 multiple entities.
-Copyright (c) 2022-2024 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the OpenGL Support Library (GLSupport).
 
@@ -47,6 +47,8 @@ class GLShaderManager
 			GLhandleARB handle; // Shader program's handle
 			unsigned int numUniforms; // Number of uniform variables used by the shader program
 			GLint* uniformLocations; // Pointer to sub-array containing this shader program's uniform variable locations
+			unsigned int numVersionNumbers; // Number of version numbers used by the shader program
+			unsigned int* versionNumbers; // Pointer to sub-array containing this shader program's version numbers
 			};
 		
 		/* Elements: */
@@ -55,10 +57,13 @@ class GLShaderManager
 		Shader* shaders; // Array of shader program states
 		unsigned int numUniforms; // Total number of uniform variables used by shaders defined in this namespace
 		GLint* uniformLocations; // Array of shader uniform variable locations
+		unsigned int numVersionNumbers; // Total number of version numbers used by shaders defined in this namespace
+		unsigned int* versionNumbers; // Array of shader version numbers
 		
 		/* Constructors and destructors: */
 		public:
 		Namespace(unsigned int sNumShaders,const unsigned int sNumShaderUniforms[]); // Creates a namespace for the given number of shaders and array of number of uniform variables per shader
+		Namespace(unsigned int sNumShaders,const unsigned int sNumShaderUniforms[],const unsigned int sNumVersionNumbers[]); // Ditto, with an additional array of number of version numbers per shader
 		Namespace(Namespace&& source); // Move constructor
 		Namespace& operator=(Namespace&& source); // Move assignment operator
 		~Namespace(void); // Destroys the namespace and all its shaders
@@ -75,6 +80,25 @@ class GLShaderManager
 		void setShader(unsigned int shaderIndex,GLhandleARB shader); // Sets the shader program handle for the given namespace slot; assumes that slot is defined and currently empty
 		void setUniformLocation(unsigned int shaderIndex,unsigned int variableIndex,GLint uniformLocation); // Sets the location of the uniform variable of the given index for the shader of the given index
 		void setUniformLocation(unsigned int shaderIndex,unsigned int variableIndex,const char* uniformName); // Ditto, using glGetUniformLocation to look up the location of the uniform variable of the given name
+		
+		/* Shader use methods: */
+		unsigned int getVersionNumber(unsigned int shaderIndex,unsigned int versionNumberIndex) const // Returns the version number of the given index of the shader of the given index
+			{
+			return shaders[shaderIndex].versionNumbers[versionNumberIndex];
+			}
+		bool isOutdated(unsigned int shaderIndex,const unsigned int versionNumbers[]) const // Returns true if the shader of the given index is outdated compared to the given array of version numbers
+			{
+			/* Compare all version numbers: */
+			const Shader& shader=shaders[shaderIndex];
+			for(unsigned int i=0;i<shader.numVersionNumbers;++i)
+				if(shader.versionNumbers[i]!=versionNumbers[i])
+					return true;
+			
+			return false;
+			}
+		void markUpToDate(unsigned int shaderIndex,const unsigned int versionNumbers[]); // Marks the shader of the given index up-to-date with respect to the given array of version numbers
+		void useShader(unsigned int shaderIndex); // Enables the shader program of the given index in the current OpenGL context
+		static void disableShaders(void); // Disables any currently enabled shader in the current OpenGL context
 		
 		/* Wrappers for glUniform*ARB functions: */
 		void uniform1f(unsigned int shaderIndex,unsigned int variableIndex,GLfloat v0) const
@@ -206,6 +230,7 @@ class GLShaderManager
 		return namespaceMap.getEntry(namespaceName).getDest();
 		}
 	std::pair<Namespace&,bool> createNamespace(const std::string& namespaceName,unsigned int numShaders,const unsigned int numShaderUniforms[]); // Returns a new or existing namespace with the given name and number of shaders and array of numbers of uniform variables per shader; second element of result is true if returned namespace is newly created
+	std::pair<Namespace&,bool> createNamespace(const std::string& namespaceName,unsigned int numShaders,const unsigned int numShaderUniforms[],const unsigned int numShaderVersionNumbers[]); // Ditto, with an additional array of numbers of version numbers per shader; shader version numbers are initialized to zero
 	};
 
 #endif

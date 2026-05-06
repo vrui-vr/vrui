@@ -26,6 +26,7 @@ o/
 scripts/Vrui.makeinclude
 scripts/Vrui.debug.makeinclude
 scripts/Vrui.pc
+etc/OpenVRDevices.conf
 share/Resources/IndexControllerLeft.wrl
 share/Resources/IndexControllerRight.wrl
 share/Resources/ViveController.wrl
@@ -37,5 +38,4 @@ ExamplePrograms/o/
 ExamplePrograms/MeshEditor/makefile
 ExamplePrograms/VRMLViewer/makefile
 Make.sh
-
 .vscode/

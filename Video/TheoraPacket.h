@@ -1,7 +1,7 @@
 /***********************************************************************
 TheoraPacket - Wrapper class for Ogg packets containing Theora video
 streams.
-Copyright (c) 2010-2022 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <ogg/ogg.h>
 #include <theora/codec.h>
+#include <Misc/SizedTypes.h>
 
 namespace Video {
 
@@ -63,13 +64,13 @@ class TheoraPacket:public ogg_packet
 		}
 	size_t getWireSize(void) const // Returns the marshalled size of the Theora packet
 		{
-		return sizeof(char)+2*sizeof(ogg_int64_t)+sizeof(unsigned int)+bytes*sizeof(unsigned char);
+		return sizeof(Misc::UInt8)+2*sizeof(ogg_int64_t)+sizeof(Misc::UInt32)+bytes*sizeof(Misc::UInt8);
 		}
 	template <class PipeParam>
 	void read(PipeParam& pipe) // Reads a packet from a pipe
 		{
 		/* Read the packet flags: */
-		b_o_s=pipe.template read<char>();
+		b_o_s=pipe.template read<Misc::UInt8>();
 		e_o_s=0;
 		
 		/* Read the packet stream position: */
@@ -77,7 +78,7 @@ class TheoraPacket:public ogg_packet
 		packetno=pipe.template read<ogg_int64_t>();
 		
 		/* Read the packet size: */
-		bytes=pipe.template read<unsigned int>();
+		bytes=pipe.template read<Misc::UInt32>();
 		
 		/* Check if the packet needs to allocate a private buffer: */
 		if(allocSize<size_t(bytes))
@@ -95,10 +96,10 @@ class TheoraPacket:public ogg_packet
 	template <class PipeParam>
 	void write(PipeParam& pipe) const
 		{
-		pipe.template write(b_o_s);
+		pipe.template write(Misc::UInt8(b_o_s));
 		pipe.template write(granulepos);
 		pipe.template write(packetno);
-		pipe.template write(bytes);
+		pipe.template write(Misc::UInt32(bytes));
 		pipe.template write(packet,bytes);
 		}
 	};

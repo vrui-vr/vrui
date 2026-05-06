@@ -1,6 +1,6 @@
 /***********************************************************************
 Small viewer for movies stored as image sequences.
-Copyright (c) 2012-2024 Oliver Kreylos
+Copyright (c) 2012-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -451,7 +451,7 @@ void ImageSequenceViewer::resetNavigation(void)
 	Vrui::Scalar h=Vrui::Scalar(frameSize[1]);
 	Vrui::Point center(Math::div2(w),Math::div2(h),Vrui::Scalar(0.01));
 	Vrui::Scalar size=Math::sqrt(Math::sqr(w)+Math::sqr(h));
-	Vrui::setNavigationTransformation(center,size,Vrui::Vector(0,1,0));
+	Vrui::setNavigationTransformation(center,size,Vrui::Vector(0,1,0),Vrui::Vector(1,0,0));
 	}
 
 void ImageSequenceViewer::initContext(GLContextData& contextData) const

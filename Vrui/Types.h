@@ -1,6 +1,6 @@
 /***********************************************************************
 Types - Forward declarations of data types used by the Vrui library.
-Copyright (c) 2005-2023 Oliver Kreylos
+Copyright (c) 2005-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -60,6 +60,8 @@ class AffineTransformation;
 template <class ScalarParam,int dimensionParam>
 class ProjectiveTransformation;
 template <class ScalarParam,int dimensionParam>
+class Box;
+template <class ScalarParam,int dimensionParam>
 class Ray;
 template <class ScalarParam,int dimensionParam>
 class Plane;
@@ -92,6 +94,7 @@ typedef Geometry::OrthonormalTransformation<Scalar,3> ONTransform; // Rigid body
 typedef Geometry::OrthogonalTransformation<Scalar,3> OGTransform; // Rigid body transformation with uniform scaling
 typedef Geometry::AffineTransformation<Scalar,3> ATransform; // General affine transformation
 typedef Geometry::ProjectiveTransformation<Scalar,3> PTransform; // General projective transformation
+typedef Geometry::Box<Scalar,3> Box; // Axis-aligned box
 typedef Geometry::Ray<Scalar,3> Ray; // Affine ray (half-line)
 typedef Geometry::Plane<Scalar,3> Plane; // Plane (half-space)
 

@@ -651,7 +651,7 @@ void TrackingTest::resetNavigation(void)
 	const TrackerState* tss=trackerStates.getLockedValue();
 	
 	/* Find the bounding box of all tracker positions: */
-	Geometry::Box<Vrui::Scalar,3> bbox=Geometry::Box<Vrui::Scalar,3>::empty;
+	Vrui::Box bbox=Vrui::Box::empty;
 	for(int trackerIndex=0;trackerIndex<numTrackers;++trackerIndex)
 		if(tss[trackerIndex].valid)
 			{

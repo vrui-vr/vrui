@@ -1,7 +1,7 @@
 /***********************************************************************
 AffineCombiner - Class to create points from affine combinations of
 arbitrary numbers of source points with arbitrary affine weights.
-Copyright (c) 2002-2005 Oliver Kreylos
+Copyright (c) 2002-2026 Oliver Kreylos
 
 This file is part of the Templatized Geometry Library (TGL).
 
@@ -53,6 +53,10 @@ class AffineCombiner
 		}
 	
 	/* Methods: */
+	bool isValid(void) const // Returns true if the combiner getPoint will return a valid point, i.e., if the current weight sum is != 0
+		{
+		return weightSum!=Scalar(0);
+		}
 	Point getPoint(void) const // Returns the created point
 		{
 		Point result;

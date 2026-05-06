@@ -1,7 +1,7 @@
 /***********************************************************************
 VruiSoundTest - Simple Vrui application to test the current audio
 configuration.
-Copyright (c) 2022-2024 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -107,15 +107,11 @@ class VruiSoundTest:public Vrui::Application,public ALObject
 	public:
 	VruiSoundTest(int& argc,char**& argv);
 	
-	#if ALSUPPORT_CONFIG_HAVE_OPENAL&&SOUND_CONFIG_HAVE_PULSEAUDIO
-	
 	/* Methods from class Vrui::Application: */
 	virtual void sound(ALContextData& contextData) const;
 	
 	/* Methods from class ALObject: */
 	virtual void initContext(ALContextData& contextData) const;
-	
-	#endif
 	};
 
 #if ALSUPPORT_CONFIG_HAVE_OPENAL&&SOUND_CONFIG_HAVE_PULSEAUDIO
@@ -325,10 +321,10 @@ VruiSoundTest::VruiSoundTest(int& argc,char**& argv)
 	#endif
 	}
 
-#if ALSUPPORT_CONFIG_HAVE_OPENAL&&SOUND_CONFIG_HAVE_PULSEAUDIO
-
 void VruiSoundTest::sound(ALContextData& contextData) const
 	{
+	#if ALSUPPORT_CONFIG_HAVE_OPENAL&&SOUND_CONFIG_HAVE_PULSEAUDIO
+	
 	/* Retrieve the context data item: */
 	DataItem* dataItem=contextData.retrieveDataItem<DataItem>(this);
 	
@@ -341,15 +337,19 @@ void VruiSoundTest::sound(ALContextData& contextData) const
 	/* Set the source's distance attenuation parameters (they don't change, but this is the best place to do it): */
 	alSourceReferenceDistance(dataItem->playbackSource,contextData.getReferenceDistance());
 	alSourceRolloffFactor(dataItem->playbackSource,contextData.getRolloffFactor());
+	
+	#endif
 	}
 
 void VruiSoundTest::initContext(ALContextData& contextData) const
 	{
+	#if ALSUPPORT_CONFIG_HAVE_OPENAL&&SOUND_CONFIG_HAVE_PULSEAUDIO
+	
 	/* Create a new context data item and associate it with the context data: */
 	DataItem* dataItem=new DataItem(this);
 	contextData.addDataItem(this,dataItem);
+	
+	#endif
 	}
-
-#endif
 
 VRUI_APPLICATION_RUN(VruiSoundTest)

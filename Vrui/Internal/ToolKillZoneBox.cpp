@@ -1,7 +1,7 @@
 /***********************************************************************
 ToolKillZoneBox - Class for box-shaped "kill zones" for tools and input
 devices.
-Copyright (c) 2004-2020 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -61,7 +61,7 @@ ToolKillZoneBox::ToolKillZoneBox(const Misc::ConfigurationFileSection& configFil
 Point ToolKillZoneBox::getCenter(void) const
 	{
 	/* Return the box's center point: */
-	return box.getOrigin()+Vector(box.getSize())*Scalar(0.5);
+	return Geometry::mid(box.min,box.max);
 	}
 
 void ToolKillZoneBox::setCenter(const Point& newCenter)
