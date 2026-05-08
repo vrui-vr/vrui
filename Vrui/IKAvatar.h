@@ -1,7 +1,7 @@
 /***********************************************************************
 IKAvatar - Class to represent a VR user as an inverse kinematics-
 controlled 3D geometry avatar.
-Copyright (c) 2020-2023 Oliver Kreylos
+Copyright (c) 2020-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -45,6 +45,17 @@ class IKAvatar
 	{
 	/* Embedded classes: */
 	public:
+	enum Joint // Enumerated type for avatar articulation joints
+		{
+		Neck=0,
+		LeftClavicle,LeftShoulder,LeftElbow,LeftWrist,
+		RightClavicle,RightShoulder,RightElbow,RightWrist,
+		Pelvis,
+		LeftHip,LeftKnee,LeftAnkle,
+		RightHip,RightKnee,RightAnkle,
+		NumJoints
+		};
+	
 	struct Configuration // Structure defining the user-fitting parameters of an IK avatar's skeleton
 		{
 		/* Embedded classes: */
@@ -158,14 +169,16 @@ class IKAvatar
 		return stateValid;
 		}
 	void setRootTransform(const ONTransform& newRootTransform); // Sets the avatar's root transformation, i.e., attaches the avatar to a head tracking device's current pose
-	const SceneGraph::TransformNode* getSceneGraph(void) const // Returns the avatar scene graph's root node
+	const SceneGraph::TransformNode& getSceneGraph(void) const // Returns the avatar scene graph's root node
 		{
-		return headNode.getPointer();
+		return *headNode;
 		}
-	SceneGraph::TransformNode* getSceneGraph(void) // Ditto
+	SceneGraph::TransformNode& getSceneGraph(void) // Ditto
 		{
-		return headNode.getPointer();
+		return *headNode;
 		}
+	const SceneGraph::TransformNode& getJointNode(int jointNode) const; // Returns the joing node corresponding to the given articulation joint
+	SceneGraph::TransformNode& getJointNode(int jointNode); // Ditto
 	OGTransform getShoulderTransform(void) const; // Returns a transformation to place an object on the avatar's back between the shoulders using avatar scale, avatar state must be valid
 	};
 

@@ -1,7 +1,7 @@
 /***********************************************************************
 IKAvatar - Class to represent a VR user as an inverse kinematics-
 controlled 3D geometry avatar.
-Copyright (c) 2020-2022 Oliver Kreylos
+Copyright (c) 2020-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -23,6 +23,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/IKAvatar.h>
 
+#include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
 #include <IO/OpenFile.h>
 #include <SceneGraph/NodeCreator.h>
@@ -235,6 +236,120 @@ void IKAvatar::setRootTransform(const ONTransform& newRootTransform)
 	headNode->translation.setValue(SceneGraph::Vector(root.getTranslation()));
 	headNode->rotation.setValue(SceneGraph::Rotation(root.getRotation()));
 	headNode->update();
+	}
+
+const SceneGraph::TransformNode& IKAvatar::getJointNode(int jointNode) const
+	{
+	switch(jointNode)
+		{
+		case Neck:
+			return *neckNode;
+		
+		case LeftClavicle:
+			return *arms[0].clavicleNode;
+		
+		case LeftShoulder:
+			return *arms[0].shoulderNode;
+		
+		case LeftElbow:
+			return *arms[0].elbowNode;
+		
+		case LeftWrist:
+			return *arms[0].wristNode;
+		
+		case RightClavicle:
+			return *arms[1].clavicleNode;
+		
+		case RightShoulder:
+			return *arms[1].shoulderNode;
+		
+		case RightElbow:
+			return *arms[1].elbowNode;
+		
+		case RightWrist:
+			return *arms[1].wristNode;
+		
+		case Pelvis:
+			return *pelvisNode;
+		
+		case LeftHip:
+			return *legs[0].hipNode;
+		
+		case LeftKnee:
+			return *legs[0].kneeNode;
+		
+		case LeftAnkle:
+			return *legs[0].ankleNode;
+		
+		case RightHip:
+			return *legs[1].hipNode;
+		
+		case RightKnee:
+			return *legs[1].kneeNode;
+		
+		case RightAnkle:
+			return *legs[1].ankleNode;
+		
+		default:
+			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid joint");
+		}
+	}
+
+SceneGraph::TransformNode& IKAvatar::getJointNode(int jointNode)
+	{
+	switch(jointNode)
+		{
+		case Neck:
+			return *neckNode;
+		
+		case LeftClavicle:
+			return *arms[0].clavicleNode;
+		
+		case LeftShoulder:
+			return *arms[0].shoulderNode;
+		
+		case LeftElbow:
+			return *arms[0].elbowNode;
+		
+		case LeftWrist:
+			return *arms[0].wristNode;
+		
+		case RightClavicle:
+			return *arms[1].clavicleNode;
+		
+		case RightShoulder:
+			return *arms[1].shoulderNode;
+		
+		case RightElbow:
+			return *arms[1].elbowNode;
+		
+		case RightWrist:
+			return *arms[1].wristNode;
+		
+		case Pelvis:
+			return *pelvisNode;
+		
+		case LeftHip:
+			return *legs[0].hipNode;
+		
+		case LeftKnee:
+			return *legs[0].kneeNode;
+		
+		case LeftAnkle:
+			return *legs[0].ankleNode;
+		
+		case RightHip:
+			return *legs[1].hipNode;
+		
+		case RightKnee:
+			return *legs[1].kneeNode;
+		
+		case RightAnkle:
+			return *legs[1].ankleNode;
+		
+		default:
+			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid joint");
+		}
 	}
 
 OGTransform IKAvatar::getShoulderTransform(void) const

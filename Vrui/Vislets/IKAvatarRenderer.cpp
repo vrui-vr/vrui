@@ -1,7 +1,7 @@
 /***********************************************************************
 IKAvatarRenderer - Vislet class to render an IK-controlled avatar for
 the local user.
-Copyright (c) 2020-2022 Oliver Kreylos
+Copyright (c) 2020-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -133,7 +133,7 @@ void IKAvatarRenderer::enable(bool startup)
 	Vislet::enable(startup);
 	
 	/* Link the avatar's scene graph root to Vrui's physical-space scene graph: */
-	Vrui::getSceneGraphManager()->addPhysicalNode(*avatar.getSceneGraph());
+	Vrui::getSceneGraphManager()->addPhysicalNode(avatar.getSceneGraph());
 	}
 
 void IKAvatarRenderer::disable(bool shutdown)
@@ -142,7 +142,7 @@ void IKAvatarRenderer::disable(bool shutdown)
 	Vislet::disable(shutdown);
 	
 	/* Unlink the avatar's scene graph root from Vrui's physical-space scene graph: */
-	Vrui::getSceneGraphManager()->removePhysicalNode(*avatar.getSceneGraph());
+	Vrui::getSceneGraphManager()->removePhysicalNode(avatar.getSceneGraph());
 	}
 
 void IKAvatarRenderer::frame(void)
