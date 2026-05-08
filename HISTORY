@@ -8658,6 +8658,9 @@ Vrui-15.0-001:
 - Add HTTP protocol version to VRCompositingServer.
   - Initial protocol version is 1.
 - Add missing inline dependency on Geometry library to Video library.
+- Fixed a bug in RoomSetup when writing a calibrated screen to a new
+  configuration file; need to write clip-space homography, not screen-
+  space homography.
 - Fixed error check after non-blocking read in IO::FileMonitor.
 - Changes to GLShaderManager class:
   - Destroy previous shader program in Namespace::setShader method.
