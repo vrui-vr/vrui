@@ -8696,8 +8696,11 @@ Vrui-15.0-001:
 - Fixed VruiSoundConfig and VruiSoundTest utilities in case ALSA,
   OpenAL, or PulseAudio are not supported on the host.
 - Added isValid() method to Geometry::AffineCombiner.
-- API change: Changed the return types of Vrui::IKAvatar::getSceneGraph
-  methods from pointers to references.
-  - Adapted Vrui::IKAvatarRenderer vislet.
-- Added enumerated type for articulation joints to Vrui::IKAvatar.
-- Added getJointNode methods to Vrui::IKAvatar.
+- Changes to Vrui::IKAvatar class:
+  - API change: Changed the return types of
+    Vrui::IKAvatar::getSceneGraph methods from pointers to references.
+    - Adapted Vrui::IKAvatarRenderer vislet.
+  - Added enumerated type for articulation joints to Vrui::IKAvatar.
+  - Added getJointNode methods to Vrui::IKAvatar.
+  - Added setSceneGraph and linkJointNode methods to replace the avatar
+    representation with a pre-loaded scene graph.

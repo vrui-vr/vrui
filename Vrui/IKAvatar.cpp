@@ -40,7 +40,7 @@ void IKAvatar::linkAvatar(SceneGraph::VRMLFile& avatarFile)
 	{
 	/* Retrieve the neck joint node: */
 	neckNode=JointPointer(avatarFile.getNode("NT"));
-	valid=neckNode!=0;
+	bool valid=neckNode!=0;
 	
 	/* Initialize the left and right arms: */
 	for(int armIndex=0;armIndex<2;++armIndex)
@@ -69,13 +69,16 @@ void IKAvatar::linkAvatar(SceneGraph::VRMLFile& avatarFile)
 		valid=valid&&leg.hipNode!=0&&leg.kneeNode!=0&&leg.ankleNode!=0;
 		}
 	
+	/* Update the valid joint mask: */
+	jointMask=valid?fullJointMask:0x0U;
+	
 	/* Mark the avatar's forward kinematics state as invalid: */
 	stateValid=false;
 	}
 
 IKAvatar::IKAvatar(void)
 	:headNode(new SceneGraph::TransformNode),
-	 valid(false),stateValid(false)
+	 jointMask(0x0U),stateValid(false)
 	{
 	}
 
@@ -91,7 +94,7 @@ void IKAvatar::loadAvatar(const char* avatarFileName)
 	
 	/* Link the avatar's joint nodes and check for errors: */
 	linkAvatar(avatarFile);
-	if(!valid)
+	if(jointMask!=fullJointMask)
 		Misc::formattedUserError("Vrui::IKAvatar::loadAvatar: Invalid avatar in VRML file %s",avatarFileName);
 	}
 
@@ -107,8 +110,112 @@ void IKAvatar::loadAvatar(IO::Directory& directory,const char* avatarFileName)
 	
 	/* Link the avatar's joint nodes and check for errors: */
 	linkAvatar(avatarFile);
-	if(!valid)
+	if(jointMask!=fullJointMask)
 		Misc::formattedUserError("Vrui::IKAvatar::loadAvatar: Invalid avatar in VRML file %s",avatarFileName);
+	}
+
+void IKAvatar::setSceneGraph(SceneGraph::TransformNode& newSceneGraph)
+	{
+	/* Invalidate all articulation joint links: */
+	neckNode=0;
+	for(int i=0;i<2;++i)
+		{
+		arms[i].clavicleNode=0;
+		arms[i].shoulderNode=0;
+		arms[i].elbowNode=0;
+		arms[i].wristNode=0;
+		}
+	pelvisNode=0;
+	for(int i=0;i<2;++i)
+		{
+		legs[i].hipNode=0;
+		legs[i].kneeNode=0;
+		legs[i].ankleNode=0;
+		}
+	
+	/* Remove the current avatar: */
+	headNode->removeAllChildren();
+	jointMask=0x0U;
+	
+	/* Replace the avatar: */
+	headNode->addChild(newSceneGraph);
+	}
+
+void IKAvatar::linkJointNode(int jointNode,SceneGraph::TransformNode& newJointNode)
+	{
+	/* Link the appropriate articulation joint with the given scene graph node: */
+	switch(jointNode)
+		{
+		case Neck:
+			neckNode=&newJointNode;
+			break;
+		
+		case LeftClavicle:
+			arms[0].clavicleNode=&newJointNode;
+			break;
+		
+		case LeftShoulder:
+			arms[0].shoulderNode=&newJointNode;
+			break;
+		
+		case LeftElbow:
+			arms[0].elbowNode=&newJointNode;
+			break;
+		
+		case LeftWrist:
+			arms[0].wristNode=&newJointNode;
+			break;
+		
+		case RightClavicle:
+			arms[1].clavicleNode=&newJointNode;
+			break;
+		
+		case RightShoulder:
+			arms[1].shoulderNode=&newJointNode;
+			break;
+		
+		case RightElbow:
+			arms[1].elbowNode=&newJointNode;
+			break;
+		
+		case RightWrist:
+			arms[1].wristNode=&newJointNode;
+			break;
+		
+		case Pelvis:
+			pelvisNode=&newJointNode;
+			break;
+		
+		case LeftHip:
+			legs[0].hipNode=&newJointNode;
+			break;
+		
+		case LeftKnee:
+			legs[0].kneeNode=&newJointNode;
+			break;
+		
+		case LeftAnkle:
+			legs[0].ankleNode=&newJointNode;
+			break;
+		
+		case RightHip:
+			legs[1].hipNode=&newJointNode;
+			break;
+		
+		case RightKnee:
+			legs[1].kneeNode=&newJointNode;
+			break;
+		
+		case RightAnkle:
+			legs[1].ankleNode=&newJointNode;
+			break;
+		
+		default:
+			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid joint");
+		}
+	
+	/* Update the joint mask: */
+	jointMask=jointMask|(0x1U<<jointNode);
 	}
 
 namespace {
@@ -136,7 +243,7 @@ void setRotation(SceneGraph::TransformNode& node,const Rotation& rotation) // Se
 void IKAvatar::configureAvatar(const Configuration& configuration)
 	{
 	/* Bail out if the avatar is not valid: */
-	if(!valid)
+	if(jointMask!=fullJointMask)
 		return;
 	
 	/* Retrieve the avatar's scale factor: */
@@ -190,7 +297,7 @@ void IKAvatar::invalidateState(void)
 void IKAvatar::updateState(const IKAvatar::State& newState)
 	{
 	/* Bail out if the avatar is not valid: */
-	if(!valid)
+	if(jointMask!=fullJointMask)
 		return;
 	
 	/* Apply the joint rotations from the given forward kinematics state to the avatar representation: */
@@ -224,7 +331,7 @@ void IKAvatar::updateState(const IKAvatar::State& newState)
 void IKAvatar::setRootTransform(const ONTransform& newRootTransform)
 	{
 	/* Bail out if the avatar is not valid: */
-	if(!valid)
+	if(jointMask!=fullJointMask)
 		return;
 	
 	/* Apply the head to device transformation: */
@@ -240,6 +347,7 @@ void IKAvatar::setRootTransform(const ONTransform& newRootTransform)
 
 const SceneGraph::TransformNode& IKAvatar::getJointNode(int jointNode) const
 	{
+	/* Return the appropriate articulation joint's scene graph node: */
 	switch(jointNode)
 		{
 		case Neck:
@@ -297,6 +405,7 @@ const SceneGraph::TransformNode& IKAvatar::getJointNode(int jointNode) const
 
 SceneGraph::TransformNode& IKAvatar::getJointNode(int jointNode)
 	{
+	/* Return the appropriate articulation joint's scene graph node: */
 	switch(jointNode)
 		{
 		case Neck:

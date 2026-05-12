@@ -141,13 +141,14 @@ class IKAvatar
 		};
 	
 	/* Elements: */
+	static const unsigned int fullJointMask=0xffffU; // Bit mask indicating that all articulation joints are valid
 	ONTransform headToDevice; // Transformation from head space, with neck joint at origin, to head tracking device space
 	JointPointer headNode; // Pointer to the root node of the avatar representation
 	JointPointer neckNode; // Scene graph node representing the neck joint
 	Arm arms[2]; // Scene graph nodes representing the joints of the left and right arms
 	JointPointer pelvisNode; // Scene graph node representing the pelvic joint
 	Leg legs[2]; // Scene graph nodes representing the joints of the left and right legs
-	bool valid; // Flag whether the avatar's representation is valid
+	unsigned int jointMask; // Bit mask indicating which of the articulation joints are linked to scene graph nodes
 	bool stateValid; // Flag whether a valid skeleton state has been applied to the avatar representation
 	
 	/* Private methods: */
@@ -160,6 +161,8 @@ class IKAvatar
 	/* Methods: */
 	void loadAvatar(const char* avatarFileName); // Creates an avatar representation by reading a VRML file of the given name relative to Vrui's resource directory
 	void loadAvatar(IO::Directory& directory,const char* avatarFileName); // Creates an avatar representation by reading a VRML file of the given name relative to the given directory
+	void setSceneGraph(SceneGraph::TransformNode& newSceneGraph); // Replaces the avatar's representation
+	void linkJointNode(int jointNode,SceneGraph::TransformNode& newJointNode); // Links the given articulation joint to the given node in the avatar's scene graph
 	void configureAvatar(const Configuration& configuration); // Configures the avatar representation
 	void scaleAvatar(Scalar scale); // Applies a scaling factor to the entire avatar to account for different units of measurement
 	void invalidateState(void); // Marks the avatar's skeleton state as invalid
