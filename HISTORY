@@ -8704,3 +8704,7 @@ Vrui-15.0-001:
   - Added getJointNode methods to Vrui::IKAvatar.
   - Added setSceneGraph and linkJointNode methods to replace the avatar
     representation with a pre-loaded scene graph.
+- Added support for regular "I'm still alive" events on event sink
+  connections to Comm::HttpServer.
+  - Enabled still alive events to VRDeviceDaemon and
+    VRCompositingServer.

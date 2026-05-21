@@ -241,6 +241,15 @@ void HttpServer::Connection::pipeCallback(Threads::RunLoop::IOWatcher::Event& ev
 									// DEBUGGING
 									std::cout<<"Comm::HttpServer: Connection marked as event sink"<<std::endl;
 									
+									/* Check if "I'm still alive" events are enabled: */
+									if(server.stillAliveInterval.tv_sec!=0||server.stillAliveInterval.tv_nsec!=0)
+										{
+										/* Register a timer to send "I'm still alive" events: */
+										Threads::RunLoop::Time timeout;
+										timeout+=server.stillAliveInterval;
+										stillAliveTimer=server.runLoop.createTimer(timeout,server.stillAliveInterval,true,*Threads::createFunctionCall(this,&HttpServer::Connection::stillAliveCallback));
+										}
+									
 									/* Go back to Start state: */
 									delete requestHeader;
 									requestHeader=0;
@@ -420,6 +429,20 @@ void HttpServer::Connection::pipeCallback(Threads::RunLoop::IOWatcher::Event& ev
 		}
 	}
 
+void HttpServer::Connection::stillAliveCallback(Threads::RunLoop::Timer::Event& event)
+	{
+	/* Write an event to the connection's pipe: */
+	{
+	IO::OStream event(pipe);
+	event<<"event: stillAlive\r\n";
+	event<<"data: {\"stillAlive\",true}\r\n";
+	event<<"\r\n";
+	}
+	
+	/* Send it: */
+	pipe->flush();
+	}
+
 HttpServer::Connection::Connection(HttpServer& sServer)
 	:server(sServer),
 	 pipe(server.listenSocket->accept()),
@@ -458,7 +481,8 @@ void HttpServer::listenSocketCallback(Threads::RunLoop::IOWatcher::Event& event)
 HttpServer::HttpServer(Threads::RunLoop& sRunLoop,int listenPort)
 	:runLoop(sRunLoop),
 	 listenSocket(new ListeningTCPSocket(listenPort,5)),
-	 listenSocketWatcher(runLoop.createIOWatcher(listenSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&HttpServer::listenSocketCallback)))
+	 listenSocketWatcher(runLoop.createIOWatcher(listenSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&HttpServer::listenSocketCallback))),
+	 stillAliveInterval(0,0)
 	{
 	/* Set the listening socket to non-blocking mode: */
 	listenSocket->setBlocking(false);
@@ -471,6 +495,12 @@ HttpServer::~HttpServer(void)
 int HttpServer::getPort(void) const
 	{
 	return static_cast<Comm::ListeningTCPSocket*>(listenSocket.getPointer())->getPortId();
+	}
+
+void HttpServer::setStillAliveInterval(const Threads::RunLoop::Interval newStillAliveInterval)
+	{
+	/* Update the event interval: */
+	stillAliveInterval=newStillAliveInterval;
 	}
 
 void HttpServer::setPostRequestHandler(PostRequestHandler& newPostRequestHandler)

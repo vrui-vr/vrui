@@ -1029,6 +1029,7 @@ VRDeviceServer::VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDevi
 		{
 		/* Create an HTTP server and register an HTTP POST request handler: */
 		httpServer=new Comm::HttpServer(runLoop,configFile.retrieveValue<int>("httpPort"));
+		httpServer->setStillAliveInterval(Threads::RunLoop::Interval(15,0));
 		httpServer->setPostRequestHandler(*Threads::createFunctionCall(this,&VRDeviceServer::handlePostRequest));
 		}
 	

@@ -319,6 +319,7 @@ VRServer::VRServer(const std::string& vrDeviceServerSocketName,bool vrDeviceServ
 		{
 		/* Create an HTTP server and register an HTTP POST request handler: */
 		httpServer=new Comm::HttpServer(runLoop,httpListenPortId);
+		httpServer->setStillAliveInterval(Threads::RunLoop::Interval(15,0));
 		httpServer->setPostRequestHandler(*Threads::createFunctionCall(this,&VRServer::handlePostRequest));
 		}
 	
