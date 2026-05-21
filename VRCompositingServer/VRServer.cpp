@@ -99,7 +99,7 @@ class VRServer
 Static elements of class VRServer:
 *********************************/
 
-const unsigned int VRServer::httpProtocolVersion=1U;
+const unsigned int VRServer::httpProtocolVersion=2U;
 
 /*************************
 Methods of class VRServer:

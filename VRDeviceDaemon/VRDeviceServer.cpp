@@ -95,7 +95,7 @@ VRDeviceServer::ClientState::ClientState(Comm::PipePtr sPipe)
 Static elements of class VRDeviceServer:
 ***************************************/
 
-const unsigned int VRDeviceServer::httpProtocolVersion=1U;
+const unsigned int VRDeviceServer::httpProtocolVersion=2U;
 
 /*******************************
 Methods of class VRDeviceServer:
