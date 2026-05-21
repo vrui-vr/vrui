@@ -245,9 +245,7 @@ void HttpServer::Connection::pipeCallback(Threads::RunLoop::IOWatcher::Event& ev
 									if(server.stillAliveInterval.tv_sec!=0||server.stillAliveInterval.tv_nsec!=0)
 										{
 										/* Register a timer to send "I'm still alive" events: */
-										Threads::RunLoop::Time timeout;
-										timeout+=server.stillAliveInterval;
-										stillAliveTimer=server.runLoop.createTimer(timeout,server.stillAliveInterval,true,*Threads::createFunctionCall(this,&HttpServer::Connection::stillAliveCallback));
+										stillAliveTimer=server.runLoop.createTimer(event.getDispatchTime()+server.stillAliveInterval,*Threads::createFunctionCall(this,&HttpServer::Connection::stillAliveCallback));
 										}
 									
 									/* Go back to Start state: */
@@ -431,6 +429,9 @@ void HttpServer::Connection::pipeCallback(Threads::RunLoop::IOWatcher::Event& ev
 
 void HttpServer::Connection::stillAliveCallback(Threads::RunLoop::Timer::Event& event)
 	{
+	// DEBUGGING
+	std::cout<<"Comm::HttpServer: Sending \"I'm still alive\" event to client"<<std::endl;
+	
 	/* Write an event to the connection's pipe: */
 	{
 	IO::OStream event(pipe);
@@ -441,6 +442,9 @@ void HttpServer::Connection::stillAliveCallback(Threads::RunLoop::Timer::Event& 
 	
 	/* Send it: */
 	pipe->flush();
+	
+	/* Reschedule the timer: */
+	stillAliveTimer->setTimeout(event.getScheduledTime()+server.stillAliveInterval,true);
 	}
 
 HttpServer::Connection::Connection(HttpServer& sServer)
@@ -512,6 +516,7 @@ void HttpServer::setPostRequestHandler(PostRequestHandler& newPostRequestHandler
 void HttpServer::sendEvent(const char* eventName,const IO::JsonEntity& eventData)
 	{
 	/* Send the event to all active connections marked as event sinks: */
+	Threads::RunLoop::Time now;
 	for(Misc::SimpleObjectSet<Connection>::iterator cIt=connections.begin();cIt!=connections.end();++cIt)
 		if(cIt->eventSink)
 			{
@@ -525,6 +530,9 @@ void HttpServer::sendEvent(const char* eventName,const IO::JsonEntity& eventData
 			
 			/* Send it: */
 			cIt->pipe->flush();
+			
+			/* Push forward the connection's still alive timeout: */
+			cIt->stillAliveTimer->setTimeout(now+stillAliveInterval,true);
 			}
 	}
 
