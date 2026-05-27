@@ -1298,7 +1298,7 @@ void VruiState::createSettingsDialog(void)
 	/* Create a slider to set ambient light intensity: */
 	new GLMotif::Label("AmbientLabel",lightSettings,"Ambient Intensity");
 	
-	GLMotif::TextFieldSlider* ambientIntensitySlider=new GLMotif::TextFieldSlider("AmbientIntensitySlider",lightSettings,5,uiStyleSheet.fontHeight*5.0f);
+	GLMotif::TextFieldSlider* ambientIntensitySlider=new GLMotif::TextFieldSlider("AmbientIntensitySlider",lightSettings,8,uiStyleSheet.fontHeight*8.0f);
 	ambientIntensitySlider->setSliderMapping(GLMotif::TextFieldSlider::LINEAR);
 	ambientIntensitySlider->setValueType(GLMotif::TextFieldSlider::FLOAT);
 	ambientIntensitySlider->setValueRange(0.0,1.0,0.005);
@@ -1403,8 +1403,8 @@ void VruiState::createSettingsDialog(void)
 	GLMotif::Margin* backgroundColorMargin=new GLMotif::Margin("BackgroundColorMargin",colorBox,false);
 	backgroundColorMargin->setAlignment(GLMotif::Alignment(GLMotif::Alignment::HCENTER));
 	
-	GLMotif::HSVColorSelector* backgroundColorSelector=new GLMotif::HSVColorSelector("BackgroundColorSelector",backgroundColorMargin);
-	backgroundColorSelector->setCurrentColor(Vrui::getBackgroundColor());
+	backgroundColorSelector=new GLMotif::HSVColorSelector("BackgroundColorSelector",backgroundColorMargin);
+	backgroundColorSelector->setCurrentColor(backgroundColor);
 	backgroundColorSelector->getValueChangedCallbacks().add(this,&VruiState::backgroundColorValueChangedCallback);
 	
 	backgroundColorMargin->manageChild();
@@ -1414,8 +1414,8 @@ void VruiState::createSettingsDialog(void)
 	GLMotif::Margin* foregroundColorMargin=new GLMotif::Margin("ForegroundColorMargin",colorBox,false);
 	foregroundColorMargin->setAlignment(GLMotif::Alignment(GLMotif::Alignment::HCENTER));
 	
-	GLMotif::HSVColorSelector* foregroundColorSelector=new GLMotif::HSVColorSelector("ForegroundColorSelector",foregroundColorMargin);
-	foregroundColorSelector->setCurrentColor(Vrui::getForegroundColor());
+	foregroundColorSelector=new GLMotif::HSVColorSelector("ForegroundColorSelector",foregroundColorMargin);
+	foregroundColorSelector->setCurrentColor(foregroundColor);
 	foregroundColorSelector->getValueChangedCallbacks().add(this,&VruiState::foregroundColorValueChangedCallback);
 	
 	foregroundColorMargin->manageChild();
@@ -1431,24 +1431,24 @@ void VruiState::createSettingsDialog(void)
 	
 	new GLMotif::Label("BackplaneLabel",planesBox,"Backplane");
 	
-	GLMotif::TextFieldSlider* backplaneSlider=new GLMotif::TextFieldSlider("BackplaneSlider",planesBox,8,uiStyleSheet.fontHeight*10.0f);
+	backplaneSlider=new GLMotif::TextFieldSlider("BackplaneSlider",planesBox,8,uiStyleSheet.fontHeight*10.0f);
 	backplaneSlider->setSliderMapping(GLMotif::TextFieldSlider::EXP10);
 	backplaneSlider->setValueType(GLMotif::TextFieldSlider::FLOAT);
 	backplaneSlider->getTextField()->setFloatFormat(GLMotif::TextField::SMART);
-	backplaneSlider->setValueRange(getBackplaneDist()/100.0,getBackplaneDist()*100.0,0.0);
-	backplaneSlider->getSlider()->addNotch(Math::log10(getBackplaneDist()));
-	backplaneSlider->setValue(getBackplaneDist());
+	backplaneSlider->setValueRange(backplaneDist/100.0,backplaneDist*100.0,0.0);
+	backplaneSlider->getSlider()->addNotch(Math::log10(backplaneDist));
+	backplaneSlider->setValue(backplaneDist);
 	backplaneSlider->getValueChangedCallbacks().add(this,&VruiState::backplaneValueChangedCallback);
 	
 	new GLMotif::Label("FrontplaneLabel",planesBox,"Frontplane");
 	
-	GLMotif::TextFieldSlider* frontplaneSlider=new GLMotif::TextFieldSlider("FrontplaneSlider",planesBox,8,uiStyleSheet.fontHeight*10.0f);
+	frontplaneSlider=new GLMotif::TextFieldSlider("FrontplaneSlider",planesBox,8,uiStyleSheet.fontHeight*10.0f);
 	frontplaneSlider->setSliderMapping(GLMotif::TextFieldSlider::EXP10);
 	frontplaneSlider->setValueType(GLMotif::TextFieldSlider::FLOAT);
 	frontplaneSlider->getTextField()->setFloatFormat(GLMotif::TextField::SMART);
-	frontplaneSlider->setValueRange(getFrontplaneDist()/100.0,getFrontplaneDist()*100.0,0.0);
-	frontplaneSlider->getSlider()->addNotch(Math::log10(getFrontplaneDist()));
-	frontplaneSlider->setValue(getFrontplaneDist());
+	frontplaneSlider->setValueRange(frontplaneDist/100.0,frontplaneDist*100.0,0.0);
+	frontplaneSlider->getSlider()->addNotch(Math::log10(frontplaneDist));
+	frontplaneSlider->setValue(frontplaneDist);
 	frontplaneSlider->getValueChangedCallbacks().add(this,&VruiState::frontplaneValueChangedCallback);
 	
 	planesBox->setColumnWeight(1,1.0f);
@@ -2678,42 +2678,72 @@ void VruiState::sunIntensityValueChangedCallback(GLMotif::TextFieldSlider::Value
 void VruiState::backgroundColorValueChangedCallback(GLMotif::HSVColorSelector::ValueChangedCallbackData* cbData)
 	{
 	/* Set the background color: */
-	setBackgroundColor(cbData->newColor);
+	backgroundColor=cbData->newColor;
+	
+	/* Update the colors of the pixel font: */
+	vruiState->pixelFont->setBackgroundColor(backgroundColor);
+	
+	/* Call the rendering parameter changed callbacks: */
+	{
+	RenderingParametersChangedCallbackData cbData(RenderingParametersChangedCallbackData::BackgroundColor);
+	renderingParametersChangedCallbacks.call(&cbData);
+	}
 	}
 
 void VruiState::foregroundColorValueChangedCallback(GLMotif::HSVColorSelector::ValueChangedCallbackData* cbData)
 	{
 	/* Set the foreground color: */
-	setForegroundColor(cbData->newColor);
+	foregroundColor=cbData->newColor;
+	
+	/* Update the colors of the pixel font: */
+	vruiState->pixelFont->setForegroundColor(foregroundColor);
+	
+	/* Call the rendering parameter changed callbacks: */
+	{
+	RenderingParametersChangedCallbackData cbData(RenderingParametersChangedCallbackData::ForegroundColor);
+	renderingParametersChangedCallbacks.call(&cbData);
+	}
 	}
 
 void VruiState::backplaneValueChangedCallback(GLMotif::TextFieldSlider::ValueChangedCallbackData* cbData)
 	{
 	/* Check if the new backplane distance is larger than the frontplane distance: */
-	if(cbData->value>getFrontplaneDist())
+	if(frontplaneDist<cbData->value)
 		{
 		/* Set the backplane distance: */
-		setBackplaneDist(cbData->value);
+		backplaneDist=cbData->value;
+		
+		/* Call the rendering parameter changed callbacks: */
+		{
+		RenderingParametersChangedCallbackData cbData(RenderingParametersChangedCallbackData::BackplaneDistance);
+		renderingParametersChangedCallbacks.call(&cbData);
+		}
 		}
 	else
 		{
 		/* Reset the slider to the current value: */
-		cbData->slider->setValue(getBackplaneDist());
+		cbData->slider->setValue(backplaneDist);
 		}
 	}
 
 void VruiState::frontplaneValueChangedCallback(GLMotif::TextFieldSlider::ValueChangedCallbackData* cbData)
 	{
 	/* Check if the new frontplane distance is smaller than the backplane distance: */
-	if(cbData->value<getBackplaneDist())
+	if(cbData->value<backplaneDist)
 		{
 		/* Set the frontplane distance: */
-		setFrontplaneDist(cbData->value);
+		frontplaneDist=cbData->value;
+		
+		/* Call the rendering parameter changed callbacks: */
+		{
+		RenderingParametersChangedCallbackData cbData(RenderingParametersChangedCallbackData::FrontplaneDistance);
+		renderingParametersChangedCallbacks.call(&cbData);
+		}
 		}
 	else
 		{
 		/* Reset the slider to the current value: */
-		cbData->slider->setValue(getFrontplaneDist());
+		cbData->slider->setValue(frontplaneDist);
 		}
 	}
 
@@ -3158,7 +3188,11 @@ Point calcFloorPoint(const Point& position)
 
 void setFrontplaneDist(Scalar newFrontplaneDist)
 	{
+	/* Set the frontplane distance without checking: */
 	vruiState->frontplaneDist=newFrontplaneDist;
+	
+	/* Update the frontplane distance slider: */
+	vruiState->frontplaneSlider->setValue(vruiState->frontplaneDist);
 	
 	/* Call the rendering parameter changed callbacks: */
 	{
@@ -3174,7 +3208,11 @@ Scalar getFrontplaneDist(void)
 
 void setBackplaneDist(Scalar newBackplaneDist)
 	{
+	/* Set the backplane distance without checking: */
 	vruiState->backplaneDist=newBackplaneDist;
+	
+	/* Update the backplane distance slider: */
+	vruiState->backplaneSlider->setValue(vruiState->backplaneDist);
 	
 	/* Call the rendering parameter changed callbacks: */
 	{
@@ -3190,12 +3228,18 @@ Scalar getBackplaneDist(void)
 
 void setBackgroundColor(const Color& newBackgroundColor)
 	{
+	/* Set the background color: */
 	vruiState->backgroundColor=newBackgroundColor;
 	
-	/* Calculate a new contrasting foreground color: */
-	for(int i=0;i<3;++i)
-		vruiState->foregroundColor[i]=1.0f-newBackgroundColor[i];
-	vruiState->foregroundColor[3]=1.0f;
+	float backgroundLuminance=0.299f*vruiState->backgroundColor[0]+0.587f*vruiState->backgroundColor[1]+0.114f*vruiState->backgroundColor[2];
+	if(backgroundLuminance<=0.5f)
+		vruiState->foregroundColor=Color(1,1,1,1);
+	else
+		vruiState->foregroundColor=Color(0,0,0,1);
+	
+	/* Update the background and foreground color selectors: */
+	vruiState->backgroundColorSelector->setCurrentColor(vruiState->backgroundColor);
+	vruiState->foregroundColorSelector->setCurrentColor(vruiState->foregroundColor);
 	
 	/* Update the colors of the pixel font: */
 	vruiState->pixelFont->setBackgroundColor(vruiState->backgroundColor);
@@ -3210,7 +3254,11 @@ void setBackgroundColor(const Color& newBackgroundColor)
 
 void setForegroundColor(const Color& newForegroundColor)
 	{
+	/* Set the foreground color: */
 	vruiState->foregroundColor=newForegroundColor;
+	
+	/* Update the foreground color selector: */
+	vruiState->foregroundColorSelector->setCurrentColor(vruiState->foregroundColor);
 	
 	/* Update the colors of the pixel font: */
 	vruiState->pixelFont->setForegroundColor(vruiState->foregroundColor);

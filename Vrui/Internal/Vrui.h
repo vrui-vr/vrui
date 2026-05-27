@@ -1,7 +1,7 @@
 /***********************************************************************
 Internal kernel interface of the Vrui virtual reality development
 toolkit.
-Copyright (c) 2000-2025 Oliver Kreylos
+Copyright (c) 2000-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -308,6 +308,11 @@ struct VruiState
 	GLMotif::TextFieldSlider* sunAzimuthSlider;
 	GLMotif::TextFieldSlider* sunElevationSlider;
 	GLMotif::TextFieldSlider* sunIntensitySlider;
+	GLMotif::HSVColorSelector* backgroundColorSelector;
+	GLMotif::HSVColorSelector* foregroundColorSelector;
+	GLMotif::TextFieldSlider* backplaneSlider;
+	GLMotif::TextFieldSlider* frontplaneSlider;
+	
 	bool userMessagesToConsole; // Flag whether to route user messages, normally displayed as dialog boxes, to the console instead
 	MessageDialogHeap messageDialogs; // Heap containing currently-open message dialogs, sorted by time-out
 	
@@ -416,7 +421,6 @@ struct VruiState
 	void finishMainLoop(void); // Performs first steps of shutdown after mainloop finishes
 	
 	/* Pipe command callback methods: */
-	static void listCommandsCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
 	static void showMessageCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
 	static void resetViewCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
 	static void loadViewCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);

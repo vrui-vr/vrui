@@ -1,7 +1,7 @@
 /***********************************************************************
 ScaleBar - Class to draw a scale bar in Vrui applications. Scale bar is
 implemented as a special top-level GLMotif widget for simplicity.
-Copyright (c) 2010-2025 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -250,7 +250,7 @@ void ScaleBar::unitChangedCallback(CoordinateManager::UnitChangedCallbackData* c
 	currentMantissa=1;
 	currentExponent=0;
 	currentNavLength=Scalar(1);
-	calcSize(Vrui::getNavigationTransformation(),cbData->newUnit,true);
+	calcSize(getNavigationTransformation(),cbData->newUnit,true);
 	
 	/* Resize the widget: */
 	GLMotif::Vector newSize=calcNaturalSize();
@@ -261,13 +261,11 @@ void ScaleBar::unitChangedCallback(CoordinateManager::UnitChangedCallbackData* c
 
 void ScaleBar::updateColors(void)
 	{
-	/* Retrieve the environment's background color: */
+	/* Retrieve the environment's background and foreground colors: */
 	Color bgColor=Vrui::getBackgroundColor();
 	bgColor[3]=0.0f;
-	
-	/* Calculate a constrasting foreground color: */
-	GLfloat luminance=bgColor[0]*0.299f+bgColor[1]*0.587f+bgColor[2]*0.114f;
-	Color fgColor=luminance<=0.5f?Color(1.0f,1.0f,1.0f):Color(0.0f,0.0f,0.0f);
+	Color fgColor=Vrui::getForegroundColor();
+	fgColor[3]=1.0f;
 	
 	/* Set the base widget colors: */
 	setBorderColor(bgColor);
@@ -326,7 +324,7 @@ ScaleBar::ScaleBar(const char* sName,GLMotif::WidgetManager* sManager)
 	getNavigationTransformationChangedCallbacks().add(this,&ScaleBar::navigationChangedCallback);
 	
 	/* Register a unit change callback with the coordinate manager: */
-	Vrui::getCoordinateManager()->getUnitChangedCallbacks().add(this,&ScaleBar::unitChangedCallback);
+	getCoordinateManager()->getUnitChangedCallbacks().add(this,&ScaleBar::unitChangedCallback);
 	
 	/* Register a rendering parameters change callback with the Vrui kernel: */
 	getRenderingParametersChangedCallbacks().add(this,&ScaleBar::renderingParametersChangedCallback);
@@ -341,7 +339,7 @@ ScaleBar::~ScaleBar(void)
 	getNavigationTransformationChangedCallbacks().remove(this,&ScaleBar::navigationChangedCallback);
 	
 	/* Unregister the unit change callback with the coordinate manager: */
-	Vrui::getCoordinateManager()->getUnitChangedCallbacks().remove(this,&ScaleBar::unitChangedCallback);
+	getCoordinateManager()->getUnitChangedCallbacks().remove(this,&ScaleBar::unitChangedCallback);
 	
 	/* Unregister the rendering parameters change callback with the Vrui kernel: */
 	getRenderingParametersChangedCallbacks().remove(this,&ScaleBar::renderingParametersChangedCallback);
