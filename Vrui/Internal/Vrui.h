@@ -427,6 +427,10 @@ struct VruiState
 	static void saveViewCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
 	static void loadInputGraphCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
 	static void saveScreenshotCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
+	static void setBackgroundColorCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
+	static void setForegroundColorCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
+	static void setBackplaneDistCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
+	static void setFrontplaneDistCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
 	static void quitCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
 	
 	/* System menu callback methods: */

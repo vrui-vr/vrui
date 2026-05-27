@@ -768,6 +768,10 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 	commandDispatcher.addCommandCallback("saveView",&VruiState::saveViewCommandCallback,this,"<viewpoint file name>","Saves a viewpoint file");
 	commandDispatcher.addCommandCallback("loadInputGraph",&VruiState::loadInputGraphCommandCallback,this,"<input graph file name>","Loads an input graph file");
 	commandDispatcher.addCommandCallback("saveScreenshot",&VruiState::saveScreenshotCommandCallback,this,"<screenshot file name> [<window index>]","Saves a screenshot from the window of the given index to an image file of the given name");
+	commandDispatcher.addCommandCallback("setBackgroundColor",&VruiState::setBackgroundColorCommandCallback,this,"<red> <green> <blue> [<alpha>]","Sets the background color to the given RGB(A) color with components in [0, 1]");
+	commandDispatcher.addCommandCallback("setForegroundColor",&VruiState::setForegroundColorCommandCallback,this,"<red> <green> <blue> [<alpha>]","Sets the foreground color to the given RGB(A) color with components in [0, 1]");
+	commandDispatcher.addCommandCallback("setBackplaneDist",&VruiState::setBackplaneDistCommandCallback,this,"<distance>","Sets rendering backplane to the given distance in physical space in physical-space units");
+	commandDispatcher.addCommandCallback("setFrontplaneDist",&VruiState::setFrontplaneDistCommandCallback,this,"<distance>","Sets rendering frontplane to the given distance in physical space in physical-space units");
 	commandDispatcher.addCommandCallback("quit",&VruiState::quitCommandCallback,this,0,"Exits from the application");
 	
 	/* Check whether the screen saver should be inhibited: */
@@ -2121,7 +2125,7 @@ void VruiState::resetViewCommandCallback(const char* argumentBegin,const char* a
 	else
 		{
 		/* Print an error message: */
-		std::cout<<"resetView: Unable to reset view because navigation transformation is locked"<<std::endl;
+		std::cout<<"resetView: Cannot reset view because navigation transformation is locked"<<std::endl;
 		}
 	}
 
@@ -2141,13 +2145,13 @@ void VruiState::loadViewCommandCallback(const char* argumentBegin,const char* ar
 		catch(const std::runtime_error& err)
 			{
 			/* Print an error message: */
-			std::cout<<"loadView: Unable to load view file "<<viewFileName<<" due to exception "<<err.what()<<std::endl;
+			std::cout<<"loadView: Cannot load view file "<<viewFileName<<" due to exception "<<err.what()<<std::endl;
 			}
 		}
 	else
 		{
 		/* Print an error message: */
-		std::cout<<"loadView: Unable to load view file "<<viewFileName<<" because navigation transformation is locked"<<std::endl;
+		std::cout<<"loadView: Cannot load view file "<<viewFileName<<" because navigation transformation is locked"<<std::endl;
 		}
 	}
 
@@ -2165,7 +2169,7 @@ void VruiState::saveViewCommandCallback(const char* argumentBegin,const char* ar
 	catch(const std::runtime_error& err)
 		{
 		/* Print an error message: */
-		std::cout<<"saveView: Unable to save view file "<<viewFileName<<" due to exception "<<err.what()<<std::endl;
+		std::cout<<"saveView: Cannot save view file "<<viewFileName<<" due to exception "<<err.what()<<std::endl;
 		}
 	}
 
@@ -2209,7 +2213,105 @@ void VruiState::saveScreenshotCommandCallback(const char* argumentBegin,const ch
 		}
 	catch(const std::runtime_error& err)
 		{
-		std::cout<<"saveScreenshot: Unable to save screenshot due to exception "<<err.what()<<std::endl;
+		std::cout<<"saveScreenshot: Cannot save screenshot due to exception "<<err.what()<<std::endl;
+		}
+	}
+
+namespace {
+
+/****************
+Helper functions:
+****************/
+
+Color parseColor(const char* argumentBegin,const char* argumentEnd)
+	{
+	Color result(0,0,0,1);
+	
+	/* Parse the argument string: */
+	const char* cPtr=argumentBegin;
+	
+	/* Parse the required RGB components: */
+	int i;
+	for(i=0;i<3;++i)
+		{
+		cPtr=Misc::skipWhitespace(cPtr,argumentEnd);
+		if(cPtr==argumentEnd)
+			break;
+		result[i]=Math::clamp(Misc::ValueCoder<float>::decode(cPtr,argumentEnd,&cPtr),0.0f,1.0f);
+		}
+	
+	if(i<3)
+		throw std::runtime_error("missing RGB component");
+	
+	/* Parse the optional alpha component: */
+	cPtr=Misc::skipWhitespace(cPtr,argumentEnd);
+	if(cPtr!=argumentEnd)
+		result[3]=Math::clamp(Misc::ValueCoder<float>::decode(cPtr,argumentEnd,&cPtr),0.0f,1.0f);
+	
+	return result;
+	}
+
+}
+
+void VruiState::setBackgroundColorCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData)
+	{
+	try
+		{
+		/* Parse the argument and set the background color: */
+		setBackgroundColor(parseColor(argumentBegin,argumentEnd));
+		}
+	catch(const std::runtime_error& err)
+		{
+		std::cout<<"setBackgroundColor: Cannot set background color due to exception "<<err.what()<<std::endl;
+		}
+	}
+
+void VruiState::setForegroundColorCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData)
+	{
+	try
+		{
+		/* Parse the argument and set the foreground color: */
+		setForegroundColor(parseColor(argumentBegin,argumentEnd));
+		}
+	catch(const std::runtime_error& err)
+		{
+		std::cout<<"setForegroundColor: Cannot set foreground color due to exception "<<err.what()<<std::endl;
+		}
+	}
+
+void VruiState::setBackplaneDistCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData)
+	{
+	try
+		{
+		/* Parse and check the argument: */
+		Scalar bpd=Misc::ValueCoder<Scalar>::decode(argumentBegin,argumentEnd);
+		if(bpd<=Scalar(0))
+			throw std::runtime_error("invalid distance");
+		
+		/* Set the backplane distance: */
+		setBackplaneDist(bpd);
+		}
+	catch(const std::runtime_error& err)
+		{
+		std::cout<<"setBackplaneDist: Cannot set backplane distance due to exception "<<err.what()<<std::endl;
+		}
+	}
+
+void VruiState::setFrontplaneDistCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData)
+	{
+	try
+		{
+		/* Parse and check the argument: */
+		Scalar fpd=Misc::ValueCoder<Scalar>::decode(argumentBegin,argumentEnd);
+		if(fpd<=Scalar(0))
+			throw std::runtime_error("invalid distance");
+		
+		/* Set the frontplane distance: */
+		setFrontplaneDist(fpd);
+		}
+	catch(const std::runtime_error& err)
+		{
+		std::cout<<"setFrontplaneDist: Cannot set frontplane distance due to exception "<<err.what()<<std::endl;
 		}
 	}
 

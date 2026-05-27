@@ -8709,3 +8709,12 @@ Vrui-15.0-001:
   - Enabled still alive events to VRDeviceDaemon and
     VRCompositingServer.
     - Bumped HTTP protocol version of both servers to 2.
+- UI elements in Vrui settings dialog react to run-time changes through
+  the kernel API.
+- Fixed layout of ambient intensity slider in Vrui settings dialog.
+- Fixed automatic foreground color selection in setBackgroundColor Vrui
+  kernel API call.
+- Vrui scale bar widget respects Vrui foreground and background color.
+- Added console commands to Vrui kernel:
+  - setBackgroundColor and setForegroundColor
+  - setBackplaneDist and setFrontplaneDist
