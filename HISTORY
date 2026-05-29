@@ -8718,3 +8718,5 @@ Vrui-15.0-001:
 - Added console commands to Vrui kernel:
   - setBackgroundColor and setForegroundColor
   - setBackplaneDist and setFrontplaneDist
+- Added useColors and useNormals flags to ignore colors and/or normal
+  vectors read from source mesh files to SceneGraph::MeshFileNode.

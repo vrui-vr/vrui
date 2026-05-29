@@ -1,7 +1,7 @@
 /***********************************************************************
 ReadPlyFile - Helper function to read a 3D polygon file in PLY format
 into a list of shape nodes.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -128,6 +128,12 @@ void readPlyFileElements(const PLYFileHeader& header,PLYFileParam& ply,MeshFileN
 			/* Check that the PLY file at least defines vertex positions: */
 			if(coordMask!=0x7)
 				throw std::runtime_error("Vertex element does not contain x, y, z properties");
+			
+			/* Disable colors and/or nodes if the mesh file node disables them: */
+			if(!node.useColors.getValue())
+				colorMask=0x0;
+			if(!node.useNormals.getValue())
+				normalMask=0x0;
 			
 			/* Create property nodes for defined properties: */
 			if(colorMask==0x7)

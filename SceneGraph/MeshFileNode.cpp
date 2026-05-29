@@ -1,7 +1,7 @@
 /***********************************************************************
 MeshFileNode - Meta node class to represent the contents of a mesh file
 in one of several supported formats as a sub-scene graph.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -56,7 +56,7 @@ void MeshFileNode::clearShapes(void)
 	}
 
 MeshFileNode::MeshFileNode(void)
-	:disableTextures(false),ccw(true),convex(true),solid(true),pointSize(1),
+	:disableTextures(false),useColors(true),useNormals(true),ccw(true),convex(true),solid(true),pointSize(1),
 	 fromBinary(false)
 	{
 	}
@@ -89,6 +89,12 @@ void MeshFileNode::parseField(const char* fieldName,VRMLFile& vrmlFile)
 		vrmlFile.parseSFNode(materialLibrary);
 	else if(strcmp(fieldName,"pointTransform")==0)
 		vrmlFile.parseSFNode(pointTransform);
+	else if(strcmp(fieldName,"useColors")==0)
+		vrmlFile.parseField(useColors);
+	else if(strcmp(fieldName,"useNormals")==0)
+		vrmlFile.parseField(useNormals);
+	else if(strcmp(fieldName,"ccw")==0)
+		vrmlFile.parseField(ccw);
 	else if(strcmp(fieldName,"ccw")==0)
 		vrmlFile.parseField(ccw);
 	else if(strcmp(fieldName,"convex")==0)

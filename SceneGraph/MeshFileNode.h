@@ -1,7 +1,7 @@
 /***********************************************************************
 MeshFileNode - Meta node class to represent the contents of a mesh file
 in one of several supported formats as a sub-scene graph.
-Copyright (c) 2018-2023 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -52,6 +52,8 @@ class MeshFileNode:public GraphNodeParent
 	SFBool disableTextures; // Flag to disable texture images when loading a material library
 	SFMaterialLibraryNode materialLibrary; // Library of named materials to be used by the mesh file; will override materials in the mesh file if present
 	SFPointTransformNode pointTransform; // A non-linear point transformation to apply to all shapes read from the mesh file
+	SFBool useColors; // Flag to use colors read from mesh file(s)
+	SFBool useNormals; // Flag to use normal vectors read from mesh file(s); if false, normals will be created automatically based on creaseAngle setting
 	SFBool ccw; // Flag whether the mesh file defines faces in counter-clockwise order
 	SFBool convex; // Flag whether all faces defined in the mesh file can assumed to be convex
 	SFBool solid; // Flag whether the mesh file defines a solid surfaces whose backfaces are not rendered

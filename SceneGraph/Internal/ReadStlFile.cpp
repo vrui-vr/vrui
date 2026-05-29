@@ -1,7 +1,7 @@
 /***********************************************************************
 ReadStlFile - Helper function to read a 3D polygon file in STL format
 into a shape node.
-Copyright (c) 2021-2024 Oliver Kreylos
+Copyright (c) 2021-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -229,13 +229,13 @@ void readStlFile(const IO::Directory& directory,const std::string& fileName,Mesh
 			}
 		
 		/* Attach the property nodes to the face set node: */
-		if(haveColor)
+		if(haveColor&&node.useColors.getValue())
 			{
 			color->update();
 			indexedFaceSet->color.setValue(color);
 			indexedFaceSet->colorPerVertex.setValue(false);
 			}
-		if(node.creaseAngle.getValue()==Scalar(0))
+		if(node.useNormals.getValue()&&node.creaseAngle.getValue()==Scalar(0))
 			{
 			normal->update();
 			indexedFaceSet->normal.setValue(normal);
