@@ -8720,3 +8720,5 @@ Vrui-15.0-001:
   - setBackplaneDist and setFrontplaneDist
 - Added useColors and useNormals flags to ignore colors and/or normal
   vectors read from source mesh files to SceneGraph::MeshFileNode.
+- Added missing initialization of creaseAngle to
+  SceneGraph::MeshFileNode.

@@ -56,7 +56,7 @@ void MeshFileNode::clearShapes(void)
 	}
 
 MeshFileNode::MeshFileNode(void)
-	:disableTextures(false),useColors(true),useNormals(true),ccw(true),convex(true),solid(true),pointSize(1),
+	:disableTextures(false),useColors(true),useNormals(true),ccw(true),convex(true),solid(true),pointSize(1),creaseAngle(0),
 	 fromBinary(false)
 	{
 	}
@@ -101,10 +101,10 @@ void MeshFileNode::parseField(const char* fieldName,VRMLFile& vrmlFile)
 		vrmlFile.parseField(convex);
 	else if(strcmp(fieldName,"solid")==0)
 		vrmlFile.parseField(solid);
-	else if(strcmp(fieldName,"creaseAngle")==0)
-		vrmlFile.parseField(creaseAngle);
 	else if(strcmp(fieldName,"pointSize")==0)
 		vrmlFile.parseField(pointSize);
+	else if(strcmp(fieldName,"creaseAngle")==0)
+		vrmlFile.parseField(creaseAngle);
 	else
 		GraphNode::parseField(fieldName,vrmlFile);
 	
