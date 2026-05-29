@@ -8722,3 +8722,5 @@ Vrui-15.0-001:
   vectors read from source mesh files to SceneGraph::MeshFileNode.
 - Added missing initialization of creaseAngle to
   SceneGraph::MeshFileNode.
+- Fixed missing check for optional heartbeat timeout to
+  Comm::HttpServer::sendEvent.

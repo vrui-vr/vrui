@@ -531,8 +531,9 @@ void HttpServer::sendEvent(const char* eventName,const IO::JsonEntity& eventData
 			/* Send it: */
 			cIt->pipe->flush();
 			
-			/* Push forward the connection's still alive timeout: */
-			cIt->stillAliveTimer->setTimeout(now+stillAliveInterval,true);
+			/* Push forward the connection's potential still alive timeout: */
+			if(cIt->stillAliveTimer!=0)
+				cIt->stillAliveTimer->setTimeout(now+stillAliveInterval,true);
 			}
 	}
 
