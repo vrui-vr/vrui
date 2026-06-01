@@ -2194,6 +2194,90 @@ void RunLoop::stop(void)
 		}
 	}
 
+void RunLoop::waitForEvents(void)
+	{
+	#ifdef __LINUX__ // On Linux, we have ppoll()
+	
+	/* Calculate a time-out for the ppoll() call: */
+	Interval pollTimeout(0,0); // In case we don't want to block, only poll
+	Interval* pt=0; // Assume that we'll block forever
+	if(numSpinningProcessFunctions>0||shutdownRequested)
+		{
+		/* Don't block for I/O events; only poll: */
+		pt=&pollTimeout;
+		}
+	else if(!activeTimers.empty())
+		{
+		/* Sample the current time: */
+		lastDispatchTime.set();
+		
+		/* Calculate the interval from now to the next timer to elapse, clamping to zero if the next timer already elapsed: */
+		if(activeTimers[0].timeout>lastDispatchTime)
+			pollTimeout=activeTimers[0].timeout-lastDispatchTime;
+		pt=&pollTimeout;
+		}
+	
+	/* Block until an I/O event occurs or the time-out expires: */
+	int pollResult=ppoll(pollFds.data(),numActiveIOWatchers+1,pt,0); // Account for the extra watcher for the self-pipe's read end
+	
+	#else
+	
+	/* Calculate a time-out for the poll() call: */
+	int pollTimeout=-1; // Assume that we'll block forever
+	if(numSpinningProcessFunctions>0||shutdownRequested)
+		{
+		/* Don't block for I/O events; only poll: */
+		pollTimeout=0;
+		}
+	else if(!activeTimers.empty())
+		{
+		/* Sample the current time: */
+		lastDispatchTime.set();
+		
+		/* Calculate the interval from now to the next timer to elapse, clamping to zero if the next timer already elapsed: */
+		pollTimeout=0;
+		if(activeTimers[0].timeout>lastDispatchTime)
+			{
+			Realtime::TimeVector timeout=activeTimers[0].timeout-lastDispatchTime;
+			pollTimeout=int(timeout.tv_sec*1000L+(timeout.tv_nsec+999999L)/1000000L); // poll() takes timeouts in ms, which is a tad unfortunate
+			}
+		}
+	
+	/* Block until an I/O event occurs or the time-out expires: */
+	int pollResult=poll(pollFds.data(),numActiveIOWatchers+1,pollTimeout); // Account for the extra watcher for the self-pipe's read end
+	
+	#endif
+	}
+
+bool RunLoop::handlePendingEvents(void)
+	{
+	/* Sample the current time: */
+	lastDispatchTime.set();
+	
+	/* Handle messages on the self-pipe: */
+	if((pollFds[0].revents&POLLIN)!=0x0)
+		handlePipeMessages();
+	
+	}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 bool RunLoop::dispatchNextEvents(void)
 	{
 	/* Check if there are active timers: */

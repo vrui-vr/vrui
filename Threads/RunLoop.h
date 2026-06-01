@@ -707,9 +707,13 @@ class RunLoop
 	/* Methods to capture OS signals: */
 	void stopOnSignal(int signum); // Instructs this run loop to stop if the OS signal of the given number is received; throws exception if another run loop already listens to that signal
 	
-	/* Dispatching methods: */
+	/* Methods to wake up or terminate a potentially blocked run loop: */
 	void wakeUp(void); // Wakes up a potentially blocked run loop; dispatchNextEvents() call will return true
 	void stop(void); // Orders the run loop to stop dispatching events; some subsequent dispatchNextEvents() call will return false
+	
+	/* Dispatching methods: */
+	void waitForEvents(void); // Blocks until any event happens
+	bool handlePendingEvents(void); // Handles all events that have happened during the previous waitForEvents call; returns true if the run loop has not been stopped
 	bool dispatchNextEvents(void); // Dispatches the next batch of events, blocking on I/O at most once; returns true if the run loop has not been stopped
 	void run(void); // Dispatches events until stopped by calling the stop() method
 	void shutdown(void); // Called after a run loop has been stopped to drain the self-pipe and release all resources; is called internally by destructor as well
