@@ -31,8 +31,8 @@ Methods of class RunLoopThread:
 void* RunLoopThread::threadMethod(void)
 	{
 	/* Run the run loop until it is shut down: */
-	while(dispatchNextEvents())
-		;
+	while(waitForEvents())
+		dispatchPendingEvents();
 	
 	/* Shut down the run loop: */
 	shutdown();

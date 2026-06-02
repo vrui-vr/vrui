@@ -1436,22 +1436,17 @@ void RunLoop::setProcessFunctionEventHandler(RunLoop::ProcessFunction* processFu
 		}
 	}
 
-bool RunLoop::handlePipeMessages(void)
+void RunLoop::handlePipeMessages(bool internalMessagesOnly)
 	{
-	/* Read a batch of messages from the self-pipe: */
-	PipeMessage messageBuffer[messageBufferSize];
-	ssize_t readResult=read(pipeFds[0],messageBuffer,messageBufferSize*sizeof(PipeMessage));
-	if(readResult<0)
-		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot read from event pipe");
-	
-	/* Check for end-of-file on the pipe during shutdown: */
-	if(readResult==0)
-		return false;
-	
-	for(PipeMessage* pmPtr=messageBuffer;size_t(readResult)>=sizeof(PipeMessage);++pmPtr,readResult-=sizeof(PipeMessage))
+	/* Handle all read messages: */
+	do
 		{
+		/* Bail out if the next message is an event message and we are restricted to handling internal messages: */
+		if(internalMessagesOnly&&(messagePtr->messageType==PipeMessage::WakeUp||messagePtr->messageType==PipeMessage::Stop||messagePtr->messageType==PipeMessage::Signal||messagePtr->messageType==PipeMessage::SignalUserSignal))
+			break;
+		
 		/* Handle the message based on its type: */
-		switch(pmPtr->messageType)
+		switch(messagePtr->messageType)
 			{
 			case PipeMessage::WakeUp:
 				/* Do nothing... */
@@ -1467,10 +1462,10 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::SetIOWatcherEventMask:
 				{
 				/* Retrieve a pointer to the I/O watcher from the pipe message: */
-				IOWatcher* ioWatcher=pmPtr->setIOWatcherEventMask.ioWatcher;
+				IOWatcher* ioWatcher=messagePtr->setIOWatcherEventMask.ioWatcher;
 				
 				/* Retrieve the new event mask from the pipe message: */
-				unsigned int newEventMask=pmPtr->setIOWatcherEventMask.newEventMask;
+				unsigned int newEventMask=messagePtr->setIOWatcherEventMask.newEventMask;
 					
 				/* Check that the I/O watcher is enabled: */
 				if(ioWatcher->enabled)
@@ -1491,7 +1486,7 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::EnableIOWatcher:
 				{
 				/* Retrieve a pointer to the I/O watcher from the pipe message: */
-				IOWatcher* ioWatcher=pmPtr->enableIOWatcher.ioWatcher;
+				IOWatcher* ioWatcher=messagePtr->enableIOWatcher.ioWatcher;
 				
 				/* Check that the I/O watcher is not already enabled and still has an owner: */
 				if(!ioWatcher->enabled&&ioWatcher->isOwned())
@@ -1526,7 +1521,7 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::DisableIOWatcher:
 				{
 				/* Retrieve a pointer to the I/O watcher from the pipe message: */
-				IOWatcher* ioWatcher=pmPtr->disableIOWatcher.ioWatcher;
+				IOWatcher* ioWatcher=messagePtr->disableIOWatcher.ioWatcher;
 				
 				/* Check that the I/O watcher is not already disabled: */
 				if(ioWatcher->enabled)
@@ -1548,8 +1543,8 @@ bool RunLoop::handlePipeMessages(void)
 					}
 				
 				/* If the caller provided a condition variable for synchronization, signal it: */
-				if(pmPtr->disableIOWatcher.cond!=0)
-					pmPtr->disableIOWatcher.cond->signal();
+				if(messagePtr->disableIOWatcher.cond!=0)
+					messagePtr->disableIOWatcher.cond->signal();
 				
 				/* Drop the message's reference to the I/O watcher: */
 				ioWatcher->unref();
@@ -1560,10 +1555,10 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::SetIOWatcherEventHandler:
 				{
 				/* Retrieve a pointer to the I/O watcher from the pipe message: */
-				IOWatcher* ioWatcher=pmPtr->setIOWatcherEventHandler.ioWatcher;
+				IOWatcher* ioWatcher=messagePtr->setIOWatcherEventHandler.ioWatcher;
 				
 				/* Replace the I/O watcher's event handler: */
-				ioWatcher->eventHandler=pmPtr->setIOWatcherEventHandler.eventHandler;
+				ioWatcher->eventHandler=messagePtr->setIOWatcherEventHandler.eventHandler;
 				
 				/* Drop the message's references to the I/O watcher and the event handler: */
 				ioWatcher->eventHandler->unref();
@@ -1576,17 +1571,17 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::SetTimerTimeoutReenable:
 				{
 				/* Retrieve a pointer to the timer from the pipe message: */
-				Timer* timer=pmPtr->setTimerTimeout.timer;
+				Timer* timer=messagePtr->setTimerTimeout.timer;
 				
 				/* Set the timer's time-out and ensure that the new time-out is not before lastDispatchTime: */
-				timer->timeout=Time(pmPtr->setTimerTimeout.timeout);
+				timer->timeout=Time(messagePtr->setTimerTimeout.timeout);
 				if(timer->timeout<lastDispatchTime)
 					timer->timeout=lastDispatchTime;
 				
 				/* If the timer is enabled, fix the active timer heap, otherwise, if requested and the timer still has an owner, re-enable it: */
 				if(timer->enabled)
 					updateActiveTimer(timer);
-				else if(pmPtr->messageType==PipeMessage::SetTimerTimeoutReenable&&timer->isOwned())
+				else if(messagePtr->messageType==PipeMessage::SetTimerTimeoutReenable&&timer->isOwned())
 					{
 					/* Insert the timer into the active timers heap: */
 					insertActiveTimer(timer,timer->timeout);
@@ -1605,10 +1600,10 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::SetTimerInterval:
 				{
 				/* Retrieve a pointer to the timer from the pipe message: */
-				Timer* timer=pmPtr->setTimerInterval.timer;
+				Timer* timer=messagePtr->setTimerInterval.timer;
 				
 				/* Set the timer's interval: */
-				timer->interval=Interval(pmPtr->setTimerInterval.interval);
+				timer->interval=Interval(messagePtr->setTimerInterval.interval);
 				
 				/* Drop the message's reference to the timer: */
 				timer->unref();
@@ -1619,7 +1614,7 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::EnableTimer:
 				{
 				/* Retrieve a pointer to the timer from the pipe message: */
-				Timer* timer=pmPtr->enableTimer.timer;
+				Timer* timer=messagePtr->enableTimer.timer;
 				
 				/* Check that the timer is not already enabled and still has an owner: */
 				if(!timer->enabled&&timer->isOwned())
@@ -1645,7 +1640,7 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::DisableTimer:
 				{
 				/* Retrieve a pointer to the timer from the pipe message: */
-				Timer* timer=pmPtr->disableTimer.timer;
+				Timer* timer=messagePtr->disableTimer.timer;
 				
 				/* Check that the timer is not already disabled: */
 				if(timer->enabled)
@@ -1668,8 +1663,8 @@ bool RunLoop::handlePipeMessages(void)
 					}
 				
 				/* If the caller provided a condition variable for synchronization, signal it: */
-				if(pmPtr->disableTimer.cond!=0)
-					pmPtr->disableTimer.cond->signal();
+				if(messagePtr->disableTimer.cond!=0)
+					messagePtr->disableTimer.cond->signal();
 				
 				/* Drop the message's reference to the timer: */
 				timer->unref();
@@ -1680,10 +1675,10 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::SetTimerEventHandler:
 				{
 				/* Retrieve a pointer to the timer from the pipe message: */
-				Timer* timer=pmPtr->setTimerEventHandler.timer;
+				Timer* timer=messagePtr->setTimerEventHandler.timer;
 				
 				/* Replace the timer's event handler: */
-				timer->eventHandler=pmPtr->setTimerEventHandler.eventHandler;
+				timer->eventHandler=messagePtr->setTimerEventHandler.eventHandler;
 				
 				/* Drop the message's references to the timer and the event handler: */
 				timer->eventHandler->unref();
@@ -1695,7 +1690,7 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::EnableSignalHandler:
 				{
 				/* Retrieve a pointer to the OS signal handler from the pipe message: */
-				SignalHandler* signalHandler=pmPtr->enableSignalHandler.signalHandler;
+				SignalHandler* signalHandler=messagePtr->enableSignalHandler.signalHandler;
 				
 				/* Check that the OS signal handler is not already enabled and still has an owner: */
 				if(!signalHandler->enabled&&signalHandler->isOwned())
@@ -1713,13 +1708,13 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::DisableSignalHandler:
 				{
 				/* Retrieve a pointer to the OS signal handler from the pipe message: */
-				SignalHandler* signalHandler=pmPtr->disableSignalHandler.signalHandler;
+				SignalHandler* signalHandler=messagePtr->disableSignalHandler.signalHandler;
 				
 				/* Mark the OS signal handler as disabled: */
 				signalHandler->enabled=true;
 				
 				/* If the caller provided a condition variable for synchronization, unregister the OS signal, then signal it: */
-				if(pmPtr->disableSignalHandler.cond!=0)
+				if(messagePtr->disableSignalHandler.cond!=0)
 					{
 					/* Lock the OS signal handler table: */
 					Threads::Mutex::Lock signalHandlersLock(signalHandlersMutex);
@@ -1737,7 +1732,7 @@ bool RunLoop::handlePipeMessages(void)
 						Misc::sourcedConsoleError(__PRETTY_FUNCTION__,"Cannot restore OS signal %d",signum);
 					
 					/* Signal the condition variable: */
-					pmPtr->disableSignalHandler.cond->signal();
+					messagePtr->disableSignalHandler.cond->signal();
 					
 					/* Drop the OS signal handler table's reference to the OS signal handler: */
 					signalHandler->unref();
@@ -1752,10 +1747,10 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::SetSignalHandlerEventHandler:
 				{
 				/* Retrieve a pointer to the signal handler from the pipe message: */
-				SignalHandler* signalHandler=pmPtr->setSignalHandlerEventHandler.signalHandler;
+				SignalHandler* signalHandler=messagePtr->setSignalHandlerEventHandler.signalHandler;
 				
 				/* Replace the signal handler's event handler: */
-				signalHandler->eventHandler=pmPtr->setSignalHandlerEventHandler.eventHandler;
+				signalHandler->eventHandler=messagePtr->setSignalHandlerEventHandler.eventHandler;
 				
 				/* Drop the message's references to the OS signal handler and the event handler: */
 				signalHandler->eventHandler->unref();
@@ -1767,7 +1762,7 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::Signal:
 				{
 				/* Retrieve the OS signal handler from the OS signal handler table: */
-				int signum=pmPtr->signal.signum;
+				int signum=messagePtr->signal.signum;
 				bool isForUs=false;
 				SignalHandler* signalHandler=0;
 				{
@@ -1802,7 +1797,7 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::EnableUserSignal:
 				{
 				/* Retrieve a pointer to the user signal from the pipe message: */
-				UserSignal* userSignal=pmPtr->enableUserSignal.userSignal;
+				UserSignal* userSignal=messagePtr->enableUserSignal.userSignal;
 				
 				/* Check that the user signal is not already enabled and still has an owner: */
 				if(!userSignal->enabled&&userSignal->isOwned())
@@ -1820,14 +1815,14 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::DisableUserSignal:
 				{
 				/* Retrieve a pointer to the user signal from the pipe message: */
-				UserSignal* userSignal=pmPtr->disableUserSignal.userSignal;
+				UserSignal* userSignal=messagePtr->disableUserSignal.userSignal;
 				
 				/* Mark the user signal as disabled: */
 				userSignal->enabled=true;
 				
 				/* If the caller provided a condition variable for synchronization, signal it: */
-				if(pmPtr->disableUserSignal.cond!=0)
-					pmPtr->disableUserSignal.cond->signal();
+				if(messagePtr->disableUserSignal.cond!=0)
+					messagePtr->disableUserSignal.cond->signal();
 				
 				/* Drop the message's reference to the user signal: */
 				userSignal->unref();
@@ -1838,10 +1833,10 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::SetUserSignalEventHandler:
 				{
 				/* Retrieve a pointer to the user signal from the pipe message: */
-				UserSignal* userSignal=pmPtr->setUserSignalEventHandler.userSignal;
+				UserSignal* userSignal=messagePtr->setUserSignalEventHandler.userSignal;
 				
 				/* Replace the user signal's event handler: */
-				userSignal->eventHandler=pmPtr->setUserSignalEventHandler.eventHandler;
+				userSignal->eventHandler=messagePtr->setUserSignalEventHandler.eventHandler;
 				
 				/* Drop the message's references to the user signal and the event handler: */
 				userSignal->eventHandler->unref();
@@ -1853,19 +1848,19 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::SignalUserSignal:
 				{
 				/* Retrieve a pointer to the user signal from the pipe message: */
-				UserSignal* userSignal=pmPtr->signalUserSignal.userSignal;
+				UserSignal* userSignal=messagePtr->signalUserSignal.userSignal;
 				
 				/* Check if the user signal is enabled: */
 				if(userSignal->enabled)
 					{
 					/* Call the user signal's event handler: */
-					UserSignal::Event event(userSignal,lastDispatchTime,pmPtr->signalUserSignal.signalData);
+					UserSignal::Event event(userSignal,lastDispatchTime,messagePtr->signalUserSignal.signalData);
 					(*userSignal->eventHandler)(event);
 					}
 				
 				/* Drop the message's references to the user signal and the signal data: */
-				if(pmPtr->signalUserSignal.signalData!=0)
-					pmPtr->signalUserSignal.signalData->unref();
+				if(messagePtr->signalUserSignal.signalData!=0)
+					messagePtr->signalUserSignal.signalData->unref();
 				userSignal->unref();
 				
 				break;
@@ -1874,8 +1869,8 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::SetProcessFunctionSpinning:
 				{
 				/* Retrieve a pointer to the process function and the new spinning flag from the pipe message: */
-				ProcessFunction* processFunction=pmPtr->setProcessFunctionSpinning.processFunction;
-				bool newSpinning=pmPtr->setProcessFunctionSpinning.spinning;
+				ProcessFunction* processFunction=messagePtr->setProcessFunctionSpinning.processFunction;
+				bool newSpinning=messagePtr->setProcessFunctionSpinning.spinning;
 				
 				/* Check that the spinning status actually changed: */
 				if(processFunction->spinning!=newSpinning)
@@ -1903,7 +1898,7 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::EnableProcessFunction:
 				{
 				/* Retrieve a pointer to the process function from the pipe message: */
-				ProcessFunction* processFunction=pmPtr->enableProcessFunction.processFunction;
+				ProcessFunction* processFunction=messagePtr->enableProcessFunction.processFunction;
 				
 				/* Check that the process function is not already enabled and still has an owner: */
 				if(!processFunction->enabled&&processFunction->isOwned())
@@ -1928,7 +1923,7 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::DisableProcessFunction:
 				{
 				/* Retrieve a pointer to the process function from the pipe message: */
-				ProcessFunction* processFunction=pmPtr->disableProcessFunction.processFunction;
+				ProcessFunction* processFunction=messagePtr->disableProcessFunction.processFunction;
 				
 				/* Check that the process function is not already disabled: */
 				if(processFunction->enabled)
@@ -1947,8 +1942,8 @@ bool RunLoop::handlePipeMessages(void)
 					}
 				
 				/* If the caller provided a condition variable for synchronization, signal it: */
-				if(pmPtr->disableProcessFunction.cond!=0)
-					pmPtr->disableProcessFunction.cond->signal();
+				if(messagePtr->disableProcessFunction.cond!=0)
+					messagePtr->disableProcessFunction.cond->signal();
 				
 				/* Drop the message's reference to the process function: */
 				processFunction->unref();
@@ -1959,10 +1954,10 @@ bool RunLoop::handlePipeMessages(void)
 			case PipeMessage::SetProcessFunctionEventHandler:
 				{
 				/* Retrieve a pointer to the process function from the pipe message: */
-				ProcessFunction* processFunction=pmPtr->setProcessFunctionEventHandler.processFunction;
+				ProcessFunction* processFunction=messagePtr->setProcessFunctionEventHandler.processFunction;
 				
 				/* Replace the process function's event handler: */
-				processFunction->eventHandler=pmPtr->setProcessFunctionEventHandler.eventHandler;
+				processFunction->eventHandler=messagePtr->setProcessFunctionEventHandler.eventHandler;
 				
 				/* Drop the message's references to the process function and the event handler: */
 				processFunction->eventHandler->unref();
@@ -1971,19 +1966,17 @@ bool RunLoop::handlePipeMessages(void)
 				break;
 				}
 			}
+		
+		/* Go to the next message: */
+		++messagePtr;
 		}
-	
-	/* Check for partial reads, which should never happen: */
-	if(readResult>0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Partial read from event pipe");
-	
-	return true;
+	while(messagePtr!=messageEnd);
 	}
 
 RunLoop::RunLoop(void)
 	:threadId(Threads::Thread::getSelfId()),
 	 pipeClosed(false),
-	 messageBuffer(new PipeMessage[messageBufferSize]),
+	 messageBuffer(new PipeMessage[messageBufferSize]),messageEnd(messageBuffer),messagePtr(messageBuffer),
 	 numActiveIOWatchers(0),
 	 numSpinningProcessFunctions(0),
 	 shutdownRequested(false),
@@ -2004,19 +1997,8 @@ RunLoop::RunLoop(void)
 
 RunLoop::~RunLoop(void)
 	{
-	/* Drain and close the self-pipe if it hasn't been done already: */
-	if(!pipeClosed)
-		{
-		/* Close the write end of the self-pipe: */
-		close(pipeFds[1]);
-		
-		/* Handle any remaining messages in the self-pipe: */
-		while(handlePipeMessages())
-			;
-		
-		/* Close the read end of the self-pipe: */
-		close(pipeFds[0]);
-		}
+	/* Drain and close the self-pipe: */
+	shutdown();
 	
 	/* Drop all references held by the active I/O watcher list: */
 	for(unsigned int i=0;i<numActiveIOWatchers;++i)
@@ -2194,200 +2176,178 @@ void RunLoop::stop(void)
 		}
 	}
 
-void RunLoop::waitForEvents(void)
+void RunLoop::restart(void)
 	{
-	#ifdef __LINUX__ // On Linux, we have ppoll()
-	
-	/* Calculate a time-out for the ppoll() call: */
-	Interval pollTimeout(0,0); // In case we don't want to block, only poll
-	Interval* pt=0; // Assume that we'll block forever
-	if(numSpinningProcessFunctions>0||shutdownRequested)
+	/* Check if the self-pipe needs to be re-opened: */
+	if(pipeClosed)
 		{
-		/* Don't block for I/O events; only poll: */
-		pt=&pollTimeout;
-		}
-	else if(!activeTimers.empty())
-		{
-		/* Sample the current time: */
-		lastDispatchTime.set();
+		/* Create the self-pipe: */
+		pipeFds[1]=pipeFds[0]=-1;
+		if(pipe(pipeFds)<0)
+			throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot create event pipe");
 		
-		/* Calculate the interval from now to the next timer to elapse, clamping to zero if the next timer already elapsed: */
-		if(activeTimers[0].timeout>lastDispatchTime)
-			pollTimeout=activeTimers[0].timeout-lastDispatchTime;
-		pt=&pollTimeout;
-		}
-	
-	/* Block until an I/O event occurs or the time-out expires: */
-	int pollResult=ppoll(pollFds.data(),numActiveIOWatchers+1,pt,0); // Account for the extra watcher for the self-pipe's read end
-	
-	#else
-	
-	/* Calculate a time-out for the poll() call: */
-	int pollTimeout=-1; // Assume that we'll block forever
-	if(numSpinningProcessFunctions>0||shutdownRequested)
-		{
-		/* Don't block for I/O events; only poll: */
-		pollTimeout=0;
-		}
-	else if(!activeTimers.empty())
-		{
-		/* Sample the current time: */
-		lastDispatchTime.set();
+		/* Re-enable the self-pipe's poll request: */
+		pollFds[0].fd=pipeFds[0];
 		
-		/* Calculate the interval from now to the next timer to elapse, clamping to zero if the next timer already elapsed: */
-		pollTimeout=0;
-		if(activeTimers[0].timeout>lastDispatchTime)
-			{
-			Realtime::TimeVector timeout=activeTimers[0].timeout-lastDispatchTime;
-			pollTimeout=int(timeout.tv_sec*1000L+(timeout.tv_nsec+999999L)/1000000L); // poll() takes timeouts in ms, which is a tad unfortunate
-			}
+		/* Mark the self-pipe as open: */
+		pipeClosed=false;
 		}
 	
-	/* Block until an I/O event occurs or the time-out expires: */
-	int pollResult=poll(pollFds.data(),numActiveIOWatchers+1,pollTimeout); // Account for the extra watcher for the self-pipe's read end
-	
-	#endif
+	/* Reset the shutdown flag: */
+	shutdownRequested=false;
 	}
 
-bool RunLoop::handlePendingEvents(void)
+bool RunLoop::waitForEvents(void)
 	{
-	/* Sample the current time: */
-	lastDispatchTime.set();
-	
-	/* Handle messages on the self-pipe: */
-	if((pollFds[0].revents&POLLIN)!=0x0)
-		handlePipeMessages();
-	
-	}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-bool RunLoop::dispatchNextEvents(void)
-	{
-	/* Check if there are active timers: */
-	if(!activeTimers.empty())
-		{
-		/* Sample the current time: */
-		lastDispatchTime.set();
-		
-		/* Handle all elapsed active timers, i.e., timers whose time-out is strictly before the current time: */
-		while(!activeTimers.empty()&&activeTimers[0].timeout<lastDispatchTime)
-			{
-			/* Create an event descriptor structure: */
-			Timer::Event event(activeTimers[0].timer,lastDispatchTime,activeTimers[0].timeout);
-			
-			/* Check if this is a repeating time-out: */
-			bool dropRef=false;
-			if(event.timer->interval.tv_sec!=0||event.timer->interval.tv_nsec!=0)
-				{
-				/* Advance the timer's time-out, and bump it to lastDispatchTime if it's too early: */
-				event.timer->timeout+=event.timer->interval;
-				if(event.timer->timeout<lastDispatchTime)
-					event.timer->timeout=lastDispatchTime;
-				
-				/* Re-schedule the timer for the next time-out: */
-				replaceFirstActiveTimer(event.timer,event.timer->timeout);
-				}
-			else
-				{
-				/* Disable the timer: */
-				event.timer->enabled=false;
-				
-				/* Replace the timer's entry in the active timers heap by re-inserting the current last element in the heap's array: */
-				ActiveTimer last=activeTimers[activeTimers.size()-1];
-				activeTimers.pop_back();
-				replaceFirstActiveTimer(last.timer,last.timeout);
-				
-				/* Drop the active timer heap's reference to the timer after the callback returns: */
-				dropRef=true;
-				}
-			
-			/* Call the timer's event handler: */
-			(*event.timer->eventHandler)(event);
-			
-			if(dropRef)
-				event.timer->unref();
-			}
-		}
-	
-	/* Bail out right before blocking if shutdown was requested: */
+	/* Bail out and signal if shutdown was requested: */
 	if(shutdownRequested)
 		return false;
 	
-	#if 1 // On Linux, we have ppoll()
-	
-	/* Calculate a time-out for the poll() call: */
-	Interval pollTimeout(0,0); // In case we don't want to block, only poll
-	Interval* pt=0; // Assume that we'll block forever
-	if(numSpinningProcessFunctions>0)
+	/* Keep blocking until there's an actual event to report: */
+	bool dontHaveEvents=true;
+	do
 		{
-		/* Don't block for I/O events; only poll: */
-		pt=&pollTimeout;
-		}
-	else if(!activeTimers.empty())
-		{
-		/* Calculate the interval from now to the next timer to elapse: */
-		lastDispatchTime.set(); // We can't re-use the previous lastDispatchTime sample because time has passed in timer event handling
-		if(activeTimers[0].timeout>lastDispatchTime)
-			pollTimeout=activeTimers[0].timeout-lastDispatchTime;
-		pt=&pollTimeout;
-		}
-	
-	/* Block until an I/O event occurs or the time-out expires: */
-	int pollResult=ppoll(pollFds.data(),numActiveIOWatchers+1,pt,0); // Account for the extra watcher for the self-pipe's read end
-	
-	#else
-	
-	/* Calculate a time-out for the poll() call: */
-	int pollTimeout=-1; // Assume that we'll block forever
-	if(numSpinningProcessFunctions>0)
-		{
-		/* Don't block for I/O events; only poll: */
-		pollTimeout=0;
-		}
-	else if(!activeTimers.empty())
-		{
-		/* Calculate the interval from now to the next timer to elapse: */
-		lastDispatchTime.set(); // We can't re-use the previous lastTispatchTime sample because time has passed in timer event handling
-		if(activeTimers[0].timeout>lastDispatchTime)
+		#ifdef __LINUX__ // On Linux, we have ppoll()
+		
+		/* Calculate a time-out for the ppoll() call: */
+		Interval pollTimeout(0,0); // In case we don't want to block, only poll
+		Interval* pt=0; // Assume that we'll block forever
+		if(numSpinningProcessFunctions>0||shutdownRequested)
 			{
-			Realtime::TimeVector timeout=activeTimers[0].timeout-lastDispatchTime;
-			pollTimeout=int(timeout.tv_sec*1000L+(timeout.tv_nsec+999999L)/1000000L); // poll() takes timeouts in ms, which is a tad unfortunate
+			/* Don't block for I/O events; only poll: */
+			pt=&pollTimeout;
 			}
-		else
+		else if(!activeTimers.empty())
+			{
+			/* Sample the current time: */
+			lastDispatchTime.set();
+			
+			/* Calculate the interval from now to the next timer to elapse, clamping to zero if the next timer already elapsed: */
+			if(activeTimers[0].timeout>lastDispatchTime)
+				pollTimeout=activeTimers[0].timeout-lastDispatchTime;
+			pt=&pollTimeout;
+			}
+		
+		/* Block until an I/O event occurs or the time-out expires: */
+		int pollResult=ppoll(pollFds.data(),numActiveIOWatchers+1,pt,0); // Account for the extra watcher for the self-pipe's read end
+		
+		#else
+		
+		/* Calculate a time-out for the poll() call: */
+		int pollTimeout=-1; // Assume that we'll block forever
+		if(numSpinningProcessFunctions>0||shutdownRequested)
 			{
 			/* Don't block for I/O events; only poll: */
 			pollTimeout=0;
 			}
+		else if(!activeTimers.empty())
+			{
+			/* Sample the current time: */
+			lastDispatchTime.set();
+			
+			/* Calculate the interval from now to the next timer to elapse, clamping to zero if the next timer already elapsed: */
+			pollTimeout=0;
+			if(activeTimers[0].timeout>lastDispatchTime)
+				{
+				Realtime::TimeVector timeout=activeTimers[0].timeout-lastDispatchTime;
+				pollTimeout=int(timeout.tv_sec*1000L+(timeout.tv_nsec+999999L)/1000000L); // poll() takes timeouts in ms, which is a tad unfortunate
+				}
+			}
+		
+		/* Block until an I/O event occurs or the time-out expires: */
+		int pollResult=poll(pollFds.data(),numActiveIOWatchers+1,pollTimeout); // Account for the extra watcher for the self-pipe's read end
+		
+		#endif
+		
+		/* Check the result of blocking: */
+		if(pollResult>0)
+			{
+			/* Read all messages available on the self-pipe and handle internal messages only: */
+			if((pollFds[0].revents&POLLIN)!=0x0)
+				{
+				/* Read a batch of messages from the self-pipe: */
+				ssize_t readResult=read(pipeFds[0],messageBuffer,messageBufferSize*sizeof(PipeMessage));
+				if(readResult<0)
+					throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot read from event pipe");
+				
+				/* Set up the message handling buffer: */
+				size_t numMessages=sizeof(readResult)/sizeof(PipeMessage);
+				if(numMessages*sizeof(PipeMessage)!=sizeof(readResult))
+					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Partial read on event pipe");
+				messageEnd=messageBuffer+numMessages;
+				messagePtr=messageBuffer;
+				
+				/* Handle internal (non-event) messages on the self-pipe only: */
+				handlePipeMessages(true);
+				
+				/* Discount the self-pipe's readiness if no actual events were encountered: */
+				if(messagePtr==messageEnd)
+					--pollResult;
+				}
+			
+			/* If any watched file descriptors are ready, that's an event: */
+			dontHaveEvents=pollResult==0;
+			}
+		else if(pollResult==0)
+			{
+			/* A timer timed out, that's an event: */
+			dontHaveEvents=false;
+			}
+		else
+			{
+			/* Handle errors from poll/ppoll: */
+			if(errno!=EINTR&&errno!=EAGAIN)
+				throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot poll for I/O events");
+			}
 		}
+	while(dontHaveEvents);
 	
-	/* Block until an I/O event occurs or the time-out expires: */
-	int pollResult=poll(pollFds.data(),numActiveIOWatchers+1,pollTimeout); // Account for the extra watcher for the self-pipe's read end
-	
-	#endif
-	
+	return true;
+	}
+
+void RunLoop::dispatchPendingEvents(void)
+	{
 	/* Sample the current time: */
 	lastDispatchTime.set();
 	
-	/* Handle messages on the self-pipe: */
-	if((pollFds[0].revents&POLLIN)!=0x0)
-		handlePipeMessages();
+	/* Handle any potential messages on the self-pipe: */
+	if(messagePtr!=messageEnd)
+		handlePipeMessages(false);
+
+	/* Handle all elapsed active timers, i.e., timers whose time-out is strictly before the current time: */
+	while(!activeTimers.empty()&&activeTimers[0].timeout<lastDispatchTime)
+		{
+		/* Create an event descriptor structure: */
+		Timer::Event event(activeTimers[0].timer,lastDispatchTime,activeTimers[0].timeout);
+		
+		/* Check if this is a repeating time-out: */
+		bool dropRef=false;
+		if(event.timer->interval.tv_sec!=0||event.timer->interval.tv_nsec!=0)
+			{
+			/* Advance the timer's time-out and re-schedule the timer: */
+			event.timer->timeout+=event.timer->interval;
+			replaceFirstActiveTimer(event.timer,event.timer->timeout);
+			}
+		else
+			{
+			/* Disable the timer: */
+			event.timer->enabled=false;
+			
+			/* Replace the timer's entry in the active timers heap by re-inserting the current last element in the heap's array: */
+			ActiveTimer last=activeTimers[activeTimers.size()-1];
+			activeTimers.pop_back();
+			replaceFirstActiveTimer(last.timer,last.timeout);
+			
+			/* Drop the active timer heap's reference to the timer after the callback returns: */
+			dropRef=true;
+			}
+		
+		/* Call the timer's event handler: */
+		(*event.timer->eventHandler)(event);
+		
+		if(dropRef)
+			event.timer->unref();
+		}
 	
 	/* Handle all active I/O watchers: */
 	handlingIOWatchers=true;
@@ -2416,33 +2376,16 @@ bool RunLoop::dispatchNextEvents(void)
 		(*pf->eventHandler)(*pf);
 		}
 	handlingProcessFunctions=false;
-	
-	return !shutdownRequested;
 	}
 
 void RunLoop::run(void)
 	{
-	/* Check if the self-pipe needs to be re-opened: */
-	if(pipeClosed)
-		{
-		/* Create the self-pipe: */
-		pipeFds[1]=pipeFds[0]=-1;
-		if(pipe(pipeFds)<0)
-			throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot create event pipe");
-		
-		/* Re-enable the self-pipe's poll request: */
-		pollFds[0].fd=pipeFds[0];
-		
-		/* Mark the self-pipe as open: */
-		pipeClosed=false;
-		}
+	/* Restart the run loop in case it was shut down: */
+	restart();
 	
-	/* Reset the shutdown flag: */
-	shutdownRequested=false;
-	
-	/* Handle batches of events until stopped: */
-	while(dispatchNextEvents())
-		;
+	/* Dispatch events until stopped: */
+	while(waitForEvents())
+		dispatchPendingEvents();
 	}
 
 void RunLoop::shutdown(void)
@@ -2453,9 +2396,26 @@ void RunLoop::shutdown(void)
 		/* Close the write end of the self-pipe: */
 		close(pipeFds[1]);
 		
-		/* Handle any remaining messages in the self-pipe: */
-		while(handlePipeMessages())
-			;
+		/* Completely drain the self-pipe: */
+		while(true)
+			{
+			/* Read a batch of messages from the self-pipe: */
+			ssize_t readResult=read(pipeFds[0],messageBuffer,messageBufferSize*sizeof(PipeMessage));
+			
+			/* Bail out on error or end-of-file: */
+			if(readResult<=0)
+				break;
+			
+			/* Set up the message handling buffer and bail out if there's a partial message; can't do anything about it: */
+			size_t numMessages=sizeof(readResult)/sizeof(PipeMessage);
+			if(numMessages*sizeof(PipeMessage)!=sizeof(readResult))
+				break;
+			messageEnd=messageBuffer+numMessages;
+			messagePtr=messageBuffer;
+			
+			/* Handle all messages on the self-pipe: */
+			handlePipeMessages(false);
+			}
 		
 		/* Close the read end of the self-pipe: */
 		close(pipeFds[0]);

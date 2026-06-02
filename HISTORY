@@ -8724,3 +8724,16 @@ Vrui-15.0-001:
   SceneGraph::MeshFileNode.
 - Fixed missing check for optional heartbeat timeout to
   Comm::HttpServer::sendEvent.
+- API and behavior changes in Threads::RunLoop:
+  - Split dispatchNextEvents method into waitForEvents, which returns
+    false after stop(), and dispatchPendingEvents.
+  - waitForEvents only returns if an actual event occurs, not when an
+    internal management message, such as changing a time-out, is
+    received on the run loop's self-pipe.
+  - Elapsed timer events are now handled after blocking for I/O, not
+    before. This means no events are dispatched to client code until
+    waitForEvents returns, giving client code a well-defined point to
+    prepare for subsequent event handling, such as starting a new Vrui
+    frame.
+  - Added restart method to restart a run loop that was previously
+    stopped and/or shut down.

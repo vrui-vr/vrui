@@ -635,6 +635,8 @@ class RunLoop
 	bool pipeClosed; // Flag if the pipe has been closed by a call to shutdown
 	static const size_t messageBufferSize; // Size of the self-pipe message buffer
 	PipeMessage* messageBuffer; // A buffer to read messages from the self-pipe
+	PipeMessage* messageEnd; // Pointer to the end of the self-pipe message buffer
+	PipeMessage* messagePtr; // Pointer to the next unhandled self-pipe message
 	unsigned int numActiveIOWatchers; // Number of active I/O watchers
 	ActiveIOWatcherList activeIOWatchers; // List of currently active I/O watchers
 	PollFdList pollFds; // List of polling request structures paralleling the list of active I/O watchers, with an extra entry at the beginning for the self-pipe's read end
@@ -689,7 +691,7 @@ class RunLoop
 	void disableProcessFunction(ProcessFunction* processFunction,bool willDestroy =false); // Disables the given process function; if the willDestroy flag is true, the caller will destroy the process function immediately after disabling it, requiring extra synchronization
 	void setProcessFunctionEventHandler(ProcessFunction* processFunction,ProcessFunction::EventHandler& newEventHandler); // Sets the given process function's event handler
 	
-	bool handlePipeMessages(void); // Handles a batch of messages received on the self-pipe; returns false when the self-pipe signals end-of-file during shutdown
+	void handlePipeMessages(bool internalMessagesOnly); // Handles a batch of messages read from the self-pipe; if given flag is true, stops handling when a non-internal event message is encountered
 	
 	/* Constructors and destructors: */
 	public:
@@ -711,12 +713,14 @@ class RunLoop
 	void wakeUp(void); // Wakes up a potentially blocked run loop; dispatchNextEvents() call will return true
 	void stop(void); // Orders the run loop to stop dispatching events; some subsequent dispatchNextEvents() call will return false
 	
-	/* Dispatching methods: */
-	void waitForEvents(void); // Blocks until any event happens
-	bool handlePendingEvents(void); // Handles all events that have happened during the previous waitForEvents call; returns true if the run loop has not been stopped
-	bool dispatchNextEvents(void); // Dispatches the next batch of events, blocking on I/O at most once; returns true if the run loop has not been stopped
-	void run(void); // Dispatches events until stopped by calling the stop() method
-	void shutdown(void); // Called after a run loop has been stopped to drain the self-pipe and release all resources; is called internally by destructor as well
+	/* Event dispatching methods: */
+	void restart(void); // Restarts a run loop that was previously stopped by calling stop() and/or shut down by subsequently calling shutdown()
+	bool waitForEvents(void); // Blocks until any event happens; does not block and returns false if the stop() method was called
+	void dispatchPendingEvents(void); // Dispatches all events that were detected during the previous waitForEvents call
+	void run(void); // Convenience method to restart the run loop if it was shut down and dispatch events until stopped by calling the stop() method
+	
+	/* Clean-up methods: */
+	void shutdown(void); // Drains the self-pipe and releases all resources after stop() has been called; is implicitly called by destructor
 	};
 
 }

@@ -1211,8 +1211,11 @@ void VRDeviceServer::run(void)
 	deviceManager->setStreamer(this);
 	
 	/* Run the main loop and dispatch events until stopped: */
-	while(runLoop.dispatchNextEvents())
+	while(runLoop.waitForEvents())
 		{
+		/* Dispatch main loop events: */
+		runLoop.dispatchPendingEvents();
+		
 		/* Check whether there are incremental or complete device state updates: */
 		if(haveUpdates||streamingTrackerStateVersion!=managerTrackerStateVersion)
 			{
