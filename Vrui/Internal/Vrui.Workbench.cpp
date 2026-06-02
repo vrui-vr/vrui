@@ -1230,7 +1230,7 @@ void init(int& argc,char**& argv,char**&)
 				
 				/* Determine the fully-qualified name of this process's executable: */
 				char exeName[PATH_MAX];
-				#ifdef __LINUX__
+				#ifdef __linux__
 				ssize_t exeNameLength=readlink("/proc/self/exe",exeName,PATH_MAX-1);
 				if(exeNameLength>0)
 					exeName[exeNameLength]='\0';
