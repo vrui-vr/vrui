@@ -8735,5 +8735,8 @@ Vrui-15.0-001:
     waitForEvents returns, giving client code a well-defined point to
     prepare for subsequent event handling, such as starting a new Vrui
     frame.
+  - Timer's time-outs can now be set to past time points, in order to
+    properly handle repeating timers that would have timed out multiple
+    times while the run loop was otherwise busy.
   - Added restart method to restart a run loop that was previously
     stopped and/or shut down.

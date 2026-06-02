@@ -879,10 +879,8 @@ void RunLoop::setTimerTimeout(RunLoop::Timer* timer,const RunLoop::Time& newTime
 	/* Check if this call was made from inside the run loop's thread: */
 	if(Threads::Thread::isSelfEqual(threadId))
 		{
-		/* Set the timer's time-out and ensure that the new time-out is not before lastDispatchTime: */
+		/* Set the timer's time-out: */
 		timer->timeout=newTimeout;
-		if(timer->timeout<lastDispatchTime)
-			timer->timeout=lastDispatchTime;
 		
 		/* If the timer is enabled, fix the active timer heap; otherwise, if requested and the timer still has an owner, re-enable it: */
 		if(timer->enabled)
@@ -933,10 +931,6 @@ void RunLoop::enableTimer(RunLoop::Timer* timer)
 		/* Check that the timer is not already enabled and still has an owner: */
 		if(!timer->enabled&&timer->isOwned())
 			{
-			/* Ensure that the timer's time-out is not before lastDispatchTime: */
-			if(timer->timeout<lastDispatchTime)
-				timer->timeout=lastDispatchTime;
-			
 			/* Insert the timer into the active timers heap: */
 			insertActiveTimer(timer,timer->timeout);
 			timer->ref(); // Take an additional reference to the timer
@@ -1573,10 +1567,8 @@ void RunLoop::handlePipeMessages(bool internalMessagesOnly)
 				/* Retrieve a pointer to the timer from the pipe message: */
 				Timer* timer=messagePtr->setTimerTimeout.timer;
 				
-				/* Set the timer's time-out and ensure that the new time-out is not before lastDispatchTime: */
+				/* Set the timer's time-out: */
 				timer->timeout=Time(messagePtr->setTimerTimeout.timeout);
-				if(timer->timeout<lastDispatchTime)
-					timer->timeout=lastDispatchTime;
 				
 				/* If the timer is enabled, fix the active timer heap, otherwise, if requested and the timer still has an owner, re-enable it: */
 				if(timer->enabled)
@@ -1619,10 +1611,6 @@ void RunLoop::handlePipeMessages(bool internalMessagesOnly)
 				/* Check that the timer is not already enabled and still has an owner: */
 				if(!timer->enabled&&timer->isOwned())
 					{
-					/* Ensure that the timer's time-out is not before lastDispatchTime: */
-					if(timer->timeout<lastDispatchTime)
-						timer->timeout=lastDispatchTime;
-					
 					/* Insert the timer into the active timers heap: */
 					insertActiveTimer(timer,timer->timeout);
 					timer->ref(); // Take another reference to the timer
