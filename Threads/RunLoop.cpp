@@ -2207,7 +2207,7 @@ bool RunLoop::waitForEvents(void)
 	bool dontHaveEvents=true;
 	do
 		{
-		#ifdef __LINUX__ // On Linux, we have ppoll()
+		#ifdef __linux__ // On Linux, we have ppoll()
 		
 		/* Calculate a time-out for the ppoll() call: */
 		Interval pollTimeout(0,0); // In case we don't want to block, only poll
@@ -2271,8 +2271,8 @@ bool RunLoop::waitForEvents(void)
 					throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot read from event pipe");
 				
 				/* Set up the message handling buffer: */
-				size_t numMessages=sizeof(readResult)/sizeof(PipeMessage);
-				if(numMessages*sizeof(PipeMessage)!=sizeof(readResult))
+				size_t numMessages=size_t(readResult)/sizeof(PipeMessage);
+				if(numMessages*sizeof(PipeMessage)!=size_t(readResult))
 					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Partial read on event pipe");
 				messageEnd=messageBuffer+numMessages;
 				messagePtr=messageBuffer;
