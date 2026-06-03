@@ -691,7 +691,7 @@ class RunLoop
 	void disableProcessFunction(ProcessFunction* processFunction,bool willDestroy =false); // Disables the given process function; if the willDestroy flag is true, the caller will destroy the process function immediately after disabling it, requiring extra synchronization
 	void setProcessFunctionEventHandler(ProcessFunction* processFunction,ProcessFunction::EventHandler& newEventHandler); // Sets the given process function's event handler
 	
-	void handlePipeMessages(bool internalMessagesOnly); // Handles a batch of messages read from the self-pipe; if given flag is true, stops handling when a non-internal event message is encountered
+	void handlePipeMessages(void); // Handles the batch of self-pipe messages between messagePtr and messageEnd; sets messagePtr to messageEnd
 	
 	/* Constructors and destructors: */
 	public:

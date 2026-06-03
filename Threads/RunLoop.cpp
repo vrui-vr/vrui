@@ -1430,15 +1430,11 @@ void RunLoop::setProcessFunctionEventHandler(RunLoop::ProcessFunction* processFu
 		}
 	}
 
-void RunLoop::handlePipeMessages(bool internalMessagesOnly)
+void RunLoop::handlePipeMessages(void)
 	{
 	/* Handle all read messages: */
 	do
 		{
-		/* Bail out if the next message is an event message and we are restricted to handling internal messages: */
-		if(internalMessagesOnly&&(messagePtr->messageType==PipeMessage::WakeUp||messagePtr->messageType==PipeMessage::Stop||messagePtr->messageType==PipeMessage::Signal||messagePtr->messageType==PipeMessage::SignalUserSignal))
-			break;
-		
 		/* Handle the message based on its type: */
 		switch(messagePtr->messageType)
 			{
@@ -2265,11 +2261,22 @@ bool RunLoop::waitForEvents(void)
 				messageEnd=messageBuffer+numMessages;
 				messagePtr=messageBuffer;
 				
-				/* Handle internal (non-event) messages on the self-pipe only: */
-				handlePipeMessages(true);
+				/* Find the first actual event message that was read from the self-pipe: */
+				PipeMessage* imPtr;
+				for(imPtr=messageBuffer;imPtr!=messageEnd&&imPtr->messageType!=PipeMessage::WakeUp&&imPtr->messageType!=PipeMessage::Stop&&imPtr->messageType!=PipeMessage::Signal&&imPtr->messageType!=PipeMessage::SignalUserSignal;++imPtr)
+					;
+				
+				/* Handle any non-event messages read from the self-pipe: */
+				if(imPtr!=messageBuffer)
+					{
+					PipeMessage* originalMessageEnd=messageEnd;
+					messageEnd=imPtr;
+					handlePipeMessages();
+					messageEnd=originalMessageEnd;
+					}
 				
 				/* Discount the self-pipe's readiness if no actual events were encountered: */
-				if(messagePtr==messageEnd)
+				if(imPtr==messageEnd)
 					--pollResult;
 				}
 			
@@ -2300,7 +2307,7 @@ void RunLoop::dispatchPendingEvents(void)
 	
 	/* Handle any potential messages on the self-pipe: */
 	if(messagePtr!=messageEnd)
-		handlePipeMessages(false);
+		handlePipeMessages();
 
 	/* Handle all elapsed active timers, i.e., timers whose time-out is strictly before the current time: */
 	while(!activeTimers.empty()&&activeTimers[0].timeout<lastDispatchTime)
@@ -2395,14 +2402,14 @@ void RunLoop::shutdown(void)
 				break;
 			
 			/* Set up the message handling buffer and bail out if there's a partial message; can't do anything about it: */
-			size_t numMessages=sizeof(readResult)/sizeof(PipeMessage);
-			if(numMessages*sizeof(PipeMessage)!=sizeof(readResult))
+			size_t numMessages=size_t(readResult)/sizeof(PipeMessage);
+			if(numMessages*sizeof(PipeMessage)!=size_t(readResult))
 				break;
 			messageEnd=messageBuffer+numMessages;
 			messagePtr=messageBuffer;
 			
 			/* Handle all messages on the self-pipe: */
-			handlePipeMessages(false);
+			handlePipeMessages();
 			}
 		
 		/* Close the read end of the self-pipe: */
