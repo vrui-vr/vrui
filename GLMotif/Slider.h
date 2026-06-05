@@ -1,6 +1,6 @@
 /***********************************************************************
 Slider - Class for horizontal or vertical sliders.
-Copyright (c) 2001-2025 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -25,14 +25,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <vector>
 #include <Misc/CallbackData.h>
 #include <Misc/CallbackList.h>
-#include <Misc/TimerEventScheduler.h>
 #include <GLMotif/VariableTracker.h>
 #include <GLMotif/Widget.h>
 #include <GLMotif/DragWidget.h>
+#include <GLMotif/ClickRepeatWidget.h>
 
 namespace GLMotif {
 
-class Slider:public Widget,public DragWidget,public VariableTracker
+class Slider:public Widget,public DragWidget,public ClickRepeatWidget,public VariableTracker
 	{
 	/* Embedded classes: */
 	public:
@@ -84,7 +84,6 @@ class Slider:public Widget,public DragWidget,public VariableTracker
 	
 	int isClicking; // Flag if the slider is currently waiting for click repeat timer events, and whether it's decrementing (<0) or incrementing (>0)
 	double clickValue; // Slider value that was clicked when isClicking!=0
-	double nextClickEventTime; // Time at which the next click-repeat event was scheduled
 	GLfloat dragOffset; // Offset between pointer position and slider origin during dragging
 	GLfloat dragZone[2]; // Range of slider handle positions that is ignored for dragging updates, to implement notch "stickiness"
 	
@@ -94,7 +93,6 @@ class Slider:public Widget,public DragWidget,public VariableTracker
 	void positionSlider(void); // Positions the slider handle inside the widget
 	void decrement(void); // Decrements the slider value by the current granularity
 	void increment(void); // Increments the slider value by the current granularity
-	void clickRepeatTimerEventCallback(Misc::TimerEventScheduler::CallbackData* cbData); // Callback for click-repeat timer events
 	
 	/* Constructors and destructors: */
 	public:
@@ -112,6 +110,10 @@ class Slider:public Widget,public DragWidget,public VariableTracker
 	virtual void pointerButtonDown(Event& event);
 	virtual void pointerButtonUp(Event& event);
 	virtual void pointerMotion(Event& event);
+	
+	/* Methods from class ClickRepeatWidget: */
+	virtual bool wantClickRepeat(void);
+	virtual void clickRepeat(void);
 	
 	/* Methods from class VariableTracker: */
 	template <class VariableTypeParam>

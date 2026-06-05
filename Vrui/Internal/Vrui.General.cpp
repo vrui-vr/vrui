@@ -933,7 +933,6 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 	timerEventScheduler=new Misc::TimerEventScheduler;
 	widgetManager=new GLMotif::WidgetManager;
 	widgetManager->setStyleSheet(&uiStyleSheet);
-	widgetManager->setTimerEventScheduler(timerEventScheduler);
 	widgetManager->setDrawOverlayWidgets(configFileSection.retrieveValue("drawOverlayWidgets",widgetManager->getDrawOverlayWidgets()));
 	widgetManager->getWidgetPopCallbacks().add(this,&VruiState::widgetPopCallback);
 	

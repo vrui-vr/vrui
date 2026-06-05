@@ -1,7 +1,7 @@
 /***********************************************************************
 WidgetManager - Class to manage top-level GLMotif UI components and user
 events.
-Copyright (c) 2001-2024 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -32,9 +32,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <GLMotif/WidgetAttribute.h>
 
 /* Forward declarations: */
-namespace Misc {
-class TimerEventScheduler;
-}
 class GLContextData;
 namespace GLMotif {
 class Event;
@@ -236,7 +233,6 @@ class WidgetManager
 	const StyleSheet* styleSheet; // The widget manager's style sheet
 	WidgetArranger* arranger; // Helper object to arrange top-level widgets in 3D display space
 	TextEntryMethod* textEntryMethod; // Helper object representing methods to generate text events or text control events
-	Misc::TimerEventScheduler* timerEventScheduler; // Pointer to a scheduler for timer events managed by the OS/window system binding layer
 	bool drawOverlayWidgets; // Flag whether widgets are drawn in an overlay layer on top of all other 3D imagery
 	WidgetAttributeMap widgetAttributeMap; // Map from widgets to widget attributes
 	PopupBinding* firstBinding; // Pointer to first bound top level widget
@@ -284,15 +280,6 @@ class WidgetManager
 	TextEntryMethod* getTextEntryMethod(void) const // Returns the widget manager's text entry method
 		{
 		return textEntryMethod;
-		}
-	void setTimerEventScheduler(Misc::TimerEventScheduler* newTimerEventScheduler); // Sets the widget manager's timer event scheduler
-	const Misc::TimerEventScheduler* getTimerEventScheduler(void) const // Returns a pointer to the timer event scheduler
-		{
-		return timerEventScheduler;
-		}
-	Misc::TimerEventScheduler* getTimerEventScheduler(void) // Ditto
-		{
-		return timerEventScheduler;
 		}
 	void setDrawOverlayWidgets(bool newDrawOverlayWidgets); // Sets whether widgets are drawn in an overlay layer
 	bool getDrawOverlayWidgets(void) const // Returns the current setting of the overlay flag

@@ -1,0 +1,32 @@
+Event Processing in the GLMotif GUI Widget Library
+==================================================
+
+Primary classes in the GLMotif library
+--------------------------------------
+
+- GLMotif::StyleSheet: Structure containing user-configurable GUI layout parameters
+
+- GLMotif::Widget: Base class for GUI components
+
+- GLMotif::WidgetManager: Central manager for displaying and interacting with widgets
+
+- GLMotif::Event: Class for clicking/dragging type events
+
+- GLMotif::TextEvent: Class for text input events, contains a string of ASCII characters
+
+- GLMotif::TextControlEvent: Class for events controlling text input, e.g., cursor movement, delete, cut/copy/paste, confirm
+
+Event Processing
+----------------
+
+- Events originate from user interface devices managed by higher-level toolkits, such as a windowing toolkit or a VR toolkit
+  - Basic event types:
+    - Clicking / dragging
+    - Text input
+    - Text input control
+
+- User interface devices directly interface with the central widget manager
+
+- Widget manager finds interaction target widgets based on location information provided by user interface device
+  - Point-based location
+  - Ray-based location

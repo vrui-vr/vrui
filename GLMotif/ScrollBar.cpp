@@ -1,7 +1,7 @@
 /***********************************************************************
 ScrollBar - Class for horizontal or vertical scroll bars, to be used as
 a component by scrolling widgets like list boxes.
-Copyright (c) 2008-2021 Oliver Kreylos
+Copyright (c) 2008-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -114,55 +114,6 @@ void ScrollBar::drawBeveledBox(const Box& base,const Box& bevel) const
 	glEnd();
 	}
 
-void ScrollBar::clickRepeatTimerEventCallback(Misc::TimerEventScheduler::CallbackData* cbData)
-	{
-	/* Only react to event if still in click-repeat mode: */
-	if(isClicking)
-		{
-		/* Adjust position and reposition handle: */
-		int newPosition=position+clickPositionIncrement;
-		if(newPosition>positionMax-pageSize)
-			newPosition=positionMax-pageSize;
-		if(newPosition<positionMin)
-			newPosition=positionMin;
-		if(newPosition!=position)
-			{
-			/* Update the scroll bar: */
-			position=newPosition;
-			positionHandle();
-			
-			/* Call the value changed callbacks: */
-			ValueChangedCallbackData cbData(this,clickChangeReason,position);
-			valueChangedCallbacks.call(&cbData);
-			
-			Misc::TimerEventScheduler* tes=getManager()->getTimerEventScheduler();
-			if(tes!=0)
-				{
-				/* Schedule a timer event for click repeat: */
-				nextClickEventTime+=0.1;
-				tes->scheduleEvent(nextClickEventTime,this,&ScrollBar::clickRepeatTimerEventCallback);
-				}
-			
-			/* Invalidate the visual representation: */
-			update();
-			}
-		}
-	}
-
-void ScrollBar::scheduleClickRepeat(int increment,ScrollBar::ValueChangedCallbackData::ChangeReason reason,double interval)
-	{
-	/* Schedule a timer event for click repeat: */
-	isClicking=true;
-	clickPositionIncrement=increment;
-	clickChangeReason=reason;
-	Misc::TimerEventScheduler* tes=getManager()->getTimerEventScheduler();
-	if(tes!=0)
-		{
-		nextClickEventTime=tes->getCurrentTime()+interval;
-		tes->scheduleEvent(nextClickEventTime,this,&ScrollBar::clickRepeatTimerEventCallback);
-		}
-	}
-
 ScrollBar::ScrollBar(const char* sName,Container* sParent,Orientation sOrientation,bool sReverse,bool sManageChild)
 	:Widget(sName,sParent,false),
 	 orientation(sOrientation),reverse(sReverse),
@@ -212,12 +163,6 @@ ScrollBar::ScrollBar(const char* sName,Container* sParent,Orientation sOrientati
 
 ScrollBar::~ScrollBar(void)
 	{
-	Misc::TimerEventScheduler* tes=getManager()->getTimerEventScheduler();
-	if(tes!=0)
-		{
-		/* Need to remove all click-repeat timer events from the event scheduler, just in case: */
-		tes->removeAllEvents(this,&ScrollBar::clickRepeatTimerEventCallback);
-		}
 	}
 
 Vector ScrollBar::calcNaturalSize(void) const
@@ -480,10 +425,12 @@ void ScrollBar::pointerButtonDown(Event& event)
 		ValueChangedCallbackData cbData(this,reason,position);
 		valueChangedCallbacks.call(&cbData);
 		
+		/* Check if the original click enables repeat clicks: */
 		if(increment!=0)
 			{
-			/* Schedule a timer event for click repeat: */
-			scheduleClickRepeat(increment,reason,0.5);
+			isClicking=true;
+			clickPositionIncrement=increment;
+			clickChangeReason=reason;
 			}
 		
 		/* Invalidate the visual representation: */
@@ -493,12 +440,8 @@ void ScrollBar::pointerButtonDown(Event& event)
 
 void ScrollBar::pointerButtonUp(Event& event)
 	{
+	/* Stop dragging and potential repeat clicks: */
 	stopDragging(event);
-	
-	/* Cancel any pending click-repeat events: */
-	Misc::TimerEventScheduler* tes=getManager()->getTimerEventScheduler();
-	if(tes!=0)
-		tes->removeEvent(nextClickEventTime,this,&ScrollBar::clickRepeatTimerEventCallback);
 	isClicking=false;
 	
 	/* Unarm the armed arrow button: */
@@ -613,6 +556,35 @@ void ScrollBar::textControlEvent(const TextControlEvent& event)
 		
 		/* Call the value changed callbacks: */
 		ValueChangedCallbackData cbData(this,reason,position);
+		valueChangedCallbacks.call(&cbData);
+		
+		/* Invalidate the visual representation: */
+		update();
+		}
+	}
+
+bool ScrollBar::wantClickRepeat(void)
+	{
+	/* Return true if the scroll bar was clicked: */
+	return isClicking;
+	}
+
+void ScrollBar::clickRepeat(void)
+	{
+	/* Adjust position and reposition handle: */
+	int newPosition=position+clickPositionIncrement;
+	if(newPosition>positionMax-pageSize)
+		newPosition=positionMax-pageSize;
+	if(newPosition<positionMin)
+		newPosition=positionMin;
+	if(newPosition!=position)
+		{
+		/* Update the scroll bar: */
+		position=newPosition;
+		positionHandle();
+		
+		/* Call the value changed callbacks: */
+		ValueChangedCallbackData cbData(this,clickChangeReason,position);
 		valueChangedCallbacks.call(&cbData);
 		
 		/* Invalidate the visual representation: */

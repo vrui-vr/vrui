@@ -8745,3 +8745,11 @@ Vrui-15.0-001:
   - Move sampling of lastDispatchTime from beginning of
     dispatchPendingEvents to end of waitForEvents.
   - Added getDispatchTime method.
+- Replaced use of Misc::TimerEventScheduler in GLMotif widget classes
+  with new GLMotif::ClickRepeatWidget mix-in class, offloading repeat
+  click handling to UI interaction code in higher-level toolkits, such
+  as Vrui::GUIInteractor.
+- API change: removed timerEventScheduler and related get/set methods
+  from GLMotif::WidgetManager.
+  - Adapted set-up code in Vrui.General.cpp.
+- Added missing inline dependency on Misc library to Plugins library.

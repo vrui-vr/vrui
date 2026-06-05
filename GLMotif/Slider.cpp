@@ -1,6 +1,6 @@
 /***********************************************************************
 Slider - Class for horizontal or vertical sliders.
-Copyright (c) 2001-2023 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -179,27 +179,6 @@ void Slider::increment(void)
 		}
 	}
 
-void Slider::clickRepeatTimerEventCallback(Misc::TimerEventScheduler::CallbackData* cbData)
-	{
-	/* Only react to event if still in click-repeat mode: */
-	if(isClicking!=0)
-		{
-		/* Adjust value and reposition slider: */
-		if(isClicking<0)
-			decrement();
-		else
-			increment();
-		
-		Misc::TimerEventScheduler* tes=getManager()->getTimerEventScheduler();
-		if(tes!=0)
-			{
-			/* Schedule a timer event for click repeat: */
-			nextClickEventTime+=0.1;
-			tes->scheduleEvent(nextClickEventTime,this,&Slider::clickRepeatTimerEventCallback);
-			}
-		}
-	}
-
 Slider::Slider(const char* sName,Container* sParent,Slider::Orientation sOrientation,GLfloat sSliderWidth,GLfloat sShaftLength,bool sManageChild)
 	:Widget(sName,sParent,false),
 	 orientation(sOrientation),
@@ -267,10 +246,6 @@ Slider::Slider(const char* sName,Container* sParent,Slider::Orientation sOrienta
 
 Slider::~Slider(void)
 	{
-	/* Need to remove all click-repeat timer events from the event scheduler, just in case: */
-	Misc::TimerEventScheduler* tes=getManager()->getTimerEventScheduler();
-	if(tes!=0)
-		tes->removeAllEvents(this,&Slider::clickRepeatTimerEventCallback);
 	}
 
 Vector Slider::calcNaturalSize(void) const
@@ -871,26 +846,14 @@ void Slider::pointerButtonDown(Event& event)
 				increment();
 				isClicking=1;
 				}
-			
-			/* Schedule a timer event for click repeat: */
-			Misc::TimerEventScheduler* tes=getManager()->getTimerEventScheduler();
-			if(tes!=0)
-				{
-				nextClickEventTime=tes->getCurrentTime()+0.5;
-				tes->scheduleEvent(nextClickEventTime,this,&Slider::clickRepeatTimerEventCallback);
-				}
 			}
 		}
 	}
 
 void Slider::pointerButtonUp(Event& event)
 	{
+	/* Stop dragging and repeated clicks: */
 	stopDragging(event);
-	
-	/* Cancel any pending click-repeat events: */
-	Misc::TimerEventScheduler* tes=getManager()->getTimerEventScheduler();
-	if(tes!=0)
-		tes->removeEvent(nextClickEventTime,this,&Slider::clickRepeatTimerEventCallback);
 	isClicking=0;
 	}
 
@@ -968,6 +931,21 @@ void Slider::pointerMotion(Event& event)
 			update();
 			}
 		}
+	}
+
+bool Slider::wantClickRepeat(void)
+	{
+	/* Return true if the slider was increment-clicked: */
+	return isClicking!=0;
+	}
+
+void Slider::clickRepeat(void)
+	{
+	/* Adjust value and reposition slider: */
+	if(isClicking<0)
+		decrement();
+	else
+		increment();
 	}
 
 void Slider::setMarginWidth(GLfloat newMarginWidth)

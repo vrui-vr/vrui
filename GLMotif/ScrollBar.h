@@ -1,7 +1,7 @@
 /***********************************************************************
 ScrollBar - Class for horizontal or vertical scroll bars, to be used as
 a component by scrolling widgets like list boxes.
-Copyright (c) 2008-2012 Oliver Kreylos
+Copyright (c) 2008-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -25,11 +25,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Misc/CallbackData.h>
 #include <Misc/CallbackList.h>
-#include <Misc/TimerEventScheduler.h>
 #include <GL/gl.h>
 #include <GLMotif/GlyphGadget.h>
 #include <GLMotif/Widget.h>
 #include <GLMotif/DragWidget.h>
+#include <GLMotif/ClickRepeatWidget.h>
 
 namespace GLMotif {
 
@@ -88,22 +88,19 @@ class ScrollBar:public Widget,public DragWidget
 	bool isClicking; // Flag if the scroll bar is currently waiting for click repeat timer events
 	int clickPositionIncrement; // Position increment for each timer event
 	ValueChangedCallbackData::ChangeReason clickChangeReason; // Change reason for each following click event
-	double nextClickEventTime; // Time at which the next click-repeat event was scheduled
 	GLfloat dragOffset; // Offset between pointer position and handle origin during dragging
 	
 	/* Protected methods: */
 	void positionButtonsAndShaft(void); // Positions the arrow buttons and scroll bar shaft inside the widget
 	void positionHandle(void); // Positions the scroll bar handle inside the widget
 	void drawBeveledBox(const Box& base,const Box& bevel) const; // Draws the bevel around a box
-	void clickRepeatTimerEventCallback(Misc::TimerEventScheduler::CallbackData* cbData); // Callback for click-repeat timer events
-	void scheduleClickRepeat(int increment,ValueChangedCallbackData::ChangeReason reason,double interval); // Schedules a click-repeat timer event
 	
 	/* Constructors and destructors: */
 	public:
 	ScrollBar(const char* sName,Container* sParent,Orientation sOrientation,bool sReverse,bool sManageChild =true);
 	virtual ~ScrollBar(void);
 	
-	/* Methods inherited from Widget: */
+	/* Methods from class Widget: */
 	virtual Vector calcNaturalSize(void) const;
 	virtual ZRange calcZRange(void) const;
 	virtual void resize(const Box& newExterior);
@@ -115,6 +112,10 @@ class ScrollBar:public Widget,public DragWidget
 	virtual void pointerMotion(Event& event);
 	virtual bool giveTextFocus(void);
 	virtual void textControlEvent(const TextControlEvent& event);
+	
+	/* Methods from class ClickRepeatWidget: */
+	virtual bool wantClickRepeat(void);
+	virtual void clickRepeat(void);
 	
 	/* New methods: */
 	void setBevelWidth(GLfloat newBevelWidth); // Changes width of bevel around arrow buttons and scroll bar handle

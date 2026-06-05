@@ -1,7 +1,7 @@
 /***********************************************************************
 WidgetManager - Class to manage top-level GLMotif UI components and user
 events.
-Copyright (c) 2001-2022 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -323,7 +323,7 @@ void WidgetManager::deleteQueuedWidgets(void)
 
 WidgetManager::WidgetManager(void)
 	:styleSheet(0),arranger(0),textEntryMethod(0),
-	 timerEventScheduler(0),drawOverlayWidgets(false),
+	 drawOverlayWidgets(false),
 	 widgetAttributeMap(101),
 	 firstBinding(0),popupBindingMap(31),
 	 time(0.0),
@@ -374,11 +374,6 @@ void WidgetManager::setTextEntryMethod(TextEntryMethod* newTextEntryMethod)
 	{
 	delete textEntryMethod;
 	textEntryMethod=newTextEntryMethod;
-	}
-
-void WidgetManager::setTimerEventScheduler(Misc::TimerEventScheduler* newTimerEventScheduler)
-	{
-	timerEventScheduler=newTimerEventScheduler;
 	}
 
 void WidgetManager::setDrawOverlayWidgets(bool newDrawOverlayWidgets)
