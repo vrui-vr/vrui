@@ -1430,7 +1430,7 @@ void RunLoop::setProcessFunctionEventHandler(RunLoop::ProcessFunction* processFu
 		}
 	}
 
-void RunLoop::handlePipeMessages(void)
+void RunLoop::handlePipeMessages(RunLoop::PipeMessage* end)
 	{
 	/* Handle all read messages: */
 	do
@@ -1954,7 +1954,7 @@ void RunLoop::handlePipeMessages(void)
 		/* Go to the next message: */
 		++messagePtr;
 		}
-	while(messagePtr!=messageEnd);
+	while(messagePtr!=end);
 	}
 
 RunLoop::RunLoop(void)
@@ -2160,6 +2160,12 @@ void RunLoop::stop(void)
 		}
 	}
 
+void RunLoop::attachToThread(void)
+	{
+	/* Override the run loop's thread ID: */
+	threadId=Threads::Thread::getSelfId();
+	}
+
 void RunLoop::restart(void)
 	{
 	/* Check if the self-pipe needs to be re-opened: */
@@ -2268,12 +2274,7 @@ bool RunLoop::waitForEvents(void)
 				
 				/* Handle any non-event messages read from the self-pipe: */
 				if(imPtr!=messageBuffer)
-					{
-					PipeMessage* originalMessageEnd=messageEnd;
-					messageEnd=imPtr;
-					handlePipeMessages();
-					messageEnd=originalMessageEnd;
-					}
+					handlePipeMessages(imPtr);
 				
 				/* Discount the self-pipe's readiness if no actual events were encountered: */
 				if(imPtr==messageEnd)
@@ -2297,17 +2298,17 @@ bool RunLoop::waitForEvents(void)
 		}
 	while(dontHaveEvents);
 	
+	/* Sample the current time: */
+	lastDispatchTime.set();
+	
 	return true;
 	}
 
 void RunLoop::dispatchPendingEvents(void)
 	{
-	/* Sample the current time: */
-	lastDispatchTime.set();
-	
 	/* Handle any potential messages on the self-pipe: */
 	if(messagePtr!=messageEnd)
-		handlePipeMessages();
+		handlePipeMessages(messageEnd);
 
 	/* Handle all elapsed active timers, i.e., timers whose time-out is strictly before the current time: */
 	while(!activeTimers.empty()&&activeTimers[0].timeout<lastDispatchTime)
@@ -2409,7 +2410,7 @@ void RunLoop::shutdown(void)
 			messagePtr=messageBuffer;
 			
 			/* Handle all messages on the self-pipe: */
-			handlePipeMessages();
+			handlePipeMessages(messageEnd);
 			}
 		
 		/* Close the read end of the self-pipe: */

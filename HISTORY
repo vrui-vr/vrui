@@ -8738,5 +8738,10 @@ Vrui-15.0-001:
   - Timer's time-outs can now be set to past time points, in order to
     properly handle repeating timers that would have timed out multiple
     times while the run loop was otherwise busy.
+  - Added attachToThread method to simplify creating a run loop for a
+    background thread in the main thread, must be used with caution.
   - Added restart method to restart a run loop that was previously
     stopped and/or shut down.
+  - Move sampling of lastDispatchTime from beginning of
+    dispatchPendingEvents to end of waitForEvents.
+  - Added getDispatchTime method.

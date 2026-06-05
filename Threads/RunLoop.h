@@ -691,7 +691,7 @@ class RunLoop
 	void disableProcessFunction(ProcessFunction* processFunction,bool willDestroy =false); // Disables the given process function; if the willDestroy flag is true, the caller will destroy the process function immediately after disabling it, requiring extra synchronization
 	void setProcessFunctionEventHandler(ProcessFunction* processFunction,ProcessFunction::EventHandler& newEventHandler); // Sets the given process function's event handler
 	
-	void handlePipeMessages(void); // Handles the batch of self-pipe messages between messagePtr and messageEnd; sets messagePtr to messageEnd
+	void handlePipeMessages(PipeMessage* end); // Handles the batch of self-pipe messages between messagePtr and the given end pointer; sets messagePtr to messageEnd
 	
 	/* Constructors and destructors: */
 	public:
@@ -713,9 +713,14 @@ class RunLoop
 	void wakeUp(void); // Wakes up a potentially blocked run loop; dispatchNextEvents() call will return true
 	void stop(void); // Orders the run loop to stop dispatching events; some subsequent dispatchNextEvents() call will return false
 	
-	/* Event dispatching methods: */
+	/* Event dispatching methods; must only be called from the thread to which the run loop is attached: */
+	void attachToThread(void); // Attaches the run loop to the calling thread; it is the caller's responsibility to prevent asynchronous use around this call
 	void restart(void); // Restarts a run loop that was previously stopped by calling stop() and/or shut down by subsequently calling shutdown()
-	bool waitForEvents(void); // Blocks until any event happens; does not block and returns false if the stop() method was called
+	bool waitForEvents(void); // Blocks until any event happens; does not block and returns false if the stop() method was called; updates dispatch time immediately before returning
+	const Time& getDispatchTime(void) const // Returns the most recent dispatch time sample
+		{
+		return lastDispatchTime;
+		}
 	void dispatchPendingEvents(void); // Dispatches all events that were detected during the previous waitForEvents call
 	void run(void); // Convenience method to restart the run loop if it was shut down and dispatch events until stopped by calling the stop() method
 	
