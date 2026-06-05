@@ -86,7 +86,7 @@ Vrui Inner Loop
 
 - Let the run loop block until something happens
   - or don't
-    - in runContinuously mode
+    - in runContinuously mode or if requestUpdate or shutdown has been called synchronously in previous frame
     - if there are unhandled X events in any of the display event queues
 
 - Tell cluster nodes that new frame is starting
@@ -105,3 +105,35 @@ Vrui Inner Loop
 
 - Wait for vsync
   - or don't
+
+New State for Vrui Inner Loop
+-----------------------------
+
+- Threads::RunLoop runLoop: central run loop
+- bool dontBlock: initialized by updateContinuously, set to true by requestUpdate and shutdown.
+  - dontBlock reset to updateContinuously immediately after waking up from block
+  - If the beginning of Vrui's frame loop is a process function, can use spinning flag in
+    process function for this purpose
+- For each window group: flag if there are unhandled X events in the group's X event queue
+  - Because a ButtonPress followed by a ButtonRelease had to be split between frames
+  - Because rendering or other code during a frame called XPending
+  - WindowGroup::havePendingEvents
+    - set to true if event handling abandoned prematurely
+    - if not true, call XQueueLength immediately before blocking
+  - Accumulate group flags onto dontBlock before blocking
+  - Same idea: window group event handling needs to be a process function because it's not
+    dependent on data availability on display connection
+    - Two parts:
+      - I/O watcher on display connection that reads events and updates numPendingEvents
+        - Enables process function if there are events
+      - Process function that handles pending events
+        - Sets spinning flag if it leaves unhandled events
+      - Still need to check XQueueLength at end of frame after all X calls have been made
+
+Integration:
+- requestUpdate calls RunLoop::interrupt and sets dontBlock to true
+  - RunLoop::interrupt is a no-op when called from in-thread, hence need flag
+- shutdown calls RunLoop::interrupt and sets dontBlock and shutdownRequested flags
+- scheduleUpdate updates the one-shot Vrui update timer
+  - if not active, set time-out
+  - if active, change time-out if new time-out is earlier
