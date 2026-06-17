@@ -8753,3 +8753,6 @@ Vrui-15.0-001:
   from GLMotif::WidgetManager.
   - Adapted set-up code in Vrui.General.cpp.
 - Added missing inline dependency on Misc library to Plugins library.
+- Rewrote ImageViewer example program to work with sets of images, added
+  ability to load images from entire directory trees; replaced use of
+  broken Images::TextureSet class.
