@@ -8745,3 +8745,5 @@ Vrui-15.0-001:
   - Move sampling of lastDispatchTime from beginning of
     dispatchPendingEvents to end of waitForEvents.
   - Added getDispatchTime method.
+- Added getCommandMap method to Misc::CommandDispatcher to query the set
+  of defined commands.
