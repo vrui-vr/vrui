@@ -8747,3 +8747,5 @@ Vrui-15.0-001:
   - Added getDispatchTime method.
 - Added getCommandMap method to Misc::CommandDispatcher to query the set
   of defined commands.
+- Fixed initialization of selection in
+  GLMotif::TextField::giveTextFocus.
