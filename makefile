@@ -2783,8 +2783,8 @@ endif
 # Install full build system in MAKEINSTALLDIR:
 	@echo Installing build system in $(MAKEINSTALLDIR)...
 	@install -d $(MAKEINSTALLDIR)
-	@chmod a+x $(VRUI_MAKEDIR)/StripPackages $(VRUI_MAKEDIR)/*.sh
 	@install -m u=rw,go=r $(BUILDROOT_FILES) $(MAKEINSTALLDIR)
+	@chmod a+x $(MAKEINSTALLDIR)/StripPackages $(MAKEINSTALLDIR)/*.sh
 # Install pkg-config metafile in PKGCONFIGINSTALLDIR:
 	@echo Installing pkg-config metafile in $(PKGCONFIGINSTALLDIR)...
 	@install -d $(PKGCONFIGINSTALLDIR)

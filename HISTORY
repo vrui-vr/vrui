@@ -8749,3 +8749,5 @@ Vrui-15.0-001:
   of defined commands.
 - Fixed initialization of selection in
   GLMotif::TextField::giveTextFocus.
+- Mark scripts and executables in share/make installation directory as
+  executable after installation.
