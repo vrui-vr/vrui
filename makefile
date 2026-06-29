@@ -2317,7 +2317,7 @@ $(EXEDIR)/OnHMD: $(VRUI_SCRIPTDIR)/OnHMD $(DEPDIR)/Configure-Vrui
 $(VRUI_ETCDIR)/OpenVRDevices.conf: | $(DEPDIR)/config $(EXEDIR)/FindHMD
 $(VRUI_ETCDIR)/OpenVRDevices.conf: $(VRUI_ETCDIR)/OpenVRDevices.conf.template
 	@echo Creating configuration file for OnHMD script...
-	@$(VRUI_MAKEDIR)/ConfigureOpenVRDevices.sh $(EXEDIR) $(VRUI_ETCDIR) OpenVRDevices.conf
+	@(LD_LIBRARY_PATH=$(VRUI_LIBDIR) $(VRUI_MAKEDIR)/ConfigureOpenVRDevices.sh $(EXEDIR) $(VRUI_ETCDIR) OpenVRDevices.conf)
 
 #
 # The Vrui eye calibration program:

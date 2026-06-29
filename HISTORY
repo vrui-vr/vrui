@@ -8752,3 +8752,5 @@ Vrui-15.0-001:
 - Mark scripts and executables in share/make installation directory as
   executable after installation.
 - Added missing scripts to install target in makefile.
+- Set LD_LIBRARY_PATH when running FindHMD in makefile to find not-yet-
+  installed libraries.
