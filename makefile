@@ -2640,7 +2640,8 @@ BUILDROOT_FILES = $(VRUI_MAKEDIR)/SystemDefinitions \
                   $(VRUI_MAKEDIR)/ConfigureOpenVRDevices.sh \
                   $(VRUI_MAKEDIR)/BackupIfNEqual.sh \
                   $(VRUI_MAKEDIR)/InstallUnlessExists.sh \
-                  $(VRUI_MAKEDIR)/InstallLink.sh \
+                  $(VRUI_MAKEDIR)/InstallLinks.sh \
+                  $(VRUI_MAKEDIR)/InstallLinksUnlessExists.sh \
                   $(VRUI_MAKEDIR)/CleanDir.sh \
                   $(VRUI_MAKEDIR)/CleanDirIfEqual.sh \
                   $(VRUI_MAKEDIR)/makefile

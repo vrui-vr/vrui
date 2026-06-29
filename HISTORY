@@ -8751,3 +8751,4 @@ Vrui-15.0-001:
   GLMotif::TextField::giveTextFocus.
 - Mark scripts and executables in share/make installation directory as
   executable after installation.
+- Added missing scripts to install target in makefile.
