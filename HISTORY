@@ -8756,3 +8756,6 @@ Vrui-15.0-001:
   installed libraries.
 - Added Vrui::getApplicationName function to internal Vrui kernel
   interface.
+- Check that Vrui settings dialog exists before changing widgets in
+  Vrui::setBackgroundColor, Vrui::setForegroundColor,
+  Vrui::setBackplaneDist, and Vrui::setFrontplaneDist.

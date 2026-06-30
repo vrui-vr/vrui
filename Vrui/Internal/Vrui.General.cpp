@@ -3293,8 +3293,9 @@ void setFrontplaneDist(Scalar newFrontplaneDist)
 	/* Set the frontplane distance without checking: */
 	vruiState->frontplaneDist=newFrontplaneDist;
 	
-	/* Update the frontplane distance slider: */
-	vruiState->frontplaneSlider->setValue(vruiState->frontplaneDist);
+	/* Update the frontplane distance slider if it already exists: */
+	if(vruiState->settingsDialog!=0)
+		vruiState->frontplaneSlider->setValue(vruiState->frontplaneDist);
 	
 	/* Call the rendering parameter changed callbacks: */
 	{
@@ -3313,8 +3314,9 @@ void setBackplaneDist(Scalar newBackplaneDist)
 	/* Set the backplane distance without checking: */
 	vruiState->backplaneDist=newBackplaneDist;
 	
-	/* Update the backplane distance slider: */
-	vruiState->backplaneSlider->setValue(vruiState->backplaneDist);
+	/* Update the backplane distance slider if it already exists: */
+	if(vruiState->settingsDialog!=0)
+		vruiState->backplaneSlider->setValue(vruiState->backplaneDist);
 	
 	/* Call the rendering parameter changed callbacks: */
 	{
@@ -3339,9 +3341,12 @@ void setBackgroundColor(const Color& newBackgroundColor)
 	else
 		vruiState->foregroundColor=Color(0,0,0,1);
 	
-	/* Update the background and foreground color selectors: */
-	vruiState->backgroundColorSelector->setCurrentColor(vruiState->backgroundColor);
-	vruiState->foregroundColorSelector->setCurrentColor(vruiState->foregroundColor);
+	/* Update the background and foreground color selectors if they already exist: */
+	if(vruiState->settingsDialog!=0)
+		{
+		vruiState->backgroundColorSelector->setCurrentColor(vruiState->backgroundColor);
+		vruiState->foregroundColorSelector->setCurrentColor(vruiState->foregroundColor);
+		}
 	
 	/* Update the colors of the pixel font: */
 	vruiState->pixelFont->setBackgroundColor(vruiState->backgroundColor);
@@ -3359,8 +3364,9 @@ void setForegroundColor(const Color& newForegroundColor)
 	/* Set the foreground color: */
 	vruiState->foregroundColor=newForegroundColor;
 	
-	/* Update the foreground color selector: */
-	vruiState->foregroundColorSelector->setCurrentColor(vruiState->foregroundColor);
+	/* Update the foreground color selector if it already exists: */
+	if(vruiState->settingsDialog!=0)
+		vruiState->foregroundColorSelector->setCurrentColor(vruiState->foregroundColor);
 	
 	/* Update the colors of the pixel font: */
 	vruiState->pixelFont->setForegroundColor(vruiState->foregroundColor);
