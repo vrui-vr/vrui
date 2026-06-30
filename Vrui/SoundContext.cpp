@@ -1,7 +1,7 @@
 /***********************************************************************
 SoundContext - Class for OpenAL contexts that are used to map a listener
 to an OpenAL sound device.
-Copyright (c) 2008-2024 Oliver Kreylos
+Copyright (c) 2008-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -29,6 +29,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StdError.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <Sound/Config.h>
+#if SOUND_CONFIG_HAVE_PULSEAUDIO
+#include <Sound/Linux/PulseAudio.h>
+#endif
 #include <AL/Config.h>
 #include <AL/ALTemplates.h>
 #include <AL/ALGeometryWrappers.h>
@@ -170,7 +174,9 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 	 speedOfSound(float(getMeterFactor())*343.0f),
 	 dopplerFactor(1.0f),
 	 distanceAttenuationModel(CONSTANT),referenceDistance(float(getDisplaySize()*Scalar(2))),rolloffFactor(1.0f),
-	 recordingDeviceName(configFileSection.retrieveString("./recordingDeviceName","Default"))
+	 recordingDeviceName(configFileSection.retrieveString("./recordingDeviceName","Default")),
+	 recordingLatencyMs(10),
+	 pulseAudioContext(0),pulseAudioSource(0)
 	{
 	/* Set sound context parameters from configuration file: */
 	configFileSection.updateValue("./speedOfSound",speedOfSound);
@@ -181,45 +187,30 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 	
 	#if ALSUPPORT_CONFIG_HAVE_OPENAL
 	
-	if(vruiVerbose&&alcIsExtensionPresent(0,"ALC_ENUMERATE_ALL_EXT"))
-		{
-		/* Enumerate all OpenAL devices: */
-		const ALchar* devices=alcGetString(0,ALC_ALL_DEVICES_SPECIFIER);
-		std::cout<<"\tOpenAL device names:"<<std::endl;
-		const ALCchar* dPtr=devices;
-		while(*dPtr!='\0')
-			{
-			const ALCchar* dEnd;
-			for(dEnd=dPtr;*dEnd!='\0';++dEnd)
-				;
-			std::cout<<"\t\t"<<dPtr<<std::endl;
-			dPtr=dEnd+1;
-			}
-		}
-	
 	/* Open the OpenAL device: */
 	std::string alDeviceName=configFileSection.retrieveString("./deviceName","Default");
 	alDevice=alcOpenDevice(alDeviceName!="Default"?alDeviceName.c_str():0);
 	if(alDevice==0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot open OpenAL sound device \"%s\"",alDeviceName.c_str());
-	
-	/* Check if the OpenAL device supports head-related transfer functions: */
-	bool supportsHrtf=alcIsExtensionPresent(alDevice,"ALC_SOFT_HRTF");
-	PFNALCGETSTRINGISOFTPROC alcGetStringiSOFTProc=0;
-	if(supportsHrtf&&vruiVerbose)
 		{
-		/* Retrieve extension function pointers: */
-		alcGetStringiSOFTProc=(PFNALCGETSTRINGISOFTPROC)(alcGetProcAddress(alDevice,"alcGetStringiSOFT"));
-		
-		/* Print a list of supported HRTF models: */
-		ALCint numHrtfs=0;
-		alcGetIntegerv(alDevice,ALC_NUM_HRTF_SPECIFIERS_SOFT,1,&numHrtfs);
-		std::cout<<"\tSupported head-related transfer functions:"<<std::endl;
-		for(ALCint i=0;i<numHrtfs;++i)
+		/* Throw the user a frickin' bone here: */
+		if(alcIsExtensionPresent(0,"ALC_ENUMERATE_ALL_EXT"))
 			{
-			const ALCchar* hrtfName=alcGetStringiSOFTProc(alDevice,ALC_HRTF_SPECIFIER_SOFT,i);
-			std::cout<<"\t\t"<<hrtfName<<std::endl;
+			/* Print all available OpenAL devices: */
+			const ALchar* devices=alcGetString(0,ALC_ALL_DEVICES_SPECIFIER);
+			std::cerr<<"Available OpenAL sound devices:"<<std::endl;
+			const ALCchar* dPtr=devices;
+			while(*dPtr!='\0')
+				{
+				const ALCchar* dEnd;
+				for(dEnd=dPtr;*dEnd!='\0';++dEnd)
+					;
+				std::cout<<"\t"<<dPtr<<std::endl;
+				dPtr=dEnd+1;
+				}
 			}
+		
+		/* Throw an exception: */
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot open OpenAL sound device \"%s\"",alDeviceName.c_str());
 		}
 	
 	/* Create a list of context attributes: */
@@ -245,6 +236,13 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 		*(attPtr++)=ALC_STEREO_SOURCES;
 		*(attPtr++)=configFileSection.retrieveValue<ALCint>("./numStereoSources");
 		}
+	
+	/* Check if the OpenAL device supports head-related transfer functions: */
+	bool supportsHrtf=alcIsExtensionPresent(alDevice,"ALC_SOFT_HRTF");
+	PFNALCGETSTRINGISOFTPROC alcGetStringiSOFTProc=0;
+	if(supportsHrtf)
+		alcGetStringiSOFTProc=(PFNALCGETSTRINGISOFTPROC)(alcGetProcAddress(alDevice,"alcGetStringiSOFT"));
+	
 	if(supportsHrtf)
 		{
 		if(configFileSection.hasTag("./useHrtf"))
@@ -274,6 +272,12 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 				}
 			else
 				{
+				/* Throw the user a frickin' bone here: */
+				std::cerr<<"Available OpenAL head-related transfer function models:"<<std::endl;
+				for(hrtfIndex=0;hrtfIndex<numHrtfs;++hrtfIndex)
+					std::cerr<<"\t"<<alcGetStringiSOFTProc(alDevice,ALC_HRTF_SPECIFIER_SOFT,hrtfIndex)<<std::endl;
+				
+				/* Close the OpenAL device and throw an exception: */
 				alcCloseDevice(alDevice);
 				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Requested HRTF model %s not found",hrtfModel.c_str());
 				}
@@ -292,6 +296,8 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 	if(vruiVerbose)
 		{
 		/* Print basic info about the OpenAL context: */
+		if(alcIsExtensionPresent(0,"ALC_ENUMERATE_ALL_EXT"))
+			std::cout<<"\tOpenAL sound device: "<<alcGetString(alDevice,ALC_ALL_DEVICES_SPECIFIER)<<std::endl;
 		ALCint frequency,refresh;
 		alcGetIntegerv(alDevice,ALC_FREQUENCY,1,&frequency);
 		std::cout<<"\tOpenAL mixer frequency: "<<frequency<<" Hz"<<std::endl;
@@ -303,7 +309,7 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 			/* Check if head-related transfer functions are enabled: */
 			ALCint hrtfEnabled;
 			alcGetIntegerv(alDevice,ALC_HRTF_SOFT,1,&hrtfEnabled);
-			std::cout<<"\tHead-related transfer functions "<<(hrtfEnabled==ALC_TRUE?"enabled":"disabled")<<std::endl;
+			std::cout<<"\tHead-related transfer function support is "<<(hrtfEnabled==ALC_TRUE?"enabled":"disabled")<<std::endl;
 			ALCint hrtfStatus;
 			alcGetIntegerv(alDevice,ALC_HRTF_STATUS_SOFT,1,&hrtfStatus);
 			switch(hrtfStatus)
@@ -397,6 +403,36 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 		}
 	
 	#endif
+	
+	/* Initialize the sound recording format: */
+	int recordingBitsPerSample=configFileSection.retrieveValue<int>("./recordingBitsPerSample",16);
+	recordingFormat.setStandardSampleFormat(recordingBitsPerSample,recordingBitsPerSample>=16);
+	recordingFormat.samplesPerFrame=configFileSection.retrieveValue<int>("./recordingChannels",1);
+	recordingFormat.framesPerSecond=configFileSection.retrieveValue<int>("./recordingFrequency",48000);
+	configFileSection.updateValue("./recordingLatency",recordingLatencyMs);
+	
+	#if SOUND_CONFIG_HAVE_PULSEAUDIO
+	
+	/* Create a PulseAudio context: */
+	pulseAudioContext=new Sound::PulseAudio::Context(getApplicationName());
+	
+	/* Create a PulseAudio source: */
+	pulseAudioSource=new Sound::PulseAudio::Source(*pulseAudioContext,recordingDeviceName.c_str(),recordingFormat,recordingLatencyMs);
+	
+	if(vruiVerbose)
+		{
+		/* List all available PulseAudio recording devices: */
+		std::vector<Sound::PulseAudio::Context::SourceInfo> sources=pulseAudioContext->getSources();
+		
+		std::cout<<"\tPulseAudio recording device names:"<<std::endl;
+		for(std::vector<Sound::PulseAudio::Context::SourceInfo>::iterator sIt=sources.begin();sIt!=sources.end();++sIt)
+			{
+			std::cout<<"\t\t"<<sIt->name<<std::endl;
+			std::cout<<"\t\t\t"<<sIt->description<<std::endl;
+			}
+		}
+	
+	#endif
 	}
 
 SoundContext::~SoundContext(void)
@@ -411,10 +447,13 @@ SoundContext::~SoundContext(void)
 		alcMakeContextCurrent(0);
 	alcDestroyContext(alContext);
 	if(!alcCloseDevice(alDevice))
-		{
-		fprintf(stderr,"SoundContext::~SoundContext: Failure in alcCloseDevice!\n");
-		fflush(stderr);
-		}
+		std::cerr<<"Vrui::SoundContext::~SoundContext: Failure in alcCloseDevice"<<std::endl;
+	
+	#endif
+	
+	#if SOUND_CONFIG_HAVE_PULSEAUDIO
+	
+	delete pulseAudioContext;
 	
 	#endif
 	}

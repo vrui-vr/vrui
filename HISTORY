@@ -8756,3 +8756,12 @@ Vrui-15.0-001:
   installed libraries.
 - Added Vrui::getApplicationName function to internal Vrui kernel
   interface.
+- Added recordingBitsPerSample, recordingChannels, recordingFrequency,
+  and recordingLatency settings to Vrui::SoundContext to configure a
+  central audio recording server.
+  - Updated Vrui configuration file reference documentation.
+- Improved debugging code in Sound::PulseAudio classes.
+- Sound::PulseAudio::Source starts in corked mode; corked/uncorked on
+  demand by start/stop methods.
+- No longer list OpenAL device/HRTF options in Vrui::SoundContext in
+  Vrui verbose mode; instead, list in any mode when configuration fails.

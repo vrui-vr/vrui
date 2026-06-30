@@ -1,7 +1,7 @@
 /***********************************************************************
 SoundContext - Class for OpenAL contexts that are used to map a listener
 to an OpenAL sound device.
-Copyright (c) 2008-2023 Oliver Kreylos
+Copyright (c) 2008-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -25,6 +25,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #define VRUI_SOUNDCONTEXT_INCLUDED
 
 #include <string>
+#include <Sound/SoundDataFormat.h>
 #include <AL/Config.h>
 #if ALSUPPORT_CONFIG_HAVE_OPENAL
 #ifdef __APPLE__
@@ -37,6 +38,12 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 /* Forward declarations: */
 namespace Misc {
 class ConfigurationFileSection;
+}
+namespace Sound {
+namespace PulseAudio {
+class Context;
+class Source;
+}
 }
 class ALContextData;
 namespace SceneGraph {
@@ -74,6 +81,10 @@ class SoundContext
 	float referenceDistance; // Reference distance for distance attenuation in physical coordinate units
 	float rolloffFactor; // Roll-off factor for distance attenuation
 	std::string recordingDeviceName; // Name of a recording device to be used with this sound context
+	Sound::SoundDataFormat recordingFormat; // Format of sound data returned when registering a recording sink
+	int recordingLatencyMs; // Target recording latency in milliseconds
+	Sound::PulseAudio::Context* pulseAudioContext; // A PulseAudio context to record sound
+	Sound::PulseAudio::Source* pulseAudioSource; // A PulseAudio source to record sound
 	
 	/* Constructors and destructors: */
 	public:
