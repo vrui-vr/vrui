@@ -2519,6 +2519,11 @@ void shutdown(void)
 		}
 	}
 
+const char* getApplicationName(void)
+	{
+	return vruiApplicationName;
+	}
+
 const char* getRootSectionName(void)
 	{
 	return vruiConfigRootSectionName;
