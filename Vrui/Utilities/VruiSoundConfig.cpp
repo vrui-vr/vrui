@@ -369,7 +369,7 @@ void VruiSoundConfig::recordingDataCallback(Sound::PulseAudio::Source& source,si
 	VruiSoundConfig* thisPtr=static_cast<VruiSoundConfig*>(userData);
 	
 	// DEBUGGING
-	std::cout<<'.'<<std::flush;
+	// std::cout<<'.'<<std::flush;
 	
 	#if 0
 	
