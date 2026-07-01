@@ -1,7 +1,7 @@
 /***********************************************************************
 PulseAudio - Simple PulseAudio wrapper to enumerate sources/sinks and
 play/record audio.
-Copyright (c) 2022-2024 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the Basic Sound Library (Sound).
 
@@ -464,6 +464,10 @@ void Source::readCallback(pa_stream* stream,size_t nbytes,void* userData)
 		/* Check for a hole: */
 		if(readBuffer!=0)
 			{
+			#if DEBUG_STREAM
+			std::cout<<'.'<<std::flush;
+			#endif
+			
 			/* Forward to the recording callback: */
 			Threads::Mutex::Lock recordingCallbackLock(thisPtr->recordingCallbackMutex);
 			if(thisPtr->recordingCallback!=0)
@@ -519,7 +523,7 @@ Source::Source(Context& context,const char* sourceName,const Sound::SoundDataFor
 	pa_stream_set_state_callback(stream,&Source::streamStateCallback,this);
 	pa_stream_set_read_callback(stream,&Source::readCallback,this);
 	
-	/* Define capture buffer attributes to approximate 10ms latency: */
+	/* Define capture buffer attributes to approximate the requested latency in milliseconds: */
 	pa_buffer_attr bufferAttrs;
 	size_t periodBytes=(latencyMs*format.framesPerSecond*format.samplesPerFrame*format.bytesPerSample)/1000;
 	bufferAttrs.fragsize=periodBytes;
@@ -530,16 +534,16 @@ Source::Source(Context& context,const char* sourceName,const Sound::SoundDataFor
 	
 	/* Connect the capture stream to the requested PulseAudio source: */
 	#if DEBUG_STREAM
-	std::cout<<"PulseAudio::Source::Source: Connecting capture stream to source"<<std::endl;
+	std::cout<<"PulseAudio::Source::Source: Connecting capture stream to source "<<sourceName<<std::endl;
 	#endif
 	pa_stream_flags_t flags=PA_STREAM_ADJUST_LATENCY;
-	#if 0
+	#if 1
 	flags=pa_stream_flags_t(flags|PA_STREAM_START_CORKED);
 	#endif
 	if(pa_stream_connect_record(stream,sourceName,&bufferAttrs,flags)<0)
 		{
 		state=Created;
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot connect stream to audio source");
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot connect stream to audio source %s",sourceName);
 		}
 	
 	/* Wait until the stream is connected: */
@@ -549,6 +553,13 @@ Source::Source(Context& context,const char* sourceName,const Sound::SoundDataFor
 		state=Created;
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Failed to create stream");
 		}
+	
+	#if DEBUG_STREAM
+	if(pa_stream_get_device_name(stream)!=0)
+		std::cout<<"PulseAudio::Source::Source: Capture stream is connected to source "<<pa_stream_get_device_name(stream)<<std::endl;
+	else
+		std::cout<<"PulseAudio::Source::Source: Capture stream is unconnected"<<std::endl;
+	#endif
 	}
 
 Source::~Source(void)
@@ -569,10 +580,16 @@ void Source::start(Source::RecordingCallback newRecordingCallback,void* newRecor
 	Threads::Mutex::Lock recordingCallbackLock(recordingCallbackMutex);
 	recordingCallback=newRecordingCallback;
 	recordingCallbackUserData=newRecordingCallbackUserData;
+	
+	/* Uncork the stream: */
+	pa_stream_cork(stream,0,0,0);
 	}
 
 void Source::stop(void)
 	{
+	/* Cork the stream: */
+	pa_stream_cork(stream,1,0,0);
+	
 	/* Uninstall the recording callback: */
 	Threads::Mutex::Lock recordingCallbackLock(recordingCallbackMutex);
 	recordingCallback=0;

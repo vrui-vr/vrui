@@ -293,6 +293,7 @@ Listener* findListener(const char* name); // Returns pointer to listener of give
 void requestSound(void); // Called during Vrui initialization to request sound processing during the main loop
 int getNumSoundContexts(void); // Returns the number of active sound contexts
 SoundContext* getSoundContext(int index); // Returns pointer to sound context of given index
+SoundContext* getRecordingSoundContext(void); // Returns pointer to a sound context that can record sound; returns 0 if no recording-capable sound context exists
 
 /* Query information about the physical environment: */
 const EnvironmentDefinition& getEnvironmentDefinition(void); // Returns the definition of the Vrui environment in physical space

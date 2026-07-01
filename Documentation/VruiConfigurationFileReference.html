@@ -1967,7 +1967,7 @@ The floor plane is used by some navigation tools or applications to lock the vir
 
 <TR>
 <TD>deviceName</TD><TD><A HREF="VruiCFGTypes.html#string">string</A></TD>
-<TD>Name of the OpenAL sound device used by this sound context.</TD>
+<TD>Name of the OpenAL sound device used by this sound context. The names of all available OpenAL sound devices are listed when any sound-using Vrui application is run with the <TT>-vruiVerbose</TT> command line option.</TD>
 </TR>
 
 <TR>
@@ -2039,17 +2039,37 @@ The floor plane is used by some navigation tools or applications to lock the vir
 
 <TR>
 <TD>useHrtf</TD><TD><A HREF="VruiCFGTypes.html#boolean">boolean</A></TD>
-<TD>Explicitly turns on or off head-related transfer functions, if supported by the local OpenAL implementation.</TD>
+<TD>Explicitly turns on or off head-related transfer functions to render high-quality 3D spatial audio, if supported by the local OpenAL implementation.</TD>
 </TR>
 
 <TR>
 <TD>hrtfModel</TD><TD><A HREF="VruiCFGTypes.html#string">string</A></TD>
-<TD>Requests a specific head-related transfer function by name if supported by the local OpenAL implementation.</TD>
+<TD>Requests a specific head-related transfer function model by name if supported by the local OpenAL implementation. The names of all available OpenAL head-related transfer function models are listed when any sound-using Vrui application is run with the <TT>-vruiVerbose</TT> command line option.</TD>
 </TR>
 
 <TR>
 <TD>recordingDeviceName</TD><TD><A HREF="VruiCFGTypes.html#string">string</A></TD>
 <TD>Name of a sound recording device associated with this sound context.</TD>
+</TR>
+
+<TR>
+<TD>recordingBitsPerSample</TD><TD><A HREF="VruiCFGTypes.html#integer">integer</A></TD>
+<TD>Number of bits per sample when recording from the recording device.</TD>
+</TR>
+
+<TR>
+<TD>recordingChannels</TD><TD><A HREF="VruiCFGTypes.html#integer">integer</A></TD>
+<TD>Number of channels when recording from the recording device.</TD>
+</TR>
+
+<TR>
+<TD>recordingFrequency</TD><TD><A HREF="VruiCFGTypes.html#integer">integer</A></TD>
+<TD>Sampling frequency in Hz when recording from the recording device.</TD>
+</TR>
+
+<TR>
+<TD>recordingLatency</TD><TD><A HREF="VruiCFGTypes.html#integer">integer</A></TD>
+<TD>Target latency in milliseconds when recording from the recording device.</TD>
 </TR>
 </TABLE>
 
