@@ -22,8 +22,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Sound/Linux/PulseAudio.h>
 
-#define DEBUG_CONTEXT 1
-#define DEBUG_STREAM 1
+#define DEBUG_CONTEXT 0
+#define DEBUG_STREAM 0
 
 #include <iostream>
 #include <Misc/StdError.h>
