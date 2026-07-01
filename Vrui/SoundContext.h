@@ -25,6 +25,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #define VRUI_SOUNDCONTEXT_INCLUDED
 
 #include <string>
+#include <vector>
+#include <Misc/Autopointer.h>
+#include <Threads/Mutex.h>
+#include <Threads/FunctionCalls.h>
 #include <Sound/SoundDataFormat.h>
 #include <AL/Config.h>
 #if ALSUPPORT_CONFIG_HAVE_OPENAL
@@ -38,6 +42,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 /* Forward declarations: */
 namespace Misc {
 class ConfigurationFileSection;
+}
+namespace Threads {
+template <class ParameterParam>
+class FunctionCall;
 }
 namespace Sound {
 namespace PulseAudio {
@@ -65,6 +73,25 @@ class SoundContext
 		CONSTANT,INVERSE,INVERSE_CLAMPED,LINEAR,LINEAR_CLAMPED,EXPONENTIAL,EXPONENTIAL_CLAMPED
 		};
 	
+	struct RecordingCallbackData // Structure passed to a recording callback when new sound data has been recorded
+		{
+		/* Elements: */
+		public:
+		const SoundContext& soundContext; // Reference to the sound context that recorded the sound samples
+		const void* frames; // Opaque pointer to an array of sound samples in the format defined by recordingFormat
+		size_t numFrames; // Number of frames in the sound sample array
+		
+		/* Constructors and destructors: */
+		RecordingCallbackData(const SoundContext& sSoundContext,const void* sFrames,size_t sNumFrames)
+			:soundContext(sSoundContext),frames(sFrames),numFrames(sNumFrames)
+			{
+			}
+		};
+	
+	typedef Threads::FunctionCall<const RecordingCallbackData&> RecordingCallback; // Type for functions called when new sound data has been recorded
+	typedef Misc::Autopointer<RecordingCallback> RecordingCallbackPtr; // Type for smart pointers to recording callbacks
+	typedef std::vector<RecordingCallbackPtr> RecordingCallbackList; // Type for lists of recording callback pointers
+	
 	/* Elements: */
 	private:
 	VruiState* vruiState; // Pointer to the Vrui state object this sound context belongs to
@@ -82,9 +109,14 @@ class SoundContext
 	float rolloffFactor; // Roll-off factor for distance attenuation
 	std::string recordingDeviceName; // Name of a recording device to be used with this sound context
 	Sound::SoundDataFormat recordingFormat; // Format of sound data returned when registering a recording sink
-	int recordingLatencyMs; // Target recording latency in milliseconds
+	int recordingLatency; // Target recording latency in milliseconds
 	Sound::PulseAudio::Context* pulseAudioContext; // A PulseAudio context to record sound
+	Threads::Mutex recordingMutex; // Mutex protecting the PulseAudio source and the list of active sound recording callbacks
 	Sound::PulseAudio::Source* pulseAudioSource; // A PulseAudio source to record sound
+	RecordingCallbackList recordingCallbacks; // List of active sound recording callbacks
+	
+	/* Private methods: */
+	static void pulseAudioRecordingCallback(Sound::PulseAudio::Source& source,size_t numFrames,const void* frames,void* userData); // Callback called when the PulseAudio source received new sound data
 	
 	/* Constructors and destructors: */
 	public:
@@ -108,6 +140,17 @@ class SoundContext
 		{
 		return recordingDeviceName;
 		}
+	bool canRecord(void) const; // Returns true if the sound context can record sound
+	const Sound::SoundDataFormat& getRecordingFormat(void) const // Returns the sound data format streamed to recording sinks
+		{
+		return recordingFormat;
+		}
+	int getRecordingLatency(void) const // Returns the target recording latency in milliseconds
+		{
+		return recordingLatency;
+		}
+	void addRecordingCallback(RecordingCallback& newRecordingCallback); // Adds a recording callback
+	void removeRecordingCallback(RecordingCallback& recordingCallback); // Removes the given recording callback
 	ALContextData& getContextData(void) // Returns the sound context's context data
 		{
 		return *contextData;

@@ -8765,3 +8765,20 @@ Vrui-15.0-001:
   demand by start/stop methods.
 - No longer list OpenAL device/HRTF options in Vrui::SoundContext in
   Vrui verbose mode; instead, list in any mode when configuration fails.
+- Added central sound recording facility via Vrui::SoundContext class:
+  - Added recordingBitsPerSample, recordingChannels, recordingFrequency,
+    and recordingLatency configuration file settings to
+    Vrui::SoundContext.
+  - If a sound context has a non-empty recordingDeviceName, it will
+    create a (paused) recording source on construction.
+  - Added canRecord() method to check if a sound context can record
+    sound.
+  - Added getRecordingFormat and getRecordingLatency methods to query
+    sound recording settings.
+  - Added addRecordingCallback and removeRecordingCallback methods;
+    can be called from any thread, and callbacks will be called from
+    some sound recording background thread. The recording sound source
+    will be unpaused/paused as needed.
+  - Added getRecordingSoundContext function to Vrui kernel interface;
+    returns a pointer to a recording-capable sound context, or a null
+    pointer if none exist.

@@ -1,6 +1,6 @@
 /***********************************************************************
 Environment-dependent part of Vrui virtual reality development toolkit.
-Copyright (c) 2000-2025 Oliver Kreylos
+Copyright (c) 2000-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -202,6 +202,7 @@ Threads::Barrier vruiRenderingBarrier;
 volatile bool vruiStopRenderingThreads=false;
 int vruiNumSoundContexts=0;
 SoundContext** vruiSoundContexts=0;
+SoundContext* vruiRecordingSoundContext=0;
 Cluster::Multiplexer* vruiMultiplexer=0;
 Cluster::MulticastPipe* vruiPipe=0;
 int vruiNumSlaves=0;
@@ -1810,6 +1811,10 @@ void startSound(void)
 		/* Initialize all ALObjects for this sound context's context data: */
 		vruiSoundContexts[0]->makeCurrent();
 		vruiSoundContexts[0]->getContextData().updateThings();
+		
+		/* Set the recording sound context if the created sound context can record: */
+		if(vruiSoundContexts[0]->canRecord())
+			vruiRecordingSoundContext=vruiSoundContexts[0];
 		}
 	catch(const std::runtime_error& err)
 		{
@@ -2557,6 +2562,11 @@ int getNumSoundContexts(void)
 SoundContext* getSoundContext(int index)
 	{
 	return vruiSoundContexts[index];
+	}
+
+SoundContext* getRecordingSoundContext(void)
+	{
+	return vruiRecordingSoundContext;
 	}
 
 void addSynchronousIOCallback(int fd,SynchronousIOCallback newIOCallback,void* newIOCallbackData)

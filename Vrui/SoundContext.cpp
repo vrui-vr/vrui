@@ -24,6 +24,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/SoundContext.h>
 
 #include <stdio.h>
+#include <utility>
 #include <string>
 #include <iostream>
 #include <Misc/StdError.h>
@@ -164,6 +165,20 @@ namespace Vrui {
 Methods of class SoundContext:
 *****************************/
 
+void SoundContext::pulseAudioRecordingCallback(Sound::PulseAudio::Source& source,size_t numFrames,const void* frames,void* userData)
+	{
+	/* Access the SoundContext object: */
+	SoundContext* thisPtr=static_cast<SoundContext*>(userData);
+	
+	/* Lock the recording subsystem: */
+	Threads::Mutex::Lock recordingLock(thisPtr->recordingMutex);
+	
+	/* Forward the new sound data to all active recording callbacks: */
+	RecordingCallbackData cbData(*thisPtr,frames,numFrames);
+	for(RecordingCallbackList::iterator rcIt=thisPtr->recordingCallbacks.begin();rcIt!=thisPtr->recordingCallbacks.end();++rcIt)
+		(**rcIt)(cbData);
+	}
+
 SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSection,VruiState* sVruiState)
 	:vruiState(sVruiState),
 	 #if ALSUPPORT_CONFIG_HAVE_OPENAL
@@ -175,7 +190,7 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 	 dopplerFactor(1.0f),
 	 distanceAttenuationModel(CONSTANT),referenceDistance(float(getDisplaySize()*Scalar(2))),rolloffFactor(1.0f),
 	 recordingDeviceName(configFileSection.retrieveString("./recordingDeviceName","Default")),
-	 recordingLatencyMs(10),
+	 recordingLatency(10),
 	 pulseAudioContext(0),pulseAudioSource(0)
 	{
 	/* Set sound context parameters from configuration file: */
@@ -409,27 +424,28 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 	recordingFormat.setStandardSampleFormat(recordingBitsPerSample,recordingBitsPerSample>=16);
 	recordingFormat.samplesPerFrame=configFileSection.retrieveValue<int>("./recordingChannels",1);
 	recordingFormat.framesPerSecond=configFileSection.retrieveValue<int>("./recordingFrequency",48000);
-	configFileSection.updateValue("./recordingLatency",recordingLatencyMs);
+	configFileSection.updateValue("./recordingLatency",recordingLatency);
 	
 	#if SOUND_CONFIG_HAVE_PULSEAUDIO
 	
-	/* Create a PulseAudio context: */
-	pulseAudioContext=new Sound::PulseAudio::Context(getApplicationName());
-	
-	/* Create a PulseAudio source: */
-	pulseAudioSource=new Sound::PulseAudio::Source(*pulseAudioContext,recordingDeviceName.c_str(),recordingFormat,recordingLatencyMs);
-	
-	if(vruiVerbose)
+	/* Don't enable recording if no recording device name is given: */
+	if(!recordingDeviceName.empty())
 		{
-		/* List all available PulseAudio recording devices: */
-		std::vector<Sound::PulseAudio::Context::SourceInfo> sources=pulseAudioContext->getSources();
+		/* Create a PulseAudio context: */
+		pulseAudioContext=new Sound::PulseAudio::Context(getApplicationName());
 		
-		std::cout<<"\tPulseAudio recording device names:"<<std::endl;
-		for(std::vector<Sound::PulseAudio::Context::SourceInfo>::iterator sIt=sources.begin();sIt!=sources.end();++sIt)
+		if(vruiVerbose)
 			{
-			std::cout<<"\t\t"<<sIt->name<<std::endl;
-			std::cout<<"\t\t\t"<<sIt->description<<std::endl;
+			/* List all available PulseAudio recording devices: */
+			std::vector<Sound::PulseAudio::Context::SourceInfo> sources=pulseAudioContext->getSources();
+			
+			std::cout<<"\tPulseAudio recording device names:"<<std::endl;
+			for(std::vector<Sound::PulseAudio::Context::SourceInfo>::iterator sIt=sources.begin();sIt!=sources.end();++sIt)
+				std::cout<<"\t\t\t"<<sIt->description<<std::endl;
 			}
+		
+		/* Create a PulseAudio source: */
+		pulseAudioSource=new Sound::PulseAudio::Source(*pulseAudioContext,recordingDeviceName.c_str(),recordingFormat,recordingLatency);
 		}
 	
 	#endif
@@ -453,7 +469,62 @@ SoundContext::~SoundContext(void)
 	
 	#if SOUND_CONFIG_HAVE_PULSEAUDIO
 	
+	/* Destroy the recording source and context: */
+	delete pulseAudioSource;
 	delete pulseAudioContext;
+	
+	#endif
+	}
+
+bool SoundContext::canRecord(void) const
+	{
+	#if SOUND_CONFIG_HAVE_PULSEAUDIO
+	return pulseAudioSource!=0;
+	#else
+	return false;
+	#endif
+	}
+
+void SoundContext::addRecordingCallback(SoundContext::RecordingCallback& newRecordingCallback)
+	{
+	/* Lock the recording subsystem: */
+	Threads::Mutex::Lock recordingLock(recordingMutex);
+	
+	/* Add the given recording callback to the list, and remember if the list was empty before: */
+	bool wasEmpty=recordingCallbacks.empty();
+	recordingCallbacks.push_back(&newRecordingCallback);
+	
+	#if SOUND_CONFIG_HAVE_PULSEAUDIO
+	
+	/* Start recording from the audio source if this is the first active callback: */
+	if(wasEmpty&&pulseAudioSource!=0)
+		pulseAudioSource->start(&SoundContext::pulseAudioRecordingCallback,this);
+	
+	#endif
+	}
+
+void SoundContext::removeRecordingCallback(SoundContext::RecordingCallback& recordingCallback)
+	{
+	/* Lock the recording subsystem: */
+	Threads::Mutex::Lock recordingLock(recordingMutex);
+	
+	/* Remove the given recording callback from the list, and remember if the list is empty afterwards: */
+	for(RecordingCallbackList::iterator rcIt=recordingCallbacks.end();rcIt!=recordingCallbacks.end();++rcIt)
+		if(*rcIt==&recordingCallback)
+			{
+			/* Move the found callback to the end of the list, then pop it off and stop looking: */
+			std::swap(*rcIt,recordingCallbacks.back());
+			recordingCallbacks.pop_back();
+			
+			break;
+			}
+	bool isEmpty=recordingCallbacks.empty();
+	
+	#if SOUND_CONFIG_HAVE_PULSEAUDIO
+	
+	/* Stop recording from the audio source if this was the last active callback: */
+	if(isEmpty&&pulseAudioSource!=0)
+		pulseAudioSource->stop();
 	
 	#endif
 	}
