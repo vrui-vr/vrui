@@ -8785,3 +8785,6 @@ Vrui-15.0-001:
   - Added getRecordingSoundContext function to Vrui kernel interface;
     returns a pointer to a recording-capable sound context, or a null
     pointer if none exist.
+- Added dispatchCommand method to Misc::CommandDispatcher to dispatch
+  a single command from a string.
+  - Also fixed dispatchCommands method for very long commands.

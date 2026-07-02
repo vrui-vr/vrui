@@ -1,6 +1,6 @@
 /***********************************************************************
 CommandDispatcher - Class to dispatch text commands read from a file.
-Copyright (c) 2020-2021 Oliver Kreylos
+Copyright (c) 2020-2026 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -36,6 +36,31 @@ namespace Misc {
 /**********************************
 Methods of class CommandDispatcher:
 **********************************/
+
+void CommandDispatcher::dispatchCommand(const char* commandBegin,const char* commandEnd,const char* argumentsBegin,const char* argumentsEnd)
+	{
+	/* Check if there really is a command: */
+	if(commandEnd!=commandBegin)
+		{
+		/* Find a handler for the command: */
+		std::string command(commandBegin,commandEnd);
+		CommandMap::Iterator cmIt=commandMap.findEntry(command);
+		if(!cmIt.isFinished())
+			{
+			try
+				{
+				/* Call the callback: */
+				cmIt->getDest().callback(argumentsBegin,argumentsEnd,cmIt->getDest().userData);
+				}
+			catch(const std::runtime_error& err)
+				{
+				Misc::formattedLogError("CommandDispatcher: Caught exception %s while handling command %s %s",err.what(),command.c_str(),std::string(argumentsBegin,argumentsEnd).c_str());
+				}
+			}
+		else
+			Misc::formattedLogError("CommandDispatcher: Unrecognized command %s",command.c_str());
+		}
+	}
 
 void CommandDispatcher::listCommandsCallback(const char* argumentBegin,const char* argumentEnd,void* userData)
 	{
@@ -82,10 +107,18 @@ void CommandDispatcher::listCommandsCallback(const char* argumentBegin,const cha
 	}
 
 CommandDispatcher::CommandDispatcher(void)
-	:commandMap(17)
+	:commandMap(17),
+	 bufferSize(1024),buffer(new char[bufferSize]),writePtr(buffer)
 	{
 	/* Define a command to list all defined commands: */
 	addCommandCallback("listCommands",listCommandsCallback,this,0,"Prints all defined commands and their descriptions");
+	addCommandCallback("help",listCommandsCallback,this,0,"Prints all defined commands and their descriptions");
+	}
+
+CommandDispatcher::~CommandDispatcher(void)
+	{
+	/* Destroy the command reading buffer: */
+	delete[] buffer;
 	}
 
 bool CommandDispatcher::addCommandCallback(const char* command,CommandCallback callback,void* userData,const char* arguments,const char* description)
@@ -118,80 +151,125 @@ void CommandDispatcher::removeCommandCallback(const char* command)
 	commandMap.removeEntry(command);
 	}
 
+void CommandDispatcher::dispatchCommand(const char* begin,const char* end)
+	{
+	/* Find the beginning of the command token: */
+	while(begin!=end&&isspace(*begin))
+		++begin;
+	const char* commandBegin=begin;
+	
+	/* Find the end of the command token: */
+	while(begin!=end&&!isspace(*begin))
+		++begin;
+	const char* commandEnd=begin;
+	
+	/* Find the beginning of an optional argument list: */
+	while(begin!=end&&isspace(*begin))
+		++begin;
+	const char* argumentsBegin=begin;
+	
+	/* Dispatch the command: */
+	dispatchCommand(commandBegin,commandEnd,argumentsBegin,end);
+	}
+
 bool CommandDispatcher::dispatchCommands(int commandFd)
 	{
-	bool result=false;
-	
-	/* Read one or more commands from the command pipe: */
-	char readBuffer[1024]; // This needs a rather large buffer
-	ssize_t readSize=read(commandFd,readBuffer,sizeof(readBuffer));
-	
-	if(readSize>0)
+	/* Read from the command file into the command buffer and check for errors: */
+	ssize_t readSize=read(commandFd,writePtr,(buffer+bufferSize)-writePtr);
+	if(readSize<=0)
 		{
-		/* Find the start of the first command: */
-		char* readEnd=readBuffer+readSize;
-		char* readPtr=readBuffer;
-		while(readPtr!=readEnd&&isspace(*readPtr))
+		/* Figure out the error condition: */
+		bool result=true;
+		if(readSize==0)
+			Misc::formattedLogWarning("CommandDispatcher: Command file %d was closed; not accepting further commands",commandFd);
+		else if(errno!=EAGAIN&&errno!=EWOULDBLOCK)
+			Misc::formattedLogError("CommandDispatcher: Read error %d (%s) from command file %d; not accepting further commands",commandFd,errno,strerror(errno));
+		else
+			{
+			/* Wasn't actually an error, just no data to read: */
+			result=false;
+			}
+		
+		return result;
+		}
+	
+	/* Process all full command lines in the command buffer: */
+	writePtr+=readSize;
+	char* readPtr=buffer;
+	while(readPtr!=writePtr)
+		{
+		/* Find the beginning of the command token: */
+		while(readPtr!=writePtr&&*readPtr!='\n'&&isspace(*readPtr))
+			++readPtr;
+		char* commandBegin=readPtr;
+		
+		/* Find the end of the command token: */
+		while(readPtr!=writePtr&&!isspace(*readPtr))
+			++readPtr;
+		char* commandEnd=readPtr;
+		
+		/* Find the beginning of an optional argument list: */
+		while(readPtr!=writePtr&&*readPtr!='\n'&&isspace(*readPtr))
+			++readPtr;
+		char* argumentsBegin=readPtr;
+		
+		/* Find the end of the current command line: */
+		while(readPtr!=writePtr&&*readPtr!='\n')
 			++readPtr;
 		
-		/* Parse all commands in the read buffer: */
-		while(readPtr!=readEnd)
+		/* Check if the current command line is not finished: */
+		if(readPtr==writePtr)
 			{
-			char* commandStart=readPtr;
+			/*****************************************************************
+			We need to stop processing here and read more data from the
+			command file to complete the current command line. We can't call
+			read() again because that might block. So we'll move what we have
+			of the current command line to the beginning of the buffer,
+			increase the buffer size if the buffer is full, and bail out.
+			*****************************************************************/
 			
-			/* Find the end of the command: */
-			while(readPtr!=readEnd&&!isspace(*readPtr))
-				++readPtr;
-			char* commandEnd=readPtr;
-			
-			/* Find the start of an optional command argument: */
-			while(readPtr!=readEnd&&isspace(*readPtr)&&*readPtr!='\n')
-				++readPtr;
-			char* argumentStart=readPtr;
-			
-			/* Find the end of the current line: */
-			while(readPtr!=readEnd&&*readPtr!='\n')
-				++readPtr;
-			
-			/* Check if there was a command: */
-			if(commandEnd!=commandStart)
+			/* Calculate the length of the unfinished line: */
+			size_t lineLength=readPtr-commandBegin;
+			if(lineLength<bufferSize)
 				{
-				/* Find a handler for the command: */
-				std::string command(commandStart,commandEnd);
-				CommandMap::Iterator cmIt=commandMap.findEntry(command);
-				if(!cmIt.isFinished())
-					{
-					try
-						{
-						/* Call the callback: */
-						cmIt->getDest().callback(argumentStart,readPtr,cmIt->getDest().userData);
-						}
-					catch(const std::runtime_error& err)
-						{
-						Misc::formattedLogError("CommandDispatcher: Caught exception %s while handling command %s %s",err.what(),command.c_str(),std::string(argumentStart,readPtr).c_str());
-						}
-					}
-				else
-					Misc::formattedLogError("CommandDispatcher: Unrecognized command %s",command.c_str());
+				/* Move the unfinished line to the beginning of the buffer: */
+				memmove(buffer,commandBegin,lineLength);
+				}
+			else
+				{
+				/* Allocate a new, larger buffer and copy the unfinished line into it: */
+				size_t newBufferSize=bufferSize*2;
+				char* newBuffer=new char[newBufferSize];
+				memcpy(newBuffer,commandBegin,lineLength);
+				
+				/* Replace the current buffer: */
+				delete[] buffer;
+				bufferSize=newBufferSize;
+				buffer=newBuffer;
 				}
 			
-			/* Find the start of the next command: */
-			while(readPtr!=readEnd&&isspace(*readPtr))
-				++readPtr;
+			/* Remember the end of the unfinished line in the command buffer and bail out: */
+			writePtr=buffer+lineLength;
+			
+			return false;
 			}
-		}
-	else if(readSize==0)
-		{
-		Misc::formattedLogWarning("CommandDispatcher: Command file %d was closed; not accepting further commands",commandFd);
-		result=true;
-		}
-	else if(errno!=EAGAIN&&errno!=EWOULDBLOCK)
-		{
-		Misc::formattedLogError("CommandDispatcher: Read error %d (%s) from command file %d; not accepting further commands",commandFd,errno,strerror(errno));
-		result=true;
+		
+		/* Strip a potential CR from the end of the command line, but don't strip any other whitespace: */
+		char* argumentsEnd=readPtr;
+		if(argumentsEnd!=argumentsBegin&&argumentsEnd[-1]=='\r')
+			--argumentsEnd;
+		
+		/* Dispatch the command: */
+		dispatchCommand(commandBegin,commandEnd,argumentsBegin,argumentsEnd);
+		
+		/* Go to the next command line by skipping the LF: */
+		++readPtr;
 		}
 	
-	return result;
+	/* Mark the command buffer as empty: */
+	writePtr=buffer;
+	
+	return false;
 	}
 
 }
