@@ -1,7 +1,7 @@
 ########################################################################
 # Packages.System - List of system packages that can be included/linked
 # into projects.
-# Copyright (c) 1999-2022 Oliver Kreylos
+# Copyright (c) 1999-2026 Oliver Kreylos
 # Mac OS X adaptation copyright (c) 2006 Braden Pellett
 #
 # This file is part of the WhyTools Build Environment.
@@ -181,6 +181,27 @@ OSX_AUDIOTOOLBOX_INCLUDE = -F/System/Library/Frameworks/AudioToolbox
 OSX_AUDIOTOOLBOX_LIBDIR  = 
 OSX_AUDIOTOOLBOX_LIBS    = -framework AudioToolbox
 
+# The ogg multimedia container library
+OGG_BASEDIR = $(shell $(VRUI_MAKEDIR)/FindLibrary.sh ogg/ogg.h libogg.$(DSOFILEEXT) $(INCLUDEEXT) $(LIBEXT) $(SYSTEM_PACKAGE_SEARCH_PATHS))
+OGG_DEPENDS = 
+OGG_INCLUDE = -I$(OGG_BASEDIR)/$(INCLUDEEXT)
+OGG_LIBDIR  = -L$(OGG_BASEDIR)/$(LIBEXT)
+OGG_LIBS    = -logg
+
+# The speex speech encoding/decoding library
+SPEEX_BASEDIR = $(shell $(VRUI_MAKEDIR)/FindLibrary.sh speex/speex.h libspeex.$(DSOFILEEXT) $(INCLUDEEXT) $(LIBEXT) $(SYSTEM_PACKAGE_SEARCH_PATHS))
+SPEEX_DEPENDS = 
+SPEEX_INCLUDE = -I$(SPEEX_BASEDIR)/$(INCLUDEEXT)
+SPEEX_LIBDIR  = -L$(SPEEX_BASEDIR)/$(LIBEXT)
+SPEEX_LIBS    = -lspeex
+
+# The OPUS general audio encoding/decoding library
+OPUS_BASEDIR = $(shell $(VRUI_MAKEDIR)/FindLibrary.sh opus/opus.h libopus.$(DSOFILEEXT) $(INCLUDEEXT) $(LIBEXT) $(SYSTEM_PACKAGE_SEARCH_PATHS))
+OPUS_DEPENDS = 
+OPUS_INCLUDE = -I$(OPUS_BASEDIR)/$(INCLUDEEXT)
+OPUS_LIBDIR  = -L$(OPUS_BASEDIR)/$(LIBEXT) 
+OPUS_LIBS    = -lopus
+
 # The Video4Linux2 video library
 V4L2_BASEDIR = $(shell $(VRUI_MAKEDIR)/FindLibrary.sh linux/videodev2.h None $(INCLUDEEXT) $(LIBEXT) $(SYSTEM_PACKAGE_SEARCH_PATHS))
 V4L2_DEPENDS = 
@@ -194,20 +215,6 @@ DC1394_DEPENDS =
 DC1394_INCLUDE = -I$(DC1394_BASEDIR)/$(INCLUDEEXT)
 DC1394_LIBDIR  = -L$(DC1394_BASEDIR)/$(LIBEXT)
 DC1394_LIBS    = -ldc1394
-
-# The speex speech encoding/decoding library
-SPEEX_BASEDIR = $(shell $(VRUI_MAKEDIR)/FindLibrary.sh speex/speex.h libspeex.$(DSOFILEEXT) $(INCLUDEEXT) $(LIBEXT) $(SYSTEM_PACKAGE_SEARCH_PATHS))
-SPEEX_DEPENDS = 
-SPEEX_INCLUDE = -I$(SPEEX_BASEDIR)/$(INCLUDEEXT)
-SPEEX_LIBDIR  = -L$(SPEEX_BASEDIR)/$(LIBEXT)
-SPEEX_LIBS    = -lspeex
-
-# The ogg multimedia container library
-OGG_BASEDIR = $(shell $(VRUI_MAKEDIR)/FindLibrary.sh ogg/ogg.h libogg.$(DSOFILEEXT) $(INCLUDEEXT) $(LIBEXT) $(SYSTEM_PACKAGE_SEARCH_PATHS))
-OGG_DEPENDS = 
-OGG_INCLUDE = -I$(OGG_BASEDIR)/$(INCLUDEEXT)
-OGG_LIBDIR  = -L$(OGG_BASEDIR)/$(LIBEXT)
-OGG_LIBS    = -logg
 
 # The Theora video codec library
 THEORA_BASEDIR = $(shell $(VRUI_MAKEDIR)/FindLibrary.sh theora/theoraenc.h libtheoraenc.$(DSOFILEEXT) $(INCLUDEEXT) $(LIBEXT) $(SYSTEM_PACKAGE_SEARCH_PATHS))
@@ -351,6 +358,24 @@ else
   SYSTEM_HAVE_PULSEAUDIO = 0
 endif
 
+ifneq ($(strip $(OGG_BASEDIR)),)
+  SYSTEM_HAVE_OGG = 1
+else
+  SYSTEM_HAVE_OGG = 0
+endif
+
+ifneq ($(strip $(SPEEX_BASEDIR)),)
+  SYSTEM_HAVE_SPEEX = 1
+else
+  SYSTEM_HAVE_SPEEX = 0
+endif
+
+ifneq ($(strip $(OPUS_BASEDIR)),)
+  SYSTEM_HAVE_OPUS = 1
+else
+  SYSTEM_HAVE_OPUS = 0
+endif
+
 ifeq ($(SYSTEM),DARWIN)
   SYSTEM_HAVE_OPENAL = 1
 else
@@ -377,12 +402,6 @@ ifneq ($(strip $(DC1394_BASEDIR)),)
   SYSTEM_HAVE_DC1394 = 1
 else
   SYSTEM_HAVE_DC1394 = 0
-endif
-
-ifneq ($(strip $(SPEEX_BASEDIR)),)
-  SYSTEM_HAVE_SPEEX = 1
-else
-  SYSTEM_HAVE_SPEEX = 0
 endif
 
 ifneq ($(strip $(THEORA_BASEDIR)),)

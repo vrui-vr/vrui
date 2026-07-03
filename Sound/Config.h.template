@@ -1,6 +1,6 @@
 /***********************************************************************
 Config - Configuration header file for the Basic Sound Library.
-Copyright (c) 2010-2022 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Sound Library (Sound).
 
@@ -24,6 +24,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #define SOUND_CONFIG_HAVE_ALSA 1
 #define SOUND_CONFIG_HAVE_PULSEAUDIO 1
+#define SOUND_CONFIG_HAVE_OGG=1
 #define SOUND_CONFIG_HAVE_SPEEX 1
+#define SOUND_CONFIG_HAVE_OPUS 1
 
 #endif

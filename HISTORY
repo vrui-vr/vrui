@@ -8788,3 +8788,8 @@ Vrui-15.0-001:
 - Added dispatchCommand method to Misc::CommandDispatcher to dispatch
   a single command from a string.
   - Also fixed dispatchCommands method for very long commands.
+- Created Sound/Ogg.h containing C++ wrappers for structures and
+  functions from the Ogg multimedia container library, deprecating the
+  Ogg* classes in the Video library.
+  - Made Sound library optionally dependent on Ogg library
+- Added support for the Opus audio codec library to Vrui's build system.
