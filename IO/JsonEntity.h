@@ -1,7 +1,7 @@
 /***********************************************************************
 JsonEntity - Base class for entities parsed from JSON (JavaScript Object
 Notation) files.
-Copyright (c) 2018-2019 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -50,10 +50,25 @@ typedef Misc::Autopointer<JsonEntity> JsonPointer; // Type for pointers to JSON 
 
 }
 
-/* Helper function to print JSON entities: */
+/***************************************
+Helper functions to print JSON entities:
+***************************************/
+
+inline std::ostream& operator<<(std::ostream& os,IO::JsonPointer entity)
+	{
+	/* Check for null entities: */
+	if(entity!=0)
+		entity->print(os);
+	else
+		os<<"null";
+	
+	return os;
+	}
+
 inline std::ostream& operator<<(std::ostream& os,const IO::JsonEntity& entity)
 	{
 	entity.print(os);
+	
 	return os;
 	}
 

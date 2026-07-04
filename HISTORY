@@ -8793,3 +8793,21 @@ Vrui-15.0-001:
   Ogg* classes in the Video library.
   - Made Sound library optionally dependent on Ogg library
 - Added support for the Opus audio codec library to Vrui's build system.
+- Several fixes and improvements in JSON parsing/printing code in IO
+  library:
+  - IO::JsonSource correctly parses JSON strings according to IETF RFC
+    8259, in string entities and object property names.
+  - IO::JsonString::print properly encodes JSON strings according to
+    IETF RFC 8259.
+    - Comments clarify that JsonString constructors expect "raw" strings
+      without JSON escape sequences, and that getString returns "raw"
+      strings.
+  - Added move constructor to JsonString to avoid string copies where
+    possible.
+  - Fixed handling of null entities in print methods of JsonArray and
+    JsonObject.
+  - Added ostream::operator<< function for IO::JsonPointer to
+    IO/JsonEntity.h with proper handling of null entities.
+  - Fixed handling of empty arrays and objects and several minor issues
+    in IO::JsonSource::parseEntity method.
+    - Improved error messages on JSON syntax errors.
