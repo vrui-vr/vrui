@@ -64,6 +64,8 @@ class TheoraMovieSaver:public MovieSaver
 	
 	/* Private methods: */
 	private:
+	void saveStream(void); // Writes filled pages from the Ogg stream to the movie file
+	void flushStream(void); // Flushes unwritten packets from the Ogg stream to the movie file
 	void* frameSavingThreadMethod(void); // Thread method to compress captured frames into the movie file
 	
 	/* Constructors and destructors: */

@@ -8816,3 +8816,5 @@ Vrui-15.0-001:
   - Minor improvements to Theora class interfaces in Video library.
 - Updated Vrui::TheoraMovieSaver to use Ogg classes from Sound library
   and new Theora wrapper class interfaces.
+- Improved Theora stream packing and error handling in
+  Vrui::TheoraMovieSaver.
