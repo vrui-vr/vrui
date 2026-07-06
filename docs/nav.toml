@@ -1,7 +1,10 @@
 # docs/Vrui/nav.toml
 nav = [
     { "Vrui" = [
-        # "index.md",
-        { "Getting started" = "installation/index.md" }
+        {"Vrui Overview" = "index.md"},
+        { "Getting started" = [
+            "installation/index.md", 
+        { "Installation guide" = "installation/guide.md" }
+        ]}
     ]}
 ]
