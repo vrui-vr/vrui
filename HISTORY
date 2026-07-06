@@ -8811,3 +8811,8 @@ Vrui-15.0-001:
   - Fixed handling of empty arrays and objects and several minor issues
     in IO::JsonSource::parseEntity method.
     - Improved error messages on JSON syntax errors.
+- Changed Theora video encoding/decoding classes in Video library to use
+  new Ogg wrapper classes in Sound library.
+  - Minor improvements to Theora class interfaces in Video library.
+- Updated Vrui::TheoraMovieSaver to use Ogg classes from Sound library
+  and new Theora wrapper class interfaces.

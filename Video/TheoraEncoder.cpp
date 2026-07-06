@@ -1,6 +1,6 @@
 /***********************************************************************
 TheoraEncoder - Wrapper class for th_enc_ctx structure handle.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Video/TheoraEncoder.h>
 
 #include <Misc/StdError.h>
-#include <Video/OggStream.h>
+#include <Sound/Ogg.h>
 #include <Video/TheoraInfo.h>
 #include <Video/TheoraComment.h>
 #include <Video/TheoraFrame.h>
@@ -84,7 +84,7 @@ bool TheoraEncoder::emitHeader(TheoraComment& comments,TheoraPacket& packet)
 	return th_encode_flushheader(encoder,&comments,&packet)>0;
 	}
 
-void TheoraEncoder::writeHeaders(TheoraComment& comments,OggStream& oggStream)
+void TheoraEncoder::writeHeaders(TheoraComment& comments,Sound::Ogg::Stream& oggStream)
 	{
 	/* Write header packets until done: */
 	TheoraPacket packet;
@@ -106,7 +106,7 @@ bool TheoraEncoder::emitPacket(TheoraPacket& packet)
 	return th_encode_packetout(encoder,0,&packet)>0;
 	}
 
-void TheoraEncoder::writePackets(OggStream& oggStream)
+void TheoraEncoder::writePackets(Sound::Ogg::Stream& oggStream)
 	{
 	/* Write data packets until done: */
 	TheoraPacket packet;

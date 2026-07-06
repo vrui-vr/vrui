@@ -1,6 +1,6 @@
 /***********************************************************************
 TheoraEncoder - Wrapper class for th_enc_ctx structure handle.
-Copyright (c) 2010 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -26,6 +26,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Video/TheoraPacket.h>
 
 /* Forward declarations: */
+namespace Sound {
+namespace Ogg {
+class Stream;
+}
+}
 namespace Video {
 class OggStream;
 class TheoraInfo;
@@ -64,7 +69,7 @@ class TheoraEncoder
 	int getMaxSpeedLevel(void); // Returns the encoder's maximum speed level for current encoder settings
 	void setSpeedLevel(int speedLevel); // Sets the encoder's speed level
 	bool emitHeader(TheoraComment& comments,TheoraPacket& packet); // Emits a header packet into the given packet buffer; returns false if no packet was written and headers are complete
-	void writeHeaders(TheoraComment& comments,OggStream& oggStream); // Writes all header packets to the given Ogg stream
+	void writeHeaders(TheoraComment& comments,Sound::Ogg::Stream& oggStream); // Writes all header packets to the given Ogg stream
 	template <class PipeParam>
 	void writeHeaders(TheoraComment& comments,PipeParam& pipe) // Writes all header packets to the given pipe
 		{
@@ -78,7 +83,7 @@ class TheoraEncoder
 		}
 	void encodeFrame(TheoraFrame& frame); // Encodes a video frame
 	bool emitPacket(TheoraPacket& packet); // Emits a data packet into the given packet buffer; returns false if no packet was written and data is complete
-	void writePackets(OggStream& oggStream); // Writes all data packets to the given Ogg stream
+	void writePackets(Sound::Ogg::Stream& oggStream); // Writes all data packets to the given Ogg stream
 	template <class PipeParam>
 	void writePackets(PipeParam& pipe) // Writes all data packets to the given pipe
 		{

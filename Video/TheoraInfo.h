@@ -1,6 +1,6 @@
 /***********************************************************************
 TheoraInfo - Wrapper class for th_info structure from Theora v1.1 API.
-Copyright (c) 2010-2022 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -44,7 +44,8 @@ class TheoraInfo:public th_info
 		return 1<<keyframe_granule_shift;
 		}
 	void setImageSize(const Size& imageSize); // Sets the size of the encoded/decoded frames; calculates appropriate padding
-	void setQuality(int newQuality); // Sets the encoder's encoding quality from 0 (low) to 63 (high)
+	void setBitrate(int newBitrate); // Sets the encoder's target bitrate for CBR encoding; selects VBR encoding if the given bitrate is 0
+	void setQuality(int newQuality); // Sets the encoder's encoding quality for VBR encoding from 0 (low) to 63 (high)
 	void setGopSize(int newGopSize); // Sets the group-of-pictures size / keyframe distance for encoding
 	};
 

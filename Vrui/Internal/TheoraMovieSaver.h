@@ -1,7 +1,7 @@
 /***********************************************************************
 TheoraMovieSaver - Helper class to save movies as Theora video streams
 packed into an Ogg container.
-Copyright (c) 2010-2015 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -28,7 +28,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Threads/MutexCond.h>
 #include <Threads/Thread.h>
 #include <IO/File.h>
-#include <Video/OggStream.h>
+#include <Sound/Ogg.h>
 #include <Video/TheoraFrame.h>
 #include <Video/TheoraEncoder.h>
 #include <Vrui/Internal/MovieSaver.h>
@@ -45,7 +45,7 @@ class TheoraMovieSaver:public MovieSaver
 	/* Elements: */
 	private:
 	IO::FilePtr movieFile; // The created movie file
-	Video::OggStream oggStream; // The Ogg stream for the created movie file
+	Sound::Ogg::Stream oggStream; // The Ogg stream for the created movie file
 	int theoraBitrate; // Target bitrate for Theora encoder in CBR mode
 	int theoraQuality; // Target quality for Theora encoder in VBR mode
 	int theoraGopSize; // Distance between keyframes in the Theora video stream

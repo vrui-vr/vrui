@@ -1,7 +1,7 @@
 /***********************************************************************
 TheoraMovieSaver - Helper class to save movies as Theora video streams
 packed into an Ogg container.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -28,7 +28,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/ConfigurationFile.h>
 #include <IO/File.h>
 #include <Video/FrameBuffer.h>
-#include <Video/OggPage.h>
 #include <Video/TheoraInfo.h>
 #include <Video/TheoraComment.h>
 #include <Video/Internal/ImageExtractorRGB8.h>
@@ -85,8 +84,8 @@ void* TheoraMovieSaver::frameSavingThreadMethod(void)
 	theoraInfo.setImageSize(imageSize);
 	theoraInfo.colorspace=TH_CS_UNSPECIFIED;
 	theoraInfo.pixel_fmt=TH_PF_420;
-	theoraInfo.target_bitrate=theoraBitrate;
-	theoraInfo.quality=theoraQuality;
+	theoraInfo.setBitrate(theoraBitrate);
+	theoraInfo.setQuality(theoraQuality);
 	theoraInfo.setGopSize(theoraGopSize);
 	theoraInfo.fps_numerator=theoraFrameRate;
 	theoraInfo.fps_denominator=1;
@@ -119,7 +118,7 @@ void* TheoraMovieSaver::frameSavingThreadMethod(void)
 		{
 		/* Write the packet to the movie file: */
 		oggStream.packetIn(packet);
-		Video::OggPage page;
+		Sound::Ogg::Page page;
 		while(oggStream.flush(page))
 			page.write(*movieFile);
 		}
@@ -128,13 +127,13 @@ void* TheoraMovieSaver::frameSavingThreadMethod(void)
 	while(theoraEncoder.emitHeader(comments,packet))
 		{
 		oggStream.packetIn(packet);
-		Video::OggPage page;
+		Sound::Ogg::Page page;
 		while(oggStream.pageOut(page))
 			page.write(*movieFile);
 		}
 	
 	/* Flush the Ogg stream: */
-	Video::OggPage page;
+	Sound::Ogg::Page page;
 	while(oggStream.flush(page))
 		page.write(*movieFile);
 	
@@ -187,7 +186,7 @@ void* TheoraMovieSaver::frameSavingThreadMethod(void)
 			oggStream.packetIn(packet);
 			
 			/* Write any generated pages to the movie file: */
-			Video::OggPage page;
+			Sound::Ogg::Page page;
 			while(oggStream.pageOut(page))
 				page.write(*movieFile);
 			}
@@ -198,26 +197,16 @@ void* TheoraMovieSaver::frameSavingThreadMethod(void)
 
 TheoraMovieSaver::TheoraMovieSaver(const Misc::ConfigurationFileSection& configFileSection)
 	:MovieSaver(configFileSection),
-	 movieFile(baseDirectory->openFile(configFileSection.retrieveString("./movieFileName").c_str(),IO::File::WriteOnly)),
+	 movieFile(baseDirectory->openFile(baseDirectory->createNumberedFileName(configFileSection.retrieveString("./movieFileName").c_str(),4).c_str(),IO::File::WriteOnly)),
 	 oggStream(1),
-	 theoraBitrate(0),theoraQuality(32),theoraGopSize(32),
+	 theoraBitrate(configFileSection.retrieveValue("./movieBitrate",0)),
+	 theoraQuality(configFileSection.retrieveValue("./movieQuality",32)),
+	 theoraGopSize(configFileSection.retrieveValue("./movieGopSize",32)),
 	 done(false),
 	 imageExtractor(0)
 	{
+	/* Open the output movie file: */
 	movieFile->setEndianness(Misc::LittleEndian);
-	
-	/* Update encoder parameters from the configuration file: */
-	configFileSection.updateValue("./movieBitrate",theoraBitrate);
-	if(theoraBitrate<0)
-		theoraBitrate=0;
-	configFileSection.updateValue("./movieQuality",theoraQuality);
-	if(theoraQuality<0)
-		theoraQuality=0;
-	if(theoraQuality>63)
-		theoraQuality=63;
-	configFileSection.updateValue("./movieGopSize",theoraGopSize);
-	if(theoraGopSize<1)
-		theoraGopSize=1;
 	
 	/* Set the Theora frame rate and adjust the initially configured frame rate: */
 	theoraFrameRate=int(frameRate+0.5);
@@ -241,7 +230,7 @@ TheoraMovieSaver::~TheoraMovieSaver(void)
 	frameSavingThread.join();
 	
 	/* Flush the Ogg stream: */
-	Video::OggPage page;
+	Sound::Ogg::Page page;
 	while(oggStream.flush(page))
 		page.write(*movieFile);
 	

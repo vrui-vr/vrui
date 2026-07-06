@@ -1,6 +1,6 @@
 /***********************************************************************
 TheoraDecoder - Wrapper class for th_dec_ctx structure handle.
-Copyright (c) 2010 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -82,7 +82,7 @@ class TheoraDecoder
 		return decoder!=0;
 		}
 	int control(int control,void* parameters,size_t parametersSize); // Supplies parameters to a decoder control
-	ogg_int64_t processPacket(const TheoraPacket& packet); // Processes the given data packet
+	ogg_int64_t processPacket(const TheoraPacket& packet); // Processes the given data packet; returns the granule position of the given packet
 	bool isFrameReady(void) const // Returns true if the decoder has a frame ready to decode
 		{
 		return frameReady;
