@@ -509,7 +509,7 @@ void SoundContext::removeRecordingCallback(SoundContext::RecordingCallback& reco
 	Threads::Mutex::Lock recordingLock(recordingMutex);
 	
 	/* Remove the given recording callback from the list, and remember if the list is empty afterwards: */
-	for(RecordingCallbackList::iterator rcIt=recordingCallbacks.end();rcIt!=recordingCallbacks.end();++rcIt)
+	for(RecordingCallbackList::iterator rcIt=recordingCallbacks.begin();rcIt!=recordingCallbacks.end();++rcIt)
 		if(*rcIt==&recordingCallback)
 			{
 			/* Move the found callback to the end of the list, then pop it off and stop looking: */

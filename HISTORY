@@ -8821,3 +8821,4 @@ Vrui-15.0-001:
 - Added Sound::OpusEncoder and Sound::OggOpusSink classes to Sound
   library.
   - Made Sound library optionally dependent on Opus library.
+- Fixed bug in Vrui::SoundContext::removeRecordingCallback.
