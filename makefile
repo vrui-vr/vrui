@@ -1422,21 +1422,53 @@ ifneq ($(SYSTEM_HAVE_ALSA),0)
 else
 	@echo "ALSA sound device support disabled"
 endif
+ifneq ($(SYSTEM_HAVE_PULSEAUDIO),0)
+	@echo "PulseAudio sound device support enabled"
+else
+	@echo "PulseAudio sound device support disabled"
+endif
+ifneq ($(SYSTEM_HAVE_OGG),0)
+	@echo "Ogg multimedia container support enabled"
+else
+	@echo "Ogg multimedia container support disabled"
+endif
 ifneq ($(SYSTEM_HAVE_SPEEX),0)
 	@echo "SPEEX speech compression support enabled"
 else
 	@echo "SPEEX speech compression support disabled"
 endif
+ifneq ($(SYSTEM_HAVE_OPUS),0)
+	@echo "Opus audio compression support enabled"
+else
+	@echo "Opus audio compression support disabled"
+endif
 	@cp Sound/Config.h.template Sound/Config.h.temp
 	@$(call CONFIG_SETVAR,Sound/Config.h.temp,SOUND_CONFIG_HAVE_ALSA,$(SYSTEM_HAVE_ALSA))
 	@$(call CONFIG_SETVAR,Sound/Config.h.temp,SOUND_CONFIG_HAVE_PULSEAUDIO,$(SYSTEM_HAVE_PULSEAUDIO))
+	@$(call CONFIG_SETVAR,Sound/Config.h.temp,SOUND_CONFIG_HAVE_OGG,$(SYSTEM_HAVE_OGG))
 	@$(call CONFIG_SETVAR,Sound/Config.h.temp,SOUND_CONFIG_HAVE_SPEEX,$(SYSTEM_HAVE_SPEEX))
+	@$(call CONFIG_SETVAR,Sound/Config.h.temp,SOUND_CONFIG_HAVE_OPUS,$(SYSTEM_HAVE_OPUS))
 	@if ! diff -qN Sound/Config.h.temp Sound/Config.h > /dev/null ; then cp Sound/Config.h.temp Sound/Config.h ; fi
 	@rm Sound/Config.h.temp
 	@touch $(DEPDIR)/Configure-Sound
 
-SOUND_HEADERS = $(wildcard Sound/*.h) \
-                $(wildcard Sound/*.icpp)
+SOUND_HEADERS = Sound/Config.h \
+                Sound/SoundDataFormat.h \
+                Sound/FrameBuffer.h \
+                Sound/AudioCaptureDevice.h \
+                Sound/SoundRecorder.h \
+                Sound/SoundPlayer.h \
+                Sound/WAVFile.h
+ifneq ($(SYSTEM_HAVE_OGG),0)
+  SOUND_HEADERS += Sound/Ogg.h
+endif
+ifneq ($(SYSTEM_HAVE_OPUS),0)
+  SOUND_HEADERS += Sound/OpusEncoder.h
+  ifneq ($(SYSTEM_HAVE_OGG),0)
+    SOUND_HEADERS += Sound/OggOpusSink.h
+  endif
+endif
+
 ifeq ($(SYSTEM),LINUX)
   SOUND_LINUX_HEADERS = 
   ifneq ($(SYSTEM_HAVE_ALSA),0)
@@ -1452,7 +1484,20 @@ ifeq ($(SYSTEM),LINUX)
   endif
 endif
 
-SOUND_SOURCES = $(wildcard Sound/*.cpp)
+SOUND_SOURCES = Sound/SoundDataFormat.cpp \
+                Sound/AudioCaptureDevice.cpp \
+                Sound/SoundRecorder.cpp \
+                Sound/SoundPlayer.cpp \
+                Sound/WAVFile.cpp
+ifneq ($(SYSTEM_HAVE_OGG),0)
+  SOUND_SOURCES += Sound/Ogg.cpp
+endif
+ifneq ($(SYSTEM_HAVE_OPUS),0)
+  SOUND_SOURCES += Sound/OpusEncoder.cpp
+  ifneq ($(SYSTEM_HAVE_OGG),0)
+    SOUND_SOURCES += Sound/OggOpusSink.cpp
+  endif
+endif
 ifeq ($(SYSTEM),LINUX)
   ifneq ($(SYSTEM_HAVE_ALSA),0)
     SOUND_SOURCES += Sound/Linux/ALSAPCMDevice.cpp \
@@ -1485,6 +1530,9 @@ ifneq ($(SYSTEM_HAVE_OGG),0)
 endif
 ifneq ($(SYSTEM_HAVE_SPEEX),0)
   SOUND_PACKAGES += SPEEX
+endif
+ifneq ($(SYSTEM_HAVE_OPUS),0)
+  SOUND_PACKAGES += OPUS
 endif
 $(call LIBRARYNAME,libSound): PACKAGES = $(SOUND_PACKAGES)
 $(call LIBRARYNAME,libSound): EXTRACINCLUDEFLAGS += $(MYSOUND_INCLUDE)

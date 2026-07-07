@@ -8791,7 +8791,7 @@ Vrui-15.0-001:
 - Created Sound/Ogg.h containing C++ wrappers for structures and
   functions from the Ogg multimedia container library, deprecating the
   Ogg* classes in the Video library.
-  - Made Sound library optionally dependent on Ogg library
+  - Made Sound library optionally dependent on Ogg library.
 - Added support for the Opus audio codec library to Vrui's build system.
 - Several fixes and improvements in JSON parsing/printing code in IO
   library:
@@ -8818,3 +8818,6 @@ Vrui-15.0-001:
   and new Theora wrapper class interfaces.
 - Improved Theora stream packing and error handling in
   Vrui::TheoraMovieSaver.
+- Added Sound::OpusEncoder and Sound::OggOpusSink classes to Sound
+  library.
+  - Made Sound library optionally dependent on Opus library.
