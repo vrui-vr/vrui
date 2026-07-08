@@ -1463,7 +1463,8 @@ ifneq ($(SYSTEM_HAVE_OGG),0)
   SOUND_HEADERS += Sound/Ogg.h
 endif
 ifneq ($(SYSTEM_HAVE_OPUS),0)
-  SOUND_HEADERS += Sound/OpusEncoder.h
+  SOUND_HEADERS += Sound/OpusEncoder.h \
+                   Sound/OpusDecoder.h
   ifneq ($(SYSTEM_HAVE_OGG),0)
     SOUND_HEADERS += Sound/OggOpusSink.h
   endif
@@ -1493,7 +1494,8 @@ ifneq ($(SYSTEM_HAVE_OGG),0)
   SOUND_SOURCES += Sound/Ogg.cpp
 endif
 ifneq ($(SYSTEM_HAVE_OPUS),0)
-  SOUND_SOURCES += Sound/OpusEncoder.cpp
+  SOUND_SOURCES += Sound/OpusEncoder.cpp \
+                   Sound/OpusDecoder.cpp
   ifneq ($(SYSTEM_HAVE_OGG),0)
     SOUND_SOURCES += Sound/OggOpusSink.cpp
   endif

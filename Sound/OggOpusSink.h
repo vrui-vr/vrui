@@ -49,7 +49,7 @@ class OggOpusSink
 		/* Elements: */
 		private:
 		int serialNumber; // Serial number assigned to the Ogg stream embedded in the Ogg/Opus sink
-		unsigned int preSkipMs; // Number of milliseconds of decoded audio data to skip from the beginning of the encoded stream when playing back, to avoid bad-quality frames from the encoder's start-up phase
+		unsigned int preSkip; // Number of frames of decoded audio data to skip at 48kHz sample frequency from the beginning of the encoded stream when playing back, to avoid bad-quality frames from the encoder's start-up phase
 		double outputGainDb; // Output gain applied to decoded audio data in dB
 		std::vector<std::string> comments; // List of comments in tag=value form
 		
@@ -59,7 +59,8 @@ class OggOpusSink
 		
 		/* Methods: */
 		void setSerialNumber(int newSerialNumber); // Sets the Ogg stream's serial number
-		void setPreSkipMs(unsigned int newPreSkipMs); // Sets the number of milliseconds of decoded audio data to skip from the beginning of the encoded stream when playing back
+		void setPreSkip(unsigned int newPreSkip); // Sets the pre-skip in units of frames at 48kHz
+		void setPreSkipMs(double newPreSkipMs); // Sets the pre-skip in units of milliseconds
 		void setOutputGainDb(double newOutputGainDb); // Sets the output gain in dB
 		void setOutputGainLinear(double newOutputGain); // Sets the output gain as a linear factor
 		void addComment(const std::string& newComment); // Adds a comment in tag=value form to the comment list

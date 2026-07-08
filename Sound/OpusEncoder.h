@@ -60,6 +60,8 @@ class OpusEncoder
 		{
 		return numChannels;
 		}
+	int getBandwidth(void) const; // Returns the encoder's configured bandwidth in Hz, or a negative value if the encoder is configured for automatic bandwidth detection
+	void reset(void); // Resets the encoder's state; should be called between using an encoder to encode unrelated sound clips
 	
 	/* Encoder control methods, can be called at any time: */
 	ApplicationMode getApplicationMode(void) const; // Returns the Opus encoder's application mode

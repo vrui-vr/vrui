@@ -8822,3 +8822,4 @@ Vrui-15.0-001:
   library.
   - Made Sound library optionally dependent on Opus library.
 - Fixed bug in Vrui::SoundContext::removeRecordingCallback.
+- Added Sound::OpusDecoder class.

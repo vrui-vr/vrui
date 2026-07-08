@@ -36,10 +36,10 @@ Methods of class OggOpusSink::Initializer:
 *****************************************/
 
 OggOpusSink::Initializer::Initializer(const OpusEncoder& encoder)
-	:serialNumber(0),preSkipMs(0),outputGainDb(0)
+	:serialNumber(0),preSkip(0),outputGainDb(0)
 	{
-	/* Initialize pre-skip to the encoder's lookahead size expressed in ms: */
-	preSkipMs=(unsigned int)(encoder.getLookaheadSamples())*1000U/(unsigned int)(encoder.getSampleFrequency());
+	/* Initialize pre-skip to the encoder's lookahead size expressed at nominal 48kHz sample frequency: */
+	preSkip=(unsigned int)((unsigned long)(encoder.getLookaheadSamples())*48000UL/(unsigned long)(encoder.getSampleFrequency()));
 	}
 
 void OggOpusSink::Initializer::setSerialNumber(int newSerialNumber)
@@ -47,9 +47,15 @@ void OggOpusSink::Initializer::setSerialNumber(int newSerialNumber)
 	serialNumber=newSerialNumber;
 	}
 
-void OggOpusSink::Initializer::setPreSkipMs(unsigned int newPreSkipMs)
+void OggOpusSink::Initializer::setPreSkip(unsigned int newPreSkip)
 	{
-	preSkipMs=newPreSkipMs;
+	preSkip=newPreSkip;
+	}
+
+void OggOpusSink::Initializer::setPreSkipMs(double newPreSkipMs)
+	{
+	/* Convert the pre-skip time to frames at 48kHz: */
+	preSkip=(unsigned int)(Misc::max(floor(newPreSkipMs*48.0+0.5),0.0));
 	}
 
 void OggOpusSink::Initializer::setOutputGainDb(double newOutputGainDb)
@@ -101,12 +107,10 @@ OggOpusSink::OggOpusSink(OpusEncoder& sEncoder,IO::File& sSink,const OggOpusSink
 	opusIdHeader.write(Misc::UInt8(encoder.getNumChannels()));
 	
 	/* Write the number of pre-skip frames at nominal 48 kHz sample frequency: */
-	unsigned int sampleFrequency=encoder.getSampleFrequency();
-	unsigned int preSkip=Misc::min((initializer.preSkipMs*sampleFrequency+500U)/1000U,65535U);
-	opusIdHeader.write(Misc::UInt16(preSkip));
+	opusIdHeader.write(Misc::UInt16(Misc::min(initializer.preSkip,65535U)));
 	
 	/* Write the source sample frequency: */
-	opusIdHeader.write(Misc::UInt32(sampleFrequency));
+	opusIdHeader.write(Misc::UInt32(encoder.getSampleFrequency()));
 	
 	/* Write the output gain as an 8:8 signed integer: */
 	opusIdHeader.write(Misc::SInt16(Misc::clamp(floor(initializer.outputGainDb*2.0*256.0+0.5),-32768.0,32767.0)));

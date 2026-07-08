@@ -75,6 +75,37 @@ int OpusEncoder::getSampleFrequency(void) const
 	return int(sampleFrequency);
 	}
 
+int OpusEncoder::getBandwidth(void) const
+	{
+	opus_int32 bandwidth;
+	opus_encoder_ctl(encoder,OPUS_GET_BANDWIDTH(&bandwidth));
+	switch(bandwidth)
+		{
+		case OPUS_BANDWIDTH_NARROWBAND:
+			return 4000;
+		
+		case OPUS_BANDWIDTH_MEDIUMBAND:
+			return 6000;
+		
+		case OPUS_BANDWIDTH_WIDEBAND:
+			return 8000;
+		
+		case OPUS_BANDWIDTH_SUPERWIDEBAND:
+			return 12000;
+		
+		case OPUS_BANDWIDTH_FULLBAND:
+			return 20000;
+		
+		default:
+			return -1;
+		}
+	}
+
+void OpusEncoder::reset(void)
+	{
+	opus_encoder_ctl(encoder,OPUS_RESET_STATE);
+	}
+
 OpusEncoder::ApplicationMode OpusEncoder::getApplicationMode(void) const
 	{
 	opus_int32 applicationMode;
