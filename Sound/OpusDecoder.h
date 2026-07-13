@@ -27,6 +27,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 /* Forward declarations: */
 struct OpusDecoder;
+namespace Sound {
+namespace Ogg {
+class Packet;
+}
+}
 
 namespace Sound {
 
@@ -37,20 +42,25 @@ class OpusDecoder
 	
 	/* Elements: */
 	private:
+	int sampleFrequency; // Sample frequency of destination audio data
 	int numChannels; // Number of channels in destination audio data (1 or 2)
 	::OpusDecoder* decoder; // Pointer to the Opus decoder object
 	
 	/* Constructors and destructors: */
 	public:
-	OpusDecoder(int sampleFrequency,int sNumChannels); // Creates an Opus decoder for the given destination sound format
+	OpusDecoder(int sSampleFrequency,int sNumChannels); // Creates an Opus decoder for the given destination sound format
 	~OpusDecoder(void);
 	
 	/* Methods: */
-	int getSampleFrequency(void) const; // Returns the destination sound format's sample frequency in Hz
+	int getSampleFrequency(void) const // Returns the destination sound format's sample frequency in Hz
+		{
+		return sampleFrequency;
+		}
 	int getNumChannels(void) const // Returns the destination sound format's number of channels (1 or 2)
 		{
 		return numChannels;
 		}
+	size_t getMaxNumChunkFrames(void) const; // Returns the maximum number of PCM frames that can be returned by a call to decodePacket with current decoder settings
 	int getBandwidth(void) const; // Returns the decoder's current bandwidth in Hz, or a negative value if the bandwidth is not yet determined
 	void reset(void); // Resets the decoder's state; should be called between using a decoder to decode unrelated sound clips
 	
@@ -59,8 +69,18 @@ class OpusDecoder
 	void setGain(double newGainDb); // Sets the decoder's output gain in dB
 	
 	/* Decoding methods: */
-	size_t getMaxNumChunkFrames(void) const; // Returns the maximum number of PCM frames that can be returned by a call to decodePacket with current decoder settings
-	size_t decodePacket(const void* packet,size_t packetSize,Misc::SInt16* chunkData,size_t numChunkFrames,bool useFec); // Decodes an opus packet into the chunk of PCM data able to hold up to the given number of frames; attempts to use forward error correction if the given flag is true; returns the number of frames in the decoded PCM chunk
+	int getBandwidth(const void* packetData) const; // Returns the bandwidth of the audio data encoded in the given packet in Hz
+	int getBandwidth(const Ogg::Packet& packet) const; // Ditto, using an Ogg packet containing an Opus packet as input
+	int getNumChannels(const void* packetData) const; // Returns the number of channels (1 or 2) encoded in the given packet
+	int getNumChannels(const Ogg::Packet& packet) const; // Ditto, using an Ogg packet containing an Opus packet as input
+	size_t getNumChunks(const void* packetData,size_t packetSize) const;
+	size_t getNumChunks(const Ogg::Packet& packet) const;
+	int getNumFramesPerChunk(const void* packetData) const;
+	int getNumFramesPerChunk(const Ogg::Packet& packet) const;
+	size_t getNumChunkFrames(const void* packetData,size_t packetSize) const; // Returns the number of frames that will be decoded from the Opus packet
+	size_t getNumChunkFrames(const Ogg::Packet& packet) const; // Ditto, using an Ogg packet containing an Opus packet as input
+	size_t decodePacket(const void* packetData,size_t packetSize,Misc::SInt16* chunkData,size_t numChunkFrames,bool useFec); // Decodes an Opus packet into the chunk of PCM data able to hold up to the given number of frames; attempts to use forward error correction if the given flag is true; returns the number of frames in the decoded PCM chunk
+	size_t decodePacket(const Ogg::Packet& packet,Misc::SInt16* chunkData,size_t numChunkFrames,bool useFec); // Ditto, using an Ogg packet containing an Opus packet as source
 	size_t fillInPacket(Misc::SInt16* chunkData,size_t numChunkFrames,bool useFec); // Returns a chunk of PCM data to conceal the loss of an Opus packet; returns the number of frames in the filled-in PCM chunk
 	};
 
