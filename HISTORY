@@ -8824,3 +8824,5 @@ Vrui-15.0-001:
 - Fixed bug in Vrui::SoundContext::removeRecordingCallback.
 - Added Sound::OpusDecoder class.
 - Added Sound::OggOpusSource class.
+- Added getShapes and setBaseDirectory methods to
+  SceneGraph::MeshFileNode.

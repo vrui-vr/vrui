@@ -90,6 +90,11 @@ class MeshFileNode:public GraphNodeParent
 	virtual void passMaskUpdate(GraphNode& child,PassMask newPassMask);
 	
 	/* New methods: */
+	void setBaseDirectory(IO::Directory& newBaseDirectory); // Sets the base directory for relative URLs
+	const std::vector<ShapeNodePointer>& getShapes(void) const // Returns the list of shape nodes read from the mesh file
+		{
+		return shapes;
+		}
 	void addShape(ShapeNode& newShape); // Adds a shape node to the representation
 	};
 

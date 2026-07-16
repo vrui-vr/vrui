@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <string.h>
 #include <Misc/StdError.h>
 #include <Misc/VarIntMarshaller.h>
+#include <IO/Directory.h>
 #include <SceneGraph/VRMLFile.h>
 #include <SceneGraph/SceneGraphReader.h>
 #include <SceneGraph/SceneGraphWriter.h>
@@ -133,15 +134,18 @@ void MeshFileNode::update(void)
 			for(extIt=endIt;extIt>=url.getValue(0).begin()&&*extIt!='.';--extIt)
 				;
 			
+			/* Determine the base directory for URLs: */
+			IO::Directory& baseDir=baseDirectory!=0?*baseDirectory:*IO::Directory::getCurrent();
+			
 			/* Read a mesh file: */
 			if(extIt>url.getValue(0).begin()&&strncasecmp(&*extIt,".stl",endIt-extIt)==0)
-				readStlFile(*baseDirectory,url.getValue(0),*this);
+				readStlFile(baseDir,url.getValue(0),*this);
 			else if(extIt>url.getValue(0).begin()&&strncasecmp(&*extIt,".ply",endIt-extIt)==0)
-				readPlyFile(*baseDirectory,url.getValue(0),*this);
+				readPlyFile(baseDir,url.getValue(0),*this);
 			else if(extIt>url.getValue(0).begin()&&strncasecmp(&*extIt,".lwo",endIt-extIt)==0)
-				readLwoFile(*baseDirectory,url.getValue(0),*this);
+				readLwoFile(baseDir,url.getValue(0),*this);
 			else if(extIt>url.getValue(0).begin()&&strncasecmp(&*extIt,".obj",endIt-extIt)==0)
-				readObjFile(*baseDirectory,url.getValue(0),*this);
+				readObjFile(baseDir,url.getValue(0),*this);
 			else
 				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Mesh file %s has unknown format",url.getValue(0).c_str());
 			}
@@ -217,6 +221,12 @@ void MeshFileNode::glRenderAction(GLRenderState& renderState) const
 void MeshFileNode::passMaskUpdate(GraphNode& child,PassMask newPassMask)
 	{
 	/* No need to do anything here */
+	}
+
+void MeshFileNode::setBaseDirectory(IO::Directory& newBaseDirectory)
+	{
+	/* Set the base directory: */
+	baseDirectory=&newBaseDirectory;
 	}
 
 void MeshFileNode::addShape(ShapeNode& newShape)
