@@ -471,11 +471,36 @@ TriangleKdTree::initNode(
 		}
 	}
 
+namespace {
+
+/****************
+Helper functions:
+****************/
+
+void insertIntersectionResult(TriangleKdTree::IntersectionResultList& intersections,TriangleKdTree::Card triangleIndex,TriangleKdTree::Scalar lambda)
+	{
+	/* Find the insertion position for the new intersection and check if an intersection for the new triangle is already in the list: */
+	TriangleKdTree::IntersectionResultList::iterator insertIt=intersections.end();
+	while(insertIt!=intersections.begin()&&insertIt[-1].lambda>=lambda)
+		{
+		/* Bail out if the newly-intersected triangle is already in the list, which must be at the same lambda: */
+		if(insertIt[-1].triangleIndex==triangleIndex)
+			return;
+		
+		--insertIt;
+		}
+	
+	/* Insert the new intersection: */
+	intersections.insert(insertIt,TriangleKdTree::IntersectionResult(triangleIndex,lambda));
+	}
+
+}
+
 void
 TriangleKdTree::intersectXrayNode(
 	const TriangleKdTree::Node& node,
 	const TriangleKdTree::Point& start,
-	std::vector<TriangleKdTree::Scalar>& intersections) const
+	TriangleKdTree::IntersectionResultList& intersections) const
 	{
 	/* Check if the node is a leaf: */
 	if(node.children==0)
@@ -519,7 +544,7 @@ TriangleKdTree::intersectXrayNode(
 					if(x>=start[0])
 						{
 						/* We have an intersection: */
-						intersections.push_back(x);
+						insertIntersectionResult(intersections,*tiIt,x);
 						}
 					}
 				else if(e0[1]>=start[1]&&e1[1]<start[1])
@@ -528,7 +553,7 @@ TriangleKdTree::intersectXrayNode(
 					if(x>=start[0])
 						{
 						/* We have an intersection: */
-						intersections.push_back(x);
+						insertIntersectionResult(intersections,*tiIt,x);
 						}
 					}
 				}
@@ -586,29 +611,44 @@ TriangleKdTree::createTree(
 	initNode(root,boundingBox,triangleIndices,triangleFragments);
 	}
 
-std::vector<TriangleKdTree::Scalar>
+void
+TriangleKdTree::createTree(
+	const TriangleKdTree::Box& sBoundingBox,
+	TriangleKdTree::Card sMaxTrianglesPerNode)
+	{
+	// DEBUGGING
+	// std::cout<<"Creating kd-tree for "<<triangles.size()<<" triangles"<<std::endl;
+	
+	/* Store tree creation parameters: */
+	boundingBox=sBoundingBox;
+	maxTrianglesPerNode=sMaxTrianglesPerNode;
+	
+	/* Extend the bounding box slightly outwards: */
+	for(int i=0;i<3;++i)
+		{
+		boundingBox.min[i]=decrement(boundingBox.min[i]);
+		boundingBox.max[i]=increment(boundingBox.max[i]);
+		}
+	
+	/* Create the list of triangle indices: */
+	CardList triangleIndices;
+	triangleIndices.reserve(triangles.size());
+	for(Card i=0;i<Card(triangles.size());++i)
+		triangleIndices.push_back(i);
+	
+	/* Initialize the kd-tree: */
+	TriangleFragmentList triangleFragments;
+	root.splitDimension=0;
+	initNode(root,boundingBox,triangleIndices,triangleFragments);
+	}
+
+TriangleKdTree::IntersectionResultList
 TriangleKdTree::intersectXray(
 	const TriangleKdTree::Point& start) const
 	{
 	/* Intersect the ray with the root node: */
-	std::vector<Scalar> intersections;
-	intersectXrayNode(root,start,intersections);
+	IntersectionResultList result;
+	intersectXrayNode(root,start,result);
 	
-	if(!intersections.empty())
-		{
-		/* Sort the intersection list: */
-		std::sort(intersections.begin(),intersections.end());
-		
-		/* Remove duplicates from the intersection list: */
-		std::vector<Scalar> result;
-		std::vector<Scalar>::iterator iIt=intersections.begin();
-		result.push_back(*iIt);
-		for(++iIt;iIt!=intersections.end();++iIt)
-			if(*iIt!=result.back())
-				result.push_back(*iIt);
-		
-		return result;
-		}
-	else
-		return intersections;
+	return result;
 	}

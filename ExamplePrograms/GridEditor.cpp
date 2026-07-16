@@ -34,6 +34,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/FileNameExtensions.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/CommandLineParser.h>
+#include <Realtime/Time.h>
 #include <IO/ValueSource.h>
 #include <IO/OpenFile.h>
 #include <Math/Math.h>
@@ -712,9 +713,11 @@ std::vector<SceneGraph::Scalar> intersectXray(const SceneGraph::Point& start,con
 EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,const EditableGrid::Size& cellSize)
 	{
 	/* Use a scene graph mesh file node to load the mesh file: */
+	Realtime::TimePointMonotonic timer1;
 	SceneGraph::MeshFileNode meshFile;
 	meshFile.url.setValue(fileName);
 	meshFile.update();
+	std::cout<<"Loaded input file in "<<double(timer1.setAndDiff())*1000.0<<" ms"<<std::endl;
 	
 	/* Fit a grid around the mesh: */
 	SceneGraph::Box meshBox=meshFile.calcBoundingBox();
@@ -738,9 +741,8 @@ EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,const Editabl
 	std::cout<<"Domain box: ["<<grid->getBox().min<<", "<<grid->getBox().max<<"]"<<std::endl;
 	
 	/* Enter all shapes contained in the loaded mesh file to the grid: */
+	Realtime::TimePointMonotonic timer2;
 	TriangleKdTree::TriangleList triangles;
-	TriangleKdTree::CardList triangleIndices;
-	TriangleKdTree::Card triangleIndex=0;
 	for(std::vector<SceneGraph::ShapeNodePointer>::const_iterator sIt=meshFile.getShapes().begin();sIt!=meshFile.getShapes().end();++sIt)
 		{
 		/* Check if the shape node has an indexed face set as geometry: */
@@ -767,7 +769,6 @@ EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,const Editabl
 						{
 						/* Add the triangle to the triangle set: */
 						triangles.push_back(TriangleKdTree::Triangle(points[*ciIt],points[*v1It],points[*v2It]));
-						triangleIndices.push_back(triangleIndex++);
 						
 						/* Go to the next triangle: */
 						v1It=v2It;
@@ -782,14 +783,16 @@ EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,const Editabl
 				}
 			}
 		}
-	std::cout<<"Extracted "<<triangles.size()<<" triangles from input mesh file"<<std::endl;
+	std::cout<<"Extracted "<<triangles.size()<<" triangles from input mesh file in "<<double(timer2.setAndDiff())*1000.0<<" ms"<<std::endl;
 	
 	/* Create a triangle kd-tree: */
+	Realtime::TimePointMonotonic timer3;
 	TriangleKdTree triangleTree(triangles);
-	triangleTree.createTree(meshBox,8,triangleIndices);
-	std::cout<<"Created triangle kd-tree"<<std::endl;
+	triangleTree.createTree(meshBox,64);
+	std::cout<<"Created triangle kd-tree in "<<double(timer3.setAndDiff())*1000.0<<" ms"<<std::endl;
 	
 	/* Calculate inside/outside values for all grid vertices: */
+	Realtime::TimePointMonotonic timer4;
 	for(int z=0;z<numVertices[2];++z)
 		for(int y=0;y<numVertices[1];++y)
 			{
@@ -797,16 +800,16 @@ EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,const Editabl
 			TriangleKdTree::Point start=grid->getBox().min;
 			start[1]+=TriangleKdTree::Scalar(SceneGraph::Scalar(y)*cellSize[1]);
 			start[2]+=TriangleKdTree::Scalar(SceneGraph::Scalar(z)*cellSize[2]);
-			std::vector<TriangleKdTree::Scalar> intersections=triangleTree.intersectXray(start);
+			TriangleKdTree::IntersectionResultList intersections=triangleTree.intersectXray(start);
 			
 			/* Process all spans between intersections: */
 			EditableGrid::Index i(0,y,z);
 			float value=0.0f; // Start from the outside
-			std::vector<TriangleKdTree::Scalar>::const_iterator iIt=intersections.begin();
+			TriangleKdTree::IntersectionResultList::const_iterator iIt=intersections.begin();
 			int spanEnd=numVertices[0];
 			if(iIt!=intersections.end())
 				{
-				spanEnd=int(Math::floor((*iIt-start[0])/TriangleKdTree::Scalar(cellSize[0])));
+				spanEnd=int(Math::floor((iIt->lambda-start[0])/TriangleKdTree::Scalar(cellSize[0])));
 				++iIt;
 				}
 			while(i[0]<numVertices[0])
@@ -823,13 +826,16 @@ EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,const Editabl
 				spanEnd=numVertices[0];
 				if(iIt!=intersections.end())
 					{
-					spanEnd=int(Math::floor((*iIt-start[0])/TriangleKdTree::Scalar(cellSize[0])));
+					spanEnd=int(Math::floor((iIt->lambda-start[0])/TriangleKdTree::Scalar(cellSize[0])));
 					++iIt;
 					}
 				}
 			}
+	std::cout<<"Created grid in "<<double(timer4.setAndDiff())*1000.0<<" ms"<<std::endl;
 	
+	Realtime::TimePointMonotonic timer5;
 	grid->invalidateVertices(EditableGrid::Index(0,0,0),grid->getNumVertices());
+	std::cout<<"Extracted initial surface in "<<double(timer5.setAndDiff())*1000.0<<" ms"<<std::endl;
 	
 	return result.releaseTarget();
 	}
