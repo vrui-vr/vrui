@@ -25,7 +25,6 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #define GRIDEDITOR_INCLUDED
 
 #include <string>
-#include <vector>
 #include <Misc/Array.h>
 #include <Geometry/Point.h>
 #include <Geometry/OrthogonalTransformation.h>
@@ -133,7 +132,9 @@ class GridEditor:public Vrui::Application,GLObject
 	void saveGridCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData);
 	void exportSurfaceCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData);
 	GLMotif::PopupMenu* createMainMenu(void); // Creates the program's main menu
-	
+	EditableGrid* loadFvolFile(const std::string& fileName,const EditableGrid::Point& origin); // Creates an editable grid from a float-valued .vol file
+	EditableGrid* loadSdfFile(const std::string& fileName); // Creates an editable grid from a signed distance field file in ASCII format
+	EditableGrid* loadMeshFile(const std::string& fileName,const EditableGrid::Size& cellSize); // Creates an editable grid from a mesh file in a supported format
 	/* Constructors and destructors: */
 	public:
 	GridEditor(int& argc,char**& argv);
