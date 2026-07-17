@@ -477,10 +477,10 @@ namespace {
 Helper functions:
 ****************/
 
-void insertIntersectionResult(TriangleKdTree::IntersectionResultList& intersections,TriangleKdTree::Card triangleIndex,TriangleKdTree::Scalar lambda)
+void insertRayIntersection(TriangleKdTree::RayIntersectionList& intersections,TriangleKdTree::Card triangleIndex,TriangleKdTree::Scalar lambda)
 	{
 	/* Find the insertion position for the new intersection and check if an intersection for the new triangle is already in the list: */
-	TriangleKdTree::IntersectionResultList::iterator insertIt=intersections.end();
+	TriangleKdTree::RayIntersectionList::iterator insertIt=intersections.end();
 	while(insertIt!=intersections.begin()&&insertIt[-1].lambda>=lambda)
 		{
 		/* Bail out if the newly-intersected triangle is already in the list, which must be at the same lambda: */
@@ -491,7 +491,7 @@ void insertIntersectionResult(TriangleKdTree::IntersectionResultList& intersecti
 		}
 	
 	/* Insert the new intersection: */
-	intersections.insert(insertIt,TriangleKdTree::IntersectionResult(triangleIndex,lambda));
+	intersections.insert(insertIt,TriangleKdTree::RayIntersection(triangleIndex,lambda));
 	}
 
 }
@@ -500,7 +500,7 @@ void
 TriangleKdTree::intersectXrayNode(
 	const TriangleKdTree::Node& node,
 	const TriangleKdTree::Point& start,
-	TriangleKdTree::IntersectionResultList& intersections) const
+	TriangleKdTree::RayIntersectionList& intersections) const
 	{
 	/* Check if the node is a leaf: */
 	if(node.children==0)
@@ -544,7 +544,7 @@ TriangleKdTree::intersectXrayNode(
 					if(x>=start[0])
 						{
 						/* We have an intersection: */
-						insertIntersectionResult(intersections,*tiIt,x);
+						insertRayIntersection(intersections,*tiIt,x);
 						}
 					}
 				else if(e0[1]>=start[1]&&e1[1]<start[1])
@@ -553,7 +553,7 @@ TriangleKdTree::intersectXrayNode(
 					if(x>=start[0])
 						{
 						/* We have an intersection: */
-						insertIntersectionResult(intersections,*tiIt,x);
+						insertRayIntersection(intersections,*tiIt,x);
 						}
 					}
 				}
@@ -575,6 +575,100 @@ TriangleKdTree::intersectXrayNode(
 				intersectXrayNode(node.children[0],start,intersections);
 			if(node.plane<=start[node.splitDimension])
 				intersectXrayNode(node.children[1],start,intersections);
+			}
+		}
+	}
+
+void
+TriangleKdTree::calcTriangleDistanceNode(
+	const TriangleKdTree::Node& node,
+	const TriangleKdTree::Point& position,
+	TriangleKdTree::TriangleDistance& distance) const
+	{
+	/* Check if the node is a leaf: */
+	if(node.children==0)
+		{
+		/* Check every triangle in the node: */
+		for(CardList::const_iterator tiIt=node.triangleIndices.begin();tiIt!=node.triangleIndices.end();++tiIt)
+			{
+			/* Calculate the query position's distance from the triangle's plane in a triangle-relative coordinate system: */
+			const Triangle& t=triangles[*tiIt];
+			Vector v0=Vector::zero;
+			Vector v1=t.vertices[1]-t.vertices[0];
+			Vector v2=t.vertices[2]-t.vertices[0];
+			Vector normal=v1^v2;
+			Scalar normal2=normal.sqr();
+			Vector offset=position-t.vertices[0];
+			Scalar dot=offset*normal;
+			Scalar dist2=Math::sqr(dot)/normal2;
+			
+			/* Check if the distance to the triangle's plane is less than the current closest distance: */
+			if(dist2<distance.dist2)
+				{
+				/* Project the query position into the triangle's plane: */
+				Vector planeOffset=offset-normal*(dot/normal2); // planeOffset is relative to t.vertices[0]
+				
+				/* Find the primary axis indices of the primary plane most parallel to the triangle: */ 
+				int a2=Geometry::findParallelAxis(normal);
+				int a0=(a2+1)%3;
+				int a1=(a0+1)%3;
+				
+				/* Sort the triangle's relative vertices by vertical position: */
+				if(v0[a1]>v1[a1])
+					Misc::swap(v0,v1);
+				if(v1[a1]>v2[a1])
+					Misc::swap(v1,v2);
+				if(v0[a1]>v1[a1])
+					Misc::swap(v0,v1);
+				
+				/* Check if the projected query position is inside the triangle using a 2D inside/out test: */
+				bool inside=false;
+				if(planeOffset[a1]>=v1[a1])
+					{
+					if(planeOffset[a1]<v2[a1])
+						{
+						/* Check against the "short" edge: */
+						if(v1[a0]+(v2[a0]-v1[a0])*(planeOffset[a1]-v1[a1])/(v2[a1]-v1[a1])>=planeOffset[a0])
+							inside=!inside;
+						
+						/* Check against the "long" edge: */
+						if(v0[a0]+(v2[a0]-v0[a0])*(planeOffset[a1]-v0[a1])/(v2[a1]-v0[a1])>=planeOffset[a0])
+							inside=!inside;
+						}
+					}
+				else
+					{
+					if(planeOffset[a1]>=v0[a1])
+						{
+						/* Check against the "short" edge: */
+						if(v0[a0]+(v1[a0]-v0[a0])*(planeOffset[a1]-v0[a1])/(v1[a1]-v0[a1])>=planeOffset[a0])
+							inside=!inside;
+						
+						/* Check against the "long" edge: */
+						if(v0[a0]+(v2[a0]-v0[a0])*(planeOffset[a1]-v0[a1])/(v2[a1]-v0[a1])>=planeOffset[a0])
+							inside=!inside;
+						}
+					}
+				
+				if(!inside)
+					{
+					/* Calculate the distance from the query position to the triangle's edges: */
+					...
+					}
+				}
+			}
+		}
+	else
+		{
+		/* Check the child containing the query position first: */
+		int childIndex=position[node.splitDimension]<node.plane?0:1;
+		calcTriangleDistanceNode(node.children[childIndex],position,distance);
+		
+		/* Check the other child if it potentially contains a closer triangle: */
+		if(Math::sqr(position[node.splitDimension]-node.plane)<distance.dist2)
+			{
+			childIndex=1-childIndex;
+			calcTriangleDistanceNode(node.children[childIndex],position,distance);
 			}
 		}
 	}
@@ -642,12 +736,12 @@ TriangleKdTree::createTree(
 	initNode(root,boundingBox,triangleIndices,triangleFragments);
 	}
 
-TriangleKdTree::IntersectionResultList
+TriangleKdTree::RayIntersectionList
 TriangleKdTree::intersectXray(
 	const TriangleKdTree::Point& start) const
 	{
 	/* Intersect the ray with the root node: */
-	IntersectionResultList result;
+	RayIntersectionList result;
 	intersectXrayNode(root,start,result);
 	
 	return result;

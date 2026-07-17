@@ -73,7 +73,7 @@ class TriangleKdTree
 	
 	typedef std::vector<Triangle> TriangleList; // Type for lists of triangles
 	
-	struct IntersectionResult // Structure to hold an intersection between a ray and a triangle
+	struct RayIntersection // Structure to hold an intersection between a ray and a triangle
 		{
 		/* Elements: */
 		public:
@@ -81,13 +81,27 @@ class TriangleKdTree
 		Scalar lambda; // Ray parameter of the intersection point
 		
 		/* Constructors and destructors: */
-		IntersectionResult(Card sTriangleIndex,Scalar sLambda)
+		RayIntersection(Card sTriangleIndex,Scalar sLambda)
 			:triangleIndex(sTriangleIndex),lambda(sLambda)
 			{
 			}
 		};
 	
-	typedef std::vector<IntersectionResult> IntersectionResultList; // Type for lists of intersection results
+	typedef std::vector<RayIntersection> RayIntersectionList; // Type for lists of ray intersections
+	
+	struct TriangleDistance // Structure to report the distance from a point to a triangle
+		{
+		/* Elements: */
+		public:
+		Card triangleIndex; // Index of the closest triangle
+		Scalar dist2; // Squared distance from the query point to the closest triangle
+		
+		/* Constructors and destructors: */
+		TriangleDistance(Card sTriangleIndex,Scalar sDist2)
+			:triangleIndex(sTriangleIndex),dist2(sDist2)
+			{
+			}
+		};
 	
 	private:
 	struct TriangleFragment // Helper structure to represent triangle fragments during kd-tree creation
@@ -141,7 +155,8 @@ class TriangleKdTree
 	Scalar findBestSplit(const Box& domain,int dimension,const CardList& triangleIndices,const TriangleFragmentList& triangleFragments) const;
 	void splitTriangle(Card triangleIndex,const Triangle& t,int dimension,Scalar splitPlane,TriangleFragmentList triangleFragments[2]);
 	void initNode(Node& node,const Box& domain,const CardList& triangleIndices,const TriangleFragmentList& triangleFragments);
-	void intersectXrayNode(const Node& node,const Point& start,IntersectionResultList& intersections) const;
+	void intersectXrayNode(const Node& node,const Point& start,RayIntersectionList& intersections) const;
+	void calcTriangleDistanceNode(const Node& node,const Point& position,TriangleDistance& distance) const;
 	
 	/* Constructors and destructors: */
 	public:
@@ -150,7 +165,7 @@ class TriangleKdTree
 	/* Methods: */
 	void createTree(const Box& sBoundingBox,Card sMaxTrianglesPerNode,const CardList& triangleIndices); // Creates a kd-tree for the given bounding box, containing only the triangles whose indices are in the given list
 	void createTree(const Box& sBoundingBox,Card sMaxTrianglesPerNode); // Ditto, using all triangles in the triangle list
-	IntersectionResultList intersectXray(const Point& start) const; // Intersects a ray along the positive x axis starting at the given starting point with the kd-tree; returns list of all intersection x coordinates in increasing order
+	RayIntersectionList intersectXray(const Point& start) const; // Intersects a ray along the positive x axis starting at the given starting point with the kd-tree; returns list of all intersection x coordinates in increasing order
 	};
 
 #endif
