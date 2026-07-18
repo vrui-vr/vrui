@@ -8826,3 +8826,6 @@ Vrui-15.0-001:
 - Added Sound::OggOpusSource class.
 - Added getShapes and setBaseDirectory methods to
   SceneGraph::MeshFileNode.
+- Fixed a bug in DisableIOWatcher pipe command in Threads::RunLoop.
+- Slight improvement to isPointInsideTriangle function in
+  Geometry/IntersectionTests.icpp.

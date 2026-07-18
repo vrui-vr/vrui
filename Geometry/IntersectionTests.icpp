@@ -123,10 +123,9 @@ isPointInsideTriangle(
 		/* Calculate the edge's 2D normal vector and edge offset: */
 		ScalarParam eN0=triangle[tv0][a1]-triangle[tv1][a1];
 		ScalarParam eN1=triangle[tv1][a0]-triangle[tv0][a0];
-		ScalarParam eOffset=eN0*triangle[tv0][a0]+eN1*triangle[tv0][a1];
 		
 		/* Check that the intersection point is to the left of the triangle edge: */
-		if((eN0*p[a0]+eN1*p[a1])*normalMax<eOffset*normalMax) // Multiply both sides with normalMax to fix the handedness of the triangle
+		if((eN0*(p[a0]-triangle[tv0][a0])+eN1*(p[a1]-triangle[tv0][a1]))*normalMax<ScalarParam(0)) // Multiply the dot product with normalMax to fix the handedness of the triangle
 			return false;
 		}
 	
