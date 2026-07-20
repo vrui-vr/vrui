@@ -26,6 +26,8 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <string>
 #include <Misc/Array.h>
+#include <Threads/MutexCond.h>
+#include <Threads/WorkerPool.h>
 #include <Geometry/Point.h>
 #include <Geometry/OrthogonalTransformation.h>
 #include <GL/gl.h>
@@ -48,6 +50,7 @@ namespace GLMotif {
 class PopupMenu;
 class PopupWindow;
 }
+class TriangleKdTree;
 
 class GridEditor:public Vrui::Application,GLObject
 	{
@@ -120,6 +123,29 @@ class GridEditor:public Vrui::Application,GLObject
 		};
 	
 	friend class EditTool;
+	
+	class MeshSlicer:public Threads::WorkerPool::JobFunction // Helper class to convert a mesh into a grid in parallel
+		{
+		/* Elements: */
+		private:
+		EditableGrid& grid; // The grid to be created
+		int z; // The z index of the grid slice produced by this job
+		const TriangleKdTree& triangleTree; // The kd-tree containing the mesh's triangles
+		double maxDist2; // Squared maximum distance to search for closest triangles
+		Threads::MutexCond& completionCond; // Condition variable signaled when the slice has been created
+		int& slicesComplete; // Counter for completed slices
+		
+		/* Constructors and destructors: */
+		public:
+		MeshSlicer(EditableGrid& sGrid,int sZ,const TriangleKdTree& sTriangleTree,double sMaxDist2,Threads::MutexCond& sCompletionCond,int& sSlicesComplete) // Elementwise constructor
+			:grid(sGrid),z(sZ),triangleTree(sTriangleTree),maxDist2(sMaxDist2),
+			 completionCond(sCompletionCond),slicesComplete(sSlicesComplete)
+			{
+			}
+		
+		/* Methods from class Threads::WorkerPool::JobFunction: */
+		virtual void operator()(int parameter);
+		};
 	
 	/* Elements: */
 	private:

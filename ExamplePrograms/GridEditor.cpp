@@ -28,6 +28,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <vector>
 #include <algorithm>
 #include <iostream>
+#include <iomanip>
 #include <Misc/Utility.h>
 #include <Misc/SelfDestructPointer.h>
 #include <Misc/StdError.h>
@@ -499,6 +500,63 @@ void GridEditor::EditTool::glRenderActionTransparent(GLContextData& contextData)
 	glPopAttrib();
 	}
 
+/***************************************
+Methods of class GridEditor::MeshSlicer:
+***************************************/
+
+void GridEditor::MeshSlicer::operator()(int)
+	{
+	/* Get the grid layout: */
+	int numRows=grid.getNumVertices()[1];
+	int numColumns=grid.getNumVertices()[0];
+	TriangleKdTree::Scalar cellSize[3];
+	for(int i=0;i<3;++i)
+		cellSize[i]=TriangleKdTree::Scalar(grid.getCellSize()[i]);
+	
+	for(int y=0;y<numRows;++y)
+		{
+		/* Calculate all intersections of the current grid line with the triangle set: */
+		TriangleKdTree::Point start=grid.getBox().min;
+		start[1]+=TriangleKdTree::Scalar(y)*cellSize[1];
+		start[2]+=TriangleKdTree::Scalar(z)*cellSize[2];
+		TriangleKdTree::RayIntersectionList intersections=triangleTree.intersectXray(start);
+		
+		/* Add a sentinel to the intersection list: */
+		intersections.push_back(TriangleKdTree::RayIntersection(TriangleKdTree::nil,Math::Constants<TriangleKdTree::Scalar>::max));
+		
+		/* Process all voxels on the current grid line: */
+		EditableGrid::Index i(0,y,z);
+		float inside=-1.0f/Math::sqrt(maxDist2); // Start from the outside
+		TriangleKdTree::RayIntersectionList::iterator iIt=intersections.begin();
+		while(i[0]<numColumns)
+			{
+			/* Process any crossed intersections since the previous voxel: */
+			while(start[0]>=iIt->lambda)
+				{
+				/* Flip the inside/outside flag: */
+				inside=-inside;
+				
+				/* Go to the next intersection: */
+				++iIt;
+				}
+			
+			/* Calculate and assign the voxel's value: */
+			grid.setValue(i,float(Math::sqrt(triangleTree.calcTriangleDistance(start,maxDist2).dist2))*inside+0.5f);
+			
+			/* Go to the next voxel: */
+			++i[0];
+			start[0]+=cellSize[0];
+			}
+		}
+	
+	/* Signal completion of this slice: */
+	{
+	Threads::MutexCond::Lock completionLock(completionCond);
+	++slicesComplete;
+	completionCond.signal();
+	}
+	}
+
 /***************************
 Methods of class GridEditor:
 ***************************/
@@ -727,47 +785,25 @@ EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,double resolu
 	triangleTree.createTree(meshBox,16);
 	std::cout<<"Created triangle kd-tree in "<<double(timer3.setAndDiff())*1000.0<<" ms"<<std::endl;
 	
-	/* Calculate inside/outside values for all grid vertices: */
-	Realtime::TimePointMonotonic timer4;
+	/* Create a job for each of the grid's z slices and submit it to the worker pool: */
 	TriangleKdTree::Scalar maxDist2=Math::sqr(cellSize[0])+Math::sqr(cellSize[1])+Math::sqr(cellSize[2])*Math::sqr(TriangleKdTree::Scalar(2));
-	
+	Threads::MutexCond completionCond;
+	int slicesComplete=0;
+	std::cout<<"Creating grid...   0%"<<std::flush;
+	Realtime::TimePointMonotonic timer4;
 	for(int z=0;z<numVertices[2];++z)
-		for(int y=0;y<numVertices[1];++y)
-			{
-			/* Calculate all intersections of the current grid line with the triangle set: */
-			TriangleKdTree::Point start=grid->getBox().min;
-			start[1]+=TriangleKdTree::Scalar(SceneGraph::Scalar(y)*cellSize[1]);
-			start[2]+=TriangleKdTree::Scalar(SceneGraph::Scalar(z)*cellSize[2]);
-			TriangleKdTree::RayIntersectionList intersections=triangleTree.intersectXray(start);
-			
-			/* Add a sentinel to the intersection list: */
-			intersections.push_back(TriangleKdTree::RayIntersection(TriangleKdTree::nil,Math::Constants<TriangleKdTree::Scalar>::max));
-			
-			/* Process all voxels on the current grid line: */
-			EditableGrid::Index i(0,y,z);
-			float inside=-1.0f/Math::sqrt(maxDist2); // Start from the outside
-			TriangleKdTree::RayIntersectionList::iterator iIt=intersections.begin();
-			while(i[0]<numVertices[0])
-				{
-				/* Process any crossed intersections since the previous voxel: */
-				while(start[0]>=iIt->lambda)
-					{
-					/* Flip the inside/outside flag: */
-					inside=-inside;
-					
-					/* Go to the next intersection: */
-					++iIt;
-					}
-				
-				/* Calculate and assign the voxel's value: */
-				grid->setValue(i,Math::sqrt(triangleTree.calcTriangleDistance(start,maxDist2).dist2)*inside+0.5);
-				
-				/* Go to the next voxel: */
-				++i[0];
-				start[0]+=cellSize[0];
-				}
-			}
-	std::cout<<"Created grid in "<<double(timer4.setAndDiff())*1000.0<<" ms"<<std::endl;
+		Vrui::submitJob(*new MeshSlicer(*grid,z,triangleTree,maxDist2,completionCond,slicesComplete));
+	
+	/* Wait until all slices are completed: */
+	{
+	Threads::MutexCond::Lock completionLock(completionCond);
+	while(slicesComplete<numVertices[2])
+		{
+		completionCond.wait(completionLock);
+		std::cout<<"\rCreating grid... "<<std::setw(3)<<(slicesComplete*100)/numVertices[2]<<'%'<<std::flush;
+		}
+	}
+	std::cout<<"\rCreated grid in "<<double(timer4.setAndDiff())*1000.0<<" ms"<<std::endl;
 	
 	Realtime::TimePointMonotonic timer5;
 	grid->invalidateVertices(EditableGrid::Index(0,0,0),grid->getNumVertices());
