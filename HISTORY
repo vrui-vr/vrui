@@ -8829,3 +8829,5 @@ Vrui-15.0-001:
 - Fixed a bug in DisableIOWatcher pipe command in Threads::RunLoop.
 - Slight improvement to isPointInsideTriangle function in
   Geometry/IntersectionTests.icpp.
+- Added version of Vrui::submitJob without a completion callback to
+  Vrui's kernel interface.

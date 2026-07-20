@@ -394,6 +394,7 @@ Misc::CallbackList& getPostRenderingCallbacks(void); // Returns the list of call
 Misc::CommandDispatcher& getCommandDispatcher(void); // Returns a dispatcher for pipe and console commands
 void addSynchronousIOCallback(int fd,SynchronousIOCallback newIOCallback,void* newIOCallbackData); // Adds a callback that is called synchronously at the beginning of a Vrui frame if there is readable data on the given file descriptor
 void removeSynchronousIOCallback(int fd); // Removes a previously installed synchronous I/O callback for the given file descriptor
+void submitJob(Threads::FunctionCall<int>& job); // Submits a job for asynchronous execution by a background thread
 void submitJob(Threads::FunctionCall<int>& job,Threads::FunctionCall<Threads::FunctionCall<int>&>& completeCallback); // Submits a job for asynchronous execution by a background thread; given callback is called from main thread, synchronously before an application's frame method
 
 /* Rendering management: */

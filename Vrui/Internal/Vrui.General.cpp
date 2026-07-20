@@ -4161,6 +4161,12 @@ class VruiJobCompleteCallback:public Threads::WorkerPool::JobCompleteCallback
 
 }
 
+void submitJob(Threads::FunctionCall<int>& job)
+	{
+	/* Submit the job to the worker pool: */
+	Threads::WorkerPool::submitJob(job);
+	}
+
 void submitJob(Threads::FunctionCall<int>& job,Threads::FunctionCall<Threads::FunctionCall<int>&>& completeCallback)
 	{
 	/* Wrap the caller-provided completion callback in our own callback to signal the front end from a background thread: */
