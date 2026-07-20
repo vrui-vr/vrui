@@ -573,11 +573,72 @@ TriangleKdTree::intersectXrayNode(
 			/* Intersect the ray with the node's child that intersects the ray: */
 			if(node.plane>=start[node.splitDimension])
 				intersectXrayNode(node.children[0],start,intersections);
-			if(node.plane<=start[node.splitDimension])
+			else
 				intersectXrayNode(node.children[1],start,intersections);
 			}
 		}
 	}
+
+namespace {
+
+TriangleKdTree::Scalar triangleDist(const TriangleKdTree::Triangle& t,const TriangleKdTree::Point& queryPos,TriangleKdTree::Scalar minDist2)
+	{
+	typedef TriangleKdTree::Scalar Scalar;
+	typedef TriangleKdTree::Point Point;
+	typedef TriangleKdTree::Vector Vector;
+	
+	/* Calculate the triangle's edge vectors: */
+	Vector ev[3];
+	ev[0]=t.vertices[1]-t.vertices[0];
+	ev[1]=t.vertices[2]-t.vertices[1];
+	ev[2]=t.vertices[0]-t.vertices[2];
+	
+	/* Calculate the query point's distance from the triangle's plane: */
+	Vector normal=ev[0]^ev[1];
+	Scalar normal2=normal.sqr();
+	Scalar dist2=Math::sqr((queryPos-t.vertices[0])*normal)/normal2;
+	if(dist2<minDist2)
+		{
+		/* Check if the query point is inside the upright prism extruded from the triangle: */
+		bool inside=true;
+		for(int tv=0;tv<3&&inside;++tv)
+			inside=(normal^ev[tv])*(queryPos-t.vertices[tv])>=Scalar(0);
+		
+		if(!inside)
+			{
+			/* Invalidate the query point-triangle plane distance: */
+			dist2=minDist2;
+			
+			/* Calculate the query point's distance from each of the triangle's edges: */
+			int tv0=2;
+			for(int tv1=0;tv1<3;tv0=tv1,++tv1)
+				{
+				/* Check if the query point is inside the edge's extent: */
+				Vector qp0=queryPos-t.vertices[tv0];
+				Vector qp1=queryPos-t.vertices[tv1];
+				if(ev[tv0]*qp0>=Scalar(0)&&ev[tv0]*qp1<=Scalar(0))
+					{
+					/* Calculate the query point's distance from the edge: */
+					Scalar edgeDist2=(ev[tv0]^qp0).sqr()/ev[tv0].sqr();
+					if(dist2>edgeDist2)
+						dist2=edgeDist2;
+					}
+				}
+			
+			/* Calculate the query point's distance from each of the triangle's vertices: */
+			for(int tv=0;tv<3;++tv)
+				{
+				Scalar vertexDist2=Geometry::sqrDist(queryPos,t.vertices[tv]);
+				if(dist2>vertexDist2)
+					dist2=vertexDist2;
+				}
+			}
+		}
+	
+	return dist2;
+	}
+
+}
 
 void
 TriangleKdTree::calcTriangleDistanceNode(
@@ -591,71 +652,105 @@ TriangleKdTree::calcTriangleDistanceNode(
 		/* Check every triangle in the node: */
 		for(CardList::const_iterator tiIt=node.triangleIndices.begin();tiIt!=node.triangleIndices.end();++tiIt)
 			{
+			#if 0
+			
 			/* Calculate the query position's distance from the triangle's plane in a triangle-relative coordinate system: */
 			const Triangle& t=triangles[*tiIt];
-			Vector v0=Vector::zero;
-			Vector v1=t.vertices[1]-t.vertices[0];
-			Vector v2=t.vertices[2]-t.vertices[0];
-			Vector normal=v1^v2;
+			Vector v[3];
+			v[0]=Vector::zero;
+			v[1]=t.vertices[1]-t.vertices[0];
+			v[2]=t.vertices[2]-t.vertices[0];
+			Vector normal=v[1]^v[2];
 			Scalar normal2=normal.sqr();
-			Vector offset=position-t.vertices[0];
-			Scalar dot=offset*normal;
-			Scalar dist2=Math::sqr(dot)/normal2;
+			Vector pos=position-t.vertices[0];
+			Scalar posNorm=pos*normal;
+			Scalar dist2=Math::sqr(posNorm)/normal2;
 			
 			/* Check if the distance to the triangle's plane is less than the current closest distance: */
 			if(dist2<distance.dist2)
 				{
 				/* Project the query position into the triangle's plane: */
-				Vector planeOffset=offset-normal*(dot/normal2); // planeOffset is relative to t.vertices[0]
+				Vector p=pos-normal*(posNorm/normal2); // p is relative to t.vertices[0]
 				
 				/* Find the primary axis indices of the primary plane most parallel to the triangle: */ 
 				int a2=Geometry::findParallelAxis(normal);
 				int a0=(a2+1)%3;
-				int a1=(a0+1)%3;
+				int a1=(a0+2)%3;
 				
-				/* Sort the triangle's relative vertices by vertical position: */
-				if(v0[a1]>v1[a1])
-					Misc::swap(v0,v1);
-				if(v1[a1]>v2[a1])
-					Misc::swap(v1,v2);
-				if(v0[a1]>v1[a1])
-					Misc::swap(v0,v1);
-				
-				/* Check if the projected query position is inside the triangle using a 2D inside/out test: */
-				bool inside=false;
-				if(planeOffset[a1]>=v1[a1])
+				/* Check the projected query position against each of the triangle's edges: */
+				bool edgeOutsides[3];
+				{
+				int tv0=2;
+				for(int tv1=0;tv1<3;tv0=tv1,++tv1)
 					{
-					if(planeOffset[a1]<v2[a1])
-						{
-						/* Check against the "short" edge: */
-						if(v1[a0]+(v2[a0]-v1[a0])*(planeOffset[a1]-v1[a1])/(v2[a1]-v1[a1])>=planeOffset[a0])
-							inside=!inside;
-						
-						/* Check against the "long" edge: */
-						if(v0[a0]+(v2[a0]-v0[a0])*(planeOffset[a1]-v0[a1])/(v2[a1]-v0[a1])>=planeOffset[a0])
-							inside=!inside;
-						}
-					}
-				else
-					{
-					if(planeOffset[a1]>=v0[a1])
-						{
-						/* Check against the "short" edge: */
-						if(v0[a0]+(v1[a0]-v0[a0])*(planeOffset[a1]-v0[a1])/(v1[a1]-v0[a1])>=planeOffset[a0])
-							inside=!inside;
-						
-						/* Check against the "long" edge: */
-						if(v0[a0]+(v2[a0]-v0[a0])*(planeOffset[a1]-v0[a1])/(v2[a1]-v0[a1])>=planeOffset[a0])
-							inside=!inside;
-						}
-					}
-				
-				if(!inside)
-					{
-					/* Calculate the distance from the query position to the triangle's edges: */
-					...
+					/* Calculate the edge's 2D normal vector and edge offset: */
+					Scalar en0=v[tv0][a1]-v[tv1][a1];
+					Scalar en1=v[tv1][a0]-v[tv0][a0];
+					
+					/* Check if the projected query position is to the left of the triangle edge: */
+					edgeOutsides[tv0]=(en0*(p[a0]-v[tv0][a0])+en1*(p[a1]-v[tv0][a1]))*normal[a2]<Scalar(0); // Multiply the dot product with normal[a2] to fix the handedness of the triangle
 					}
 				}
+				
+				/* Calculate the distance from the query position to each of the triangle's edges to which it's outside: */
+				bool checkVertices[3]={false,false,false};
+				{
+				int tv0=2;
+				for(int tv1=0;tv1<3;tv0=tv1,++tv1)
+					{
+					if(edgeOutsides[tv0])
+						{
+						/* Check if the projected query position is inside the cylinder defined by the edge: */
+						Scalar ed0=v[tv1][a0]-v[tv0][a0];
+						Scalar ed1=v[tv1][a1]-v[tv0][a1];
+						Scalar dot=(p[a0]-v[tv0][a0])*ed0+(p[a1]-v[tv0][a1])*ed1;
+						if(dot<Scalar(0))
+							{
+							checkVertices[tv0]=true;
+							checkVertices[tv1]=false;
+							}
+						else if(dot>ed0*ed0+ed1*ed1)
+							{
+							checkVertices[tv0]=false;
+							checkVertices[tv1]=true;
+							}
+						else
+							{
+							/* Calculate the distance from the query position to the edge: */
+							Vector ed=v[tv1]-v[tv0];
+							dist2=(ed^(pos-v[tv0])).sqr()/ed.sqr();
+							
+							checkVertices[tv0]=false;
+							checkVertices[tv1]=false;
+							break;
+							}
+						}
+					}
+				}
+				
+				/* Calculate the distance from the query position to any marked vertex (there can be at most one): */
+				for(int tv=0;tv<3;++tv)
+					if(checkVertices[tv])
+						dist2=(v[tv]-pos).sqr();
+				
+				/* Update the distance result if this triangle is closer than the previous candidate: */
+				if(distance.dist2>dist2)
+					{
+					distance.triangleIndex=*tiIt;
+					distance.dist2=dist2;
+					}
+				}
+			
+			#else
+			
+			Scalar dist2=triangleDist(triangles[*tiIt],position,distance.dist2);
+			if(distance.dist2>dist2)
+				{
+				distance.triangleIndex=*tiIt;
+				distance.dist2=dist2;
+				}
+			
+			#endif
 			}
 		}
 	else
@@ -666,10 +761,7 @@ TriangleKdTree::calcTriangleDistanceNode(
 		
 		/* Check the other child if it potentially contains a closer triangle: */
 		if(Math::sqr(position[node.splitDimension]-node.plane)<distance.dist2)
-			{
-			childIndex=1-childIndex;
-			calcTriangleDistanceNode(node.children[childIndex],position,distance);
-			}
+			calcTriangleDistanceNode(node.children[1-childIndex],position,distance);
 		}
 	}
 
@@ -743,6 +835,20 @@ TriangleKdTree::intersectXray(
 	/* Intersect the ray with the root node: */
 	RayIntersectionList result;
 	intersectXrayNode(root,start,result);
+	
+	// std::sort(result.begin(),result.end());
+	
+	return result;
+	}
+
+TriangleKdTree::TriangleDistance
+TriangleKdTree::calcTriangleDistance(
+	const TriangleKdTree::Point& position,
+	TriangleKdTree::Scalar maxDist2) const
+	{
+	/* Intersect the ray with the root node: */
+	TriangleDistance result(nil,maxDist2);
+	calcTriangleDistanceNode(root,position,result);
 	
 	return result;
 	}

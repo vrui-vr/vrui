@@ -38,6 +38,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <IO/ValueSource.h>
 #include <IO/OpenFile.h>
 #include <Math/Math.h>
+#include <Math/Constants.h>
 #include <Geometry/Box.h>
 #include <Geometry/OrthogonalTransformation.h>
 #include <Geometry/OutputOperators.h>
@@ -638,79 +639,7 @@ EditableGrid* GridEditor::loadSdfFile(const std::string& fileName)
 	return result.releaseTarget();
 	}
 
-namespace {
-
-/****************
-Helper functions:
-****************/
-
-std::vector<SceneGraph::Scalar> intersectXray(const SceneGraph::Point& start,const std::vector<SceneGraph::Point>& triangles) // Returns all intersections between a ray along the positive x axis from the given start point with the given set of triangles, ordered by x position
-	{
-	std::vector<SceneGraph::Scalar> result;
-	
-	/* Test all triangles in the triangle set: */
-	for(std::vector<SceneGraph::Point>::const_iterator tIt=triangles.begin();tIt!=triangles.end();tIt+=3)
-		{
-		/* Sort the triangle's vertices by their z values: */
-		const SceneGraph::Point* v0=&tIt[0];
-		const SceneGraph::Point* v1=&tIt[1];
-		if((*v0)[2]>(*v1)[2])
-			Misc::swap(v0,v1);
-		const SceneGraph::Point* v2=&tIt[2];
-		if((*v1)[2]>(*v2)[2])
-			Misc::swap(v1,v2);
-		if((*v0)[2]>(*v1)[2])
-			Misc::swap(v0,v1);
-		
-		/* Intersect the triangle with the plane parallel to the (x, y) plane containing the ray: */
-		SceneGraph::Point e0,e1;
-		bool haveEdge=false;
-		if((*v0)[2]<start[2]&&(*v1)[2]<start[2]&&(*v2)[2]>=start[2])
-			{
-			e0=Geometry::affineCombination(*v0,*v2,(start[2]-(*v0)[2])/((*v2)[2]-(*v0)[2]));
-			e1=Geometry::affineCombination(*v1,*v2,(start[2]-(*v1)[2])/((*v2)[2]-(*v1)[2]));
-			haveEdge=true;
-			}
-		else if((*v0)[2]<start[2]&&(*v1)[2]>=start[2]&&(*v2)[2]>=start[2])
-			{
-			e0=Geometry::affineCombination(*v0,*v1,(start[2]-(*v0)[2])/((*v1)[2]-(*v0)[2]));
-			e1=Geometry::affineCombination(*v0,*v2,(start[2]-(*v0)[2])/((*v2)[2]-(*v0)[2]));
-			haveEdge=true;
-			}
-		if(haveEdge)
-			{
-			/* Intersect the edge in the intersection plane with the ray: */
-			if(e0[1]<start[1]&&e1[1]>=start[1])
-				{
-				SceneGraph::Scalar w=(start[1]-e0[1])/(e1[1]-e0[1]);
-				SceneGraph::Scalar x=e0[0]*(SceneGraph::Scalar(1)-w)+e1[0]*w;
-				if(x>=start[0])
-					{
-					/* We have an intersection: */
-					result.push_back(x);
-					}
-				}
-			else if(e0[1]>=start[1]&&e1[1]<start[1])
-				{
-				SceneGraph::Scalar w=(start[1]-e1[1])/(e0[1]-e1[1]);
-				SceneGraph::Scalar x=e1[0]*(SceneGraph::Scalar(1)-w)+e0[0]*w;
-				if(x>=start[0])
-					{
-					/* We have an intersection: */
-					result.push_back(x);
-					}
-				}
-			}
-		}
-	
-	/* Sort and return the set of intersections: */
-	std::sort(result.begin(),result.end());
-	return result;
-	}
-
-}
-
-EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,const EditableGrid::Size& cellSize)
+EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,double resolutionScale)
 	{
 	/* Use a scene graph mesh file node to load the mesh file: */
 	Realtime::TimePointMonotonic timer1;
@@ -719,16 +648,23 @@ EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,const Editabl
 	meshFile.update();
 	std::cout<<"Loaded input file in "<<double(timer1.setAndDiff())*1000.0<<" ms"<<std::endl;
 	
-	/* Fit a grid around the mesh: */
+	/* Calculate a grid cell size to approximate a target number of cells: */
 	SceneGraph::Box meshBox=meshFile.calcBoundingBox();
 	std::cout<<"Mesh bounding box: "<<meshBox.min<<", "<<meshBox.max<<std::endl;
+	double meshVolume=(meshBox.max[0]-meshBox.min[0])*(meshBox.max[1]-meshBox.min[1])*(meshBox.max[2]-meshBox.min[2])*Math::pow(1.1,3.0);
+	double targetNumCells=256.0*256.0*256.0;
+	SceneGraph::Scalar cs(Math::pow(meshVolume/(targetNumCells*resolutionScale),1.0/3.0));
+	EditableGrid::Size cellSize(cs,cs,cs);
+	
+	/* Fit a grid around the mesh: */
 	EditableGrid::Point origin;
 	EditableGrid::Index numVertices;
 	for(int i=0;i<3;++i)
 		{
-		SceneGraph::Scalar min=Math::floor(meshBox.min[i]/cellSize[i])-SceneGraph::Scalar(2);
+		SceneGraph::Scalar border=(meshBox.max[i]-meshBox.min[i])*SceneGraph::Scalar(0.05);
+		SceneGraph::Scalar min=Math::floor((meshBox.min[i]-border)/cellSize[i]);
 		origin[i]=min*cellSize[i];
-		SceneGraph::Scalar max=Math::ceil(meshBox.max[i]/cellSize[i])+SceneGraph::Scalar(2);
+		SceneGraph::Scalar max=Math::ceil((meshBox.max[i]+border)/cellSize[i]);
 		numVertices[i]=int(max-min)+1;
 		}
 	
@@ -788,11 +724,13 @@ EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,const Editabl
 	/* Create a triangle kd-tree: */
 	Realtime::TimePointMonotonic timer3;
 	TriangleKdTree triangleTree(triangles);
-	triangleTree.createTree(meshBox,64);
+	triangleTree.createTree(meshBox,16);
 	std::cout<<"Created triangle kd-tree in "<<double(timer3.setAndDiff())*1000.0<<" ms"<<std::endl;
 	
 	/* Calculate inside/outside values for all grid vertices: */
 	Realtime::TimePointMonotonic timer4;
+	TriangleKdTree::Scalar maxDist2=Math::sqr(cellSize[0])+Math::sqr(cellSize[1])+Math::sqr(cellSize[2])*Math::sqr(TriangleKdTree::Scalar(2));
+	
 	for(int z=0;z<numVertices[2];++z)
 		for(int y=0;y<numVertices[1];++y)
 			{
@@ -800,35 +738,33 @@ EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,const Editabl
 			TriangleKdTree::Point start=grid->getBox().min;
 			start[1]+=TriangleKdTree::Scalar(SceneGraph::Scalar(y)*cellSize[1]);
 			start[2]+=TriangleKdTree::Scalar(SceneGraph::Scalar(z)*cellSize[2]);
-			TriangleKdTree::IntersectionResultList intersections=triangleTree.intersectXray(start);
+			TriangleKdTree::RayIntersectionList intersections=triangleTree.intersectXray(start);
 			
-			/* Process all spans between intersections: */
+			/* Add a sentinel to the intersection list: */
+			intersections.push_back(TriangleKdTree::RayIntersection(TriangleKdTree::nil,Math::Constants<TriangleKdTree::Scalar>::max));
+			
+			/* Process all voxels on the current grid line: */
 			EditableGrid::Index i(0,y,z);
-			float value=0.0f; // Start from the outside
-			TriangleKdTree::IntersectionResultList::const_iterator iIt=intersections.begin();
-			int spanEnd=numVertices[0];
-			if(iIt!=intersections.end())
-				{
-				spanEnd=int(Math::floor((iIt->lambda-start[0])/TriangleKdTree::Scalar(cellSize[0])));
-				++iIt;
-				}
+			float inside=-1.0f/Math::sqrt(maxDist2); // Start from the outside
+			TriangleKdTree::RayIntersectionList::iterator iIt=intersections.begin();
 			while(i[0]<numVertices[0])
 				{
-				/* Assign the current vertex value to all vertices in the span: */
-				while(i[0]<spanEnd)
+				/* Process any crossed intersections since the previous voxel: */
+				while(start[0]>=iIt->lambda)
 					{
-					grid->setValue(i,value);
-					++i[0];
-					}
-				
-				/* Go to the next span: */
-				value=1.0f-value; // Flip the inside/outside flag
-				spanEnd=numVertices[0];
-				if(iIt!=intersections.end())
-					{
-					spanEnd=int(Math::floor((iIt->lambda-start[0])/TriangleKdTree::Scalar(cellSize[0])));
+					/* Flip the inside/outside flag: */
+					inside=-inside;
+					
+					/* Go to the next intersection: */
 					++iIt;
 					}
+				
+				/* Calculate and assign the voxel's value: */
+				grid->setValue(i,Math::sqrt(triangleTree.calcTriangleDistance(start,maxDist2).dist2)*inside+0.5);
+				
+				/* Go to the next voxel: */
+				++i[0];
+				start[0]+=cellSize[0];
 				}
 			}
 	std::cout<<"Created grid in "<<double(timer4.setAndDiff())*1000.0<<" ms"<<std::endl;
@@ -859,6 +795,8 @@ GridEditor::GridEditor(int& argc,char**& argv)
 	parser.addArrayOption("cellSize","cs",3,newCellSize.getComponents(),"<cx> <cy> <cz>","Sets the cell size of a newly-created grid in some coordinate unit. Default 1 1 1.");
 	EditableGrid::Index newGridSize(256,256,256);
 	parser.addArrayOption("gridSize","gs",3,newGridSize.getComponents(),"<sx> <sy> <sz>","Sets the size of a newly-created grid. Default 256 256 256.");
+	double resolutionScale=1.0;
+	parser.addValueOption("resolutionScale","rs",resolutionScale,"<resolution scale factor>","Scale factor to increase or decrase the number grid cells generated for mesh files. Default 1.0, generating approx. 256^3 grid cells.");
 	parser.parse(argv,argv+argc);
 	if(parser.hadHelp())
 		{
@@ -904,7 +842,7 @@ GridEditor::GridEditor(int& argc,char**& argv)
 		else
 			{
 			/* Create a grid from a mesh file: */
-			grid=loadMeshFile(inputFileNames.front(),newCellSize);
+			grid=loadMeshFile(inputFileNames.front(),resolutionScale);
 			}
 		}
 	else

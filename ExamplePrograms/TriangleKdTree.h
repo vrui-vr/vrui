@@ -85,6 +85,12 @@ class TriangleKdTree
 			:triangleIndex(sTriangleIndex),lambda(sLambda)
 			{
 			}
+		
+		/* Methods: */
+		bool operator<(const RayIntersection& other) const
+			{
+			return lambda<other.lambda;
+			}
 		};
 	
 	typedef std::vector<RayIntersection> RayIntersectionList; // Type for lists of ray intersections
@@ -166,6 +172,7 @@ class TriangleKdTree
 	void createTree(const Box& sBoundingBox,Card sMaxTrianglesPerNode,const CardList& triangleIndices); // Creates a kd-tree for the given bounding box, containing only the triangles whose indices are in the given list
 	void createTree(const Box& sBoundingBox,Card sMaxTrianglesPerNode); // Ditto, using all triangles in the triangle list
 	RayIntersectionList intersectXray(const Point& start) const; // Intersects a ray along the positive x axis starting at the given starting point with the kd-tree; returns list of all intersection x coordinates in increasing order
+	TriangleDistance calcTriangleDistance(const Point& position,Scalar maxDist2) const; // Returns the distance from the query position to the closest triangle
 	};
 
 #endif
