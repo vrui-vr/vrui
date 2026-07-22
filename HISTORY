@@ -8831,3 +8831,5 @@ Vrui-15.0-001:
   Geometry/IntersectionTests.icpp.
 - Added version of Vrui::submitJob without a completion callback to
   Vrui's kernel interface.
+- Added error checking for execve in Vrui::ScriptExecutorTool to avoid
+  crashes when the selected script cannot be executed.
