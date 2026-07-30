@@ -8833,3 +8833,5 @@ Vrui-15.0-001:
   Vrui's kernel interface.
 - Added error checking for execve in Vrui::ScriptExecutorTool to avoid
   crashes when the selected script cannot be executed.
+- Added more debugging code to Comm::HttpServer.
+- Improved HTTP connection management in VRServerLauncher.
