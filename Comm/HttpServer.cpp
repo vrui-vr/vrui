@@ -61,9 +61,6 @@ Methods of class HttpServer::Connection:
 
 void HttpServer::Connection::close(void)
 	{
-	// DEBUGGING
-	std::cout<<"Comm::HttpServer: Closing HTTP connection with "<<peerName<<std::endl;
-	
 	/* Remove this connection from the server's set of active connections: */
 	server.connections.remove(this);
 	
@@ -477,8 +474,31 @@ HttpServer::Connection::Connection(HttpServer& sServer)
 
 HttpServer::Connection::~Connection(void)
 	{
+	// DEBUGGING
+	std::cout<<"Comm::HttpServer: Closing HTTP connection with "<<peerName<<std::endl;
+	
 	/* Delete a potential lingering HTTP request header: */
 	delete requestHeader;
+	
+	#if 0 // This doesn't really help at all with the TIME_WAIT problem :(
+	
+	/* Try shutting down the connection politely: */
+	try
+		{
+		/* Signal to the peer that we have nothing left to write: */
+		pipe->shutdown(false,true);
+		
+		/* Skip all incoming data until the peer hangs up: */
+		void* buffer;
+		while(!pipe->eof())
+			pipe->readInBuffer(buffer);
+		}
+	catch(const std::runtime_error& err)
+		{
+		/* Just carry on... */
+		}
+	
+	#endif
 	}
 
 /***************************
@@ -511,6 +531,9 @@ HttpServer::HttpServer(Threads::RunLoop& sRunLoop,int listenPort)
 
 HttpServer::~HttpServer(void)
 	{
+	/* Abort all still active connections to notify clients that the server is going down: */
+	for(Misc::SimpleObjectSet<Connection>::iterator cIt=connections.begin();cIt!=connections.end();++cIt)
+		cIt->pipe->abort();
 	}
 
 int HttpServer::getPort(void) const

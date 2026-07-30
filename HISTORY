@@ -8838,3 +8838,8 @@ Vrui-15.0-001:
 - No need to shutdown() before close() in Comm::HttpServer::~HttpServer.
 - Add more politeness when disconnecting from server in
   Vrui::VRDeviceClient::~VRDeviceClient.
+- Add abort() method to Comm::Pipe class to shut down a pipe with an
+  error condition, such as TCP RST for a TCP pipe.
+  - Implement abort() in Comm::TCPPipe using SO_LINGER socket option.
+- Abort all remaining client connections in
+  Comm::HttpServer::~HttpServer.

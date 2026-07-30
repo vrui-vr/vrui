@@ -1,7 +1,7 @@
 /***********************************************************************
 TCPPipe - Class for high-performance reading/writing from/to connected
 TCP sockets.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -263,6 +263,18 @@ void TCPPipe::shutdown(bool read,bool write)
 		::shutdown(fd,SHUT_RD);
 	else if(write)
 		::shutdown(fd,SHUT_WR);
+	}
+
+void TCPPipe::abort(void)
+	{
+	/* Discard the contents of the write buffer: */
+	discard();
+	
+	/* Set the SO_LINGER socket option on the TCP socket with zero time-out: */
+	struct linger l;
+	l.l_onoff=1;
+	l.l_linger=0;
+	setsockopt(fd,SOL_SOCKET,SO_LINGER,&l,sizeof(struct linger));
 	}
 
 int TCPPipe::getPortId(void) const
