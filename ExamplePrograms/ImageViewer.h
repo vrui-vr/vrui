@@ -35,6 +35,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Vrui/Application.h>
 #include <Vrui/Tool.h>
 #include <Vrui/GenericToolFactory.h>
+#include <Vrui/TransformTool.h>
 
 /* Forward declarations: */
 namespace Threads {
@@ -91,6 +92,28 @@ class ImageViewer:public Vrui::Application,public GLObject
 		/* Constructors and destructors: */
 		DataItem(void);
 		virtual ~DataItem(void);
+		};
+	
+	class PixelSnapperTool; // Forward declaration
+	typedef Vrui::GenericToolFactory<PixelSnapperTool> PixelSnapperToolFactory; // Pixel snapper tool class uses the generic factory class
+	
+	class PixelSnapperTool:public Vrui::TransformTool,public Vrui::Application::Tool<ImageViewer> // A tool class to snap input device positions to pixel corners
+		{
+		friend class Vrui::GenericToolFactory<PixelSnapperTool>;
+		
+		/* Elements: */
+		private:
+		static PixelSnapperToolFactory* factory; // Pointer to the factory object for this class
+		
+		/* Constructors and destructors: */
+		public:
+		static void initClass(void); // Initializes the pixel snapper tool factory class
+		PixelSnapperTool(const Vrui::ToolFactory* factory,const Vrui::ToolInputAssignment& inputAssignment);
+		
+		/* Methods: */
+		virtual void initialize(void);
+		virtual const Vrui::ToolFactory* getFactory(void) const;
+		virtual void frame(void);
 		};
 	
 	class PipetteTool; // Forward declaration

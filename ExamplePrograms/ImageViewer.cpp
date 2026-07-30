@@ -55,6 +55,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <GLMotif/TextField.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/ToolManager.h>
+#include <Vrui/InputGraphManager.h>
 
 #if 0
 // DEBUGGING
@@ -86,6 +87,92 @@ ImageViewer::DataItem::~DataItem(void)
 	{
 	/* Destroy the texture object: */
 	glDeleteTextures(1,&textureId);
+	}
+
+/******************************************************
+Static elements of class ImageViewer::PixelSnapperTool:
+******************************************************/
+
+ImageViewer::PixelSnapperToolFactory* ImageViewer::PixelSnapperTool::factory=0;
+
+/**********************************************
+Methods of class ImageViewer::PixelSnapperTool:
+**********************************************/
+
+void ImageViewer::PixelSnapperTool::initClass(void)
+	{
+	/* Load the parent tool class: */
+	Vrui::ToolFactory* parentFactory=Vrui::getToolManager()->loadClass("TransformTool");
+	
+	/* Create the pixel snapper tool class's factory: */
+	PixelSnapperToolFactory* factory=new PixelSnapperToolFactory("PixelSnapperTool","Snap to Pixels",parentFactory,*Vrui::getToolManager());
+	
+	/* Set the pixel snapper tool class's input layout: */
+	factory->setNumButtons(0,true);
+	factory->setNumValuators(0,true);
+	
+	/* Add the factory to the tool manager: */
+	Vrui::getToolManager()->addClass(factory,Vrui::ToolManager::defaultToolFactoryDestructor);
+	}
+
+ImageViewer::PixelSnapperTool::PixelSnapperTool(const Vrui::ToolFactory* factory,const Vrui::ToolInputAssignment& inputAssignment)
+	:Vrui::TransformTool(factory,inputAssignment)
+	{
+	/* Set the source device: */
+	if(input.getNumButtonSlots()>0)
+		sourceDevice=getButtonDevice(0);
+	else
+		sourceDevice=getValuatorDevice(0);
+	}
+
+void ImageViewer::PixelSnapperTool::initialize(void)
+	{
+	/* Initialize the base tool: */
+	TransformTool::initialize();
+	
+	/* Disable the transformed device's glyph: */
+	Vrui::getInputGraphManager()->getInputDeviceGlyph(transformedDevice).disable();
+	}
+
+const Vrui::ToolFactory* ImageViewer::PixelSnapperTool::getFactory(void) const
+	{
+	return factory;
+	}
+
+void ImageViewer::PixelSnapperTool::frame(void)
+	{
+	/* Get the source position in navigational coordinates: */
+	Vrui::Point sourcePos;
+	if(sourceDevice->isRayDevice())
+		{
+		/* Get the source device's interaction ray in navigational coordinates: */
+		Vrui::Ray ray=sourceDevice->getRay();
+		ray.transform(Vrui::getInverseNavigationTransformation());
+		
+		/* Intersect the ray with the z=0 plane: */
+		if(ray.getOrigin()[2]*ray.getDirection()[2]<Vrui::Scalar(0))
+			sourcePos=ray(-ray.getOrigin()[2]/ray.getDirection()[2]);
+		else
+			{
+			/* Use the source device's 3D position instead: */
+			sourcePos=Vrui::getInverseNavigationTransformation().transform(sourceDevice->getPosition());
+			}
+		}
+	else
+		{
+		/* Use the source device's 3D position: */
+		sourcePos=Vrui::getInverseNavigationTransformation().transform(sourceDevice->getPosition());
+		}
+	
+	/* Snap the source position: */
+	for(int i=0;i<2;++i)
+		sourcePos[i]=Math::floor(sourcePos[i]+Vrui::Scalar(0.5));
+	sourcePos[2]=Vrui::Scalar(0);
+	
+	/* Update the transformed device: */
+	Vrui::TrackerState ts(Vrui::getNavigationTransformation().transform(sourcePos)-Vrui::Point::origin,sourceDevice->getOrientation());
+	transformedDevice->setTransformation(ts);
+	transformedDevice->setDeviceRay(sourceDevice->getDeviceRayDirection(),sourceDevice->getDeviceRayStart());
 	}
 
 /*************************************************
@@ -1309,7 +1396,8 @@ ImageViewer::ImageViewer(int& argc,char**& argv)
 	infoDialog=createInfoDialog();
 	updateInfoDialog();
 	
-	/* Initialize the tool class: */
+	/* Initialize the tool classes: */
+	PixelSnapperTool::initClass();
 	PipetteTool::initClass();
 	HomographySamplerTool::initClass();
 	addEventTool("Previous Image",0,0);
@@ -1359,16 +1447,29 @@ void ImageViewer::display(GLContextData& contextData) const
 		x1=0.0f;
 		}
 	
-	/* Draw the image: */
+	/*********************************************************************
+	We are going to render the image in physical coordinates, to avoid
+	OpenGL rounding errors when zooming in on large images.
+	*********************************************************************/
+	
+	/* Go to physical space, retrieve the navigation transformation, and calculate image corners in physical space: */
+	Vrui::goToPhysicalSpace(contextData);
+	const Vrui::NavTransform& nav=Vrui::getNavigationTransformation();
+	Vrui::Point c0=nav.transform(Vrui::Point(0,0,0));
+	Vrui::Point c1=nav.transform(Vrui::Point(image.getSize(0),0,0));
+	Vrui::Point c2=nav.transform(Vrui::Point(0,image.getSize(1),0));
+	Vrui::Point c3=nav.transform(Vrui::Point(image.getSize(0),image.getSize(1),0));
+	
+	/* Draw the image, explicitly transforming image corner positions to physical space: */
 	glBegin(GL_QUADS);
 	glTexCoord2f(x0,0.0f);
-	glVertex2i(0,0);
+	glVertex(c0);
 	glTexCoord2f(x1,0.0f);
-	glVertex2i(image.getSize(0),0);
+	glVertex(c1);
 	glTexCoord2f(x1,1.0f);
-	glVertex2i(image.getSize(0),image.getSize(1));
+	glVertex(c3);
 	glTexCoord2f(x0,1.0f);
-	glVertex2i(0,image.getSize(1));
+	glVertex(c2);
 	glEnd();
 	
 	/* Protect the texture object: */
@@ -1380,11 +1481,14 @@ void ImageViewer::display(GLContextData& contextData) const
 	
 	glBegin(GL_QUADS);
 	glNormal3f(0.0f,0.0f,-1.0f);
-	glVertex2i(0,0);
-	glVertex2i(0,image.getSize(1));
-	glVertex2i(image.getSize(0),image.getSize(1));
-	glVertex2i(image.getSize(0),0);
+	glVertex(c0);
+	glVertex(c2);
+	glVertex(c3);
+	glVertex(c1);
 	glEnd();
+	
+	/* Go back to navigational space: */
+	glPopMatrix();
 	
 	/* Restore OpenGL state: */
 	glPopAttrib();
