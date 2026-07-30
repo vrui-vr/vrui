@@ -20,6 +20,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include "ImageViewer.h"
 
 #include <string.h>
+#include <algorithm>
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
 #include <Threads/FunctionCalls.h>
@@ -30,17 +31,28 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Math/Constants.h>
 #include <Math/Matrix.h>
 #include <Math/SimplexMinimizer.h>
+#include <Geometry/OrthogonalTransformation.h>
 #include <Geometry/ProjectiveTransformation.h>
 #include <GL/gl.h>
 #include <GL/GLColorTemplates.h>
 #include <GL/GLMaterial.h>
+#include <GL/GLContextData.h>
+#include <GL/Extensions/GLEXTFramebufferObject.h>
+#include <GL/Extensions/GLEXTTextureFilterAnisotropic.h>
 #include <GL/GLGeometryWrappers.h>
 #include <Images/RGBImage.h>
 #include <Images/ImageFileFormats.h>
 #include <Images/ReadImageFile.h>
 #include <Images/WriteImageFile.h>
+#include <GLMotif/StyleSheet.h>
 #include <GLMotif/PopupMenu.h>
+#include <GLMotif/PopupWindow.h>
+#include <GLMotif/Margin.h>
+#include <GLMotif/RowColumn.h>
+#include <GLMotif/Label.h>
 #include <GLMotif/Button.h>
+#include <GLMotif/ToggleButton.h>
+#include <GLMotif/TextField.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/ToolManager.h>
 
@@ -50,6 +62,31 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Realtime/Time.h>
 #include <Geometry/OutputOperators.h>
 #endif
+
+/***************************************
+Methods of struct ImageViewer::DataItem:
+***************************************/
+
+ImageViewer::DataItem::DataItem(void)
+	:haveAutomaticMipMapGeneration(GLEXTFramebufferObject::isSupported()),
+	 haveAnisotropicFiltering(GLEXTTextureFilterAnisotropic::isSupported()),
+	 textureId(0),textureVersion(0)
+	{
+	/* Initialize OpenGL extensions: */
+	if(haveAutomaticMipMapGeneration)
+		GLEXTFramebufferObject::initExtension();
+	if(haveAnisotropicFiltering)
+		GLEXTTextureFilterAnisotropic::initExtension();
+	
+	/* Create the texture object: */
+	glGenTextures(1,&textureId);
+	}
+
+ImageViewer::DataItem::~DataItem(void)
+	{
+	/* Destroy the texture object: */
+	glDeleteTextures(1,&textureId);
+	}
 
 /*************************************************
 Static elements of class ImageViewer::PipetteTool:
@@ -173,7 +210,7 @@ void ImageViewer::PipetteTool::buttonCallback(int buttonSlotIndex,Vrui::InputDev
 		setPixelPos();
 		
 		/* Access the displayed image: */
-		const Images::BaseImage& image(application->textures.getTexture(application->imageKey).getImage());
+		const Images::BaseImage& image=application->image;
 		
 		/* Calculate the average pixel value inside the selection rectangle: */
 		int xmin=Math::max(Math::min(x0,x),0);
@@ -418,7 +455,7 @@ class LDKernel // Minimization kernel to calculate lens distortion parameters
 void ImageViewer::HomographySamplerTool::resample(void)
 	{
 	/* Access the displayed image: */
-	const Images::BaseImage& image(application->textures.getTexture(application->imageKey).getImage());
+	const Images::BaseImage& image=application->image;
 	
 	/* Use a simple lens distortion model to straighten out the current quad: */
 	LDKernel kernel(quad,edge,image.getSize());
@@ -755,6 +792,70 @@ Methods of class ImageViewer:
 
 namespace {
 
+/**************
+Helper classes:
+**************/
+
+struct Entry // Structure to represent a directory entry that is either a subdirectory or a compatible image file
+	{
+	/* Elements: */
+	public:
+	std::string name; // Name of the directory entry
+	bool directory; // Flag if the entry is a subdirectory
+	
+	/* Constructors and destructors: */
+	Entry(const char* sName,bool sDirectory)
+		:name(sName),directory(sDirectory)
+		{
+		}
+	
+	/* Methods: */
+	friend bool operator<(const Entry& e1,const Entry& e2)
+		{
+		return e1.name<e2.name;
+		}
+	};
+
+}
+
+void ImageViewer::addDirectory(IO::Directory& directory)
+	{
+	/* Enumerate all directories and compatible image files in the given directory: */
+	std::vector<Entry> entries;
+	while(directory.readNextEntry())
+		{
+		Misc::PathType entryType=directory.getEntryType();
+		if(entryType==Misc::PATHTYPE_DIRECTORY&&directory.getEntryName()[0]!='.')
+			{
+			/* Store the entry as a directory: */
+			entries.push_back(Entry(directory.getEntryName(),true));
+			}
+		else if(entryType==Misc::PATHTYPE_FILE&&Images::canReadImageFileFormat(directory.getEntryName()))
+			{
+			/* Store the entry as a compatible image file: */
+			entries.push_back(Entry(directory.getEntryName(),false));
+			}
+		}
+	
+	/* Sort the directory contents by name: */
+	std::sort(entries.begin(),entries.end());
+	
+	/* Add all compatible directory entries to the image source list: */
+	for(std::vector<Entry>::iterator eIt=entries.begin();eIt!=entries.end();++eIt)
+		if(eIt->directory)
+			{
+			/* Add the contents of the subdirectory recursively: */
+			addDirectory(*directory.openDirectory(eIt->name.c_str()));
+			}
+		else
+			{
+			/* Add the image file: */
+			imageSources.push_back(ImageSource(directory,eIt->name));
+			}
+	}
+
+namespace {
+
 template <class ScalarParam>
 class PixelExtractor
 	{
@@ -796,29 +897,103 @@ class PixelExtractor
 
 ImageViewer::Color ImageViewer::getPixel(unsigned int x,unsigned int y) const
 	{
-	switch(image->getScalarType())
+	switch(image.getScalarType())
 		{
 		case GL_UNSIGNED_BYTE:
-			return PixelExtractor<GLubyte>::getPixel(*image,x,y);
+			return PixelExtractor<GLubyte>::getPixel(image,x,y);
 		
 		case GL_UNSIGNED_SHORT:
-			return PixelExtractor<GLushort>::getPixel(*image,x,y);
+			return PixelExtractor<GLushort>::getPixel(image,x,y);
 		
 		case GL_SHORT:
-			return PixelExtractor<GLshort>::getPixel(*image,x,y);
+			return PixelExtractor<GLshort>::getPixel(image,x,y);
 		
 		case GL_UNSIGNED_INT:
-			return PixelExtractor<GLuint>::getPixel(*image,x,y);
+			return PixelExtractor<GLuint>::getPixel(image,x,y);
 		
 		case GL_INT:
-			return PixelExtractor<GLint>::getPixel(*image,x,y);
+			return PixelExtractor<GLint>::getPixel(image,x,y);
 			break;
 		
 		case GL_FLOAT:
-			return PixelExtractor<GLfloat>::getPixel(*image,x,y);
+			return PixelExtractor<GLfloat>::getPixel(image,x,y);
 		
 		default:
 			return Color(0.0f,0.0f,0.0f,1.0f);
+		}
+	}
+
+void ImageViewer::updateInfoDialog(void)
+	{
+	/* Update the image index and total number of images: */
+	imageIndex->setValue((unsigned int)((isIt-imageSources.begin())+1));
+	imageNumImages->setValue((unsigned int)(imageSources.size()));
+	
+	/* Update the directory containing the image file and the image file name: */
+	imageDirectoryName->setValue(isIt->directory->getPath());
+	imageFileName->setValue(isIt->fileName);
+	
+	/* Update the image size: */
+	for(int i=0;i<2;++i)
+		imageSize[i]->setValue(image.getSize(i));
+	
+	/* Update the image's channel layout: */
+	imageNumChannels->setValue(image.getNumChannels());
+	imageChannelSize->setValue(image.getChannelSize());
+	if(image.getNumChannels()>1)
+		{
+		imageChannelLayoutLabel1->setString("channels of");
+		if(image.getChannelSize()>1)
+			imageChannelLayoutLabel2->setString("bytes each");
+		else
+			imageChannelLayoutLabel2->setString("byte each");
+		}
+	else
+		{
+		imageChannelLayoutLabel1->setString("channel of");
+		if(image.getChannelSize()>1)
+			imageChannelLayoutLabel2->setString("bytes");
+		else
+			imageChannelLayoutLabel2->setString("byte");
+		}
+	
+	/* Update the image's component data type: */
+	switch(image.getScalarType())
+		{
+		case GL_BYTE:
+			imageChannelType->setString("signed 8-bit integer");
+			break;
+		
+		case GL_UNSIGNED_BYTE:
+			imageChannelType->setString("unsigned 8-bit integer");
+			break;
+		
+		case GL_SHORT:
+			imageChannelType->setString("signed 16-bit integer");
+			break;
+		
+		case GL_UNSIGNED_SHORT:
+			imageChannelType->setString("unsigned 16-bit integer");
+			break;
+		
+		case GL_INT:
+			imageChannelType->setString("signed 32-bit integer");
+			break;
+		
+		case GL_UNSIGNED_INT:
+			imageChannelType->setString("unsigned 32-bit integer");
+			break;
+		
+		case GL_FLOAT:
+			imageChannelType->setString("32-bit floating-point number");
+			break;
+		
+		case GL_DOUBLE:
+			imageChannelType->setString("64-bit floating-point number");
+			break;
+		
+		default:
+			imageChannelType->setString("<unknown>");
 		}
 	}
 
@@ -839,6 +1014,11 @@ class ImageLoader:public Threads::WorkerPool::JobFunction // Class to load an im
 	/* Constructors and destructors: */
 	public:
 	ImageLoader(IO::Directory& sDirectory,const char* sFileName)
+		:directory(&sDirectory),
+		 fileName(sFileName)
+		{
+		}
+	ImageLoader(IO::Directory& sDirectory,const std::string& sFileName)
 		:directory(&sDirectory),
 		 fileName(sFileName)
 		{
@@ -867,28 +1047,38 @@ class ImageLoader:public Threads::WorkerPool::JobFunction // Class to load an im
 
 void ImageViewer::loadImageCompleteCallback(Threads::FunctionCall<int>& job)
 	{
-	/* Don't delete the previous image, because Images::TextureSet is buggered beyond belief: */
-	// textures.deleteTexture(imageKey);
-	
-	/* Add the new image to the texture set: */
+	/* Calculate a transformation to align the newly loaded image with the currently displayed one: */
 	const Images::BaseImage& newImage=static_cast<ImageLoader&>(job).getImage();
-	Images::TextureSet::Texture& tex=textures.addTexture(newImage,GL_TEXTURE_2D,newImage.getInternalFormat());
-	imageKey=tex.getKey();
-	image=&tex.getImage();
+	Vrui::NavTransform t=Vrui::NavTransform::translateFromOriginTo(Vrui::Point(Math::div2(Scalar(image.getSize(0))),Math::div2(Scalar(image.getSize(1))),0));
+	Scalar area=Scalar(image.getSize(0))*Scalar(image.getSize(1));
+	Scalar newArea=Scalar(newImage.getSize(0))*Scalar(newImage.getSize(1));
+	t*=Vrui::NavTransform::scale(Math::sqrt(area/newArea));
+	t*=Vrui::NavTransform::translateToOriginFrom(Vrui::Point(Math::div2(Scalar(newImage.getSize(0))),Math::div2(Scalar(newImage.getSize(1))),0));
+	Vrui::concatenateNavigationTransformation(t);
 	
-	/* Set clamping and filtering parameters for mip-mapped linear interpolation: */
-	tex.setMipmapRange(0,1000);
-	tex.setWrapModes(GL_CLAMP_TO_EDGE,GL_CLAMP_TO_EDGE);
-	tex.setFilterModes(GL_LINEAR_MIPMAP_LINEAR,GL_LINEAR);
+	/* Replace the currently displayed image with the just loaded one: */
+	image=newImage;
+	++imageVersion;
 	
-	/* Center the image in the display: */
-	resetNavigation();
+	/* Update the image information dialog: */
+	updateInfoDialog();
 	}
 
 void ImageViewer::loadImageCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData)
 	{
+	/* Add the selected image file to the end of the list of image sources: */
+	imageSources.push_back(ImageSource(*cbData->selectedDirectory,cbData->selectedFileName));
+	isIt=imageSources.end();
+	--isIt;
+	
 	/* Submit a job to load the selected image file in the background: */
-	Vrui::submitJob(*new ImageLoader(*cbData->selectedDirectory,cbData->selectedFileName),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+	Vrui::submitJob(*new ImageLoader(*isIt->directory,isIt->fileName),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+	}
+
+void ImageViewer::showInfoDialogButtonSelectedCallback(Misc::CallbackData* cbData)
+	{
+	/* Show the image information dialog: */
+	Vrui::popupPrimaryWidget(infoDialog);
 	}
 
 GLMotif::PopupMenu* ImageViewer::createMainMenu(void)
@@ -903,9 +1093,142 @@ GLMotif::PopupMenu* ImageViewer::createMainMenu(void)
 	/* Hook the image file selection helper into the "load image" buttons: */
 	imageHelper.addLoadCallback(loadImageButton,*Threads::createFunctionCall(this,&ImageViewer::loadImageCallback));
 	
+	/* Create a button to show the image information dialog: */
+	GLMotif::Button* showInfoDialogButton=new GLMotif::Button("ShowInfoDialogButton",mainMenu,"Show Info Dialog");
+	showInfoDialogButton->getSelectCallbacks().add(this,&ImageViewer::showInfoDialogButtonSelectedCallback);
+	
+	/* Create toggle buttons to select display modes: */
+	smoothPixelsToggle=new GLMotif::ToggleButton("SmoothPixelsToggle",mainMenu,"Smooth Pixels");
+	smoothPixelsToggle->track(smoothPixels);
+	flipHToggle=new GLMotif::ToggleButton("FlipHToggle",mainMenu,"Flip Horizontally");
+	flipHToggle->track(flipH);
+	
 	/* Finish and return the main menu: */
 	mainMenu->manageMenu();
 	return mainMenu;
+	}
+
+GLMotif::PopupWindow* ImageViewer::createInfoDialog(void)
+	{
+	/* Access the style sheet: */
+	const GLMotif::StyleSheet& ss=*Vrui::getUiStyleSheet();
+	
+	GLMotif::PopupWindow* result=new GLMotif::PopupWindow("InfoDialog",Vrui::getWidgetManager(),"Image Information");
+	result->setCloseButton(true);
+	result->setResizableFlags(true,false);
+	
+	GLMotif::RowColumn* info=new GLMotif::RowColumn("Info",result,false);
+	info->setOrientation(GLMotif::RowColumn::VERTICAL);
+	info->setPacking(GLMotif::RowColumn::PACK_TIGHT);
+	info->setNumMinorWidgets(2);
+	
+	new GLMotif::Label("ImageSetLabel",info,"Image Set");
+	
+	GLMotif::Margin* imageSetMargin=new GLMotif::Margin("ImageSetMargin",info,false);
+	imageSetMargin->setAlignment(GLMotif::Alignment::LEFT);
+	
+	GLMotif::RowColumn* imageSetBox=new GLMotif::RowColumn("ImageSetBox",imageSetMargin,false);
+	imageSetBox->setOrientation(GLMotif::RowColumn::HORIZONTAL);
+	imageSetBox->setPacking(GLMotif::RowColumn::PACK_TIGHT);
+	
+	imageIndex=new GLMotif::TextField("ImageIndex",imageSetBox,4);
+	imageIndex->setValueType(GLMotif::TextField::UINT);
+	imageIndex->setEditable(false);
+	
+	new GLMotif::Label("OfLabel",imageSetBox,"of");
+	
+	imageNumImages=new GLMotif::TextField("ImageNumImages",imageSetBox,4);
+	imageNumImages->setValueType(GLMotif::TextField::UINT);
+	imageNumImages->setEditable(false);
+	
+	imageSetBox->manageChild();
+	
+	imageSetMargin->manageChild();
+	
+	new GLMotif::Label("ImageDirectoryNameLabel",info,"Directory");
+	
+	imageDirectoryName=new GLMotif::TextField("ImageDirectoryName",info,40);
+	imageDirectoryName->setHAlignment(GLFont::Left);
+	imageDirectoryName->setEditable(false);
+	
+	new GLMotif::Label("ImageFileNameLabel",info,"File");
+	
+	imageFileName=new GLMotif::TextField("ImageFileName",info,40);
+	imageFileName->setHAlignment(GLFont::Left);
+	imageFileName->setEditable(false);
+	
+	new GLMotif::Label("ImageSizeLabel",info,"Size");
+	
+	GLMotif::Margin* sizeMargin=new GLMotif::Margin("SizeMargin",info,false);
+	sizeMargin->setAlignment(GLMotif::Alignment::LEFT);
+	
+	GLMotif::RowColumn* sizeBox=new GLMotif::RowColumn("SizeBox",sizeMargin,false);
+	sizeBox->setOrientation(GLMotif::RowColumn::HORIZONTAL);
+	sizeBox->setPacking(GLMotif::RowColumn::PACK_TIGHT);
+	
+	imageSize[0]=new GLMotif::TextField("ImageWidth",sizeBox,6);
+	imageSize[0]->setValueType(GLMotif::TextField::UINT);
+	imageSize[0]->setEditable(false);
+	
+	new GLMotif::Label("ImageWidthUnitLabel",sizeBox,"pixels");
+	
+	new GLMotif::Label("ImageSizeCrossLabel",sizeBox," x ");
+	
+	imageSize[1]=new GLMotif::TextField("ImageHeight",sizeBox,6);
+	imageSize[1]->setValueType(GLMotif::TextField::UINT);
+	imageSize[1]->setEditable(false);
+	
+	new GLMotif::Label("ImageHeightUnitLabel",sizeBox,"pixels");
+	
+	sizeBox->setColumnWeight(0,0.45f);
+	sizeBox->setColumnWeight(1,0.0f);
+	sizeBox->setColumnWeight(2,0.1f);
+	sizeBox->setColumnWeight(3,0.45f);
+	sizeBox->setColumnWeight(4,0.0f);
+	
+	sizeBox->manageChild();
+	
+	sizeMargin->manageChild();
+	
+	new GLMotif::Label("ChannelLayoutLabel",info,"Channel Layout");
+	
+	GLMotif::Margin* channelLayoutMargin=new GLMotif::Margin("ChannelLayoutMargin",info,false);
+	channelLayoutMargin->setAlignment(GLMotif::Alignment::LEFT);
+	
+	GLMotif::RowColumn* channelLayoutBox=new GLMotif::RowColumn("ChannelLayoutBox",channelLayoutMargin,false);
+	channelLayoutBox->setOrientation(GLMotif::RowColumn::HORIZONTAL);
+	channelLayoutBox->setPacking(GLMotif::RowColumn::PACK_TIGHT);
+	
+	imageNumChannels=new GLMotif::TextField("ImageNumChannels",channelLayoutBox,3);
+	imageNumChannels->setValueType(GLMotif::TextField::UINT);
+	imageNumChannels->setEditable(false);
+	
+	imageChannelLayoutLabel1=new GLMotif::Label("ChannelLayoutLabel1",channelLayoutBox,"channels of");
+	
+	imageChannelSize=new GLMotif::TextField("ImageChannelSize",channelLayoutBox,3);
+	imageChannelSize->setValueType(GLMotif::TextField::UINT);
+	imageChannelSize->setEditable(false);
+	
+	imageChannelLayoutLabel2=new GLMotif::Label("ChannelLayoutLabel2",channelLayoutBox,"bytes each");
+	
+	channelLayoutBox->manageChild();
+	
+	channelLayoutMargin->manageChild();
+	
+	new GLMotif::Label("ChannelTypeLabel",info,"Channel Type");
+	
+	GLMotif::Margin* channelTypeMargin=new GLMotif::Margin("ChannelTypeMargin",info,false);
+	channelTypeMargin->setAlignment(GLMotif::Alignment::LEFT);
+	
+	imageChannelType=new GLMotif::TextField("ImageChannelType",channelTypeMargin,30);
+	imageChannelType->setHAlignment(GLFont::Left);
+	imageChannelType->setEditable(false);
+	
+	channelTypeMargin->manageChild();
+	
+	info->manageChild();
+	
+	return result;
 	}
 
 namespace {
@@ -937,130 +1260,114 @@ std::string createImageExtensionFilter(void)
 
 ImageViewer::ImageViewer(int& argc,char**& argv)
 	:Vrui::Application(argc,argv),
+	 imageVersion(0),
 	 imageHelper(Vrui::getWidgetManager(),"",createImageExtensionFilter().c_str()),
-	 mainMenu(0)
+	 smoothPixels(true),flipH(false),
+	 mainMenu(0),infoDialog(0)
 	{
 	/* Parse the command line: */
-	const char* imageFileName=0;
-	bool printInfo=false;
+	IO::DirectoryPtr currentDir=IO::Directory::getCurrent();
 	for(int i=1;i<argc;++i)
 		{
 		if(argv[i][0]=='-')
 			{
-			if(strcasecmp(argv[i]+1,"p")==0)
-				printInfo=true;
 			}
-		else if(imageFileName==0)
-			imageFileName=argv[i];
+		else
+			{
+			/* Check if the argument is a directory or supported image file: */
+			Misc::PathType pathType=currentDir->getPathType(argv[i]);
+			if(pathType==Misc::PATHTYPE_DIRECTORY)
+				{
+				/* Add all image files in the directory to the source list: */
+				addDirectory(*currentDir->openDirectory(argv[i]));
+				}
+			else if(pathType==Misc::PATHTYPE_FILE&&Images::canReadImageFileFormat(argv[i]))
+				{
+				/* Add the file name to the source list: */
+				imageSources.push_back(ImageSource(*currentDir,argv[i]));
+				}
+			}
 		}
-	if(imageFileName==0)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No image file name provided");
+	if(imageSources.empty())
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No image file name(s) provided");
+	
+	/* Show the first image source first: */
+	isIt=imageSources.begin();
 	
 	/* Set the image helper's current directory: */
-	imageHelper.setCurrentDirectory(IO::openFileDirectory(imageFileName));
+	imageHelper.setCurrentDirectory(isIt->directory);
 	
-	/* Load the image into the texture set: */
-	// DEBUGGING
-	// Realtime::TimePointMonotonic loadTimer;
-	Images::BaseImage loadImage=Images::readGenericImageFile(imageFileName);
-	// DEBUGGING
-	// std::cout<<"Time to load image: "<<double(loadTimer.setAndDiff())*1000.0<<" ms"<<std::endl;
-	Images::TextureSet::Texture& tex=textures.addTexture(loadImage,GL_TEXTURE_2D,loadImage.getInternalFormat());
-	imageKey=tex.getKey();
-	image=&tex.getImage();
-	
-	if(printInfo)
-		{
-		/* Display image size and format: */
-		char messageText[2048];
-		const char* componentScalarType=0;
-		switch(image->getScalarType())
-			{
-			case GL_BYTE:
-				componentScalarType="signed 8-bit integer";
-				break;
-			
-			case GL_UNSIGNED_BYTE:
-				componentScalarType="unsigned 8-bit integer";
-				break;
-			
-			case GL_SHORT:
-				componentScalarType="signed 16-bit integer";
-				break;
-			
-			case GL_UNSIGNED_SHORT:
-				componentScalarType="unsigned 16-bit integer";
-				break;
-			
-			case GL_INT:
-				componentScalarType="signed 32-bit integer";
-				break;
-			
-			case GL_UNSIGNED_INT:
-				componentScalarType="unsigned 32-bit integer";
-				break;
-			
-			case GL_FLOAT:
-				componentScalarType="32-bit floating-point number";
-				break;
-			
-			case GL_DOUBLE:
-				componentScalarType="64-bit floating-point number";
-				break;
-			
-			default:
-				componentScalarType="<unknown>";
-			}
-		Misc::formattedUserNote("Image: %s\nSize: %u x %u pixels\nFormat: %u %s of %u %s%s\nComponent type: %s",imageFileName,image->getSize(0),image->getSize(1),image->getNumChannels(),image->getNumChannels()!=1?"channels":"channel",image->getChannelSize(),image->getChannelSize()!=1?"bytes":"byte",image->getNumChannels()!=1?" each":"",componentScalarType);
-		}
-	
-	/* Set clamping and filtering parameters for mip-mapped linear interpolation: */
-	tex.setMipmapRange(0,1000);
-	tex.setWrapModes(GL_CLAMP_TO_EDGE,GL_CLAMP_TO_EDGE);
-	tex.setFilterModes(GL_LINEAR_MIPMAP_LINEAR,GL_LINEAR);
+	/* Load the first image: */
+	image=Images::readGenericImageFile(*isIt->directory,isIt->fileName.c_str());
+	++imageVersion;
 	
 	/* Create and install the main menu: */
 	mainMenu=createMainMenu();
 	Vrui::setMainMenu(mainMenu);
 	
+	/* Create the image information dialog: */
+	infoDialog=createInfoDialog();
+	updateInfoDialog();
+	
 	/* Initialize the tool class: */
 	PipetteTool::initClass();
 	HomographySamplerTool::initClass();
+	addEventTool("Previous Image",0,0);
+	addEventTool("Next Image",0,1);
 	}
 
 ImageViewer::~ImageViewer(void)
 	{
-	/* Delete the main menu: */
+	/* Destroy all UI components: */
 	delete mainMenu;
+	delete infoDialog;
 	}
 
 void ImageViewer::display(GLContextData& contextData) const
 	{
+	/* Retrieve the context data item: */
+	DataItem* dataItem=contextData.retrieveDataItem<DataItem>(this);
+	
 	/* Set up OpenGL state: */
 	glPushAttrib(GL_ENABLE_BIT);
 	glEnable(GL_TEXTURE_2D);
 	glTexEnvi(GL_TEXTURE_ENV,GL_TEXTURE_ENV_MODE,GL_REPLACE);
 	
-	/* Get the texture set's GL state: */
-	Images::TextureSet::GLState* texGLState=textures.getGLState(contextData);
+	/* Bind the texture: */
+	glBindTexture(GL_TEXTURE_2D,dataItem->textureId);
 	
-	/* Bind the texture object: */
-	const Images::TextureSet::GLState::Texture& tex=texGLState->bindTexture(imageKey);
-	const Images::BaseImage& image=tex.getImage();
+	/* Check if the texture is outdated: */
+	if(dataItem->textureVersion!=imageVersion)
+		{
+		/* Upload the texture image: */
+		image.glTexImage2DMipmap(GL_TEXTURE_2D);
+		
+		/* Mark the texture as up-to-date: */
+		dataItem->textureVersion=imageVersion;
+		}
 	
-	/* Query the range of texture coordinates: */
-	const GLfloat* texMin=tex.getTexCoordMin();
-	const GLfloat* texMax=tex.getTexCoordMax();
+	/* Set up display modes: */
+	if(smoothPixels)
+		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+	else
+		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_NEAREST);
+	GLfloat x0=0.0f;
+	GLfloat x1=1.0f;
+	if(flipH)
+		{
+		x0=1.0f;
+		x1=0.0f;
+		}
 	
 	/* Draw the image: */
 	glBegin(GL_QUADS);
-	glTexCoord2f(texMin[0],texMin[1]);
+	glTexCoord2f(x0,0.0f);
 	glVertex2i(0,0);
-	glTexCoord2f(texMax[0],texMin[1]);
+	glTexCoord2f(x1,0.0f);
 	glVertex2i(image.getSize(0),0);
-	glTexCoord2f(texMax[0],texMax[1]);
+	glTexCoord2f(x1,1.0f);
 	glVertex2i(image.getSize(0),image.getSize(1));
-	glTexCoord2f(texMin[0],texMax[1]);
+	glTexCoord2f(x0,1.0f);
 	glVertex2i(0,image.getSize(1));
 	glEnd();
 	
@@ -1085,15 +1392,61 @@ void ImageViewer::display(GLContextData& contextData) const
 
 void ImageViewer::resetNavigation(void)
 	{
-	/* Access the image: */
-	const Images::BaseImage& image=textures.getTexture(imageKey).getImage();
-	
 	/* Reset the Vrui navigation transformation: */
 	Vrui::Scalar w(image.getSize(0));
 	Vrui::Scalar h(image.getSize(1));
 	Vrui::Point center(Math::div2(w),Math::div2(h),Vrui::Scalar(0.05));
 	Vrui::Scalar size=Math::sqrt(Math::sqr(w)+Math::sqr(h));
 	Vrui::setNavigationTransformation(center,size,Vrui::Vector(0,1,0),Vrui::Vector(1,0,0));
+	}
+
+void ImageViewer::eventCallback(Vrui::Application::EventID eventId,Vrui::InputDevice::ButtonCallbackData* cbData)
+	{
+	if(cbData->newButtonState)
+		{
+		switch(eventId)
+			{
+			case 0:
+				/* Go to the previous image source: */
+				if(isIt==imageSources.begin())
+					isIt=imageSources.end();
+				--isIt;
+				
+				/* Load the image source in the background: */
+				Vrui::submitJob(*new ImageLoader(*isIt->directory,isIt->fileName),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+				
+				break;
+			
+			case 1:
+				/* Go to the next image source: */
+				++isIt;
+				if(isIt==imageSources.end())
+					isIt=imageSources.begin();
+				
+				/* Load the image source in the background: */
+				Vrui::submitJob(*new ImageLoader(*isIt->directory,isIt->fileName),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+				break;
+			}
+		}
+	}
+
+void ImageViewer::initContext(GLContextData& contextData) const
+	{
+	/* Create a context data item and associate it with this object: */
+	DataItem* dataItem=new DataItem;
+	contextData.addDataItem(this,dataItem);
+	
+	/* Initialize the texture object: */
+	glBindTexture(GL_TEXTURE_2D,dataItem->textureId);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,GL_LINEAR_MIPMAP_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_S,GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
+	if(dataItem->haveAnisotropicFiltering)
+		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAX_ANISOTROPY_EXT,16);
+	
+	/* Protect the texture object: */
+	glBindTexture(GL_TEXTURE_2D,0);
 	}
 
 /* Create and execute an application object: */

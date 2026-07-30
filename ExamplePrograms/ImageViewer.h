@@ -20,12 +20,16 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #ifndef IMAGEVIEWER_INCLUDED
 #define IMAGEVIEWER_INCLUDED
 
+#include <string>
+#include <vector>
+#include <IO/Directory.h>
 #include <Geometry/Point.h>
 #include <Geometry/Vector.h>
 #include <GL/gl.h>
 #include <GL/GLColor.h>
+#include <GL/GLObject.h>
 #include <Images/Types.h>
-#include <Images/TextureSet.h>
+#include <Images/BaseImage.h>
 #include <GLMotif/FileSelectionDialog.h>
 #include <GLMotif/FileSelectionHelper.h>
 #include <Vrui/Application.h>
@@ -39,9 +43,13 @@ class FunctionCall;
 }
 namespace GLMotif {
 class PopupMenu;
+class PopupWindow;
+class Label;
+class ToggleButton;
+class TextField;
 }
 
-class ImageViewer:public Vrui::Application
+class ImageViewer:public Vrui::Application,public GLObject
 	{
 	/* Embedded classes: */
 	public:
@@ -51,6 +59,40 @@ class ImageViewer:public Vrui::Application
 	typedef GLColor<GLfloat,4> Color; // Type for RGBA image colors
 	
 	private:
+	struct ImageSource // Structure describing the source of an image that can be loaded
+		{
+		/* Elements: */
+		public:
+		IO::DirectoryPtr directory; // Pointer to the directory containing the image source
+		std::string fileName; // Name of the image source relative to the containing directory
+		
+		/* Constructors and destructors: */
+		ImageSource(IO::Directory& sDirectory,const std::string& sFileName) // Elementwise constructor with directory reference
+			:directory(&sDirectory),fileName(sFileName)
+			{
+			}
+		ImageSource(IO::Directory& sDirectory,const char* sFileName) // Ditto, using a C string
+			:directory(&sDirectory),fileName(sFileName)
+			{
+			}
+		};
+	
+	typedef std::vector<ImageSource> ImageSourceList; // Type for lists of image sources
+	
+	struct DataItem:public GLObject::DataItem
+		{
+		/* Elements: */
+		public:
+		bool haveAutomaticMipMapGeneration; // Flag if the local OpenGL supports automatic mipmap generation
+		bool haveAnisotropicFiltering; // Flag if the local OpenGL supports anisotropic filtering
+		GLuint textureId; // ID of the texture object holding the currently displayed image
+		unsigned int textureVersion; // Version number of the image currently held in the texture object
+		
+		/* Constructors and destructors: */
+		DataItem(void);
+		virtual ~DataItem(void);
+		};
+	
 	class PipetteTool; // Forward declaration
 	typedef Vrui::GenericToolFactory<PipetteTool> PipetteToolFactory; // Pipette tool class uses the generic factory class
 	
@@ -120,26 +162,50 @@ class ImageViewer:public Vrui::Application
 	friend class HomographySamplerTool;
 	
 	/* Elements: */
-	Images::TextureSet textures; // Texture set containing the image to be displayed
-	Images::TextureSet::Key imageKey; // Key to access the current image in the texture set
-	const Images::BaseImage* image; // Pointer to the image
+	ImageSourceList imageSources; // List of image sources that can be loaded
+	ImageSourceList::iterator isIt; // Iterator to the currently displayed image source
+	Images::BaseImage image; // The currently displayed image
+	unsigned int imageVersion; // Version number of the currently displayed image
 	GLMotif::FileSelectionHelper imageHelper; // Helper object to load image files
+	bool smoothPixels; // Flag to enable bilinear interpolation when magnifying images
+	bool flipH; // Flag to flip images horizontally
 	GLMotif::PopupMenu* mainMenu; // The application's main menu
+	GLMotif::ToggleButton* smoothPixelsToggle; // Toggle button to select bilinear interpolation when magnifying an image
+	GLMotif::ToggleButton* flipHToggle; // Toggle button to flip images horizontally
+	GLMotif::PopupWindow* infoDialog; // Dialog window displaying information about the currently displayed image
+	GLMotif::TextField* imageIndex; // Index of the currently displayed image in the set
+	GLMotif::TextField* imageNumImages; // Total number of images in the set
+	GLMotif::TextField* imageDirectoryName; // Name of the directory containing the currently displayed image
+	GLMotif::TextField* imageFileName; // The currently displayed image's file name
+	GLMotif::TextField* imageSize[2]; // The currently displayed image's width and height
+	GLMotif::TextField* imageNumChannels; // The currently displayed image's number of channels
+	GLMotif::Label* imageChannelLayoutLabel1;
+	GLMotif::TextField* imageChannelSize; // The currently displayed image's channel size in bytes
+	GLMotif::Label* imageChannelLayoutLabel2;
+	GLMotif::TextField* imageChannelType; // The currently displayed image's channel data type
 	
 	/* Private methods: */
+	void addDirectory(IO::Directory& directory); // Adds all readable image files in the given directory to the image sources list
 	Color getPixel(unsigned int x,unsigned int y) const; // Returns an RGBA color for the given pixel position
+	void updateInfoDialog(void); // Updates the image information dialog after an image has been loaded
 	void loadImageCompleteCallback(Threads::FunctionCall<int>& job); // Callback called when a new image has been loaded
 	void loadImageCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData); // Callback called when a new image is to be loaded
+	void showInfoDialogButtonSelectedCallback(Misc::CallbackData* cbData); // Callback called when the image information dialog is to be shown
 	GLMotif::PopupMenu* createMainMenu(void); // Creates the application's main menu
+	GLMotif::PopupWindow* createInfoDialog(void); // Creates the image information dialog
 	
 	/* Constructors and destructors: */
 	public:
 	ImageViewer(int& argc,char**& argv);
 	virtual ~ImageViewer(void);
 	
-	/* Methods from Vrui::Application: */
+	/* Methods from class Vrui::Application: */
 	virtual void display(GLContextData& contextData) const;
 	virtual void resetNavigation(void);
+	virtual void eventCallback(EventID eventId,Vrui::InputDevice::ButtonCallbackData* cbData);
+	
+	/* Methods from class GLObject: */
+	virtual void initContext(GLContextData& contextData) const;
 	};
 
 #endif
