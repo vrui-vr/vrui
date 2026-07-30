@@ -8836,3 +8836,5 @@ Vrui-15.0-001:
 - Added more debugging code to Comm::HttpServer.
 - Improved HTTP connection management in VRServerLauncher.
 - No need to shutdown() before close() in Comm::HttpServer::~HttpServer.
+- Add more politeness when disconnecting from server in
+  Vrui::VRDeviceClient::~VRDeviceClient.

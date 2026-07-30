@@ -569,17 +569,26 @@ VRDeviceClient::VRDeviceClient(Threads::RunLoop& sRunLoop,const Misc::Configurat
 
 VRDeviceClient::~VRDeviceClient(void)
 	{
-	/* Leave streaming mode: */
-	if(streaming)
+	/* Try to be polite when disconnecting from the server: */
+	try
+		{
+		/* Leave streaming mode and deactivate the client: */
 		stopStream();
-	
-	/* Deactivate client: */
-	if(active)
 		deactivate();
-	
-	/* Disconnect from server: */
-	pipe->write(MessageIdType(DISCONNECT_REQUEST));
-	pipe->flush();
+		
+		/* Disconnect from the server: */
+		pipe->write(MessageIdType(DISCONNECT_REQUEST));
+		pipe->shutdown(false,true);
+		
+		/* Wait until the server closes the connection: */
+		void* buffer;
+		while(!pipe->eof())
+			pipe->readInBuffer(buffer);
+		}
+	catch(const std::runtime_error& err)
+		{
+		/* Just ignore it... */
+		}
 	
 	/* Delete all callbacks: */
 	delete[] hmdConfigurationUpdatedCallbacks;
