@@ -479,10 +479,6 @@ HttpServer::Connection::~Connection(void)
 	{
 	/* Delete a potential lingering HTTP request header: */
 	delete requestHeader;
-	
-	/* Shut down the client connection: */
-	if(pipe!=0)
-		pipe->shutdown(true,true);
 	}
 
 /***************************
