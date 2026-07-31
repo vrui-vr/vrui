@@ -1013,12 +1013,12 @@ ImageViewer::Color ImageViewer::getPixel(unsigned int x,unsigned int y) const
 void ImageViewer::updateInfoDialog(void)
 	{
 	/* Update the image index and total number of images: */
-	imageIndex->setValue((unsigned int)((isIt-imageSources.begin())+1));
-	imageNumImages->setValue((unsigned int)(imageSources.size()));
+	imageIndex->setValue(currentImage+1);
+	imageNumImages->setValue(numImages);
 	
 	/* Update the directory containing the image file and the image file name: */
-	imageDirectoryName->setValue(isIt->directory->getPath());
-	imageFileName->setValue(isIt->fileName);
+	imageDirectoryName->setValue(imageSources[currentImage].directory->getPath());
+	imageFileName->setValue(imageSources[currentImage].fileName);
 	
 	/* Update the image size: */
 	for(int i=0;i<2;++i)
@@ -1096,18 +1096,21 @@ class ImageLoader:public Threads::WorkerPool::JobFunction // Class to load an im
 	private:
 	IO::DirectoryPtr directory; // Directory containing the file to be loaded
 	std::string fileName; // Name of the file to be loaded
+	int request; // The load request identifier
 	Images::BaseImage image; // The image loaded from the image file
 	
 	/* Constructors and destructors: */
 	public:
-	ImageLoader(IO::Directory& sDirectory,const char* sFileName)
-		:directory(&sDirectory),
-		 fileName(sFileName)
+	ImageLoader(IO::Directory& sDirectory,const char* sFileName,int sRequest)
+		:directory(&sDirectory),fileName(sFileName),request(sRequest)
 		{
 		}
-	ImageLoader(IO::Directory& sDirectory,const std::string& sFileName)
-		:directory(&sDirectory),
-		 fileName(sFileName)
+	ImageLoader(IO::Directory& sDirectory,const std::string& sFileName,int sRequest)
+		:directory(&sDirectory),fileName(sFileName),request(sRequest)
+		{
+		}
+	ImageLoader(ImageViewer::ImageSource& imageSource,int sRequest)
+		:directory(imageSource.directory),fileName(imageSource.fileName),request(sRequest)
 		{
 		}
 	
@@ -1128,38 +1131,55 @@ class ImageLoader:public Threads::WorkerPool::JobFunction // Class to load an im
 		{
 		return image;
 		}
+	int getRequest(void) const // Returns the request number associated with the loaded image
+		{
+		return request;
+		}
 	};
 
 }
 
 void ImageViewer::loadImageCompleteCallback(Threads::FunctionCall<int>& job)
 	{
-	/* Calculate a transformation to align the newly loaded image with the currently displayed one: */
-	const Images::BaseImage& newImage=static_cast<ImageLoader&>(job).getImage();
-	Vrui::NavTransform t=Vrui::NavTransform::translateFromOriginTo(Vrui::Point(Math::div2(Scalar(image.getSize(0))),Math::div2(Scalar(image.getSize(1))),0));
-	Scalar area=Scalar(image.getSize(0))*Scalar(image.getSize(1));
-	Scalar newArea=Scalar(newImage.getSize(0))*Scalar(newImage.getSize(1));
-	t*=Vrui::NavTransform::scale(Math::sqrt(area/newArea));
-	t*=Vrui::NavTransform::translateToOriginFrom(Vrui::Point(Math::div2(Scalar(newImage.getSize(0))),Math::div2(Scalar(newImage.getSize(1))),0));
-	Vrui::concatenateNavigationTransformation(t);
+	ImageLoader& imageLoader=static_cast<ImageLoader&>(job);
 	
-	/* Replace the currently displayed image with the just loaded one: */
-	image=newImage;
-	++imageVersion;
-	
-	/* Update the image information dialog: */
-	updateInfoDialog();
+	/* Check if this request is the most recent one: */
+	if((imageLoader.getRequest()-loaded)>0) // This will work if wrap-around happens, 2 billion load request in :)
+		{
+		/* Calculate a transformation to align the newly loaded image with the currently displayed one: */
+		const Images::BaseImage& newImage=imageLoader.getImage();
+		Vrui::NavTransform t=Vrui::NavTransform::translateFromOriginTo(Vrui::Point(Math::div2(Scalar(image.getSize(0))),Math::div2(Scalar(image.getSize(1))),0));
+		Scalar area=Scalar(image.getSize(0))*Scalar(image.getSize(1));
+		Scalar newArea=Scalar(newImage.getSize(0))*Scalar(newImage.getSize(1));
+		t*=Vrui::NavTransform::scale(Math::sqrt(area/newArea));
+		t*=Vrui::NavTransform::translateToOriginFrom(Vrui::Point(Math::div2(Scalar(newImage.getSize(0))),Math::div2(Scalar(newImage.getSize(1))),0));
+		Vrui::concatenateNavigationTransformation(t);
+		
+		/* Replace the currently displayed image with the just loaded one: */
+		image=newImage;
+		loaded=imageLoader.getRequest();
+		++imageVersion;
+		
+		/* Update the image information dialog: */
+		updateInfoDialog();
+		}
 	}
 
 void ImageViewer::loadImageCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData)
 	{
 	/* Add the selected image file to the end of the list of image sources: */
 	imageSources.push_back(ImageSource(*cbData->selectedDirectory,cbData->selectedFileName));
-	isIt=imageSources.end();
-	--isIt;
+	++numImages;
 	
-	/* Submit a job to load the selected image file in the background: */
-	Vrui::submitJob(*new ImageLoader(*isIt->directory,isIt->fileName),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+	/* Submit a job to load the newly-added image file in the background: */
+	currentImage=numImages-1;
+	Vrui::submitJob(*new ImageLoader(imageSources[currentImage],++request),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+	}
+
+void ImageViewer::showSelectorDialogButtonSelectedCallback(Misc::CallbackData* cbData)
+	{
+	/* Show the image selector dialog: */
+	Vrui::popupPrimaryWidget(selectorDialog);
 	}
 
 void ImageViewer::showInfoDialogButtonSelectedCallback(Misc::CallbackData* cbData)
@@ -1180,6 +1200,10 @@ GLMotif::PopupMenu* ImageViewer::createMainMenu(void)
 	/* Hook the image file selection helper into the "load image" buttons: */
 	imageHelper.addLoadCallback(loadImageButton,*Threads::createFunctionCall(this,&ImageViewer::loadImageCallback));
 	
+	/* Create a button to show the image selector dialog: */
+	GLMotif::Button* showSelectorDialogButton=new GLMotif::Button("ShowSelectorDialogButton",mainMenu,"Show Selector Dialog");
+	showSelectorDialogButton->getSelectCallbacks().add(this,&ImageViewer::showSelectorDialogButtonSelectedCallback);
+	
 	/* Create a button to show the image information dialog: */
 	GLMotif::Button* showInfoDialogButton=new GLMotif::Button("ShowInfoDialogButton",mainMenu,"Show Info Dialog");
 	showInfoDialogButton->getSelectCallbacks().add(this,&ImageViewer::showInfoDialogButtonSelectedCallback);
@@ -1193,6 +1217,43 @@ GLMotif::PopupMenu* ImageViewer::createMainMenu(void)
 	/* Finish and return the main menu: */
 	mainMenu->manageMenu();
 	return mainMenu;
+	}
+
+void ImageViewer::imageIndexSliderValueChangedCallback(GLMotif::TextFieldSlider::ValueChangedCallbackData* cbData)
+	{
+	/* Select the selected image source: */
+	currentImage=(unsigned int)(Math::floor(cbData->value+0.5))-1;
+	
+	/* Load the image source in the background: */
+	Vrui::submitJob(*new ImageLoader(imageSources[currentImage],++request),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+	}
+
+GLMotif::PopupWindow* ImageViewer::createSelectorDialog(void)
+	{
+	/* Access the style sheet: */
+	const GLMotif::StyleSheet& ss=*Vrui::getUiStyleSheet();
+	
+	GLMotif::PopupWindow* result=new GLMotif::PopupWindow("SelectorDialog",Vrui::getWidgetManager(),"Select Image");
+	result->setCloseButton(true);
+	result->setResizableFlags(true,false);
+	
+	GLMotif::RowColumn* selector=new GLMotif::RowColumn("Selector",result,false);
+	selector->setOrientation(GLMotif::RowColumn::VERTICAL);
+	selector->setPacking(GLMotif::RowColumn::PACK_TIGHT);
+	selector->setNumMinorWidgets(2);
+	
+	new GLMotif::Label("SelectorLabel",selector,"Image Index");
+	
+	imageIndexSlider=new GLMotif::TextFieldSlider("ImageIndexSlider",selector,6,ss.fontHeight*20.0f);
+	imageIndexSlider->setSliderMapping(GLMotif::TextFieldSlider::LINEAR);
+	imageIndexSlider->setValueType(GLMotif::TextFieldSlider::UINT);
+	imageIndexSlider->setValueRange(1.0,double(numImages),1.0);
+	imageIndexSlider->setValue(currentImage+1);
+	imageIndexSlider->getValueChangedCallbacks().add(this,&ImageViewer::imageIndexSliderValueChangedCallback);
+	
+	selector->manageChild();
+	
+	return result;
 	}
 
 GLMotif::PopupWindow* ImageViewer::createInfoDialog(void)
@@ -1350,7 +1411,7 @@ ImageViewer::ImageViewer(int& argc,char**& argv)
 	 imageVersion(0),
 	 imageHelper(Vrui::getWidgetManager(),"",createImageExtensionFilter().c_str()),
 	 smoothPixels(true),flipH(false),
-	 mainMenu(0),infoDialog(0)
+	 mainMenu(0),selectorDialog(0),infoDialog(0)
 	{
 	/* Parse the command line: */
 	IO::DirectoryPtr currentDir=IO::Directory::getCurrent();
@@ -1377,20 +1438,26 @@ ImageViewer::ImageViewer(int& argc,char**& argv)
 		}
 	if(imageSources.empty())
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No image file name(s) provided");
+	numImages=imageSources.size();
 	
 	/* Show the first image source first: */
-	isIt=imageSources.begin();
+	currentImage=0;
 	
 	/* Set the image helper's current directory: */
-	imageHelper.setCurrentDirectory(isIt->directory);
+	imageHelper.setCurrentDirectory(imageSources[currentImage].directory);
 	
 	/* Load the first image: */
-	image=Images::readGenericImageFile(*isIt->directory,isIt->fileName.c_str());
+	request=0;
+	image=Images::readGenericImageFile(*imageSources[currentImage].directory,imageSources[currentImage].fileName.c_str());
+	loaded=request;
 	++imageVersion;
 	
 	/* Create and install the main menu: */
 	mainMenu=createMainMenu();
 	Vrui::setMainMenu(mainMenu);
+	
+	/* Create the image selector dialog: */
+	selectorDialog=createSelectorDialog();
 	
 	/* Create the image information dialog: */
 	infoDialog=createInfoDialog();
@@ -1408,6 +1475,7 @@ ImageViewer::~ImageViewer(void)
 	{
 	/* Destroy all UI components: */
 	delete mainMenu;
+	delete selectorDialog;
 	delete infoDialog;
 	}
 
@@ -1512,23 +1580,30 @@ void ImageViewer::eventCallback(Vrui::Application::EventID eventId,Vrui::InputDe
 			{
 			case 0:
 				/* Go to the previous image source: */
-				if(isIt==imageSources.begin())
-					isIt=imageSources.end();
-				--isIt;
+				if(currentImage==0)
+					currentImage=numImages;
+				--currentImage;
 				
 				/* Load the image source in the background: */
-				Vrui::submitJob(*new ImageLoader(*isIt->directory,isIt->fileName),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+				Vrui::submitJob(*new ImageLoader(imageSources[currentImage],++request),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+				
+				/* Update the image selector dialog: */
+				imageIndexSlider->setValue(currentImage+1);
 				
 				break;
 			
 			case 1:
 				/* Go to the next image source: */
-				++isIt;
-				if(isIt==imageSources.end())
-					isIt=imageSources.begin();
+				++currentImage;
+				if(currentImage==numImages)
+					currentImage=0;
 				
 				/* Load the image source in the background: */
-				Vrui::submitJob(*new ImageLoader(*isIt->directory,isIt->fileName),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+				Vrui::submitJob(*new ImageLoader(imageSources[currentImage],++request),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+				
+				/* Update the image selector dialog: */
+				imageIndexSlider->setValue(currentImage+1);
+				
 				break;
 			}
 		}
