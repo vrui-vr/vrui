@@ -1,6 +1,6 @@
 /***********************************************************************
 VisletManager - Class to manage vislet classes.
-Copyright (c) 2006-2023 Oliver Kreylos
+Copyright (c) 2006-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -25,6 +25,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <ctype.h>
 #include <string>
 #include <vector>
+#include <Misc/StringPrintf.h>
 #include <Misc/ConfigurationFile.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
@@ -127,9 +128,7 @@ void VisletManager::addVisletCommandCallback(const char* argumentBegin,const cha
 	thisPtr->vislets.push_back(newVislet);
 	
 	/* Create a toggle button for the new vislet in the vislet menu: */
-	char toggleButtonName[40];
-	snprintf(toggleButtonName,sizeof(toggleButtonName),"Vislet%u",(unsigned int)(thisPtr->vislets.size())-1);
-	GLMotif::ToggleButton* toggleButton=new GLMotif::ToggleButton(toggleButtonName,thisPtr->visletMenu,factory->getClassName());
+	GLMotif::ToggleButton* toggleButton=new GLMotif::ToggleButton(Misc::stringPrintf("Vislet%u",(unsigned int)(thisPtr->vislets.size())-1).c_str(),thisPtr->visletMenu,factory->getClassName());
 	toggleButton->setToggle(newVislet->isActive());
 	toggleButton->getValueChangedCallbacks().add(thisPtr,&VisletManager::visletMenuToggleButtonCallback);
 	
@@ -277,9 +276,7 @@ GLMotif::PopupMenu* VisletManager::buildVisletMenu(void)
 	/* Create a toggle button for each vislet: */
 	for(unsigned int i=0;i<vislets.size();++i)
 		{
-		char toggleButtonName[40];
-		snprintf(toggleButtonName,sizeof(toggleButtonName),"Vislet%u",i);
-		GLMotif::ToggleButton* toggleButton=new GLMotif::ToggleButton(toggleButtonName,visletMenu,vislets[i]->getFactory()->getClassName());
+		GLMotif::ToggleButton* toggleButton=new GLMotif::ToggleButton(Misc::stringPrintf("Vislet%u",i).c_str(),visletMenu,vislets[i]->getFactory()->getClassName());
 		toggleButton->setToggle(vislets[i]->isActive());
 		toggleButton->getValueChangedCallbacks().add(this,&VisletManager::visletMenuToggleButtonCallback);
 		}

@@ -1,7 +1,7 @@
 /***********************************************************************
 Menu - Subclass of RowColumn that only contains buttons and acts as a
 pop-up menu.
-Copyright (c) 2001-2015 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <GLMotif/Menu.h>
 
-#include <stdio.h>
+#include <Misc/StringPrintf.h>
 #include <GLMotif/StyleSheet.h>
 #include <GLMotif/Event.h>
 #include <GLMotif/WidgetManager.h>
@@ -154,9 +154,7 @@ void Menu::addChild(Widget* newChild)
 void Menu::addEntry(const char* newEntryLabel)
 	{
 	/* Create a new button: */
-	char newButtonName[40];
-	snprintf(newButtonName,sizeof(newButtonName),"_MenuButton%d",int(children.size()));
-	new Button(newButtonName,this,newEntryLabel);
+	new Button(Misc::stringPrintf("_MenuButton%d",int(children.size())).c_str(),this,newEntryLabel);
 	}
 
 int Menu::getEntryIndex(const Button* entry) const

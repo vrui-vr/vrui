@@ -1,7 +1,7 @@
 /***********************************************************************
 MeasurementTool - Tool to measure positions, distances and angles in
 physical or navigational coordinates.
-Copyright (c) 2006-2023 Oliver Kreylos
+Copyright (c) 2006-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -25,6 +25,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <stdio.h>
 #include <vector>
+#include <Misc/StringPrintf.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/File.h>
 #include <Misc/CreateNumberedFileName.h>
@@ -500,9 +501,7 @@ GLMotif::RowColumn* createPosBox(const char* name,GLMotif::Container* parent,GLM
 	for(int i=0;i<3;++i)
 		{
 		/* Create a row column widget for the field value and unit: */
-		char fieldName[40];
-		snprintf(fieldName,sizeof(fieldName),"Pos-%d",i+1);
-		GLMotif::RowColumn* fieldBox=new GLMotif::RowColumn(fieldName,result,false);
+		GLMotif::RowColumn* fieldBox=new GLMotif::RowColumn(Misc::stringPrintf("Pos-%d",i+1).c_str(),result,false);
 		fieldBox->setOrientation(GLMotif::RowColumn::HORIZONTAL);
 		
 		/* Create the field value text field: */

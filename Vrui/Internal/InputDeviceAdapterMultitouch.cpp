@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterMultitouch - Class to convert a direct-mode
 multitouch-capable screen into a set of Vrui input devices.
-Copyright (c) 2015-2021 Oliver Kreylos
+Copyright (c) 2015-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -28,8 +28,8 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/GlyphRenderer.h>
 #include <Vrui/InputGraphManager.h>
 
-#include <stdio.h>
 #include <Misc/PrintInteger.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StandardHashFunction.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
@@ -92,9 +92,7 @@ InputDeviceAdapterMultitouch::InputDeviceAdapterMultitouch(InputDeviceManager* s
 	for(int i=0;i<maxNumDevices;++i)
 		{
 		/* Create a new one-button directional input device: */
-		char deviceName[32];
-		snprintf(deviceName,sizeof(deviceName),"Multitouch%02d",i);
-		InputDevice* newDevice=inputDeviceManager->createInputDevice(deviceName,InputDevice::TRACK_POS|InputDevice::TRACK_DIR,numModifierButtons*numDeviceButtons,0,true);
+		InputDevice* newDevice=inputDeviceManager->createInputDevice(Misc::stringPrintf("Multitouch%02d",i).c_str(),InputDevice::TRACK_POS|InputDevice::TRACK_DIR,numModifierButtons*numDeviceButtons,0,true);
 		
 		// DEBUGGING
 		// Glyph& deviceGlyph=inputDeviceManager->getInputGraphManager()->getInputDeviceGlyph(newDevice);

@@ -31,6 +31,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <iostream>
 #include <iomanip>
 #include <vector>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/File.h>
 #include <Misc/StandardValueCoders.h>
@@ -348,15 +349,13 @@ GLMotif::PopupMenu* ShowEarthModel::createRenderTogglesMenu(void)
 	for(unsigned int i=0;i<earthquakeSets.size();++i)
 		{
 		/* Create a unique name for the toggle button widget: */
-		char toggleName[256];
-		snprintf(toggleName,sizeof(toggleName),"ShowEarthquakeSetToggle%04d",i);
+		std::string toggleName=Misc::stringPrintf("ShowEarthquakeSetToggle%04d",i).c_str();
 		
 		/* Create a label to display in the submenu: */
-		char toggleLabel[256];
-		snprintf(toggleLabel,sizeof(toggleLabel),"Show Earthquake Set %d",i);
+		std::string toggleLabel=Misc::stringPrintf("Show Earthquake Set %d",i);
 		
 		/* Create a toggle button to render the earthquake set: */
-		GLMotif::ToggleButton* showEarthquakeSetToggle=new GLMotif::ToggleButton(toggleName,renderTogglesMenu,toggleLabel);
+		GLMotif::ToggleButton* showEarthquakeSetToggle=new GLMotif::ToggleButton(toggleName.c_str(),renderTogglesMenu,toggleLabel.c_str());
 		showEarthquakeSetToggle->track(settings.showEarthquakeSets[i]);
 		showEarthquakeSetToggle->getValueChangedCallbacks().add(this,&ShowEarthModel::settingsChangedCallback);
 		}
@@ -365,15 +364,13 @@ GLMotif::PopupMenu* ShowEarthModel::createRenderTogglesMenu(void)
 	for(unsigned int i=0;i<pointSets.size();++i)
 		{
 		/* Create a unique name for the toggle button widget: */
-		char toggleName[256];
-		snprintf(toggleName,sizeof(toggleName),"ShowPointSetToggle%04d",i);
+		std::string toggleName=Misc::stringPrintf("ShowPointSetToggle%04d",i);
 		
 		/* Create a label to display in the submenu: */
-		char toggleLabel[256];
-		snprintf(toggleLabel,sizeof(toggleLabel),"Show Point Set %d",i);
+		std::string toggleLabel=Misc::stringPrintf("Show Point Set %d",i);
 		
 		/* Create a toggle button to render the additional point set: */
-		GLMotif::ToggleButton* showPointSetToggle=new GLMotif::ToggleButton(toggleName,renderTogglesMenu,toggleLabel);
+		GLMotif::ToggleButton* showPointSetToggle=new GLMotif::ToggleButton(toggleName.c_str(),renderTogglesMenu,toggleLabel.c_str());
 		showPointSetToggle->track(settings.showPointSets[i]);
 		showPointSetToggle->getValueChangedCallbacks().add(this,&ShowEarthModel::settingsChangedCallback);
 		}
@@ -391,15 +388,13 @@ GLMotif::PopupMenu* ShowEarthModel::createRenderTogglesMenu(void)
 	for(unsigned int i=0;i<sceneGraphs.size();++i)
 		{
 		/* Create a unique name for the toggle button widget: */
-		char toggleName[256];
-		snprintf(toggleName,sizeof(toggleName),"ShowSceneGraphToggle%04d",i);
+		std::string toggleName=Misc::stringPrintf("ShowSceneGraphToggle%04d",i);
 		
 		/* Create a label to display in the submenu: */
-		char toggleLabel[256];
-		snprintf(toggleLabel,sizeof(toggleLabel),"Show Scene Graph %d",i);
+		std::string toggleLabel=Misc::stringPrintf("Show Scene Graph %d",i);
 		
 		/* Create a toggle button to render the scene graph: */
-		GLMotif::ToggleButton* showSceneGraphToggle=new GLMotif::ToggleButton(toggleName,renderTogglesMenu,toggleLabel);
+		GLMotif::ToggleButton* showSceneGraphToggle=new GLMotif::ToggleButton(toggleName.c_str(),renderTogglesMenu,toggleLabel.c_str());
 		showSceneGraphToggle->track(settings.showSceneGraphs[i]);
 		showSceneGraphToggle->getValueChangedCallbacks().add(this,&ShowEarthModel::settingsChangedCallback);
 		}

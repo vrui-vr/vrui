@@ -2,7 +2,7 @@
 VRWindow - Abstract base class for OpenGL windows that are used to map
 one or two eyes of a viewer onto a VR screen using a variety of mono or
 stereo rendering methods.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -31,9 +31,9 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Internal/Config.h>
 
 #include <string.h>
-#include <stdio.h>
 #include <iostream>
 #include <Misc/SizedTypes.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/CreateNumberedFileName.h>
 #include <Misc/MessageLogger.h>
@@ -907,17 +907,13 @@ void VRWindow::setWindowIndex(int newWindowIndex)
 	windowIndex=newWindowIndex;
 	
 	/* Register a pipe command to set the window's position and size: */
-	char setRectCommand[64];
-	snprintf(setRectCommand,sizeof(setRectCommand),"Window(%d).setRect",windowIndex);
-	getCommandDispatcher().addCommandCallback(setRectCommand,&VRWindow::setRectCallback,this,"<x> <y> <width> <height>","Sets the window's position and size");
+	getCommandDispatcher().addCommandCallback(Misc::stringPrintf("Window(%d).setRect",windowIndex).c_str(),&VRWindow::setRectCallback,this,"<x> <y> <width> <height>","Sets the window's position and size");
 	
 	/* Check if the window is supposed to save a movie: */
 	if(movieSaver!=0)
 		{
 		/* Register pipe command callbacks: */
-		char toggleMovieSaverCommand[64];
-		snprintf(toggleMovieSaverCommand,sizeof(toggleMovieSaverCommand),"Window(%d).toggleMovieSaver",windowIndex);
-		getCommandDispatcher().addCommandCallback(toggleMovieSaverCommand,&VRWindow::toggleMovieSaverCallback,this,0,"Toggles the window's movie saver between paused and active");
+		getCommandDispatcher().addCommandCallback(Misc::stringPrintf("Window(%d).toggleMovieSaver",windowIndex).c_str(),&VRWindow::toggleMovieSaverCallback,this,0,"Toggles the window's movie saver between paused and active");
 		}
 	}
 

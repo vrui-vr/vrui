@@ -1,7 +1,7 @@
 /***********************************************************************
 RadioBox - Subclass of RowColumn that contains only mutually exclusive
 ToggleButton objects.
-Copyright (c) 2001-2025 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -20,10 +20,10 @@ with the GLMotif Widget Library; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ***********************************************************************/
 
-#include <stdio.h>
-#include <GLMotif/ToggleButton.h>
-
 #include <GLMotif/RadioBox.h>
+
+#include <Misc/StringPrintf.h>
+#include <GLMotif/ToggleButton.h>
 
 namespace GLMotif {
 
@@ -173,9 +173,7 @@ void RadioBox::addChild(Widget* newChild)
 void RadioBox::addToggle(const char* newToggleLabel)
 	{
 	/* Create a new toggle button: */
-	char newToggleName[40];
-	snprintf(newToggleName,sizeof(newToggleName),"_RadioBoxToggle%d",int(children.size()));
-	new ToggleButton(newToggleName,this,newToggleLabel);
+	new ToggleButton(Misc::stringPrintf("_RadioBoxToggle%d",int(children.size())).c_str(),this,newToggleLabel);
 	}
 
 int RadioBox::getToggleIndex(const ToggleButton* toggle) const

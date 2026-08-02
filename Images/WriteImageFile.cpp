@@ -1,7 +1,7 @@
 /***********************************************************************
 WriteImageFile - Functions to write RGB images to a variety of file
 formats.
-Copyright (c) 2006-2024 Oliver Kreylos
+Copyright (c) 2006-2026 Oliver Kreylos
 
 This file is part of the Image Handling Library (Images).
 
@@ -53,7 +53,7 @@ Function to write binary PNM image files:
 void writePnmFile(unsigned int width,unsigned int height,const unsigned char* image,IO::File& imageFile)
 	{
 	/* Assemble the PNM header: */
-	char header[1024];
+	char header[64];
 	int headerSize=snprintf(header,sizeof(header),"P6\n%u %u\n255\n",width,height);
 	
 	/* Write the assembled header to the file: */

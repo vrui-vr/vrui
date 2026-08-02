@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterHID - Mac OSX-specific version of HID input device
 adapter.
-Copyright (c) 2009-2024 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -25,6 +25,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <stdlib.h>
 #include <IOKit/hid/IOHIDKeys.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
@@ -348,18 +349,10 @@ InputDeviceAdapterHID::InputDeviceAdapterHID(InputDeviceManager* sInputDeviceMan
 				/* Complete the button and valuator name arrays: */
 				int buttonIndex=int(dIt->buttonNames.size());
 				for(;buttonIndex<dIt->numButtons;++buttonIndex)
-					{
-					char buttonName[40];
-					snprintf(buttonName,sizeof(buttonName),"Button%d",buttonIndex);
-					dIt->buttonNames.push_back(buttonName);
-					}
+					dIt->buttonNames.push_back(Misc::stringPrintf("Button%d",buttonIndex));
 				int valuatorIndex=int(dIt->valuatorNames.size());
 				for(;valuatorIndex<dIt->numValuators;++valuatorIndex)
-					{
-					char valuatorName[40];
-					snprintf(valuatorName,sizeof(valuatorName),"Valuator%d",valuatorIndex);
-					dIt->valuatorNames.push_back(valuatorName);
-					}
+					dIt->valuatorNames.push_back(Misc::stringPrintf("Valuator%d",valuatorIndex));
 				
 				/* Register a value change callback with the HID device: */
 				IOHIDDeviceRegisterInputValueCallback(device,hidDeviceValueChangedCallbackWrapper,this);

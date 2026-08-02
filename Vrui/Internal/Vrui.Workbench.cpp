@@ -35,6 +35,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <stdexcept>
 #include <Misc/Utility.h>
 #include <Misc/Size.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/StringHashFunctions.h>
 #include <Misc/HashTable.h>
@@ -1372,13 +1373,12 @@ void init(int& argc,char**& argv,char**&)
 		/* Count the number of windows on all cluster nodes: */
 		for(unsigned int nodeIndex=0;nodeIndex<vruiMultiplexer->getNumNodes();++nodeIndex)
 			{
+			/* Remember the index of the first window on this node: */
 			if(nodeIndex==vruiMultiplexer->getNodeIndex())
 				vruiFirstLocalWindowIndex=vruiTotalNumWindows;
-			char windowNamesTag[40];
-			snprintf(windowNamesTag,sizeof(windowNamesTag),"./node%uWindowNames",nodeIndex);
-			typedef std::vector<std::string> StringList;
-			StringList windowNames=vruiConfigFile->retrieveValue<StringList>(windowNamesTag);
-			vruiTotalNumWindows+=int(windowNames.size());
+			
+			/* Add the number of windows in the node's window list to the total: */
+			vruiTotalNumWindows+=int(vruiConfigFile->retrieveValue<StringList>(Misc::stringPrintf("./node%uWindowNames",nodeIndex).c_str()).size());
 			}
 		}
 	else
@@ -1633,11 +1633,7 @@ void startDisplay(void)
 		typedef std::vector<std::string> StringList;
 		StringList windowNames;
 		if(vruiState->multiplexer!=0)
-			{
-			char windowNamesTag[40];
-			snprintf(windowNamesTag,sizeof(windowNamesTag),"./node%dWindowNames",vruiState->multiplexer->getNodeIndex());
-			windowNames=vruiConfigFile->retrieveValue<StringList>(windowNamesTag);
-			}
+			windowNames=vruiConfigFile->retrieveValue<StringList>(Misc::stringPrintf("./node%dWindowNames",vruiState->multiplexer->getNodeIndex()).c_str());
 		else
 			windowNames=vruiConfigFile->retrieveValue<StringList>("./windowNames");
 		
@@ -1780,14 +1776,10 @@ void startSound(void)
 	/* Retrieve the name of the sound context: */
 	std::string soundContextName;
 	if(vruiState->multiplexer!=0)
-		{
-		char soundContextNameTag[40];
-		snprintf(soundContextNameTag,sizeof(soundContextNameTag),"./node%dSoundContextName",vruiState->multiplexer->getNodeIndex());
-		soundContextName=vruiConfigFile->retrieveValue<std::string>(soundContextNameTag,"");
-		}
+		soundContextName=vruiConfigFile->retrieveValue<std::string>(Misc::stringPrintf("./node%dSoundContextName",vruiState->multiplexer->getNodeIndex()).c_str(),"");
 	else
 		soundContextName=vruiConfigFile->retrieveValue<std::string>("./soundContextName","");
-	if(soundContextName=="")
+	if(soundContextName.empty())
 		return;
 	
 	/* Ready the ALObject manager to initialize its objects per-context: */

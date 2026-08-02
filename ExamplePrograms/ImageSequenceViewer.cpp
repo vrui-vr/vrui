@@ -21,8 +21,9 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <stdlib.h>
 #include <string>
 #include <iostream>
-#include <Misc/StdError.h>
 #include <Misc/PrintfTemplateTests.h>
+#include <Misc/StringPrintf.h>
+#include <Misc/StdError.h>
 #include <Threads/MutexCond.h>
 #include <Threads/Thread.h>
 #include <Threads/TripleBuffer.h>
@@ -130,13 +131,9 @@ Methods of class ImageSequenceViewer:
 
 void ImageSequenceViewer::readImage(int imageIndex)
 	{
-	/* Assemble the name of the requested image: */
-	char frameName[2048];
-	snprintf(frameName,sizeof(frameName),frameNameTemplate.c_str(),imageIndex);
-	
-	/* Read the image into the next triple buffer slot: */
+	/* Read the requested image into the next triple buffer slot: */
 	Images::BaseImage& image=images.startNewValue();
-	image=Images::readGenericImageFile(*frameDir,frameName);
+	image=Images::readGenericImageFile(*frameDir,Misc::stringPrintf(frameNameTemplate.c_str(),imageIndex).c_str());
 	images.postNewValue();
 	}
 

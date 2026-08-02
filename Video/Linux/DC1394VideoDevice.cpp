@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <string.h>
 #include <iostream>
+#include <Misc/PrintInteger.h>
 #include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/StandardHashFunction.h>
@@ -1052,9 +1053,7 @@ void DC1394VideoDevice::enumerateDevices(std::vector<VideoDevice::DeviceIdPtr>& 
 				/* Append an index to the name: */
 				name.push_back(':');
 				char index[10];
-				++cIt->getDest();
-				snprintf(index,sizeof(index),"%u",cIt->getDest());
-				name.append(index);
+				name.append(Misc::print(++cIt->getDest(),index+sizeof(index)-1));
 				}
 			
 			/* Create a device ID for the camera: */

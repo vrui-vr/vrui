@@ -1,7 +1,7 @@
 /***********************************************************************
 XMLDocument - Class representing the structure and contents of an XML
 entity as a tree.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -22,9 +22,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <IO/XMLDocument.h>
 
-#include <stdio.h>
 #include <stdexcept>
 #include <Misc/SelfDestructPointer.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <IO/Directory.h>
 #include <IO/UTF8.h>
@@ -36,15 +36,8 @@ namespace IO {
 Methods of class XMLNode::ConversionError:
 *****************************************/
 
-std::string XMLNode::ConversionError::createErrorString(const XMLNode* sNode,const char* sRequestedType)
-	{
-	char stringBuffer[512];
-	snprintf(stringBuffer,sizeof(stringBuffer),"IO::XMLNode: Unable to convert node of type %s to %s",sNode->getTypeName(),sRequestedType);
-	return std::string(stringBuffer);
-	}
-
 XMLNode::ConversionError::ConversionError(const XMLNode* sNode,const char* sRequestedType)
-	:std::runtime_error(createErrorString(sNode,sRequestedType)),
+	:std::runtime_error(Misc::stringPrintf("IO::XMLNode: Unable to convert node of type %s to %s",sNode->getTypeName(),sRequestedType)),
 	 node(sNode),requestedType(sRequestedType)
 	{
 	}

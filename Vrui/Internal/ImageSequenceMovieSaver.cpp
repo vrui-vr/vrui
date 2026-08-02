@@ -1,7 +1,7 @@
 /***********************************************************************
 ImageSequenceMovieSaver - Helper class to save movies as sequences of
 image files in formats supported by the Images library.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -24,10 +24,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Internal/ImageSequenceMovieSaver.h>
 
 #include <ctype.h>
-#include <stdio.h>
 #include <unistd.h>
 #include <iostream>
 #include <Misc/PrintfTemplateTests.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
@@ -92,11 +92,8 @@ void* ImageSequenceMovieSaver::frameSavingThreadMethod(void)
 		}
 		
 		/* Write the next frame image file: */
-		char frameName[1024];
-		snprintf(frameName,sizeof(frameName),frameNameTemplate.c_str(),frameIndex);
+		Images::writeImageFile(frame.getFrameSize()[0],frame.getFrameSize()[1],frame.getBuffer(),Misc::stringPrintf(frameNameTemplate.c_str(),frameIndex).c_str());
 		++frameIndex;
-		
-		Images::writeImageFile(frame.getFrameSize()[0],frame.getFrameSize()[1],frame.getBuffer(),frameName);
 		}
 	
 	return 0;

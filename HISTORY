@@ -8843,3 +8843,5 @@ Vrui-15.0-001:
   - Implement abort() in Comm::TCPPipe using SO_LINGER socket option.
 - Abort all remaining client connections in
   Comm::HttpServer::~HttpServer.
+- Replaced snprintf with Misc::stringPrintf in all sources where doing
+  so makes sense.

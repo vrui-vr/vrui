@@ -2,7 +2,7 @@
 PrintInputDeviceDataFile - Program to print the contents of a previously
 saved input device data file in the format used by Vrui's
 InputDeviceDataSaver and InputDeviceAdapterPlayback classes.
-Copyright (c) 2008-2023 Oliver Kreylos
+Copyright (c) 2008-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -22,11 +22,11 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 02111-1307 USA
 ***********************************************************************/
 
-#include <stdio.h>
 #include <string>
 #include <vector>
 #include <iostream>
 #include <iomanip>
+#include <Misc/StringPrintf.h>
 #include <Misc/StringMarshaller.h>
 #include <IO/File.h>
 #include <IO/SeekableFile.h>
@@ -38,22 +38,19 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 std::string getDefaultFeatureName(const Vrui::InputDeviceFeature& feature)
 	{
-	char featureName[40];
-	featureName[0]='\0';
-	
 	/* Check if the feature is a button or a valuator: */
 	if(feature.isButton())
 		{
 		/* Return a default button name: */
-		snprintf(featureName,sizeof(featureName),"Button%d",feature.getIndex());
+		return Misc::stringPrintf("Button%d",feature.getIndex());
 		}
-	if(feature.isValuator())
+	else if(feature.isValuator())
 		{
 		/* Return a default valuator name: */
-		snprintf(featureName,sizeof(featureName),"Valuator%d",feature.getIndex());
+		return Misc::stringPrintf("Valuator%d",feature.getIndex());
 		}
-	
-	return std::string(featureName);
+	else
+		return std::string();
 	}
 
 /**************

@@ -23,12 +23,12 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <string.h>
 #include <stdlib.h>
-#include <stdio.h>
 #include <string>
 #include <iostream>
 #include <fstream>
 #include <Misc/SizedTypes.h>
 #include <Misc/Utility.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/ConfigurationFile.h>
 #include <Threads/FunctionCalls.h>
@@ -88,9 +88,7 @@ class VruiSoundConfig:public Vrui::Application
 		void operator()(int parameter)
 			{
 			/* Play the loaded sound on the selected PCM: */
-			char pcmName[40];
-			snprintf(pcmName,sizeof(pcmName),"plughw:%d,%d",pcmIt->cardIndex,pcmIt->deviceIndex);
-			device=new Sound::ALSAPCMDevice(pcmName,false);
+			device=new Sound::ALSAPCMDevice(Misc::stringPrintf("plughw:%d,%d",pcmIt->cardIndex,pcmIt->deviceIndex).c_str(),false);
 			device->setSoundDataFormat(app.soundFormat);
 			
 			/* Write to the PCM in tiny chunks: */

@@ -1,7 +1,7 @@
 /***********************************************************************
 Pager - Container class to arrange children as individual pages in a
 "flipbook" of sorts.
-Copyright (c) 2013-2022 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <GLMotif/Pager.h>
 
-#include <stdio.h>
+#include <Misc/StringPrintf.h>
 #include <GL/gl.h>
 #include <GL/GLColorTemplates.h>
 #include <GL/GLVertexTemplates.h>
@@ -278,22 +278,20 @@ void Pager::addChild(Widget* newChild)
 	children.insert(children.begin()+nextChildIndex,newChild);
 	
 	/* Create a new page button: */
-	char pbName[20];
-	snprintf(pbName,sizeof(pbName),"PageButton%u",nextPageIndex);
 	++nextPageIndex;
-	Button* newPageButton;
+	std::string pbName=Misc::stringPrintf("PageButton%u",nextPageIndex);
 	addingPageButton=true;
+	Button* newPageButton;
 	if(!nextPageName.empty())
 		{
-		newPageButton=new Button(pbName,this,nextPageName.c_str());
-		nextPageName="";
+		/* Use the most recently set page name: */
+		newPageButton=new Button(pbName.c_str(),this,nextPageName.c_str());
+		nextPageName.clear();
 		}
 	else
 		{
-		/* Create a default page button label: */
-		char pbLabel[20];
-		snprintf(pbLabel,sizeof(pbLabel),"Page %u",nextPageIndex);
-		newPageButton=new Button(pbName,this,pbLabel);
+		/* Use a default page name: */
+		newPageButton=new Button(pbName.c_str(),this,Misc::stringPrintf("Page %u",nextPageIndex).c_str());
 		}
 	addingPageButton=false;
 	newPageButton->setBorderWidth(newPageButton->getBorderWidth()*0.5f);

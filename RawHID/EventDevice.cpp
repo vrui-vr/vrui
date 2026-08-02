@@ -37,6 +37,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <sys/types.h>
 #include <sys/ioctl.h>
 #include <linux/input.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Threads/FunctionCalls.h>
 #include <RawHID/Config.h>
@@ -126,9 +127,7 @@ int EventDevice::findDevice(EventDeviceMatcher& deviceMatcher)
 	for(int eventFileIndex=0;eventFileIndex<numEventFiles;++eventFileIndex)
 		{
 		/* Try opening the event device file: */
-		char eventFileName[288];
-		snprintf(eventFileName,sizeof(eventFileName),"%s/%s",RAWHID_EVENTDEVICEFILEDIR,eventFiles[eventFileIndex]->d_name);
-		int eventFileFd=open(eventFileName,O_RDWR);
+		int eventFileFd=open(Misc::stringPrintf("%s/%s",RAWHID_EVENTDEVICEFILEDIR,eventFiles[eventFileIndex]->d_name).c_str(),O_RDWR);
 		if(eventFileFd>=0)
 			{
 			/* Get the device information: */
@@ -307,12 +306,8 @@ std::vector<std::string> EventDevice::getEventDeviceFileNames(void)
 	result.reserve(numEventFiles);
 	for(int eventFileIndex=0;eventFileIndex<numEventFiles;++eventFileIndex)
 		{
-		/* Create the fully-qualified event device file name: */
-		char eventFileName[288];
-		snprintf(eventFileName,sizeof(eventFileName),"%s/%s",RAWHID_EVENTDEVICEFILEDIR,eventFiles[eventFileIndex]->d_name);
-		
-		/* Add the fully-qualified name to the result list: */
-		result.push_back(eventFileName);
+		/* Add the fully-qualified event device file name to the result list: */
+		result.push_back(Misc::stringPrintf("%s/%s",RAWHID_EVENTDEVICEFILEDIR,eventFiles[eventFileIndex]->d_name));
 		}
 	
 	/* Destroy list of event device files: */

@@ -1,7 +1,7 @@
 /***********************************************************************
 StringPrintf - Helper function to print to a C++ string using a printf-
 style function call.
-Copyright (c) 2009-2018 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -25,6 +25,8 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <errno.h>
+#include <Misc/StdError.h>
 
 namespace Misc {
 
@@ -38,8 +40,13 @@ std::string stringPrintf(const char* formatString,...)
 	int result=vsnprintf(printBuffer,sizeof(printBuffer),formatString,ap);
 	va_end(ap);
 	
-	/* Check for overflow in the print buffer: */
-	if(result>=int(sizeof(printBuffer)))
+	/* Check for errors or overflow in the print buffer: */
+	if(result<0)
+		{
+		/* Throw an exception: */
+		throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Internal printf error");
+		}
+	else if(result>=int(sizeof(printBuffer)))
 		{
 		/* Allocate a dynamic buffer of sufficient size: */
 		char* buffer=new char[result+1];

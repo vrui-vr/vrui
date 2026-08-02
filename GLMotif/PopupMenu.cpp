@@ -1,7 +1,7 @@
 /***********************************************************************
 PopupMenu - Class for top-level GLMotif UI components that act as menus
 and only require a single down-motion-up sequence to select an entry.
-Copyright (c) 2001-2019 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <GLMotif/PopupMenu.h>
 
-#include <stdio.h>
+#include <Misc/StringPrintf.h>
 #include <GLMotif/StyleSheet.h>
 #include <GLMotif/Event.h>
 #include <GLMotif/RowColumn.h>
@@ -396,17 +396,13 @@ Widget* PopupMenu::getEntry(int entryIndex)
 Button* PopupMenu::addEntry(const char* newEntryLabel)
 	{
 	/* Create a new button of the given name: */
-	char newButtonName[40];
-	snprintf(newButtonName,sizeof(newButtonName),"_MenuButton%d",getNumEntries());
-	return new Button(newButtonName,this,newEntryLabel);
+	return new Button(Misc::stringPrintf("_MenuButton%d",getNumEntries()).c_str(),this,newEntryLabel);
 	}
 
 Separator* PopupMenu::addSeparator(void)
 	{
 	/* Create a new horizontal separator: */
-	char newSeparatorName[40];
-	snprintf(newSeparatorName,sizeof(newSeparatorName),"_MenuSeparator%d",getNumEntries());
-	return new Separator(newSeparatorName,this,Separator::HORIZONTAL,0.0f,Separator::LOWERED);
+	return new Separator(Misc::stringPrintf("_MenuSeparator%d",getNumEntries()).c_str(),this,Separator::HORIZONTAL,0.0f,Separator::LOWERED);
 	}
 
 int PopupMenu::getEntryIndex(Widget* button)

@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Sound/Linux/ALSAAudioCaptureDevice.h>
 
-#include <stdio.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Threads/FunctionCalls.h>
 #include <Sound/SoundDataFormat.h>
@@ -94,10 +94,8 @@ void ALSAAudioCaptureDevice::addDevices(AudioCaptureDevice::DeviceList& devices)
 			}
 		
 		/* Open the card's control interface: */
-		char cardName[20];
-		snprintf(cardName,sizeof(cardName),"hw:%d",cardIndex);
 		snd_ctl_t* cardHandle;
-		if(snd_ctl_open(&cardHandle,cardName,0)!=0)
+		if(snd_ctl_open(&cardHandle,Misc::stringPrintf("hw:%d",cardIndex).c_str(),0)!=0)
 			break;
 		
 		/* Enumerate all PCM devices on this card: */
@@ -136,20 +134,14 @@ void ALSAAudioCaptureDevice::addDevices(AudioCaptureDevice::DeviceList& devices)
 						std::string deviceName=cardName;
 						free(cardName);
 						if(numCardDevices>0)
-							{
-							char suffix[16];
-							snprintf(suffix,sizeof(suffix),":%d",numCardDevices);
-							deviceName.append(suffix);
-							}
+							deviceName.append(Misc::stringPrintf(":%d",numCardDevices));
 						DeviceId* newDeviceId=new DeviceId(deviceName);
 						
-						/* Set the PCM device name: */
-						char pcmDeviceName[20];
+						/* Set the PCM device name depending on whether the device has sub-devices: */
 						if(numSubDevices>1)
-							snprintf(pcmDeviceName,sizeof(pcmDeviceName),"plughw:%d,%d,%d",snd_pcm_info_get_card(pcmInfo),snd_pcm_info_get_device(pcmInfo),snd_pcm_info_get_subdevice(pcmInfo));
+							newDeviceId->pcmDeviceName=Misc::stringPrintf("plughw:%d,%d,%d",snd_pcm_info_get_card(pcmInfo),snd_pcm_info_get_device(pcmInfo),snd_pcm_info_get_subdevice(pcmInfo));
 						else
-							snprintf(pcmDeviceName,sizeof(pcmDeviceName),"plughw:%d,%d",snd_pcm_info_get_card(pcmInfo),snd_pcm_info_get_device(pcmInfo));
-						newDeviceId->pcmDeviceName=pcmDeviceName;
+							newDeviceId->pcmDeviceName=Misc::stringPrintf("plughw:%d,%d",snd_pcm_info_get_card(pcmInfo),snd_pcm_info_get_device(pcmInfo));
 						
 						/* Store the device ID: */
 						devices.push_back(newDeviceId);

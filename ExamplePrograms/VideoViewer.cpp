@@ -25,6 +25,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <utility>
 #include <iostream>
 #include <iomanip>
+#include <Misc/StringPrintf.h>
 #include <Misc/Timer.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/CommandLineParser.h>
@@ -215,15 +216,14 @@ void VideoViewer::videoFrameCallback(const Images::BaseImage& image)
 	if(saveVideoFrames)
 		{
 		/* Create a filename for the new video frame: */
-		char videoFrameFileName[1024];
-		snprintf(videoFrameFileName,sizeof(videoFrameFileName),saveVideoFrameNameTemplate.c_str(),saveVideoNextFrameIndex);
+		std::string videoFrameFileName=Misc::stringPrintf(saveVideoFrameNameTemplate.c_str(),saveVideoNextFrameIndex);
 		
 		try
 			{
 			/* Save the new video frame: */
 			Images::RGBImage saveImage(image);
 			std::cout<<"Saving frame "<<videoFrameFileName<<" at "<<timeStamp*1000.0<<" ms..."<<std::flush;
-			Images::writeImageFile(saveImage,videoFrameFileName);
+			Images::writeImageFile(saveImage,videoFrameFileName.c_str());
 			std::cout<<" done"<<std::endl;
 			
 			/* Increment the frame counter: */
@@ -232,7 +232,7 @@ void VideoViewer::videoFrameCallback(const Images::BaseImage& image)
 		catch(const std::runtime_error& err)
 			{
 			/* Show an error message and carry on: */
-			Misc::formattedUserError("VideoViewer: Unable to save frame to file %s due to exception %s",videoFrameFileName,err.what());
+			Misc::formattedUserError("VideoViewer: Unable to save frame to file %s due to exception %s",videoFrameFileName.c_str(),err.what());
 			}
 		}
 	}

@@ -1,6 +1,6 @@
 /***********************************************************************
 Quikwriting - Widget for text entry using the Quikwriting method.
-Copyright (c) 2019-2020 Oliver Kreylos
+Copyright (c) 2019-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -21,7 +21,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <GLMotif/Quikwriting.h>
 
-#include <stdio.h>
+#include <Misc/StringPrintf.h>
 #include <IO/Directory.h>
 #include <IO/OpenFile.h>
 #include <Math/Math.h>
@@ -519,9 +519,7 @@ void Quikwriting::initContext(GLContextData& contextData) const
 		glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_WRAP_T,GL_CLAMP_TO_EDGE);
 		
 		/* Load the image: */
-		char imageFileName[1024];
-		snprintf(imageFileName,sizeof(imageFileName),"Textures/Quikwriting-%d.png",i);
-		Images::BaseImage image=Images::readGenericImageFile(*textureDirectory,imageFileName);
+		Images::BaseImage image=Images::readGenericImageFile(*textureDirectory,Misc::stringPrintf("Textures/Quikwriting-%d.png",i).c_str());
 		image.glTexImage2D(GL_TEXTURE_2D,0);
 		
 		if(canMipmap)

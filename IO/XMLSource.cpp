@@ -1,6 +1,6 @@
 /***********************************************************************
 XMLSource - Class implementing a low-level XML file processor.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -22,10 +22,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <IO/XMLSource.h>
 
 #include <string.h>
-#include <stdio.h>
 #include <stdexcept>
 #include <Misc/SizedTypes.h>
 #include <Misc/UTF8.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <IO/UTF8.h>
 
@@ -310,10 +310,7 @@ inline std::string constructErrorMessage(const XMLSource& source,const char* err
 		}
 	
 	/* Construct a descriptive error message: */
-	char buffer[2048];
-	snprintf(buffer,sizeof(buffer),"IO::XMLSource: %s: %s at line %u, column %u",errorType,what,(unsigned int)(filePos.first),(unsigned int)(filePos.second));
-	
-	return buffer;
+	return Misc::stringPrintf("IO::XMLSource: %s: %s at line %u, column %u",errorType,what,(unsigned int)(filePos.first),(unsigned int)(filePos.second));
 	}
 
 /******************************************************************

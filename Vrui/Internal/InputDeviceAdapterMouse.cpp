@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterMouse - Class to convert mouse and keyboard into a
 Vrui input device.
-Copyright (c) 2004-2025 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -25,10 +25,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 #include <X11/keysym.h>
 #include <X11/Xutil.h>
 #include <X11/cursorfont.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
@@ -412,9 +412,7 @@ std::string InputDeviceAdapterMouse::getFeatureName(const InputDeviceFeature& fe
 		if(buttonIndex<numButtons)
 			{
 			/* Append a mouse button name: */
-			char buttonName[40];
-			snprintf(buttonName,sizeof(buttonName),"Mouse%d",buttonIndex+1);
-			result.append(buttonName);
+			result.append(Misc::stringPrintf("Mouse%d",buttonIndex+1));
 			}
 		else
 			{

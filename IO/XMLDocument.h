@@ -1,7 +1,7 @@
 /***********************************************************************
 XMLDocument - Class representing the structure and contents of an XML
 document as a tree of nodes.
-Copyright (c) 2018-2022 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -57,10 +57,6 @@ class XMLNode // Base class for XML document tree nodes
 		public:
 		const XMLNode* node; // Node that could not be converted
 		std::string requestedType; // Requested conversion target type
-		
-		/* Private methods: */
-		private:
-		static std::string createErrorString(const XMLNode* sNode,const char* sRequestedType); // Creates an error message
 		
 		/* Constructors and destructors: */
 		public:

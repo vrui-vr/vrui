@@ -3,7 +3,7 @@ SubMenu - Subclass of RowColumn that only contains buttons and acts as a
 sub-menu of another pop-up menu. This class replicates Menu's API but is
 not related because it implies a different selection strategy in widget
 managers.
-Copyright (c) 2007-2008 Oliver Kreylos
+Copyright (c) 2007-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -22,7 +22,7 @@ with the GLMotif Widget Library; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ***********************************************************************/
 
-#include <stdio.h>
+#include <Misc/StringPrintf.h>
 #include <GLMotif/StyleSheet.h>
 #include <GLMotif/Event.h>
 #include <GLMotif/WidgetManager.h>
@@ -84,9 +84,7 @@ void SubMenu::addChild(Widget* newChild)
 void SubMenu::addEntry(const char* newEntryLabel)
 	{
 	/* Create a new button: */
-	char newButtonName[40];
-	snprintf(newButtonName,sizeof(newButtonName),"_SubMenuButton%d",int(children.size()));
-	new Button(newButtonName,this,newEntryLabel);
+	new Button(Misc::stringPrintf("_SubMenuButton%d",int(children.size())).c_str(),this,newEntryLabel);
 	}
 
 int SubMenu::getEntryIndex(const Button* entry) const

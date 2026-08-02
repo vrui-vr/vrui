@@ -25,9 +25,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <stdlib.h>
 #include <string.h>
-#include <stdio.h>
 #include <stdexcept>
 #include <iostream>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/StandardHashFunction.h>
@@ -338,9 +338,7 @@ void ViewerComponent::updateVideoDevicesDialog(void)
 		if(!addedFrameSizes.setEntry(videoFormats[i].size))
 			{
 			/* Add the frame size to the drop-down menu: */
-			char frameSizeBuffer[64];
-			snprintf(frameSizeBuffer,sizeof(frameSizeBuffer),"%u x %u",videoFormats[i].size[0],videoFormats[i].size[1]);
-			GLMotif::Widget* newItem=frameSizes->addItem(frameSizeBuffer);
+			GLMotif::Widget* newItem=frameSizes->addItem(Misc::stringPrintf("%u x %u",videoFormats[i].size[0],videoFormats[i].size[1]).c_str());
 			
 			/* Associate the video frame size with the new menu entry: */
 			widgetManager->setWidgetAttribute(newItem,videoFormats[i].size);

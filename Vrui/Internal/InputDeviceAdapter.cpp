@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapter - Base class to convert from diverse "raw" input
 device representations to Vrui's internal input device representation.
-Copyright (c) 2004-2025 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -24,7 +24,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Internal/InputDeviceAdapter.h>
 
 #include <string.h>
-#include <stdio.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/StandardValueCoders.h>
@@ -123,11 +123,7 @@ InputDevice* InputDeviceAdapter::createInputDevice(const char* name,int trackTyp
 	
 	/* Assign default names to all remaining buttons: */
 	for(;buttonIndex<numButtons;++buttonIndex)
-		{
-		char buttonName[40];
-		snprintf(buttonName,sizeof(buttonName),"Button%d",buttonIndex);
-		buttonNames.push_back(buttonName);
-		}
+		buttonNames.push_back(Misc::stringPrintf("Button%d",buttonIndex));
 	
 	/* Read a (partial) list of valuator names from the configuration file section: */
 	StringList tempValuatorNames;
@@ -140,11 +136,7 @@ InputDevice* InputDeviceAdapter::createInputDevice(const char* name,int trackTyp
 	
 	/* Assign default names to all remaining valuators: */
 	for(;valuatorIndex<numValuators;++valuatorIndex)
-		{
-		char valuatorName[40];
-		snprintf(valuatorName,sizeof(valuatorName),"Valuator%d",valuatorIndex);
-		valuatorNames.push_back(valuatorName);
-		}
+		valuatorNames.push_back(Misc::stringPrintf("Valuator%d",valuatorIndex));
 	
 	return newDevice;
 	}
@@ -223,22 +215,19 @@ InputDeviceAdapter::~InputDeviceAdapter(void)
 
 std::string InputDeviceAdapter::getDefaultFeatureName(const InputDeviceFeature& feature)
 	{
-	char featureName[40];
-	featureName[0]='\0';
-	
 	/* Check if the feature is a button or a valuator: */
 	if(feature.isButton())
 		{
 		/* Return a default button name: */
-		snprintf(featureName,sizeof(featureName),"Button%d",feature.getIndex());
+		return Misc::stringPrintf("Button%d",feature.getIndex());
 		}
-	if(feature.isValuator())
+	else if(feature.isValuator())
 		{
 		/* Return a default valuator name: */
-		snprintf(featureName,sizeof(featureName),"Valuator%d",feature.getIndex());
+		return Misc::stringPrintf("Valuator%d",feature.getIndex());
 		}
-	
-	return std::string(featureName);
+	else
+		return std::string();
 	}
 
 int InputDeviceAdapter::getDefaultFeatureIndex(InputDevice* device,const char* featureName)

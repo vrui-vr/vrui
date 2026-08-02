@@ -1,6 +1,6 @@
 /***********************************************************************
 GLFont - Class to represent texture-based fonts and to render 3D text.
-Copyright (c) 1999-2024 Oliver Kreylos
+Copyright (c) 1999-2026 Oliver Kreylos
 
 This file is part of the OpenGL Support Library (GLSupport).
 
@@ -21,9 +21,9 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <GL/GLFont.h>
 
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <IO/File.h>
 #include <IO/OpenFile.h>
@@ -493,12 +493,10 @@ GLFont::GLFont(const char* fontName)
 	 antialiasing(false)
 	{
 	/* Read the font from file: */
-	char fontFileName[1024];
 	try
 		{
 		/* Try given directory first: */
-		snprintf(fontFileName,sizeof(fontFileName),"%s.fnt",fontName);
-		IO::FilePtr fontFile(IO::openFile(fontFileName));
+		IO::FilePtr fontFile(IO::openFile(Misc::stringPrintf("%s.fnt",fontName).c_str()));
 		fontFile->setEndianness(Misc::LittleEndian);
 		loadFont(*fontFile);
 		return;
@@ -514,8 +512,7 @@ GLFont::GLFont(const char* fontName)
 		try
 			{
 			/* Try the GLFONTDIR directory next: */
-			snprintf(fontFileName,sizeof(fontFileName),"%s/%s.fnt",getenv("GLFONTDIR"),fontName);
-			IO::FilePtr fontFile(IO::openFile(fontFileName));
+			IO::FilePtr fontFile(IO::openFile(Misc::stringPrintf("%s/%s.fnt",getenv("GLFONTDIR"),fontName).c_str()));
 			fontFile->setEndianness(Misc::LittleEndian);
 			loadFont(*fontFile);
 			return;
@@ -529,8 +526,7 @@ GLFont::GLFont(const char* fontName)
 	try
 		{
 		/* Try system-wide GL font directory last: */
-		snprintf(fontFileName,sizeof(fontFileName),"%s/%s.fnt",GLSUPPORT_CONFIG_GL_FONT_DIR,fontName);
-		IO::FilePtr fontFile(IO::openFile(fontFileName));
+		IO::FilePtr fontFile(IO::openFile(Misc::stringPrintf("%s/%s.fnt",GLSUPPORT_CONFIG_GL_FONT_DIR,fontName).c_str()));
 		fontFile->setEndianness(Misc::LittleEndian);
 		loadFont(*fontFile);
 		return;

@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Video/ImageSequenceVideoDevice.h>
 
-#include <stdio.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/Time.h>
 #include <Threads/FunctionCalls.h>
@@ -58,9 +58,7 @@ void ImageSequenceVideoDevice::loadFrame(int frameIndex)
 	Threads::Mutex::Lock currentFrameLock(currentFrameMutex);
 	
 	/* Load the requested image: */
-	char frameName[2048];
-	snprintf(frameName,sizeof(frameName),frameNameTemplate.c_str(),frameIndex);
-	currentFrame=Images::readGenericImageFile(*frameDir,frameName);
+	currentFrame=Images::readGenericImageFile(*frameDir,Misc::stringPrintf(frameNameTemplate.c_str(),frameIndex).c_str());
 	
 	/* Convert the requested image to RGB: */
 	currentFrame=currentFrame.dropAlpha().toRgb();
