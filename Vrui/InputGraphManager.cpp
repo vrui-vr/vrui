@@ -2,7 +2,7 @@
 InputGraphManager - Class to maintain the bipartite input device / tool
 graph formed by tools being assigned to input devices, and input devices
 in turn being grabbed by tools.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -30,9 +30,9 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #endif
 
 #include <Misc/SizedTypes.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
-#include <Misc/PrintInteger.h>
 #include <Misc/FileTests.h>
 #include <Misc/PriorityHeap.h>
 #include <Misc/StringHashFunctions.h>
@@ -1068,12 +1068,7 @@ void InputGraphManager::loadInputGraph(const Misc::ConfigurationFileSection& bas
 							{
 							/* Add each of the forwarded devices, appending its index: */
 							for(unsigned int index=0;index<forwardedDevices.size();++index)
-								{
-								char indexString[11];
-								std::string forwardedDeviceName=sIt.getName();
-								forwardedDeviceName.append(Misc::print(index,indexString+10));
-								createdDeviceMap[forwardedDeviceName]=forwardedDevices[index];
-								}
+								createdDeviceMap[Misc::stringPrintf("%s%u",sIt.getName().c_str(),index)]=forwardedDevices[index];
 							}
 						}
 					}
@@ -1215,9 +1210,7 @@ void InputGraphManager::saveInputGraph(IO::Directory& directory,const char* conf
 					if(gidPtr->grabber!=&inputDeviceManager&&!deviceNameMap.isEntry(gidPtr->device))
 						{
 						/* Create a new section for the virtual input device: */
-						std::string deviceSectionName="Device";
-						char deviceIndexString[11];
-						deviceSectionName.append(Misc::print(virtualDeviceIndex,deviceIndexString+10));
+						std::string deviceSectionName=Misc::stringPrintf("Device%d",virtualDeviceIndex);
 						++virtualDeviceIndex;
 						Misc::ConfigurationFileSection deviceSection=baseSection.getSection(deviceSectionName.c_str());
 						
@@ -1249,9 +1242,7 @@ void InputGraphManager::saveInputGraph(IO::Directory& directory,const char* conf
 				for(GraphTool* gtPtr=toolLevels[level];gtPtr!=0;gtPtr=gtPtr->levelSucc)
 					{
 					/* Create a new section for the tool: */
-					std::string toolSectionName="Tool";
-					char toolIndexString[11];
-					toolSectionName.append(Misc::print(toolIndex,toolIndexString+10));
+					std::string toolSectionName=Misc::stringPrintf("Tool%d",toolIndex);
 					++toolIndex;
 					Misc::ConfigurationFileSection toolSection=baseSection.getSection(toolSectionName.c_str());
 					
@@ -1320,12 +1311,7 @@ void InputGraphManager::saveInputGraph(IO::Directory& directory,const char* conf
 							{
 							/* Add an entry for each forwarded device, appending their indices: */
 							for(unsigned int index=0;index<forwardedDevices.size();++index)
-								{
-								std::string forwardedDeviceName=toolSectionName;
-								char indexString[11];
-								forwardedDeviceName.append(Misc::print(index,indexString+10));
-								deviceNameMap[forwardedDevices[0]]=forwardedDeviceName;
-								}
+								deviceNameMap[forwardedDevices[index]]=Misc::stringPrintf("%s%u",toolSectionName.c_str(),index);
 							}
 						}
 					}

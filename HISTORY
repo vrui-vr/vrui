@@ -8845,3 +8845,5 @@ Vrui-15.0-001:
   Comm::HttpServer::~HttpServer.
 - Replaced snprintf with Misc::stringPrintf in all sources where doing
   so makes sense.
+- Fixed bug in Vrui::InputGraphManager::saveInputGraph that caused
+  issues with forwarding tools controlling more than one input device.
