@@ -1068,7 +1068,7 @@ void InputGraphManager::loadInputGraph(const Misc::ConfigurationFileSection& bas
 							{
 							/* Add each of the forwarded devices, appending its index: */
 							for(unsigned int index=0;index<forwardedDevices.size();++index)
-								createdDeviceMap[Misc::stringPrintf("%s%u",sIt.getName().c_str(),index)]=forwardedDevices[index];
+								createdDeviceMap[Misc::stringPrintf("%s%c",sIt.getName().c_str(),char(index+'a'))]=forwardedDevices[index];
 							}
 						}
 					}
@@ -1088,7 +1088,8 @@ void InputGraphManager::loadInputGraph(const Misc::ConfigurationFileSection& bas
 			/* Read the device's layout and create a new virtual device: */
 			int numButtons=sIt.retrieveValue<int>("./numButtons",0);
 			int numValuators=sIt.retrieveValue<int>("./numValuators",0);
-			InputDevice* newDevice=addVirtualInputDevice("VirtualInputDevice",numButtons,numValuators);
+			std::string name=sIt.retrieveString("./name","VirtualInputDevice");
+			InputDevice* newDevice=addVirtualInputDevice(name.c_str(),numButtons,numValuators);
 			
 			/* Get the graph input device representing the new device: */
 			GraphInputDevice* gidPtr=deviceMap.getEntry(newDevice).getDest();
@@ -1217,6 +1218,7 @@ void InputGraphManager::saveInputGraph(IO::Directory& directory,const char* conf
 						/* Write the virtual input device's layout: */
 						deviceSection.storeValue("./numButtons",gidPtr->device->getNumButtons());
 						deviceSection.storeValue("./numValuators",gidPtr->device->getNumValuators());
+						deviceSection.storeString("./name",gidPtr->device->getDeviceName());
 						
 						/* Write the virtual input device's navigation flag: */
 						deviceSection.storeValue("./navigational",gidPtr->navigational);
@@ -1311,7 +1313,7 @@ void InputGraphManager::saveInputGraph(IO::Directory& directory,const char* conf
 							{
 							/* Add an entry for each forwarded device, appending their indices: */
 							for(unsigned int index=0;index<forwardedDevices.size();++index)
-								deviceNameMap[forwardedDevices[index]]=Misc::stringPrintf("%s%u",toolSectionName.c_str(),index);
+								deviceNameMap[forwardedDevices[index]]=Misc::stringPrintf("%s%c",toolSectionName.c_str(),char(index+'a'));
 							}
 						}
 					}

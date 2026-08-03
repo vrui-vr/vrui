@@ -8847,3 +8847,8 @@ Vrui-15.0-001:
   so makes sense.
 - Fixed bug in Vrui::InputGraphManager::saveInputGraph that caused
   issues with forwarding tools controlling more than one input device.
+- Changed device naming scheme when saving input graphs that might break
+  saved input graphs created by previous versions.
+  - Change is necessary to avoid device name ambiguities.
+- Save ungrabbed virtual input device's names in scene graph files using
+  the "name" tag.
