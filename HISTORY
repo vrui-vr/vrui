@@ -8852,3 +8852,4 @@ Vrui-15.0-001:
   - Change is necessary to avoid device name ambiguities.
 - Save ungrabbed virtual input device's names in scene graph files using
   the "name" tag.
+- Adapted comments in Threads/RunLoop.h to changed API.
