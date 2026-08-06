@@ -1,7 +1,7 @@
 /***********************************************************************
 SceneGraphManager - Class to manage a scene graph used to represent
 renderable objects in physical and navigational space.
-Copyright (c) 2021-2025 Oliver Kreylos
+Copyright (c) 2021-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -131,11 +131,11 @@ void SceneGraphManager::setInputDeviceState(InputDevice* device,bool newEnabled)
 		{
 		DeviceSceneGraph& dsg=dsgmIt->getDest();
 		
-		/* Add or remove the device's scene graph from the physical-space scene graph: */
+		/* Add or remove the device's scene graph from the devices group: */
 		if(newEnabled)
-			physicalRoot->addChild(*dsg.root);
+			devices->addChild(*dsg.root);
 		else
-			physicalRoot->removeChild(*dsg.root);
+			devices->removeChild(*dsg.root);
 		
 		/* Update the device's state: */
 		dsg.enabled=newEnabled;
@@ -150,9 +150,9 @@ void SceneGraphManager::removeInputDevice(InputDevice* device)
 		{
 		DeviceSceneGraph& dsg=dsgmIt->getDest();
 		
-		/* If the device is currently enabled, remove it from the physical-space scene graph: */
+		/* If the device is currently enabled, remove it from the devices group: */
 		if(dsg.enabled)
-			physicalRoot->removeChild(*dsg.root);
+			devices->removeChild(*dsg.root);
 		
 		/* Remove the device from the device scene graph map: */
 		deviceSceneGraphMap.removeEntry(dsgmIt);
@@ -160,10 +160,15 @@ void SceneGraphManager::removeInputDevice(InputDevice* device)
 	}
 
 SceneGraphManager::SceneGraphManager(void)
-	:physicalRoot(new SceneGraph::GroupNode),navigationalRoot(new SceneGraph::DOGTransformNode),
+	:physicalRoot(new SceneGraph::GroupNode),
+	 devices(new SceneGraph::GroupNode),
+	 navigationalRoot(new SceneGraph::DOGTransformNode),
 	 clippedRoot(new ClippedGroup),
 	 deviceSceneGraphMap(17)
 	{
+	/* Add the devices group to the physical-space scene graph: */
+	addPhysicalNode(*devices);
+	
 	/* Add the navigational-space scene graph to the physical-space scene graph: */
 	addPhysicalNode(*navigationalRoot);
 	
@@ -218,9 +223,9 @@ void SceneGraphManager::addDeviceNode(InputDevice* device,SceneGraph::GraphNode&
 		bool enabled=getInputGraphManager()->isEnabled(device);
 		dsgmIt=deviceSceneGraphMap.setAndFindEntry(DeviceSceneGraphMap::Entry(device,DeviceSceneGraph(*deviceRoot,enabled)));
 		
-		/* Add the new device scene graph to the physical-space scene graph if the device is enabled: */
+		/* Add the new device scene graph to the devices group if the device is enabled: */
 		if(enabled)
-			physicalRoot->addChild(*deviceRoot);
+			devices->addChild(*deviceRoot);
 		}
 	
 	/* Add the given node to the device scene graph root: */
@@ -241,9 +246,9 @@ void SceneGraphManager::removeDeviceNode(InputDevice* device,SceneGraph::GraphNo
 		/* Check if the device scene graph is now empty: */
 		if(dsg.root->getChildren().empty())
 			{
-			/* Remove the device scene graph from the physical-space scene graph if the device is currently enabled: */
+			/* Remove the device scene graph from the devices group if the device is currently enabled: */
 			if(dsg.enabled)
-				physicalRoot->removeChild(*dsg.root);
+				devices->removeChild(*dsg.root);
 			
 			/* Remove the device from the device scene graph map: */
 			deviceSceneGraphMap.removeEntry(dsgmIt);
