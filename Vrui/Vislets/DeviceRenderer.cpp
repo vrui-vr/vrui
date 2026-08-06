@@ -1,7 +1,7 @@
 /***********************************************************************
 DeviceRenderer - Vislet class to render input devices using fancy
 representations.
-Copyright (c) 2018-2021 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -139,10 +139,7 @@ DeviceRenderer::DeviceRenderer(int numArguments,const char* const arguments[])
 					IO::DirectoryPtr shareDir=IO::openDirectory(VRUI_INTERNAL_CONFIG_SHAREDIR "/Resources");
 					
 					/* Load the scene graph file: */
-					SceneGraph::NodeCreator nodeCreator;
-					SceneGraph::GroupNodePointer root=new SceneGraph::GroupNode;
-					SceneGraph::VRMLFile vrmlFile(*shareDir,dgIt->second,nodeCreator);
-					vrmlFile.parse(*root);
+					SceneGraph::GraphNodePointer root=getSceneGraphManager()->loadSceneGraph(*shareDir,dgIt->second);
 					
 					/* Associate the new scene graph with the input device: */
 					sceneGraphMap[dgIt->second]=root;

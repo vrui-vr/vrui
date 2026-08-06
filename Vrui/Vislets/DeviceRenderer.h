@@ -1,7 +1,7 @@
 /***********************************************************************
 DeviceRenderer - Vislet class to render input devices using fancy
 representations.
-Copyright (c) 2018-2021 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -27,7 +27,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <utility>
 #include <string>
 #include <vector>
-#include <SceneGraph/GroupNode.h>
+#include <SceneGraph/GraphNode.h>
 #include <Vrui/Vislet.h>
 
 /* Forward declarations: */
@@ -70,7 +70,7 @@ class DeviceRenderer:public Vrui::Vislet
 		{
 		/* Elements: */
 		InputDevice* device; // Pointer to the input device
-		SceneGraph::GroupNodePointer glyph; // Pointer to the root node of the device's scene graph
+		SceneGraph::GraphNodePointer glyph; // Pointer to the root node of the device's scene graph
 		};
 	
 	/* Elements: */

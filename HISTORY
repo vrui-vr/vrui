@@ -8858,3 +8858,5 @@ Vrui-15.0-001:
 - When loading a VRML file defining a single root node in
   SceneGraph::SceneGraphList or Vrui::SceneGraphManager, return that
   node instead of a group containing a single child.
+- Use Vrui::SceneGraphManager::loadSceneGraph to load device glyph files
+  in Vrui::DeviceRenderer vislet.
