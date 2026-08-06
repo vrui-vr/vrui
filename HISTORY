@@ -8855,3 +8855,6 @@ Vrui-15.0-001:
 - Adapted comments in Threads/RunLoop.h to changed API.
 - Create a separate sub-graph to represent input devices in
   Vrui::SceneGraphManager.
+- When loading a VRML file defining a single root node in
+  SceneGraph::SceneGraphList or Vrui::SceneGraphManager, return that
+  node instead of a group containing a single child.

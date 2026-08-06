@@ -272,7 +272,14 @@ SceneGraph::GraphNodePointer SceneGraphManager::loadVRMLSceneGraph(IO::Directory
 	SceneGraph::VRMLFile vrmlFile(baseDirectory,sourceUrl,nodeCreator);
 	vrmlFile.parse(*root);
 	
-	return root;
+	/* Check if the VRML file only contained a single root node: */
+	if(root->getChildren().size()==1)
+		{
+		/* Return the group's single child node instead of the redundant single-element group: */
+		return root->getChildren().front();
+		}
+	else
+		return root;
 	}
 
 SceneGraph::GraphNodePointer SceneGraphManager::loadVRMLSceneGraph(const std::string& sourceUrl)
@@ -284,7 +291,14 @@ SceneGraph::GraphNodePointer SceneGraphManager::loadVRMLSceneGraph(const std::st
 	SceneGraph::VRMLFile vrmlFile(sourceUrl,nodeCreator);
 	vrmlFile.parse(*root);
 	
-	return root;
+	/* Check if the VRML file only contained a single root node: */
+	if(root->getChildren().size()==1)
+		{
+		/* Return the group's single child node instead of the redundant single-element group: */
+		return root->getChildren().front();
+		}
+	else
+		return root;
 	}
 
 SceneGraph::GraphNodePointer SceneGraphManager::loadSceneGraph(IO::Directory& baseDirectory,const std::string& sourceUrl)
