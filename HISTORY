@@ -8860,3 +8860,5 @@ Vrui-15.0-001:
   node instead of a group containing a single child.
 - Use Vrui::SceneGraphManager::loadSceneGraph to load device glyph files
   in Vrui::DeviceRenderer vislet.
+- Initialize the pixmap color in GLWindow::hideCursor. It's never used,
+  but valgrind complains about it.
