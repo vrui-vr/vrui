@@ -557,7 +557,7 @@ void GLWindow::hideCursor(void)
 	                               0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 	Pixmap emptyCursorPixmap=XCreatePixmapFromBitmapData(context->getDisplay(),window,emptyCursorBits,16,16,1,0,1);
 	XColor color; // We only need one color, and it doesn't even have to be initialized
-	memset(&color,0,sizeof(color));
+	memset(&color,0,sizeof(color)); // We're still initializing it to shut up valgrind
 	Cursor emptyCursor=XCreatePixmapCursor(context->getDisplay(),emptyCursorPixmap,emptyCursorPixmap,&color,&color,0,0);
 	XDefineCursor(context->getDisplay(),window,emptyCursor);
 	XFreeCursor(context->getDisplay(),emptyCursor);
