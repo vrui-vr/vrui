@@ -142,6 +142,7 @@ struct VruiWindowGroup
 	/* Elements: */
 	Display* display; // Display connection shared by all windows in the window group
 	int displayFd; // File descriptor for the display connection
+	bool hasPendingEvents; // Flag if the display connection has unhandled events in its event queue
 	GLContextPtr context; // OpenGL context shared by all windows in the group
 	DisplayState* displayState; // Display state structure shared by all windows in the group
 	std::vector<Window> windows; // List of pointers to windows in the window group
@@ -150,7 +151,7 @@ struct VruiWindowGroup
 	
 	/* Constructors and destructors: */
 	VruiWindowGroup(void)
-		:display(0),displayFd(-1),displayState(0)
+		:display(0),displayFd(-1),hasPendingEvents(false),displayState(0)
 		{
 		}
 	};
@@ -1852,6 +1853,14 @@ bool vruiHandleAllEvents(bool allowBlocking)
 	/* Flag to keep track if anything meaningful really happened: */
 	bool handledEvents=false;
 	
+	/* Check if any X event queues have unhandled events in them: */
+	for(int windowGroupIndex=0;windowGroupIndex<vruiNumWindowGroups;++windowGroupIndex)
+		{
+		VruiWindowGroup& windowGroup=vruiWindowGroups[windowGroupIndex];
+		windowGroup.hasPendingEvents=XQLength(windowGroup.display)>0;
+		allowBlocking=allowBlocking&&!windowGroup.hasPendingEvents;
+		}
+	
 	/* If there are no pending events, and blocking is allowed, block until something happens: */
 	Misc::FdSet readFdSet(vruiReadFdSet);
 	if(allowBlocking)
@@ -1903,31 +1912,33 @@ bool vruiHandleAllEvents(bool allowBlocking)
 		VruiWindowGroup& windowGroup=vruiWindowGroups[windowGroupIndex];
 		
 		/* For some reason, the following check drops X events in non-blocking mode: */
-		// if(readFdSet.isSet(windowGroup.displayFd))
+		if(windowGroup.hasPendingEvents||readFdSet.isSet(windowGroup.displayFd))
 			{
 			/* Process all pending events for this display connection: */
 			bool isKeyRepeat=false; // Flag if the next event is a key repeat event
-			while(XPending(windowGroup.display))
+			int numPendingEvents=XPending(windowGroup.display);
+			while(numPendingEvents>0)
 				{
 				/* Get the next event: */
 				XEvent event;
 				XNextEvent(windowGroup.display,&event);
+				--numPendingEvents;
 				
 				/* Check for key repeat events (a KeyRelease immediately followed by a KeyPress with the same time stamp and key code): */
-				if(event.type==KeyRelease&&XPending(windowGroup.display))
+				if(event.type==KeyRelease&&numPendingEvents>0)
 					{
 					/* Check if the next event is a KeyPress with the same time stamp: */
 					XEvent nextEvent;
 					XPeekEvent(windowGroup.display,&nextEvent);
 					if(nextEvent.type==KeyPress&&nextEvent.xkey.window==event.xkey.window&&nextEvent.xkey.time==event.xkey.time&&nextEvent.xkey.keycode==event.xkey.keycode)
 						{
-						/* Mark the next event as a key repeat: */
+						/* Mark the next event as a key repeat and ignore this event: */
 						isKeyRepeat=true;
 						continue;
 						}
 					}
 				
-				/* Pass the next event to all windows interested in it: */
+				/* Pass the event to all windows interested in it: */
 				bool finishProcessing=false;
 				for(std::vector<VruiWindowGroup::Window>::iterator wIt=windowGroup.windows.begin();wIt!=windowGroup.windows.end();++wIt)
 					if(wIt->window->isEventForWindow(event))
@@ -1935,9 +1946,13 @@ bool vruiHandleAllEvents(bool allowBlocking)
 				handledEvents=!isKeyRepeat||finishProcessing;
 				isKeyRepeat=false;
 				
+				#if 0
+				
 				/* Stop processing events if something significant happened: */
 				if(finishProcessing)
 					goto doneWithXEvents;
+				
+				#endif
 				}
 			}
 		}

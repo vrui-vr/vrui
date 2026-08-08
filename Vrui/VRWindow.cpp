@@ -1466,39 +1466,43 @@ bool VRWindow::processEvent(const XEvent& event)
 			}
 		
 		case FocusIn:
-			if(panningViewport&&getNumVRScreens()==1)
+			/* Only handle "normal" events, not those caused by grabbing/releasing the pointer: */
+			if(event.xfocus.mode==NotifyNormal)
 				{
-				/* Retrieve the screen, its size, and its transformation: */
-				VRScreen* screen=getVRScreen(0);
-				Scalar screenW=screen->getWidth();
-				Scalar screenH=screen->getHeight();
-				ONTransform screenT=screen->getScreenTransformation();
+				if(panningViewport&&getNumVRScreens()==1)
+					{
+					/* Retrieve the screen, its size, and its transformation: */
+					VRScreen* screen=getVRScreen(0);
+					Scalar screenW=screen->getWidth();
+					Scalar screenH=screen->getHeight();
+					ONTransform screenT=screen->getScreenTransformation();
+					
+					/* Calculate the screen's center: */
+					Point center=screenT.transform(Point(Math::mid(panRect[0],panRect[1])*screenW,Math::mid(panRect[2],panRect[3])*screenH,0));
+					
+					/* Update Vrui's display center: */
+					setDisplayCenter(center,getDisplaySize());
+					}
 				
-				/* Calculate the screen's center: */
-				Point center=screenT.transform(Point(Math::mid(panRect[0],panRect[1])*screenW,Math::mid(panRect[2],panRect[3])*screenH,0));
+				if(trackToolKillZone)
+					placeToolKillZone();
 				
-				/* Update Vrui's display center: */
-				setDisplayCenter(center,getDisplaySize());
-				}
-			
-			if(trackToolKillZone)
-				placeToolKillZone();
-			
-			if(mouseAdapter!=0)
-				{
-				/* Create a fake XKeymap event: */
-				XKeymapEvent keymapEvent;
-				keymapEvent.type=KeymapNotify;
-				keymapEvent.serial=event.xcrossing.serial;
-				keymapEvent.send_event=event.xcrossing.send_event;
-				keymapEvent.display=event.xcrossing.display;
-				keymapEvent.window=event.xcrossing.window;
-				
-				/* Query the current key map: */
-				XQueryKeymap(getContext().getDisplay(),keymapEvent.key_vector);
-				
-				/* Reset the input device adapter's key states: */
-				mouseAdapter->resetKeys(this,keymapEvent);
+				if(mouseAdapter!=0)
+					{
+					/* Create a fake XKeymap event: */
+					XKeymapEvent keymapEvent;
+					keymapEvent.type=KeymapNotify;
+					keymapEvent.serial=event.xcrossing.serial;
+					keymapEvent.send_event=event.xcrossing.send_event;
+					keymapEvent.display=event.xcrossing.display;
+					keymapEvent.window=event.xcrossing.window;
+					
+					/* Query the current key map: */
+					XQueryKeymap(getContext().getDisplay(),keymapEvent.key_vector);
+					
+					/* Reset the input device adapter's key states: */
+					mouseAdapter->resetKeys(this,keymapEvent);
+					}
 				}
 			break;
 		

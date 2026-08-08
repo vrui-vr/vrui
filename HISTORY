@@ -8862,3 +8862,29 @@ Vrui-15.0-001:
   in Vrui::DeviceRenderer vislet.
 - Initialize the pixmap color in GLWindow::hideCursor. It's never used,
   but valgrind complains about it.
+- Large update to Vrui input device handling and specifically mouse
+  handling:
+  - Replaced saved state arrays in Vrui::InputDevice with change lists;
+    this enables multiple state changes in a single Vrui frame,
+    improving responsiveness and simplifying X event handling.
+  - Button/valuators in Vrui::InputDevice change state *after* callbacks
+    are called, making the oldValuatorValue field in callback redundant.
+  - API change in Vrui::InputDevice: ValuatorCallbackData no longer has
+    oldValuatorValue field; old value can be queried from input device
+    via getValuator(...) instead, as value only changes after callbacks.
+    - Adapted Vrui::FiveAxisNavigationTool and
+      Vrui::SixAxisNavigationTool.
+  - Updated Vrui::InputDeviceAdapterMouse to use new capabilities of
+    Vrui::InputDevice.
+    - Added copyButtons and stickyButtons configuration settings,
+      defaulting to old behavior.
+      - Added settings to Vrui.cfg and ControlWindow.cfg.
+    - Some general code clean-up.
+    - Improved(?) mouse velocity estimation by basing it on frequency of
+      mouse position updates sent by X.
+  - Cleaned up some code in Vrui::FPSNavigationTool.
+  - In Vrui::VRWindow::processEvent, ignore FocusIn events resulting
+    from pointer grabs.
+  - Improved X event handling in vruiHandleAllEvents in
+    Vrui.Workbench.cpp due to new capabilities in Vrui::InputDevice and
+    in preparation for move to Threads::RunLoop.

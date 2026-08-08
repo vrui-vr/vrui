@@ -32,6 +32,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <Math/Math.h>
 #include <Geometry/Vector.h>
 #include <Geometry/Ray.h>
 #include <Geometry/GeometryValueCoders.h>
@@ -135,87 +136,62 @@ int InputDeviceAdapterMouse::getModifierIndex(int keysym) const
 	return -1;
 	}
 
-bool InputDeviceAdapterMouse::changeButtonState(int stateIndex,bool newState)
+void InputDeviceAdapterMouse::changeButtonStateNoCheck(int stateIndex,bool newState)
 	{
-	/* Check if the button state actually changed: */
-	if(buttonStates[stateIndex]==newState)
-		return false;
+	/* Set the new button state in the state tracking array and in the mouse input device: */
+	buttonStates[stateIndex]=newState;
+	inputDevices[0]->setButtonState(stateIndex,newState);
 	
 	/* Keep track of the total number of pressed buttons: */
-	if(buttonStates[stateIndex])
-		--numPressedButtons;
-	else
+	if(newState)
 		++numPressedButtons;
-	
-	/* Set the new button state: */
-	buttonStates[stateIndex]=newState;
-	
-	/* Grab or release the mouse pointer if necessary: */
-	if(numPressedButtons>0&&grabWindow==0)
-		{
-		/* Try grabbing the mouse pointer: */
-		if(grabPointer&&window->grabPointer())
-			grabWindow=window;
-		}
-	if(numPressedButtons==0&&grabWindow!=0)
-		{
-		/* Release the mouse pointer: */
-		grabWindow->releasePointer();
-		grabWindow=0;
-		}
-	
-	return true;
+	else
+		--numPressedButtons;
 	}
 
 void InputDeviceAdapterMouse::changeModifierKeyMask(int newModifierKeyMask)
 	{
-	/* Copy all button states from the old layer to the new layer: */
-	bool* oldLayer=buttonStates+(numButtons+numButtonKeys)*modifierKeyMask;
-	bool* newLayer=buttonStates+(numButtons+numButtonKeys)*newModifierKeyMask;
-	for(int i=0;i<numButtons+numButtonKeys;++i)
+	/* Bail out if the modifier mask didn't actually change: */
+	if(modifierKeyMask==newModifierKeyMask)
+		return;
+	
+	/* Access the previous and next button modifier layers: */
+	int numLayerButtons=numButtons+numButtonKeys;
+	int oldLayerBegin=numLayerButtons*modifierKeyMask;
+	bool* oldLayer=buttonStates+oldLayerBegin;
+	int newLayerBegin=numLayerButtons*newModifierKeyMask;
+	bool* newLayer=buttonStates+newLayerBegin;
+	
+	/* If asked, copy button states from the previous modifier layer to the new modifier layer; otherwise, reset all buttons in the new modifier layer: */
+	if(copyButtons)
 		{
-		if(newLayer[i]&&!oldLayer[i])
-			--numPressedButtons;
-		if(!newLayer[i]&&oldLayer[i])
-			++numPressedButtons;
-		newLayer[i]=oldLayer[i];
+		for(int i=0;i<numLayerButtons;++i)
+			if(newLayer[i]!=oldLayer[i])
+				changeButtonStateNoCheck(newLayerBegin+i,oldLayer[i]);
 		}
+	else
+		{
+		for(int i=0;i<numLayerButtons;++i)
+			if(newLayer[i])
+				changeButtonStateNoCheck(newLayerBegin+i,false);
+		}
+	
+	/* If sticky buttons are disabled, reset all button states in the previous modifier layer: */
+	if(!stickyButtons)
+		for(int i=0;i<numLayerButtons;++i)
+			if(oldLayer[i])
+				changeButtonStateNoCheck(oldLayerBegin+i,false);
 	
 	if(modifiersAsButtons)
 		{
 		/* Update the states of the forwarded modifier key buttons: */
-		int firstModifierKeyButton=(numButtons+numButtonKeys)*(1<<numModifierKeys);
+		int firstModifierKeyButton=numLayerButtons*(1<<numModifierKeys);
 		for(int i=0;i<numModifierKeys;++i)
-			{
-			if((modifierKeyMask&(0x1<<i))==0x0&&(newModifierKeyMask&(0x1<<i))!=0x0)
-				{
-				buttonStates[firstModifierKeyButton+i]=true;
-				++numPressedButtons;
-				}
-			else if((modifierKeyMask&(0x1<<i))!=0x0&&(newModifierKeyMask&(0x1<<i))==0x0)
-				{
-				buttonStates[firstModifierKeyButton+i]=false;
-				--numPressedButtons;
-				}
-			}
+			changeButtonState(firstModifierKeyButton+i,(newModifierKeyMask&(0x1<<i))!=0x0);
 		}
 	
-	/* Change the modifier key mask: */
+	/* Update the modifier key mask: */
 	modifierKeyMask=newModifierKeyMask;
-	
-	/* Grab or release the mouse pointer if necessary: */
-	if(numPressedButtons>0&&grabWindow==0)
-		{
-		/* Try grabbing the mouse pointer: */
-		if(grabPointer&&window->grabPointer())
-			grabWindow=window;
-		}
-	if(numPressedButtons==0&&grabWindow!=0)
-		{
-		/* Release the mouse pointer: */
-		grabWindow->releasePointer();
-		grabWindow=0;
-		}
 	}
 
 void InputDeviceAdapterMouse::hideCursor(bool newCursorHidden)
@@ -263,14 +239,14 @@ InputDeviceAdapterMouse::InputDeviceAdapterMouse(InputDeviceManager* sInputDevic
 	:InputDeviceAdapter(sInputDeviceManager),
 	 numButtons(0),
 	 numButtonKeys(0),buttonKeysyms(0),
-	 numModifierKeys(0),modifierKeysyms(0),modifiersAsButtons(false),
+	 numModifierKeys(0),modifierKeysyms(0),copyButtons(true),stickyButtons(true),modifiersAsButtons(false),
 	 numButtonStates(0),
 	 keyboardModeToggleKey(0,0),controlKeyMap(101),
 	 modifierKeyMask(0x0),buttonStates(0),numPressedButtons(0),
 	 keyboardMode(false),
 	 numMouseWheelTicks(0),
 	 window(0),
-	 mousePosChanged(false),mousePosChangedLastFrame(false),
+	 numMousePosChanges(0),mousePosChangedLastFrame(false),
 	 grabPointer(true),grabWindow(0),
 	 mouseLocked(false),
 	 fakeMouseCursor(false),
@@ -311,7 +287,9 @@ InputDeviceAdapterMouse::InputDeviceAdapterMouse(InputDeviceManager* sInputDevic
 			modifierKeysyms[i]=KeyMapper::getKeysym(modifierKeyNames[i]);
 		}
 	
-	/* Read the modifiers-as-buttons flag: */
+	/* Read modifier layer-related settings: */
+	configFileSection.updateValue("./copyButtons",copyButtons);
+	configFileSection.updateValue("./stickyButtons",stickyButtons);
 	configFileSection.updateValue("./modifiersAsButtons",modifiersAsButtons);
 	
 	/* Calculate number of buttons and valuators: */
@@ -320,11 +298,8 @@ InputDeviceAdapterMouse::InputDeviceAdapterMouse(InputDeviceManager* sInputDevic
 		numButtonStates+=numModifierKeys;
 	int numValuators=1<<numModifierKeys;
 	
-	/* Create new input device: */
-	InputDevice* newDevice=inputDeviceManager->createInputDevice("Mouse",InputDevice::TRACK_POS|InputDevice::TRACK_DIR,numButtonStates,numValuators,true);
-	
-	/* Store the input device: */
-	inputDevices[0]=newDevice;
+	/* Create the mouse input device: */
+	inputDevices[0]=inputDeviceManager->createInputDevice("Mouse",InputDevice::TRACK_POS|InputDevice::TRACK_DIR,numButtonStates,numValuators,true);
 	
 	/* Retrieve the keyboard toggle key symbol: */
 	keyboardModeToggleKey=KeyMapper::getQualifiedKey(configFileSection.retrieveValue<std::string>("./keyboardModeToggleKey","F1"));
@@ -353,7 +328,7 @@ InputDeviceAdapterMouse::InputDeviceAdapterMouse(InputDeviceManager* sInputDevic
 	if(fakeMouseCursor)
 		{
 		/* Enable the device's glyph as a cursor: */
-		Glyph& deviceGlyph=inputDeviceManager->getInputGraphManager()->getInputDeviceGlyph(newDevice);
+		Glyph& deviceGlyph=inputDeviceManager->getInputGraphManager()->getInputDeviceGlyph(inputDevices[0]);
 		deviceGlyph.enable();
 		deviceGlyph.setGlyphType(Glyph::CURSOR);
 		}
@@ -517,14 +492,15 @@ void InputDeviceAdapterMouse::updateInputDevices(void)
 	{
 	if(window!=0)
 		{
-		if(mousePosChanged)
+		if(numMousePosChanges>0)
 			{
 			/* Set mouse device's transformation and device ray: */
 			Point lastMousePos=inputDevices[0]->getPosition();
 			window->updateScreenDevice(mousePos,inputDevices[0]);
 			
-			/* Calculate the mouse device's linear velocity: */
-			inputDevices[0]->setLinearVelocity((inputDevices[0]->getPosition()-lastMousePos)/Vrui::getFrameTime());
+			/* Estimate the mouse device's linear velocity: */
+			Scalar changeTime=Scalar(numMousePosChanges)*Scalar(0.008); // We are assuming that there are 125 nominal mouse position updates per second
+			inputDevices[0]->setLinearVelocity((inputDevices[0]->getPosition()-lastMousePos)/changeTime);
 			
 			if(mouseLocked)
 				{
@@ -544,7 +520,7 @@ void InputDeviceAdapterMouse::updateInputDevices(void)
 			
 			/* Reset the mouse change tracking flags: */
 			mousePosChangedLastFrame=true;
-			mousePosChanged=false;
+			numMousePosChanges=0;
 			}
 		else if(mousePosChangedLastFrame)
 			{
@@ -555,21 +531,12 @@ void InputDeviceAdapterMouse::updateInputDevices(void)
 			mousePosChangedLastFrame=false;
 			}
 		
-		/* Set mouse device button states: */
-		for(int i=0;i<numButtonStates;++i)
-			inputDevices[0]->setButtonState(i,buttonStates[i]);
-		
 		/* Set mouse device valuator states: */
 		int numValuators=1<<numModifierKeys;
 		for(int i=0;i<numValuators;++i)
 			{
 			/* Convert the mouse wheel tick count into a valuator value (ugh): */
-			double mouseWheelValue=double(numMouseWheelTicks[i])/3.0;
-			if(mouseWheelValue<-1.0)
-				mouseWheelValue=-1.0;
-			else if(mouseWheelValue>1.0)
-				mouseWheelValue=1.0;
-			inputDevices[0]->setValuator(i,mouseWheelValue);
+			inputDevices[0]->setValuator(i,Math::clamp(double(numMouseWheelTicks[i])/3.0,-1.0,1.0));
 			
 			/* If there were mouse ticks, request another Vrui frame in a short while because there will be no "no mouse ticks" message: */
 			if(numMouseWheelTicks[i]!=0)
@@ -583,6 +550,21 @@ void InputDeviceAdapterMouse::updateInputDevices(void)
 		inputDevices[0]->setValuator(numValuators+2,0.0);
 		inputDevices[0]->setValuator(numValuators+3,0.0);
 		#endif
+		
+		/* Check if we are supposed to grab the mouse pointer while buttons/keys are pressed: */
+		if(grabPointer)
+			{
+			/* Grab the pointer if it needs to be grabbed: */
+			if(numPressedButtons>0&&grabWindow==0&&window->grabPointer())
+				grabWindow=window;
+			
+			/* Release the pointer if it needs to be released: */
+			if(grabWindow!=0&&numPressedButtons==0)
+				{
+				grabWindow->releasePointer();
+				grabWindow=0;
+				}
+			}
 		}
 	
 	if(mouseIdleTimeout>0.0)
@@ -614,7 +596,7 @@ void InputDeviceAdapterMouse::updateInputDevices(void)
 void InputDeviceAdapterMouse::invalidateMousePosition(void)
 	{
 	/* Mark the mouse position as changed: */
-	mousePosChanged=true;
+	++numMousePosChanges;
 	}
 
 void InputDeviceAdapterMouse::setMousePosition(VRWindow* newWindow,const GLWindow::Offset& newMouse)
@@ -631,7 +613,7 @@ void InputDeviceAdapterMouse::setMousePosition(VRWindow* newWindow,const GLWindo
 		/* Set current mouse position: */
 		for(int i=0;i<2;++i)
 			mousePos[i]=newMousePos[i];
-		mousePosChanged=true;
+		++numMousePosChanges;
 		
 		/* Remember event time for idle time-out processing: */
 		lastMouseEventTime=getApplicationTime();
@@ -867,7 +849,7 @@ void InputDeviceAdapterMouse::decMouseWheelTicks(void)
 
 void InputDeviceAdapterMouse::lockMouse(void)
 	{
-	/* Do nothing if the mouse is already locked, or if the current window is unknown: */
+	/* Bail out if the mouse is already locked, or if the current window is unknown: */
 	if(mouseLocked||window==0)
 		return;
 	
@@ -896,7 +878,7 @@ void InputDeviceAdapterMouse::lockMouse(void)
 
 void InputDeviceAdapterMouse::unlockMouse(void)
 	{
-	/* Do nothing if the mouse is not locked: */
+	/* Bail out if the mouse is not locked: */
 	if(!mouseLocked)
 		return;
 	
