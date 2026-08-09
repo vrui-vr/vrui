@@ -8888,3 +8888,5 @@ Vrui-15.0-001:
   - Improved X event handling in vruiHandleAllEvents in
     Vrui.Workbench.cpp due to new capabilities in Vrui::InputDevice and
     in preparation for move to Threads::RunLoop.
+- Fixed up and added playback control functionality to
+  ImageSequenceViewer example application.

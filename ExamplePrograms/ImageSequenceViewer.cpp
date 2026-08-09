@@ -32,6 +32,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <IO/OpenFile.h>
 #include <Math/Math.h>
 #include <Math/Constants.h>
+#include <Math/Rational.h>
 #include <GL/gl.h>
 #include <GL/GLMaterial.h>
 #include <GL/GLObject.h>
@@ -43,8 +44,11 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <GLMotif/WidgetManager.h>
 #include <GLMotif/PopupWindow.h>
 #include <GLMotif/RowColumn.h>
+#include <GLMotif/Label.h>
 #include <GLMotif/Button.h>
 #include <GLMotif/ToggleButton.h>
+#include <GLMotif/TextField.h>
+#include <GLMotif/Slider.h>
 #include <GLMotif/TextFieldSlider.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/Application.h>
@@ -81,9 +85,12 @@ class ImageSequenceViewer:public Vrui::Application,public GLObject
 	int nextImageIndex; // Index of the next image requested by the foreground thread
 	Threads::Thread imageLoaderThread; // Background thread to load images during automatic playback
 	bool playing; // Flag whether the movie is currently playing
+	bool looping; // Flag whether to loop playback
 	double frameDueTime; // Time at which the next frame must be displayed during playback
 	GLMotif::PopupWindow* playbackDialog; // The playback control dialog
 	GLMotif::TextFieldSlider* frameIndexSlider; // Slider to select image frames
+	GLMotif::ToggleButton* playToggle;
+	GLMotif::TextField* frameRateField; // Text field to display the playback frame rate in Hz
 	
 	/* Private methods: */
 	void readImage(int imageIndex); // Reads the frame image of the given index into the next image buffer slot
@@ -91,6 +98,7 @@ class ImageSequenceViewer:public Vrui::Application,public GLObject
 	GLMotif::PopupWindow* createPlaybackDialog(void); // Creates the playback control dialog
 	void playToggleCallback(GLMotif::ToggleButton::ValueChangedCallbackData* cbData);
 	void frameIndexSliderCallback(GLMotif::TextFieldSlider::ValueChangedCallbackData* cbData);
+	void frameRateSliderCallback(GLMotif::Slider::ValueChangedCallbackData* cbData);
 	
 	/* Constructors and destructors: */
 	public:
@@ -172,13 +180,9 @@ GLMotif::PopupWindow* ImageSequenceViewer::createPlaybackDialog(void)
 	
 	/* Create a rowcolumn to hold the playback controls: */
 	GLMotif::RowColumn* playbackDialog=new GLMotif::RowColumn("PlaybackDialog",playbackDialogPopup,false);
-	playbackDialog->setOrientation(GLMotif::RowColumn::HORIZONTAL);
+	playbackDialog->setOrientation(GLMotif::RowColumn::VERTICAL);
 	playbackDialog->setPacking(GLMotif::RowColumn::PACK_TIGHT);
 	playbackDialog->setNumMinorWidgets(1);
-	
-	/* Create the playback toggle: */
-	GLMotif::ToggleButton* playToggle=new GLMotif::ToggleButton("PlayToggle",playbackDialog,"Play");
-	playToggle->getValueChangedCallbacks().add(this,&ImageSequenceViewer::playToggleCallback);
 	
 	/* Create the frame index slider: */
 	frameIndexSlider=new GLMotif::TextFieldSlider("FrameIndexSlider",playbackDialog,6,Vrui::getWidgetManager()->getStyleSheet()->fontHeight*20.0f);
@@ -187,6 +191,40 @@ GLMotif::PopupWindow* ImageSequenceViewer::createPlaybackDialog(void)
 	frameIndexSlider->setValueRange(double(firstIndex),double(lastIndex-1),1.0);
 	frameIndexSlider->setValue(double(firstIndex));
 	frameIndexSlider->getValueChangedCallbacks().add(this,&ImageSequenceViewer::frameIndexSliderCallback);
+	
+	/* Create the playback control area: */
+	GLMotif::RowColumn* playbackControl=new GLMotif::RowColumn("PlaybackControl",playbackDialog,false);
+	playbackControl->setOrientation(GLMotif::RowColumn::HORIZONTAL);
+	playbackControl->setPacking(GLMotif::RowColumn::PACK_TIGHT);
+	playbackControl->setNumMinorWidgets(1);
+	
+	/* Create the playback and loop toggles: */
+	playToggle=new GLMotif::ToggleButton("PlayToggle",playbackControl,"Play");
+	playToggle->setToggle(playing);
+	playToggle->getValueChangedCallbacks().add(this,&ImageSequenceViewer::playToggleCallback);
+	
+	GLMotif::ToggleButton* loopToggle=new GLMotif::ToggleButton("LoopToggle",playbackControl,"Loop");
+	loopToggle->track(looping);
+	
+	/* Create the frame rate slider: */
+	frameRateField=new GLMotif::TextField("FrameRateField",playbackControl,8);
+	frameRateField->setValueType(GLMotif::TextField::ALPHA);
+	frameRateField->setHAlignment(GLFont::Right);
+	Math::Rational frameRate(120,int(Math::floor(frameTime*120.0+0.5)));
+	if(frameRate.getDenominator()!=1)
+		frameRateField->setString(Misc::stringPrintf("%d/%d",frameRate.getNumerator(),frameRate.getDenominator()).c_str());
+	else
+		frameRateField->setString(Misc::stringPrintf("%d",frameRate.getNumerator()).c_str());
+	
+	new GLMotif::Label("HzLabel",playbackControl,"FPS");
+	
+	GLMotif::Slider* frameRateSlider=new GLMotif::Slider("FrameRateSlider",playbackControl,GLMotif::Slider::HORIZONTAL,Vrui::getWidgetManager()->getStyleSheet()->fontHeight*10.0f);
+	frameRateSlider->setValueRange(-1.0,-1.0/120.0,1.0/120.0);
+	frameRateSlider->setValue(-frameTime);
+	frameRateSlider->getValueChangedCallbacks().add(this,&ImageSequenceViewer::frameRateSliderCallback);
+	
+	playbackDialog->setColumnWeight(3,1.0f);
+	playbackControl->manageChild();
 	
 	playbackDialog->setColumnWeight(1,1.0f);
 	playbackDialog->manageChild();
@@ -204,13 +242,9 @@ void ImageSequenceViewer::playToggleCallback(GLMotif::ToggleButton::ValueChanged
 		/* Request the next image: */
 		{
 		Threads::MutexCond::Lock loadRequestLock(loadRequestCond);
-		if(nextImageIndex<lastIndex-1)
-			{
-			++nextImageIndex;
-			loadRequestCond.signal();
-			}
-		else
-			playing=false;
+		if(++nextImageIndex>=lastIndex)
+			nextImageIndex=0;
+		loadRequestCond.signal();
 		}
 		
 		frameDueTime=Vrui::getApplicationTime()+frameTime;
@@ -230,13 +264,26 @@ void ImageSequenceViewer::frameIndexSliderCallback(GLMotif::TextFieldSlider::Val
 	loadRequestCond.signal();
 	}
 
+void ImageSequenceViewer::frameRateSliderCallback(GLMotif::Slider::ValueChangedCallbackData* cbData)
+	{
+	/* Update the frame time: */
+	frameTime=-cbData->value;
+	
+	/* Update the frame rate field: */
+	Math::Rational frameRate(120,int(Math::floor(frameTime*120.0+0.5)));
+	if(frameRate.getDenominator()!=1)
+		frameRateField->setString(Misc::stringPrintf("%d/%d",frameRate.getNumerator(),frameRate.getDenominator()).c_str());
+	else
+		frameRateField->setString(Misc::stringPrintf("%d",frameRate.getNumerator()).c_str());
+	}
+
 ImageSequenceViewer::ImageSequenceViewer(int& argc,char**& argv)
 	:Vrui::Application(argc,argv),
 	 firstIndex(0),lastIndex(0),
 	 frameTime(1.0/30.0),
-	 playing(false),
+	 playing(false),looping(false),
 	 frameDueTime(0.0),currentIndex(-1),imageVersion(0),
-	 playbackDialog(0)
+	 playbackDialog(0),frameRateField(0)
 	{
 	/* Parse the command line: */
 	bool autoPlay=false;
@@ -263,20 +310,28 @@ ImageSequenceViewer::ImageSequenceViewer(int& argc,char**& argv)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Invalid frame name template \"%s\"",frameNameTemplate.c_str());
 	
 	/* Split the frame name template into directory and file name: */
-	std::string::iterator lastSlashIt;
+	std::string::iterator lastSlashIt=frameNameTemplate.end();
 	for(std::string::iterator fntIt=frameNameTemplate.begin();fntIt!=frameNameTemplate.end();++fntIt)
 		if(*fntIt=='/')
 			lastSlashIt=fntIt;
-	std::string frameDirName(frameNameTemplate.begin(),lastSlashIt);
-	frameNameTemplate=std::string(lastSlashIt+1,frameNameTemplate.end());
-	
-	/* Ensure that the index conversion is in the file name, and not in the path: */
-	if(indexStart<frameDirName.length()+1)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Frame name template \"%s\" has %%d conversion in path name",frameNameTemplate.c_str());
-	indexStart-=frameDirName.length()+1;
-	
-	/* Open the directory containing all frame images: */
-	frameDir=IO::openDirectory(frameDirName.c_str());
+	if(lastSlashIt!=frameNameTemplate.end())
+		{
+		std::string frameDirName(frameNameTemplate.begin(),lastSlashIt);
+		frameNameTemplate=std::string(lastSlashIt+1,frameNameTemplate.end());
+		
+		/* Ensure that the index conversion is in the file name, and not in the path: */
+		if(indexStart<frameDirName.length()+1)
+			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Frame name template \"%s\" has %%d conversion in path name",frameNameTemplate.c_str());
+		indexStart-=frameDirName.length()+1;
+		
+		/* Open the directory containing all frame images: */
+		frameDir=IO::openDirectory(frameDirName.c_str());
+		}
+	else
+		{
+		/* Read frame images from the current directory: */
+		frameDir=IO::Directory::getCurrent();
+		}
 	
 	/* Determine the index range of the frame sequence: */
 	firstIndex=Math::Constants<int>::max;
@@ -362,13 +417,21 @@ void ImageSequenceViewer::frame(void)
 			/* Request the next image: */
 			{
 			Threads::MutexCond::Lock loadRequestLock(loadRequestCond);
-			if(nextImageIndex<lastIndex-1)
+			if(++nextImageIndex>=lastIndex)
 				{
-				++nextImageIndex;
-				loadRequestCond.signal();
+				if(looping)
+					{
+					nextImageIndex=0;
+					loadRequestCond.signal();
+					}
+				else
+					{
+					playing=false;
+					playToggle->setToggle(false);
+					}
 				}
 			else
-				playing=false;
+				loadRequestCond.signal();
 			}
 			
 			frameDueTime+=frameTime;
@@ -405,7 +468,7 @@ void ImageSequenceViewer::display(GLContextData& contextData) const
 	if(dataItem->textureVersion!=imageVersion)
 		{
 		/* Upload the new image into the texture: */
-		images.getLockedValue().glTexImage2D(GL_TEXTURE_2D,0,GL_RGB8,!dataItem->haveNpotdt);
+		images.getLockedValue().glTexImage2D(GL_TEXTURE_2D,0,!dataItem->haveNpotdt);
 		
 		dataItem->textureVersion=imageVersion;
 		}
