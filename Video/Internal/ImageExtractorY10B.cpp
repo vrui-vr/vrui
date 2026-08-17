@@ -1,7 +1,7 @@
 /***********************************************************************
 ImageExtractorY10B - Class to extract images from raw video frames
 encoded 10-bit byte-packed greyscale format.
-Copyright (c) 2013-2022 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -131,7 +131,7 @@ void ImageExtractorY10B::extractYpCbCr(const FrameBuffer* frame,void* image)
 			for(int i=0;i<4;++i,ypCbCrPtr+=3)
 				{
 				ypCbCrPtr[0]=(unsigned char)(yps[i]);
-				ypCbCrPtr[2]=ypCbCrPtr[1]=0U;
+				ypCbCrPtr[2]=ypCbCrPtr[1]=128U;
 				}
 			}
 		}
@@ -156,14 +156,14 @@ void ImageExtractorY10B::extractYpCbCr420(const FrameBuffer* frame,void* yp,unsi
 			}
 		}
 	
-	/* Reset the Cb and Cr planes to zero: */
+	/* Reset the Cb and Cr planes to 128: */
 	unsigned char* cbRowPtr=static_cast<unsigned char*>(cb);
 	unsigned char* crRowPtr=static_cast<unsigned char*>(cr);
 	for(unsigned int y=0;y<size[1];y+=2,cbRowPtr+=cbStride,crRowPtr+=crStride)
 		{
-		/* Reset the two planes' pixel row to zero: */
-		memset(cbRowPtr,0,size[0]/2);
-		memset(crRowPtr,0,size[0]/2);
+		/* Reset the two planes' pixel row to 128: */
+		memset(cbRowPtr,128,size[0]/2);
+		memset(crRowPtr,128,size[0]/2);
 		}
 	}
 

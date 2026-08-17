@@ -1,7 +1,7 @@
 /***********************************************************************
 ImageExtractorY8 - Class to extract images from raw video frames encoded
 in 8-bit greyscale format.
-Copyright (c) 2015-2022 Oliver Kreylos
+Copyright (c) 2015-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -62,7 +62,7 @@ void ImageExtractorY8::extractYpCbCr(const FrameBuffer* frame,void* image)
 	for(;fPtr!=fEnd;++fPtr,iPtr+=3)
 		{
 		iPtr[0]=*fPtr;
-		iPtr[2]=iPtr[1]=0U;
+		iPtr[2]=iPtr[1]=128U;
 		}
 	}
 
@@ -74,13 +74,13 @@ void ImageExtractorY8::extractYpCbCr420(const FrameBuffer* frame,void* yp,unsign
 	for(unsigned int y=0;y<size[1];++y,fRowPtr+=size[0],ypRowPtr+=ypStride)
 		memcpy(ypRowPtr,fRowPtr,size[0]);
 	
-	/* Reset the Cb and Cr planes to zero: */
+	/* Reset the Cb and Cr planes to 128: */
 	unsigned char* cbRowPtr=static_cast<unsigned char*>(cb);
 	unsigned char* crRowPtr=static_cast<unsigned char*>(cr);
 	for(unsigned int y=0;y<size[1];y+=2,cbRowPtr+=cbStride,crRowPtr+=crStride)
 		{
-		memset(cbRowPtr,0,size[0]/2);
-		memset(crRowPtr,0,size[0]/2);
+		memset(cbRowPtr,128,size[0]/2);
+		memset(crRowPtr,128,size[0]/2);
 		}
 	}
 

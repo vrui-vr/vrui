@@ -8892,3 +8892,8 @@ Vrui-15.0-001:
   ImageSequenceViewer example application.
 - Added ImageExtractorY16 class to Video library to process video in Y16
   (16-bit luminance) pixel format.
+  - Added support for Y16 pixel format to Video::V4L2VideoDevice.
+- Fixed Y'CbCr extraction methods in Video::ImageExtractorY8 and
+  Video::ImageExtractorY10B.
+- Added proper JPEG decompression error handling to
+  Video::ImageExtractorMJPG.

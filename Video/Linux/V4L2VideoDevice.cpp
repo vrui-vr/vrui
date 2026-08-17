@@ -55,6 +55,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Video/Config.h>
 #include <Video/Internal/ImageExtractorY8.h>
 #include <Video/Internal/ImageExtractorY10B.h>
+#include <Video/Internal/ImageExtractorY16.h>
 #include <Video/Internal/ImageExtractorYUYV.h>
 #include <Video/Internal/ImageExtractorUYVY.h>
 #include <Video/Internal/ImageExtractorYV12.h>
@@ -732,6 +733,8 @@ ImageExtractor* V4L2VideoDevice::createImageExtractor(void) const
 		return new ImageExtractorY8(format.size);
 	else if(format.isPixelFormat("Y10B"))
 		return new ImageExtractorY10B(format.size);
+	else if(format.isPixelFormat("Y16 "))
+		return new ImageExtractorY16(format.size);
 	else if(format.isPixelFormat("YUYV"))
 		return new ImageExtractorYUYV(format.size);
 	else if(format.isPixelFormat("UYVY"))
@@ -1127,7 +1130,7 @@ void V4L2VideoDevice::enumerateDevices(std::vector<VideoDevice::DeviceIdPtr>& de
 		/* Check if the device can capture video in streaming mode: */
 		v4l2_capability videoCap;
 		if(ioctl(videoFd,VIDIOC_QUERYCAP,&videoCap)==0)
-			if((videoCap.capabilities&V4L2_CAP_VIDEO_CAPTURE)!=0&&(videoCap.capabilities&V4L2_CAP_STREAMING)!=0)
+			if((videoCap.device_caps&V4L2_CAP_VIDEO_CAPTURE)!=0&&(videoCap.device_caps&V4L2_CAP_STREAMING)!=0)
 				{
 				/* Query the device's name: */
 				std::string name=reinterpret_cast<const char*>(videoCap.card);

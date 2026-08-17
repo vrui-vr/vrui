@@ -1,7 +1,7 @@
 /***********************************************************************
 ImageExtractorMJPG - Class to extract images from raw video frames
 encoded in Motion JPEG format.
-Copyright (c) 2010-2022 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -22,7 +22,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Video/Internal/ImageExtractorMJPG.h>
 
-#include <stdio.h>
+#include <string.h>
+#include <string>
+#include <stdexcept>
+#include <Misc/SelfDestructArray.h>
+#include <Misc/MessageLogger.h>
+#include <Misc/StdError.h>
 #include <jpeglib.h>
 #include <Video/FrameBuffer.h>
 
@@ -149,6 +154,18 @@ const unsigned char ImageExtractorMJPG::huffmanValues[4][256]=
 Methods of class ImageExtractorMJPG:
 ***********************************/
 
+void ImageExtractorMJPG::errorExitFunction(j_common_ptr cinfo)
+	{
+	/* Log an error message: */
+	jpeg_error_mgr* err=cinfo->err;
+	std::string errorMessage="Video::ImageExtractorMJPG: ";
+	errorMessage.append(err->jpeg_message_table[err->msg_code]);
+	Misc::formattedConsoleError(errorMessage.c_str(),err->msg_parm.i[0],err->msg_parm.i[1],err->msg_parm.i[2],err->msg_parm.i[3],err->msg_parm.i[4],err->msg_parm.i[5],err->msg_parm.i[6],err->msg_parm.i[7]);
+	
+	/* Throw an exception to reset the JPEG decompressor: */
+	throw std::runtime_error("JPEG decompression error");
+	}
+
 ImageExtractorMJPG::ImageExtractorMJPG(const Size& sSize)
 	:ImageExtractor(sSize),
 	 jpegErrorManager(0),jpegStruct(0),
@@ -159,6 +176,7 @@ ImageExtractorMJPG::ImageExtractorMJPG(const Size& sSize)
 	jpegStruct=new jpeg_decompress_struct;
 	jpeg_create_decompress(jpegStruct);
 	jpegStruct->err=jpeg_std_error(jpegErrorManager);
+	jpegStruct->err->error_exit=errorExitFunction;
 	
 	/* Create the standard Motion JPEG Huffman tables: */
 	for(int tableIndex=0;tableIndex<4;++tableIndex)
@@ -196,190 +214,243 @@ ImageExtractorMJPG::~ImageExtractorMJPG(void)
 
 void ImageExtractorMJPG::extractGrey(const FrameBuffer* frame,void* image)
 	{
-	/* Attach a JPEG source to the raw frame: */
-	MJPEGReader mjr(frame);
-	jpegStruct->src=&mjr;
-	
-	/* Read the abbreviated image file header: */
-	jpeg_read_header(jpegStruct,true);
-	
-	/* Set the decompressor's output color space to Y'CbCr: */
-	jpegStruct->out_color_space=JCS_YCbCr;
-	
-	/* Prepare the decompressor: */
-	jpeg_start_decompress(jpegStruct);
-	
-	/* Create a temporary image array and set the image row pointers: */
-	unsigned char* tempImage=new unsigned char[size.volume()*3];
-	for(unsigned int y=0;y<size[1];++y)
-		imageRows[y]=tempImage+y*size[0]*3;
-	
-	/* Decompress the video frame: */
-	unsigned int numLines=0;
-	while(numLines<size[1])
-		numLines+=jpeg_read_scanlines(jpegStruct,reinterpret_cast<JSAMPLE**>(imageRows+numLines),size[1]-numLines);
-	
-	/* Finish decompression: */
-	jpeg_finish_decompress(jpegStruct);
-	jpegStruct->src=0;
-	
-	/* Convert the frame's Y' channel to Y: */
-	const unsigned char* rRowPtr=tempImage;
-	unsigned char* gRowPtr=static_cast<unsigned char*>(image);
-	gRowPtr+=(size[1]-1)*size[0];
-	for(unsigned int y=0;y<size[1];++y,rRowPtr+=size[0]*3,gRowPtr-=size[0])
+	try
 		{
-		const unsigned char* rPtr=rRowPtr;
-		unsigned char* gPtr=gRowPtr;
-		for(unsigned int x=0;x<size[0];++x,++gPtr,rPtr+=3)
+		/* Attach a JPEG source to the raw frame: */
+		MJPEGReader mjr(frame);
+		jpegStruct->src=&mjr;
+		
+		/* Read the abbreviated image file header: */
+		jpeg_read_header(jpegStruct,true);
+		
+		/* Set the decompressor's output color space to Y'CbCr: */
+		jpegStruct->out_color_space=JCS_YCbCr;
+		
+		/* Prepare the decompressor: */
+		jpeg_start_decompress(jpegStruct);
+		
+		/* Create a temporary image array and set the image row pointers: */
+		Misc::SelfDestructArray<unsigned char> tempImage(new unsigned char[size.volume()*3]);
+		for(unsigned int y=0;y<size[1];++y)
+			imageRows[y]=tempImage+y*size[0]*3;
+		
+		/* Decompress the video frame: */
+		unsigned int numLines=0;
+		while(numLines<size[1])
+			numLines+=jpeg_read_scanlines(jpegStruct,reinterpret_cast<JSAMPLE**>(imageRows+numLines),size[1]-numLines);
+		
+		/* Finish decompression: */
+		jpeg_finish_decompress(jpegStruct);
+		jpegStruct->src=0;
+		
+		/* Convert the frame's Y' channel to Y: */
+		const unsigned char* rRowPtr=tempImage;
+		unsigned char* gRowPtr=static_cast<unsigned char*>(image);
+		gRowPtr+=(size[1]-1)*size[0];
+		for(unsigned int y=0;y<size[1];++y,rRowPtr+=size[0]*3,gRowPtr-=size[0])
 			{
-			/* Convert from Y' to Y: */
-			if(*rPtr<=16)
-				*gPtr=0;
-			else if(*rPtr>=236)
-				*gPtr=255;
-			else
-				*gPtr=(unsigned char)(((int(rPtr[0])-16)*256)/220);
+			const unsigned char* rPtr=rRowPtr;
+			unsigned char* gPtr=gRowPtr;
+			for(unsigned int x=0;x<size[0];++x,++gPtr,rPtr+=3)
+				{
+				/* Convert from Y' to Y: */
+				if(*rPtr<=16)
+					*gPtr=0;
+				else if(*rPtr>=236)
+					*gPtr=255;
+				else
+					*gPtr=(unsigned char)(((int(rPtr[0])-16)*256)/220);
+				}
 			}
 		}
-	
-	/* Clean up: */
-	delete[] tempImage;
+	catch(const std::runtime_error&)
+		{
+		/* Abort decompression: */
+		jpeg_abort_decompress(jpegStruct);
+		jpegStruct->src=0;
+		
+		/* Return a 50% grey frame: */
+		memset(image,128,size.volume());
+		}
 	}
 
 void ImageExtractorMJPG::extractRGB(const FrameBuffer* frame,void* image)
 	{
-	/* Attach a JPEG source to the raw frame: */
-	MJPEGReader mjr(frame);
-	jpegStruct->src=&mjr;
-	
-	/* Read the abbreviated image file header: */
-	jpeg_read_header(jpegStruct,true);
-	
-	/* Set the decompressor's output color space to RGB: */
-	jpegStruct->out_color_space=JCS_RGB;
-	
-	/* Prepare the decompressor: */
-	jpeg_start_decompress(jpegStruct);
-	
-	/* Set the image row pointers to flip the image vertically: */
-	for(unsigned int y=0;y<size[1];++y)
-		imageRows[y]=reinterpret_cast<unsigned char*>(image)+(size[1]-1-y)*size[0]*3;
-	
-	/* Decompress the video frame: */
-	unsigned int numLines=0;
-	while(numLines<size[1])
-		numLines+=jpeg_read_scanlines(jpegStruct,reinterpret_cast<JSAMPLE**>(imageRows+numLines),size[1]-numLines);
-	
-	/* Finish decompression: */
-	jpeg_finish_decompress(jpegStruct);
-	jpegStruct->src=0;
+	try
+		{
+		/* Attach a JPEG source to the raw frame: */
+		MJPEGReader mjr(frame);
+		jpegStruct->src=&mjr;
+		
+		/* Read the abbreviated image file header: */
+		jpeg_read_header(jpegStruct,true);
+		
+		/* Set the decompressor's output color space to RGB: */
+		jpegStruct->out_color_space=JCS_RGB;
+		
+		/* Prepare the decompressor: */
+		jpeg_start_decompress(jpegStruct);
+		
+		/* Set the image row pointers to flip the image vertically: */
+		for(unsigned int y=0;y<size[1];++y)
+			imageRows[y]=reinterpret_cast<unsigned char*>(image)+(size[1]-1-y)*size[0]*3;
+		
+		/* Decompress the video frame: */
+		unsigned int numLines=0;
+		while(numLines<size[1])
+			numLines+=jpeg_read_scanlines(jpegStruct,reinterpret_cast<JSAMPLE**>(imageRows+numLines),size[1]-numLines);
+		
+		/* Finish decompression: */
+		jpeg_finish_decompress(jpegStruct);
+		jpegStruct->src=0;
+		}
+	catch(const std::runtime_error&)
+		{
+		/* Abort decompression: */
+		jpeg_abort_decompress(jpegStruct);
+		jpegStruct->src=0;
+		
+		/* Return a 50% grey frame: */
+		memset(image,128,size.volume()*3);
+		}
 	}
 
 void ImageExtractorMJPG::extractYpCbCr(const FrameBuffer* frame,void* image)
 	{
-	/* Attach a JPEG source to the raw frame: */
-	MJPEGReader mjr(frame);
-	jpegStruct->src=&mjr;
-	
-	/* Read the abbreviated image file header: */
-	jpeg_read_header(jpegStruct,true);
-	
-	/* Set the decompressor's output color space to Y'CbCr: */
-	jpegStruct->out_color_space=JCS_YCbCr;
-	
-	/* Prepare the decompressor: */
-	jpeg_start_decompress(jpegStruct);
-	
-	/* Set the image row pointers to flip the image vertically: */
-	for(unsigned int y=0;y<size[1];++y)
-		imageRows[y]=reinterpret_cast<unsigned char*>(image)+(size[1]-1-y)*size[0]*3;
-	
-	/* Decompress the video frame: */
-	unsigned int numLines=0;
-	while(numLines<size[1])
-		numLines+=jpeg_read_scanlines(jpegStruct,reinterpret_cast<JSAMPLE**>(imageRows+numLines),size[1]-numLines);
-	
-	/* Finish decompression: */
-	jpeg_finish_decompress(jpegStruct);
-	jpegStruct->src=0;
+	try
+		{
+		/* Attach a JPEG source to the raw frame: */
+		MJPEGReader mjr(frame);
+		jpegStruct->src=&mjr;
+		
+		/* Read the abbreviated image file header: */
+		jpeg_read_header(jpegStruct,true);
+		
+		/* Set the decompressor's output color space to Y'CbCr: */
+		jpegStruct->out_color_space=JCS_YCbCr;
+		
+		/* Prepare the decompressor: */
+		jpeg_start_decompress(jpegStruct);
+		
+		/* Set the image row pointers to flip the image vertically: */
+		for(unsigned int y=0;y<size[1];++y)
+			imageRows[y]=reinterpret_cast<unsigned char*>(image)+(size[1]-1-y)*size[0]*3;
+		
+		/* Decompress the video frame: */
+		unsigned int numLines=0;
+		while(numLines<size[1])
+			numLines+=jpeg_read_scanlines(jpegStruct,reinterpret_cast<JSAMPLE**>(imageRows+numLines),size[1]-numLines);
+		
+		/* Finish decompression: */
+		jpeg_finish_decompress(jpegStruct);
+		jpegStruct->src=0;
+		}
+	catch(const std::runtime_error&)
+		{
+		/* Abort decompression: */
+		jpeg_abort_decompress(jpegStruct);
+		jpegStruct->src=0;
+		
+		/* Return a 50% grey frame: */
+		memset(image,128,size.volume()*3);
+		}
 	}
 
 void ImageExtractorMJPG::extractYpCbCr420(const FrameBuffer* frame,void* yp,unsigned int ypStride,void* cb,unsigned int cbStride,void* cr,unsigned int crStride)
 	{
-	/* Attach a JPEG source to the raw frame: */
-	MJPEGReader mjr(frame);
-	jpegStruct->src=&mjr;
-	
-	/* Read the abbreviated image file header: */
-	jpeg_read_header(jpegStruct,true);
-	
-	/* Set the decompressor's output color space to Y'CbCr: */
-	jpegStruct->out_color_space=JCS_YCbCr;
-	
-	/* Prepare the decompressor: */
-	jpeg_start_decompress(jpegStruct);
-	
-	/* Create a temporary image array and set the image row pointers: */
-	unsigned char* tempImage=new unsigned char[size.volume()*3];
-	for(unsigned int y=0;y<size[1];++y)
-		imageRows[y]=tempImage+y*size[0]*3;
-	
-	/* Decompress the video frame: */
-	unsigned int numLines=0;
-	while(numLines<size[1])
-		numLines+=jpeg_read_scanlines(jpegStruct,reinterpret_cast<JSAMPLE**>(imageRows+numLines),size[1]-numLines);
-	
-	/* Finish decompression: */
-	jpeg_finish_decompress(jpegStruct);
-	jpegStruct->src=0;
-	
-	/* Downsample the image to 4:2:0: */
-	unsigned char* framePtr=tempImage;
-	unsigned char* ypRowPtr=static_cast<unsigned char*>(yp);
-	unsigned char* cbRowPtr=static_cast<unsigned char*>(cb);
-	unsigned char* crRowPtr=static_cast<unsigned char*>(cr);;
-	for(unsigned int y=0;y<size[1];y+=2)
+	try
 		{
-		/* Process an even row by keeping its Cb values: */
-		unsigned char* ypPtr=ypRowPtr;
-		unsigned char* cbPtr=cbRowPtr;
-		for(unsigned int x=0;x<size[0];x+=2)
-			{
-			/* Get Yp and Cb from even pixel: */
-			*(ypPtr++)=*(framePtr++);
-			*(cbPtr++)=*(framePtr++);
-			++framePtr;
-			
-			/* Get Yp from odd pixel: */
-			*(ypPtr++)=*(framePtr++);
-			++framePtr;
-			++framePtr;
-			}
-		ypRowPtr+=ypStride;
-		cbRowPtr+=cbStride;
+		/* Attach a JPEG source to the raw frame: */
+		MJPEGReader mjr(frame);
+		jpegStruct->src=&mjr;
 		
-		/* Process an odd row by keeping its Cr values: */
-		ypPtr=ypRowPtr;
-		unsigned char* crPtr=crRowPtr;
-		for(unsigned int x=0;x<size[0];x+=2)
+		/* Read the abbreviated image file header: */
+		jpeg_read_header(jpegStruct,true);
+		
+		/* Set the decompressor's output color space to Y'CbCr: */
+		jpegStruct->out_color_space=JCS_YCbCr;
+		
+		/* Prepare the decompressor: */
+		jpeg_start_decompress(jpegStruct);
+		
+		/* Create a temporary image array and set the image row pointers: */
+		Misc::SelfDestructArray<unsigned char> tempImage(new unsigned char[size.volume()*3]);
+		for(unsigned int y=0;y<size[1];++y)
+			imageRows[y]=tempImage+y*size[0]*3;
+		
+		/* Decompress the video frame: */
+		unsigned int numLines=0;
+		while(numLines<size[1])
+			numLines+=jpeg_read_scanlines(jpegStruct,reinterpret_cast<JSAMPLE**>(imageRows+numLines),size[1]-numLines);
+		
+		/* Finish decompression: */
+		jpeg_finish_decompress(jpegStruct);
+		jpegStruct->src=0;
+		
+		/* Downsample the image to 4:2:0: */
+		unsigned char* framePtr=tempImage;
+		unsigned char* ypRowPtr=static_cast<unsigned char*>(yp);
+		unsigned char* cbRowPtr=static_cast<unsigned char*>(cb);
+		unsigned char* crRowPtr=static_cast<unsigned char*>(cr);;
+		for(unsigned int y=0;y<size[1];y+=2)
 			{
-			/* Get Yp from even pixel: */
-			*(ypPtr++)=*(framePtr++);
-			++framePtr;
-			++framePtr;
+			/* Process an even row by keeping its Cb values: */
+			unsigned char* ypPtr=ypRowPtr;
+			unsigned char* cbPtr=cbRowPtr;
+			for(unsigned int x=0;x<size[0];x+=2)
+				{
+				/* Get Yp and Cb from even pixel: */
+				*(ypPtr++)=*(framePtr++);
+				*(cbPtr++)=*(framePtr++);
+				++framePtr;
+				
+				/* Get Yp from odd pixel: */
+				*(ypPtr++)=*(framePtr++);
+				++framePtr;
+				++framePtr;
+				}
+			ypRowPtr+=ypStride;
+			cbRowPtr+=cbStride;
 			
-			/* Get Yp and Cr from odd pixel: */
-			*(ypPtr++)=*(framePtr++);
-			++framePtr;
-			*(crPtr++)=*(framePtr++);
+			/* Process an odd row by keeping its Cr values: */
+			ypPtr=ypRowPtr;
+			unsigned char* crPtr=crRowPtr;
+			for(unsigned int x=0;x<size[0];x+=2)
+				{
+				/* Get Yp from even pixel: */
+				*(ypPtr++)=*(framePtr++);
+				++framePtr;
+				++framePtr;
+				
+				/* Get Yp and Cr from odd pixel: */
+				*(ypPtr++)=*(framePtr++);
+				++framePtr;
+				*(crPtr++)=*(framePtr++);
+				}
+			ypRowPtr+=ypStride;
+			crRowPtr+=crStride;
 			}
-		ypRowPtr+=ypStride;
-		crRowPtr+=crStride;
 		}
-	
-	/* Clean up: */
-	delete[] tempImage;
+	catch(const std::runtime_error&)
+		{
+		/* Abort decompression: */
+		jpeg_abort_decompress(jpegStruct);
+		jpegStruct->src=0;
+		
+		/* Return a 50% grey frame: */
+		unsigned char* ypRowPtr=static_cast<unsigned char*>(yp);
+		for(unsigned int y=0;y<size[1];++y,ypRowPtr+=ypStride)
+			memset(ypRowPtr,128,size[0]);
+		
+		/* Reset the Cb and Cr planes to 128: */
+		unsigned char* cbRowPtr=static_cast<unsigned char*>(cb);
+		unsigned char* crRowPtr=static_cast<unsigned char*>(cr);
+		for(unsigned int y=0;y<size[1];y+=2,cbRowPtr+=cbStride,crRowPtr+=crStride)
+			{
+			memset(cbRowPtr,128,size[0]/2);
+			memset(crRowPtr,128,size[0]/2);
+			}
+		}
 	}
 
 }
