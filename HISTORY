@@ -8890,3 +8890,5 @@ Vrui-15.0-001:
     in preparation for move to Threads::RunLoop.
 - Fixed up and added playback control functionality to
   ImageSequenceViewer example application.
+- Added ImageExtractorY16 class to Video library to process video in Y16
+  (16-bit luminance) pixel format.

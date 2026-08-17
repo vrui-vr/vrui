@@ -1607,6 +1607,7 @@ VIDEO_SOURCES = Video/VideoDataFormat.cpp \
                 Video/Internal/ImageExtractorRGB8.cpp \
                 Video/Internal/ImageExtractorY8.cpp \
                 Video/Internal/ImageExtractorY10B.cpp \
+                Video/Internal/ImageExtractorY16.cpp \
                 Video/Internal/ImageExtractorYUYV.cpp \
                 Video/Internal/ImageExtractorUYVY.cpp \
                 Video/Internal/ImageExtractorYV12.cpp \
