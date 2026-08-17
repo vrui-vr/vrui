@@ -223,16 +223,17 @@ void ImageExtractorMJPG::extractGrey(const FrameBuffer* frame,void* image)
 		/* Read the abbreviated image file header: */
 		jpeg_read_header(jpegStruct,true);
 		
-		/* Set the decompressor's output color space to Y'CbCr: */
-		jpegStruct->out_color_space=JCS_YCbCr;
+		/* Set the decompressor's output color space to luminance-only: */
+		jpegStruct->out_color_space=JCS_GRAYSCALE;
 		
 		/* Prepare the decompressor: */
 		jpeg_start_decompress(jpegStruct);
 		
-		/* Create a temporary image array and set the image row pointers: */
-		Misc::SelfDestructArray<unsigned char> tempImage(new unsigned char[size.volume()*3]);
-		for(unsigned int y=0;y<size[1];++y)
-			imageRows[y]=tempImage+y*size[0]*3;
+		/* Set the image row pointers to flip the image vertically, using only one byte per pixel: */
+		unsigned char* iRowPtr=static_cast<unsigned char*>(image);
+		iRowPtr+=(size[1]-1)*size[0];
+		for(unsigned int y=0;y<size[1];++y,iRowPtr-=size[0])
+			imageRows[y]=iRowPtr;
 		
 		/* Decompress the video frame: */
 		unsigned int numLines=0;
@@ -242,26 +243,6 @@ void ImageExtractorMJPG::extractGrey(const FrameBuffer* frame,void* image)
 		/* Finish decompression: */
 		jpeg_finish_decompress(jpegStruct);
 		jpegStruct->src=0;
-		
-		/* Convert the frame's Y' channel to Y: */
-		const unsigned char* rRowPtr=tempImage;
-		unsigned char* gRowPtr=static_cast<unsigned char*>(image);
-		gRowPtr+=(size[1]-1)*size[0];
-		for(unsigned int y=0;y<size[1];++y,rRowPtr+=size[0]*3,gRowPtr-=size[0])
-			{
-			const unsigned char* rPtr=rRowPtr;
-			unsigned char* gPtr=gRowPtr;
-			for(unsigned int x=0;x<size[0];++x,++gPtr,rPtr+=3)
-				{
-				/* Convert from Y' to Y: */
-				if(*rPtr<=16)
-					*gPtr=0;
-				else if(*rPtr>=236)
-					*gPtr=255;
-				else
-					*gPtr=(unsigned char)(((int(rPtr[0])-16)*256)/220);
-				}
-			}
 		}
 	catch(const std::runtime_error&)
 		{
@@ -292,8 +273,10 @@ void ImageExtractorMJPG::extractRGB(const FrameBuffer* frame,void* image)
 		jpeg_start_decompress(jpegStruct);
 		
 		/* Set the image row pointers to flip the image vertically: */
-		for(unsigned int y=0;y<size[1];++y)
-			imageRows[y]=reinterpret_cast<unsigned char*>(image)+(size[1]-1-y)*size[0]*3;
+		unsigned char* iRowPtr=static_cast<unsigned char*>(image);
+		iRowPtr+=(size[1]-1)*size[0]*3;
+		for(unsigned int y=0;y<size[1];++y,iRowPtr-=size[0]*3)
+			imageRows[y]=iRowPtr;
 		
 		/* Decompress the video frame: */
 		unsigned int numLines=0;
@@ -333,8 +316,10 @@ void ImageExtractorMJPG::extractYpCbCr(const FrameBuffer* frame,void* image)
 		jpeg_start_decompress(jpegStruct);
 		
 		/* Set the image row pointers to flip the image vertically: */
-		for(unsigned int y=0;y<size[1];++y)
-			imageRows[y]=reinterpret_cast<unsigned char*>(image)+(size[1]-1-y)*size[0]*3;
+		unsigned char* iRowPtr=static_cast<unsigned char*>(image);
+		iRowPtr+=(size[1]-1)*size[0]*3;
+		for(unsigned int y=0;y<size[1];++y,iRowPtr-=size[0]*3)
+			imageRows[y]=iRowPtr;
 		
 		/* Decompress the video frame: */
 		unsigned int numLines=0;
@@ -375,8 +360,9 @@ void ImageExtractorMJPG::extractYpCbCr420(const FrameBuffer* frame,void* yp,unsi
 		
 		/* Create a temporary image array and set the image row pointers: */
 		Misc::SelfDestructArray<unsigned char> tempImage(new unsigned char[size.volume()*3]);
-		for(unsigned int y=0;y<size[1];++y)
-			imageRows[y]=tempImage+y*size[0]*3;
+		unsigned char* tiRowPtr=tempImage;
+		for(unsigned int y=0;y<size[1];++y,tiRowPtr+=size[0]*3)
+			imageRows[y]=tiRowPtr;
 		
 		/* Decompress the video frame: */
 		unsigned int numLines=0;

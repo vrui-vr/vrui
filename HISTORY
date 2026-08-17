@@ -8897,3 +8897,4 @@ Vrui-15.0-001:
   Video::ImageExtractorY10B.
 - Added proper JPEG decompression error handling to
   Video::ImageExtractorMJPG.
+- Improved decompression set-up in Video::ImageExtractorMJPG.
