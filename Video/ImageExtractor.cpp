@@ -1,7 +1,7 @@
 /***********************************************************************
 ImageExtractor - Abstract base class for processors that can extract
 image data in a variety of formats from raw video streams.
-Copyright (c) 2009-2024 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Video/VideoDataFormat.h>
 #include <Video/Internal/ImageExtractorY8.h>
 #include <Video/Internal/ImageExtractorY10B.h>
+#include <Video/Internal/ImageExtractorY16.h>
 #include <Video/Internal/ImageExtractorBA81.h>
 #include <Video/Internal/ImageExtractorYUYV.h>
 #include <Video/Internal/ImageExtractorUYVY.h>
@@ -50,6 +51,9 @@ ImageExtractor* ImageExtractor::createExtractor(const VideoDataFormat& format)
 		
 		case 0x42303159: // "Y10B"
 			return new ImageExtractorY10B(format.size);
+		
+		case 0x20363159: // "Y16 "
+			return new ImageExtractorY16(format.size);
 		
 		case 0x47425247: // "GRBG"
 			return new ImageExtractorBA81(format.size,BAYER_GRBG);

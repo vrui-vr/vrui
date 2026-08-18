@@ -33,7 +33,7 @@ Methods of class ImageExtractorY8:
 *********************************/
 
 ImageExtractorY8::ImageExtractorY8(const Size& sSize)
-	:ImageExtractor(size)
+	:ImageExtractor(sSize)
 	{
 	}
 

@@ -34,7 +34,7 @@ Methods of class ImageExtractorY16:
 **********************************/
 
 ImageExtractorY16::ImageExtractorY16(const Size& sSize)
-	:ImageExtractor(size)
+	:ImageExtractor(sSize)
 	{
 	}
 

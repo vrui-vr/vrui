@@ -158,7 +158,7 @@ void ViewerComponent::frameCallback(const Video::FrameBuffer* frameBuffer)
 	else
 		{
 		/* Check if the input image buffer is invalid or of incorrect size: */
-		if(!inputVideoFrame.isValid()||inputVideoFrame.getSize()!=videoFormat.size)
+		if(!inputVideoFrame.isValid()||inputVideoFrame.getScalarType()!=GL_UNSIGNED_BYTE||inputVideoFrame.getNumChannels()!=3||inputVideoFrame.getSize()!=videoFormat.size)
 			{
 			/* Create a new input image: */
 			inputVideoFrame=Images::RGBImage(videoFormat.size);
