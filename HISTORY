@@ -8899,3 +8899,5 @@ Vrui-15.0-001:
   Video::ImageExtractorMJPG.
 - Improved decompression set-up in Video::ImageExtractorMJPG.
 - Fixed a couple of bugs in Video::ImageExtractor classes.
+- Add Almalinux to list of supported linux distributions in
+  InstallPrerequisites.sh script.

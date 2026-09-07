@@ -32,7 +32,7 @@ LINUXDISTRO=Unknown
 PACKAGE_INSTALL_CMD=
 LINUXDISTRO_ID=$(sed -n "s/^ID=\(.*\)$/\1/p" /etc/os-release)
 LINUXDISTRO_ID=$(sed "s/^\(\"\)\(.*\)\1\$/\2/g" <<<"$LINUXDISTRO_ID")
-if [[ "${LINUXDISTRO_ID}" == "fedora" || "${LINUXDISTRO_ID}" == "centos" || "${LINUXDISTRO_ID}" == "rhel" ]]; then
+if [[ "${LINUXDISTRO_ID}" == "fedora" || "${LINUXDISTRO_ID}" == "centos" || "${LINUXDISTRO_ID}" == "rhel" || "${LINUXDISTRO_ID}" == "almalinux" ]]; then
 	LINUXDISTRO=Fedora
 	PACKAGE_INSTALL_CMD="dnf -y install"
 elif [[ "${LINUXDISTRO_ID}" == "ubuntu" ]]; then
