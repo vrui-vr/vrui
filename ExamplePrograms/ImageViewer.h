@@ -197,8 +197,6 @@ class ImageViewer:public Vrui::Application,public GLObject
 	bool smoothPixels; // Flag to enable bilinear interpolation when magnifying images
 	bool flipH; // Flag to flip images horizontally
 	GLMotif::PopupMenu* mainMenu; // The application's main menu
-	GLMotif::ToggleButton* smoothPixelsToggle; // Toggle button to select bilinear interpolation when magnifying an image
-	GLMotif::ToggleButton* flipHToggle; // Toggle button to flip images horizontally
 	GLMotif::PopupWindow* selectorDialog; // Dialog window to select the currently displayed image
 	GLMotif::TextFieldSlider* imageIndexSlider; // Slider to select the currently displayed image
 	GLMotif::PopupWindow* infoDialog; // Dialog window displaying information about the currently displayed image

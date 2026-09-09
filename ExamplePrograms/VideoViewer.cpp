@@ -89,6 +89,7 @@ class VideoViewer:public Vrui::Application
 	Images::Size vibeProcFrameSize; // Frame size in ViBe processing object
 	ViBeProc* vibeProc; // Pointer to ViBe processing object
 	#endif
+	bool smoothPixels; // Flag to enable bilinear interpolation
 	bool mirror[2]; // Flag whether to mirror video frames horizontally or vertically, respectively
 	GLMotif::FileSelectionHelper saveVideoFrameHelper; // Helper object to select file names to save video frames
 	volatile bool saveVideoFrames; // Flag to save video frames to disk as they arrive
@@ -277,7 +278,9 @@ GLMotif::PopupMenu* VideoViewer::createMainMenu(void)
 	if(viewer->getVideoControlPanel()==0)
 		showControlPanelButton->setEnabled(false);
 	
-	/* Create buttons to mirror video frames: */
+	/* Create toggle buttons to select display modes: */
+	GLMotif::ToggleButton* smoothPixelsToggle=new GLMotif::ToggleButton("SmoothPixelsToggle",mainMenu,"Smooth Pixels");
+	smoothPixelsToggle->track(smoothPixels);
 	GLMotif::ToggleButton* mirrorHToggle=new GLMotif::ToggleButton("MirrorHToggle",mainMenu,"Mirror H");
 	mirrorHToggle->track(mirror[0]);
 	GLMotif::ToggleButton* mirrorVToggle=new GLMotif::ToggleButton("MirrorVToggle",mainMenu,"Mirror V");
@@ -326,6 +329,7 @@ VideoViewer::VideoViewer(int& argc,char**& argv)
 	 #if SYSTEM_HAVE_VIBE
 	 vibeProc(0),
 	 #endif
+	 smoothPixels(true),
 	 saveVideoFrameHelper(Vrui::getWidgetManager(),"VideoFrame.jpg",createImageFormatList().c_str()),
 	 saveVideoFrames(false),saveVideoFrameNameTemplate("Frame%06u.ppm"),saveVideoNextFrameIndex(0),
 	 paused(false),
@@ -429,6 +433,8 @@ void VideoViewer::display(GLContextData& contextData) const
 	/* Bind the viewer component's video texture: */
 	Video::ViewerComponent::DataItem* dataItem=viewer->getDataItem(contextData);
 	dataItem->bindVideoTexture();
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MIN_FILTER,smoothPixels?GL_LINEAR:GL_NEAREST);
+	glTexParameteri(GL_TEXTURE_2D,GL_TEXTURE_MAG_FILTER,smoothPixels?GL_LINEAR:GL_NEAREST);
 	
 	/* Draw the video display rectangle: */
 	const Video::Size& frameSize=dataItem->getSize();

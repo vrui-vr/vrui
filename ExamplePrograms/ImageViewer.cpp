@@ -1209,9 +1209,9 @@ GLMotif::PopupMenu* ImageViewer::createMainMenu(void)
 	showInfoDialogButton->getSelectCallbacks().add(this,&ImageViewer::showInfoDialogButtonSelectedCallback);
 	
 	/* Create toggle buttons to select display modes: */
-	smoothPixelsToggle=new GLMotif::ToggleButton("SmoothPixelsToggle",mainMenu,"Smooth Pixels");
+	GLMotif::ToggleButton* smoothPixelsToggle=new GLMotif::ToggleButton("SmoothPixelsToggle",mainMenu,"Smooth Pixels");
 	smoothPixelsToggle->track(smoothPixels);
-	flipHToggle=new GLMotif::ToggleButton("FlipHToggle",mainMenu,"Flip Horizontally");
+	GLMotif::ToggleButton* flipHToggle=new GLMotif::ToggleButton("FlipHToggle",mainMenu,"Flip Horizontally");
 	flipHToggle->track(flipH);
 	
 	/* Finish and return the main menu: */
