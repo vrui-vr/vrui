@@ -33,11 +33,9 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StdError.h>
 #include <Threads/MutexCond.h>
 #include <Threads/Thread.h>
+#include <Threads/FunctionCalls.h>
 #include <Sound/Config.h>
 #include <Sound/SoundDataFormat.h>
-#if SOUND_CONFIG_HAVE_PULSEAUDIO
-#include <Sound/Linux/PulseAudio.h>
-#endif
 #include <AL/Config.h>
 #include <AL/ALTemplates.h>
 #include <AL/ALContextData.h>
@@ -52,7 +50,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 class VruiSoundTest:public Vrui::Application,public ALObject
 	{
-	#if ALSUPPORT_CONFIG_HAVE_OPENAL&&SOUND_CONFIG_HAVE_PULSEAUDIO
+	#if ALSUPPORT_CONFIG_HAVE_OPENAL
 	
 	/* Embedded classes: */
 	private:
@@ -78,10 +76,8 @@ class VruiSoundTest:public Vrui::Application,public ALObject
 		{
 		/* Elements: */
 		public:
-		unsigned int latencyMs; // Audio looping latency in ms
-		Sound::PulseAudio::Context paContext; // A PulseAudio context
-		Sound::PulseAudio::Source* recordingDevice; // The PulseAudio source connected to the Vrui environment's sound recording device
-		Sound::SoundDataFormat recordingFormat; // Recording audio data format
+		Sound::SoundDataFormat recordingFormat; // Format in which Vrui's sound context delivers audio data
+		unsigned int latencyMs; // Sound looping latency in ms
 		Threads::MutexCond sourceStateCond; // Condition variable/mutex serializing access to the OpenAL sound source's state and signaling wake-ups to the playback thread
 		volatile State state; // Current remote client state
 		std::deque<SoundBuffer> soundBuffers; // List of recorded sound buffers not yet added to the playback source's queue
@@ -89,7 +85,7 @@ class VruiSoundTest:public Vrui::Application,public ALObject
 		Threads::Thread playbackThread; // Thread running audio playback
 		
 		/* Private methods: */
-		static void recordingDataCallback(Sound::PulseAudio::Source& source,size_t numFrames,const void* frames,void* userData); // Callback called when there is new data available on the current PulseAudio source
+		void recordingCallback(const Vrui::SoundContext::RecordingCallbackData& cbData); // Callback called with a chunk of audio data from Vrui's audio recording device
 		void* playbackThreadMethod(void); // Method running the audio playback thread for the given OpenAL context data item
 		
 		/* Constructors and destructors: */
@@ -114,27 +110,25 @@ class VruiSoundTest:public Vrui::Application,public ALObject
 	virtual void initContext(ALContextData& contextData) const;
 	};
 
-#if ALSUPPORT_CONFIG_HAVE_OPENAL&&SOUND_CONFIG_HAVE_PULSEAUDIO
+#if ALSUPPORT_CONFIG_HAVE_OPENAL
 
 /****************************************
 Methods of class VruiSoundTest::DataItem:
 ****************************************/
 
-void VruiSoundTest::DataItem::recordingDataCallback(Sound::PulseAudio::Source& source,size_t numFrames,const void* frames,void* userData)
+void VruiSoundTest::DataItem::recordingCallback(const Vrui::SoundContext::RecordingCallbackData& cbData)
 	{
-	/* Access the data item object: */
-	DataItem* thisPtr=static_cast<DataItem*>(userData);
-	
 	/* Copy the provided sound data into a new buffer: */
+	size_t chunkSize=cbData.numFrames*recordingFormat.samplesPerFrame*recordingFormat.bytesPerSample;
 	SoundBuffer newBuffer;
-	newBuffer.numFrames=numFrames;
-	newBuffer.frameData=malloc(numFrames*sizeof(Misc::SInt16));
-	memcpy(newBuffer.frameData,frames,numFrames*sizeof(Misc::SInt16));
+	newBuffer.numFrames=cbData.numFrames;
+	newBuffer.frameData=malloc(chunkSize);
+	memcpy(newBuffer.frameData,cbData.frames,chunkSize);
 	
 	/* Submit the new buffer to the playback thread and notify it: */
-	Threads::MutexCond::Lock sourceStateLock(thisPtr->sourceStateCond);
-	thisPtr->soundBuffers.push_back(newBuffer);
-	thisPtr->sourceStateCond.signal();
+	Threads::MutexCond::Lock sourceStateLock(sourceStateCond);
+	soundBuffers.push_back(newBuffer);
+	sourceStateCond.signal();
 	}
 
 void* VruiSoundTest::DataItem::playbackThreadMethod(void)
@@ -220,32 +214,8 @@ void* VruiSoundTest::DataItem::playbackThreadMethod(void)
 	}
 
 VruiSoundTest::DataItem::DataItem(const VruiSoundTest* application)
-	:paContext("VruiSoundTest"),
-	 latencyMs(application->latencyMs),
-	 recordingDevice(0),
-	 state(Created),playbackSource(0)
+	:latencyMs(application->latencyMs)
 	{
-	/* Get the name of the Vrui environment's PulseAudio recording device: */
-	const std::string& recordingDeviceName=Vrui::getSoundContext(0)->getRecordingDeviceName();
-	
-	/* Find the recording device among all PulseAudio sources on the system: */
-	std::vector<Sound::PulseAudio::Context::SourceInfo> paSources=paContext.getSources();
-	std::vector<Sound::PulseAudio::Context::SourceInfo>::iterator psIt;
-	for(psIt=paSources.begin();psIt!=paSources.end();++psIt)
-		if(psIt->description==recordingDeviceName)
-			break;
-	if(psIt==paSources.end())
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Recording device %s not found",recordingDeviceName.c_str());
-	
-	/* Record in 16-bit signed integer mono: */
-	recordingFormat.setStandardSampleFormat(16,true,Sound::SoundDataFormat::LittleEndian);
-	recordingFormat.samplesPerFrame=1;
-	recordingFormat.framesPerSecond=psIt->format.framesPerSecond;
-	
-	/* Start the recording device: */
-	recordingDevice=new Sound::PulseAudio::Source(paContext,psIt->name.c_str(),recordingFormat,latencyMs);
-	recordingDevice->start(recordingDataCallback,this);
-	
 	/* Create and initialize the playback source: */
 	alGenSources(1,&playbackSource);
 	if(alGetError()!=AL_NO_ERROR)
@@ -259,10 +229,6 @@ VruiSoundTest::DataItem::DataItem(const VruiSoundTest* application)
 
 VruiSoundTest::DataItem::~DataItem(void)
 	{
-	/* Stop the recording device and then delete it: */
-	recordingDevice->stop();
-	delete recordingDevice;
-	
 	/* Shut down the audio playback thread: */
 	{
 	Threads::MutexCond::Lock sourceStateLock(sourceStateCond);
@@ -308,7 +274,7 @@ VruiSoundTest::VruiSoundTest(int& argc,char**& argv)
 	if(argc>=2)
 		latencyMs=atoi(argv[1]);
 	
-	#if ALSUPPORT_CONFIG_HAVE_OPENAL&&SOUND_CONFIG_HAVE_PULSEAUDIO
+	#if ALSUPPORT_CONFIG_HAVE_OPENAL
 
 	/* Request OpenAL sound processing from Vrui: */
 	Vrui::requestSound();
@@ -316,14 +282,14 @@ VruiSoundTest::VruiSoundTest(int& argc,char**& argv)
 	#else
 	
 	/* Audio won't work: */
-	Vrui::showErrorMessage("Vrui Sound Configuration Test","Sound recording and/or playback are disabled because ALSA and/or PulseAudio sound libraries are not installed on system.");
+	Vrui::showErrorMessage("Vrui Sound Configuration Test","Sound recording and/or playback are disabled because OpenAL is not installed on system.");
 	
 	#endif
 	}
 
 void VruiSoundTest::sound(ALContextData& contextData) const
 	{
-	#if ALSUPPORT_CONFIG_HAVE_OPENAL&&SOUND_CONFIG_HAVE_PULSEAUDIO
+	#if ALSUPPORT_CONFIG_HAVE_OPENAL
 	
 	/* Retrieve the context data item: */
 	DataItem* dataItem=contextData.retrieveDataItem<DataItem>(this);
@@ -343,11 +309,23 @@ void VruiSoundTest::sound(ALContextData& contextData) const
 
 void VruiSoundTest::initContext(ALContextData& contextData) const
 	{
-	#if ALSUPPORT_CONFIG_HAVE_OPENAL&&SOUND_CONFIG_HAVE_PULSEAUDIO
+	#if ALSUPPORT_CONFIG_HAVE_OPENAL
 	
 	/* Create a new context data item and associate it with the context data: */
 	DataItem* dataItem=new DataItem(this);
 	contextData.addDataItem(this,dataItem);
+	
+	/* Start recording audio: */
+	Vrui::SoundContext* recordingSoundContext=Vrui::getRecordingSoundContext();
+	if(recordingSoundContext!=0)
+		{
+		dataItem->recordingFormat=recordingSoundContext->getRecordingFormat();
+		
+		/* Register a recording callback: */
+		recordingSoundContext->addRecordingCallback(*Threads::createFunctionCall(dataItem,&VruiSoundTest::DataItem::recordingCallback));
+		}
+	else
+		std::cerr<<"No recording-capable sound contexts found"<<std::endl;
 	
 	#endif
 	}

@@ -8901,3 +8901,6 @@ Vrui-15.0-001:
 - Fixed a couple of bugs in Video::ImageExtractor classes.
 - Add Almalinux to list of supported linux distributions in
   InstallPrerequisites.sh script.
+- In Vrui.Workbench.cpp, move recording sound context initialization
+  before ALObjects are initialized.
+- Rewrite VruiSoundConfigTest to use new recording sound context API.

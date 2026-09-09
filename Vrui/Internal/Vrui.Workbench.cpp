@@ -1801,13 +1801,13 @@ void startSound(void)
 		vruiSoundContexts=new SoundContext*[1];
 		vruiSoundContexts[0]=sc;
 		
-		/* Initialize all ALObjects for this sound context's context data: */
-		vruiSoundContexts[0]->makeCurrent();
-		vruiSoundContexts[0]->getContextData().updateThings();
-		
 		/* Set the recording sound context if the created sound context can record: */
 		if(vruiSoundContexts[0]->canRecord())
 			vruiRecordingSoundContext=vruiSoundContexts[0];
+		
+		/* Initialize all ALObjects for this sound context's context data: */
+		vruiSoundContexts[0]->makeCurrent();
+		vruiSoundContexts[0]->getContextData().updateThings();
 		}
 	catch(const std::runtime_error& err)
 		{
