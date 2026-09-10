@@ -8899,8 +8899,11 @@ Vrui-15.0-001:
   Video::ImageExtractorMJPG.
 - Improved decompression set-up in Video::ImageExtractorMJPG.
 - Fixed a couple of bugs in Video::ImageExtractor classes.
-- Add Almalinux to list of supported linux distributions in
+- Added Almalinux to list of supported linux distributions in
   InstallPrerequisites.sh script.
-- In Vrui.Workbench.cpp, move recording sound context initialization
+- In Vrui.Workbench.cpp, moved recording sound context initialization
   before ALObjects are initialized.
-- Rewrite VruiSoundConfigTest to use new recording sound context API.
+- Rewrote VruiSoundConfigTest to use new recording sound context API.
+- Fixed recording device selection in Vrui::SoundContext.
+  - Remove list of recording devices from vruiVerbose output; instead,
+    print list if the configured recording device does not exist.

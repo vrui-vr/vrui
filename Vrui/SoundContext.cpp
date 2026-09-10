@@ -434,18 +434,27 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 		/* Create a PulseAudio context: */
 		pulseAudioContext=new Sound::PulseAudio::Context(getApplicationName());
 		
-		if(vruiVerbose)
+		/* Find the PulseAudio recording device requested by the configuration: */
+		std::string sourceName;
+		if(recordingDeviceName!="Default")
 			{
-			/* List all available PulseAudio recording devices: */
+			/* Get the list of all available PulseAudio recording devices and pick the first device whose description matches the request: */
 			std::vector<Sound::PulseAudio::Context::SourceInfo> sources=pulseAudioContext->getSources();
+			for(std::vector<Sound::PulseAudio::Context::SourceInfo>::iterator sIt=sources.begin();sourceName.empty()&&sIt!=sources.end();++sIt)
+				if(sIt->description==recordingDeviceName)
+					sourceName=sIt->name;
 			
-			std::cout<<"\tPulseAudio recording device names:"<<std::endl;
-			for(std::vector<Sound::PulseAudio::Context::SourceInfo>::iterator sIt=sources.begin();sIt!=sources.end();++sIt)
-				std::cout<<"\t\t\t"<<sIt->description<<std::endl;
+			if(sourceName.empty())
+				{
+				/* Throw the user a frickin' bone here: */
+				std::cerr<<"Available PulseAudio recording device names:"<<std::endl;
+				for(std::vector<Sound::PulseAudio::Context::SourceInfo>::iterator sIt=sources.begin();sIt!=sources.end();++sIt)
+					std::cerr<<'\t'<<sIt->description<<std::endl;
+				}
 			}
 		
 		/* Create a PulseAudio source: */
-		pulseAudioSource=new Sound::PulseAudio::Source(*pulseAudioContext,recordingDeviceName.c_str(),recordingFormat,recordingLatency);
+		pulseAudioSource=new Sound::PulseAudio::Source(*pulseAudioContext,sourceName.empty()?0:sourceName.c_str(),recordingFormat,recordingLatency);
 		}
 	
 	#endif
