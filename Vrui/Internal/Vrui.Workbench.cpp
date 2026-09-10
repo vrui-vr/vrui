@@ -53,7 +53,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/TimerEventScheduler.h>
 #include <Realtime/Time.h>
 #include <Threads/Thread.h>
-#include <Threads/Mutex.h>
 #include <Threads/Barrier.h>
 #include <Cluster/Multiplexer.h>
 #include <Cluster/MulticastPipe.h>
@@ -185,7 +184,6 @@ Workbench-specific global variables:
 int vruiEventPipe[2]={-1,-1};
 int vruiCommandPipe=-1;
 int vruiCommandPipeHolder=-1;
-Threads::Mutex vruiFrameMutex;
 SynchronousIOCallbackList vruiSynchronousIOCallbacks;
 Misc::FdSet vruiReadFdSet;
 Misc::ConfigurationFile* vruiConfigFile=0;
@@ -652,19 +650,16 @@ bool vruiCreateWindowGroup(const VruiWindowGroupCreator& group,const std::string
 		{
 		try
 			{
-			/* Create a unique name for the window: */
-			char windowName[256];
+			/* Assign a unique name to the window: */
+			std::string windowName=vruiApplicationName;
 			if(vruiNumWindows>1)
-				snprintf(windowName,sizeof(windowName),"%s - %d",vruiApplicationName,wIt->windowIndex);
-			else
-				snprintf(windowName,sizeof(windowName),"%s",vruiApplicationName);
-			
+				windowName+=Misc::stringPrintf(" - %d",wIt->windowIndex);
 			if(vruiVerbose)
 				std::cout<<vruiErrorHeader<<"Opening window "<<windowName<<" from configuration section "<<wIt->windowConfigFileSection.getName()<<':'<<std::endl;
 			
 			/* Create the new window and add it to the window group: */
 			VruiWindowGroup::Window newWindow;
-			newWindow.window=VRWindow::createWindow(*windowGroup.context,windowName,wIt->windowConfigFileSection);
+			newWindow.window=VRWindow::createWindow(*windowGroup.context,windowName.c_str(),wIt->windowConfigFileSection);
 			newWindow.window->makeCurrent();
 			newWindow.viewportSize=ISize(0,0);
 			newWindow.frameSize=ISize(0,0);
@@ -748,7 +743,9 @@ void* vruiRenderingThreadFunction(int windowGroupIndex)
 	if(vruiVerbose)
 		std::cout<<"Vrui: Started rendering thread for window group "<<windowGroupIndex<<std::endl;
 	
+	/* Keep track of how many rendering barriers this thread still has to pass, in order to clean up properly should an exception occur: */
 	int numBarriers=0;
+	
 	try
 		{
 		/* Synchronize all rendering threads: */

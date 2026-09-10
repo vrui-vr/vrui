@@ -8918,3 +8918,4 @@ Vrui-15.0-001:
 - Rewrote ImageViewer example program to work with sets of images, added
   ability to load images from entire directory trees; replaced use of
   broken Images::TextureSet class.
+- Removed unused vruiFrameMutex from Vrui.Workbench.cpp.
