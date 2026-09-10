@@ -212,7 +212,7 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 			{
 			/* Print all available OpenAL devices: */
 			const ALchar* devices=alcGetString(0,ALC_ALL_DEVICES_SPECIFIER);
-			std::cerr<<"Available OpenAL sound devices:"<<std::endl;
+			std::cerr<<"OpenAL sound device "<<alDeviceName<<" not found. Available sound devices:"<<std::endl;
 			const ALCchar* dPtr=devices;
 			while(*dPtr!='\0')
 				{
@@ -288,13 +288,13 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 			else
 				{
 				/* Throw the user a frickin' bone here: */
-				std::cerr<<"Available OpenAL head-related transfer function models:"<<std::endl;
+				std::cerr<<"OpenAL head-related transfer function model "<<hrtfModel<<" not found. Available HRTF models:"<<std::endl;
 				for(hrtfIndex=0;hrtfIndex<numHrtfs;++hrtfIndex)
 					std::cerr<<"\t"<<alcGetStringiSOFTProc(alDevice,ALC_HRTF_SPECIFIER_SOFT,hrtfIndex)<<std::endl;
 				
 				/* Close the OpenAL device and throw an exception: */
 				alcCloseDevice(alDevice);
-				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Requested HRTF model %s not found",hrtfModel.c_str());
+				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Requested OpenAL HRTF model %s not found",hrtfModel.c_str());
 				}
 			}
 		}
@@ -447,7 +447,7 @@ SoundContext::SoundContext(const Misc::ConfigurationFileSection& configFileSecti
 			if(sourceName.empty())
 				{
 				/* Throw the user a frickin' bone here: */
-				std::cerr<<"Available PulseAudio recording device names:"<<std::endl;
+				std::cerr<<"PulseAudio recording device "<<recordingDeviceName<<" not found. Available recording device names:"<<std::endl;
 				for(std::vector<Sound::PulseAudio::Context::SourceInfo>::iterator sIt=sources.begin();sIt!=sources.end();++sIt)
 					std::cerr<<'\t'<<sIt->description<<std::endl;
 				}
