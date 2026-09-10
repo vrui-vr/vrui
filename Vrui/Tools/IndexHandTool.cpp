@@ -1,7 +1,7 @@
 /***********************************************************************
 IndexHandTool - Tool to attach an animated hand model to a Valve Index
 controller and create a virtual input device following the index finger.
-Copyright (c) 2021-2024 Oliver Kreylos
+Copyright (c) 2021-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -25,6 +25,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <string>
 #include <vector>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/FixedArray.h>
 #include <Misc/StandardValueCoders.h>
@@ -107,9 +108,7 @@ void IndexHandToolFactory::Configuration::read(const Misc::ConfigurationFileSect
 		Pose p;
 		for(int joint=0;joint<3;++joint)
 			p[joint]=SceneGraph::ONTransform::rotate(thumb.rs[button][joint]);
-		char settingName[64];
-		snprintf(settingName,sizeof(settingName),"./thumb%sRots",buttonNames[button]);
-		cfs.updateValue(settingName,p);
+		cfs.updateValue(Misc::stringPrintf("./thumb%sRots",buttonNames[button]).c_str(),p);
 		for(int joint=0;joint<3;++joint)
 			thumb.rs[button][joint]=p[joint].getRotation();
 		}
@@ -123,18 +122,14 @@ void IndexHandToolFactory::Configuration::read(const Misc::ConfigurationFileSect
 			Pose p;
 			for(int joint=0;joint<3;++joint)
 				p[joint]=SceneGraph::ONTransform::rotate(fingers[finger].rs[state][joint]);
-			char settingName[64];
-			snprintf(settingName,sizeof(settingName),"./%s%sRots",fingerNames[finger],stateNames[state]);
-			cfs.updateValue(settingName,p);
+			cfs.updateValue(Misc::stringPrintf("./%s%sRots",fingerNames[finger],stateNames[state]).c_str(),p);
 			for(int joint=0;joint<3;++joint)
 				fingers[finger].rs[state][joint]=p[joint].getRotation();
 			}
 		
 		/* Read the current finger's bend thresholds: */
 		Misc::FixedArray<SceneGraph::Scalar,2> fbt(fingers[finger].bendThresholds);
-		char settingName[64];
-		snprintf(settingName,sizeof(settingName),"./%sBendThresholds",fingerNames[finger]);
-		cfs.updateValue(settingName,fbt);
+		cfs.updateValue(Misc::stringPrintf("./%sBendThresholds",fingerNames[finger]).c_str(),fbt);
 		fbt.writeElements(fingers[finger].bendThresholds);
 		}
 	
@@ -156,9 +151,7 @@ void IndexHandToolFactory::Configuration::write(Misc::ConfigurationFileSection& 
 		Pose p;
 		for(int joint=0;joint<3;++joint)
 			p[joint]=SceneGraph::ONTransform::rotate(thumb.rs[button][joint]);
-		char settingName[64];
-		snprintf(settingName,sizeof(settingName),"./thumb%sRots",buttonNames[button]);
-		cfs.storeValue(settingName,p);
+		cfs.storeValue(Misc::stringPrintf("./thumb%sRots",buttonNames[button]).c_str(),p);
 		}
 	
 	/* Write the other finger's joint rotations for stretched and grabbed states and bend thresholds: */
@@ -170,16 +163,12 @@ void IndexHandToolFactory::Configuration::write(Misc::ConfigurationFileSection& 
 			Pose p;
 			for(int joint=0;joint<3;++joint)
 				p[joint]=SceneGraph::ONTransform::rotate(fingers[finger].rs[state][joint]);
-			char settingName[64];
-			snprintf(settingName,sizeof(settingName),"./%s%sRots",fingerNames[finger],stateNames[state]);
-			cfs.storeValue(settingName,p);
+			cfs.storeValue(Misc::stringPrintf("./%s%sRots",fingerNames[finger],stateNames[state]).c_str(),p);
 			}
 		
 		/* Write the current finger's bend thresholds: */
 		Misc::FixedArray<SceneGraph::Scalar,2> fbt(fingers[finger].bendThresholds);
-		char settingName[64];
-		snprintf(settingName,sizeof(settingName),"./%sBendThresholds",fingerNames[finger]);
-		cfs.storeValue(settingName,fbt);
+		cfs.storeValue(Misc::stringPrintf("./%sBendThresholds",fingerNames[finger]).c_str(),fbt);
 		}
 	
 	/* Write the index finger device transformation: */

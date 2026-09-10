@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDevice - Class to represent input devices (6-DOF tracker with
 associated buttons and valuators) in virtual reality environments.
-Copyright (c) 2000-2023 Oliver Kreylos
+Copyright (c) 2000-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -24,6 +24,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #ifndef VRUI_INPUTDEVICE_INCLUDED
 #define VRUI_INPUTDEVICE_INCLUDED
 
+#include <vector>
 #include <Misc/CallbackList.h>
 #include <Geometry/Point.h>
 #include <Geometry/Vector.h>
@@ -83,15 +84,18 @@ class InputDevice // Class for input devices
 		/* Elements: */
 		public:
 		int valuatorIndex; // Index of valuator that changed value
-		double oldValuatorValue,newValuatorValue; // Old and new valuator values
+		double newValuatorValue; // New value of that valuator; the old value can be queried from the input device, because the value will only be changed after the callback
 		
 		/* Constructors and destructors: */
-		ValuatorCallbackData(InputDevice* sInputDevice,int sValuatorIndex,double sOldValuatorValue,double sNewValuatorValue)
+		ValuatorCallbackData(InputDevice* sInputDevice,int sValuatorIndex,double sNewValuatorValue)
 			:CallbackData(sInputDevice),
-			 valuatorIndex(sValuatorIndex),oldValuatorValue(sOldValuatorValue),newValuatorValue(sNewValuatorValue)
+			 valuatorIndex(sValuatorIndex),newValuatorValue(sNewValuatorValue)
 			{
 			}
 		};
+	
+	struct ChangeListItem; // Structure to keep track of changes to an input device's state while callbacks are disabled
+	typedef std::vector<ChangeListItem> ChangeList; // Type for lists of accumulated state changes
 	
 	/* Elements: */
 	private:
@@ -116,10 +120,7 @@ class InputDevice // Class for input devices
 	
 	/* State for disabling callbacks: */
 	bool callbacksEnabled; // Flag if callbacks are enabled
-	bool deviceRayChanged; // Flag whether the device-space ray direction or ray start have changed
-	bool trackingChanged; // Flag whether the transformation, linear velocity, or angular velocity have changed
-	bool* savedButtonStates; // Button states are saved at the time callbacks are disabled
-	double* savedValuatorValues; // Valuator values are saved at the time callbacks are disabled
+	ChangeList changes; // Input device state changes accumulated since the time callbacks were disabled
 	
 	/* Constructors and destructors: */
 	public:
@@ -252,7 +253,7 @@ class InputDevice // Class for input devices
 	void clearButtonStates(void);
 	void setButtonState(int index,bool newButtonState);
 	void setSingleButtonPressed(int index);
-	void setValuator(int index,double value);
+	void setValuator(int index,double newValuatorValue);
 	
 	/* Current state access methods: */
 	const Vector& getDeviceRayDirection(void) const // Returns the device ray direction in device coordinates

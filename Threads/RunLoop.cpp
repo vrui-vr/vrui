@@ -1519,10 +1519,10 @@ void RunLoop::handlePipeMessages(RunLoop::PipeMessage* end)
 					/* Replace the I/O watcher's entries in the active I/O watchers list and the poll request list with the last entries in the respective lists, then drop the last entries: */
 					unsigned int aiowi=ioWatcher->activeIndex;
 					activeIOWatchers[aiowi]=activeIOWatchers[numActiveIOWatchers-1];
+					activeIOWatchers[aiowi].ioWatcher->activeIndex=aiowi;
 					activeIOWatchers.pop_back();
 					pollFds[aiowi+1]=pollFds[numActiveIOWatchers]; // Take account of the extra self-pipe entry at the head of the list
 					pollFds.pop_back();
-					activeIOWatchers[aiowi].ioWatcher->activeIndex=aiowi;
 					--numActiveIOWatchers;
 					
 					/* Mark the I/O watcher as disabled: */

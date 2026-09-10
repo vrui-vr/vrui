@@ -332,12 +332,17 @@ bool VRServerLauncher::startServer(VRServerLauncher::Server& server)
 				request<<"Content-Length: 0\r\n";
 				request<<"\r\n";
 				}
-				httpPipe.flush();
+				
+				/* Flush and shut down the write side of the connection: */
+				httpPipe.shutdown(false,true);
 				
 				/* Read the HTTP reply: */
 				void* buffer;
 				while(!httpPipe.eof())
 					httpPipe.readInBuffer(buffer);
+				
+				/* Shut down the read side of the connection: */
+				httpPipe.shutdown(true,false);
 				
 				/* Bail out 'cuz it worked: */
 				break;

@@ -2,7 +2,7 @@
 VRWindow - Abstract base class for OpenGL windows that are used to map
 one or two eyes of a viewer onto a VR screen using a variety of mono or
 stereo rendering methods.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -31,9 +31,9 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Internal/Config.h>
 
 #include <string.h>
-#include <stdio.h>
 #include <iostream>
 #include <Misc/SizedTypes.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/CreateNumberedFileName.h>
 #include <Misc/MessageLogger.h>
@@ -907,17 +907,13 @@ void VRWindow::setWindowIndex(int newWindowIndex)
 	windowIndex=newWindowIndex;
 	
 	/* Register a pipe command to set the window's position and size: */
-	char setRectCommand[64];
-	snprintf(setRectCommand,sizeof(setRectCommand),"Window(%d).setRect",windowIndex);
-	getCommandDispatcher().addCommandCallback(setRectCommand,&VRWindow::setRectCallback,this,"<x> <y> <width> <height>","Sets the window's position and size");
+	getCommandDispatcher().addCommandCallback(Misc::stringPrintf("Window(%d).setRect",windowIndex).c_str(),&VRWindow::setRectCallback,this,"<x> <y> <width> <height>","Sets the window's position and size");
 	
 	/* Check if the window is supposed to save a movie: */
 	if(movieSaver!=0)
 		{
 		/* Register pipe command callbacks: */
-		char toggleMovieSaverCommand[64];
-		snprintf(toggleMovieSaverCommand,sizeof(toggleMovieSaverCommand),"Window(%d).toggleMovieSaver",windowIndex);
-		getCommandDispatcher().addCommandCallback(toggleMovieSaverCommand,&VRWindow::toggleMovieSaverCallback,this,0,"Toggles the window's movie saver between paused and active");
+		getCommandDispatcher().addCommandCallback(Misc::stringPrintf("Window(%d).toggleMovieSaver",windowIndex).c_str(),&VRWindow::toggleMovieSaverCallback,this,0,"Toggles the window's movie saver between paused and active");
 		}
 	}
 
@@ -1470,39 +1466,43 @@ bool VRWindow::processEvent(const XEvent& event)
 			}
 		
 		case FocusIn:
-			if(panningViewport&&getNumVRScreens()==1)
+			/* Only handle "normal" events, not those caused by grabbing/releasing the pointer: */
+			if(event.xfocus.mode==NotifyNormal)
 				{
-				/* Retrieve the screen, its size, and its transformation: */
-				VRScreen* screen=getVRScreen(0);
-				Scalar screenW=screen->getWidth();
-				Scalar screenH=screen->getHeight();
-				ONTransform screenT=screen->getScreenTransformation();
+				if(panningViewport&&getNumVRScreens()==1)
+					{
+					/* Retrieve the screen, its size, and its transformation: */
+					VRScreen* screen=getVRScreen(0);
+					Scalar screenW=screen->getWidth();
+					Scalar screenH=screen->getHeight();
+					ONTransform screenT=screen->getScreenTransformation();
+					
+					/* Calculate the screen's center: */
+					Point center=screenT.transform(Point(Math::mid(panRect[0],panRect[1])*screenW,Math::mid(panRect[2],panRect[3])*screenH,0));
+					
+					/* Update Vrui's display center: */
+					setDisplayCenter(center,getDisplaySize());
+					}
 				
-				/* Calculate the screen's center: */
-				Point center=screenT.transform(Point(Math::mid(panRect[0],panRect[1])*screenW,Math::mid(panRect[2],panRect[3])*screenH,0));
+				if(trackToolKillZone)
+					placeToolKillZone();
 				
-				/* Update Vrui's display center: */
-				setDisplayCenter(center,getDisplaySize());
-				}
-			
-			if(trackToolKillZone)
-				placeToolKillZone();
-			
-			if(mouseAdapter!=0)
-				{
-				/* Create a fake XKeymap event: */
-				XKeymapEvent keymapEvent;
-				keymapEvent.type=KeymapNotify;
-				keymapEvent.serial=event.xcrossing.serial;
-				keymapEvent.send_event=event.xcrossing.send_event;
-				keymapEvent.display=event.xcrossing.display;
-				keymapEvent.window=event.xcrossing.window;
-				
-				/* Query the current key map: */
-				XQueryKeymap(getContext().getDisplay(),keymapEvent.key_vector);
-				
-				/* Reset the input device adapter's key states: */
-				mouseAdapter->resetKeys(this,keymapEvent);
+				if(mouseAdapter!=0)
+					{
+					/* Create a fake XKeymap event: */
+					XKeymapEvent keymapEvent;
+					keymapEvent.type=KeymapNotify;
+					keymapEvent.serial=event.xcrossing.serial;
+					keymapEvent.send_event=event.xcrossing.send_event;
+					keymapEvent.display=event.xcrossing.display;
+					keymapEvent.window=event.xcrossing.window;
+					
+					/* Query the current key map: */
+					XQueryKeymap(getContext().getDisplay(),keymapEvent.key_vector);
+					
+					/* Reset the input device adapter's key states: */
+					mouseAdapter->resetKeys(this,keymapEvent);
+					}
 				}
 			break;
 		

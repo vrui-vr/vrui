@@ -1,6 +1,6 @@
 /***********************************************************************
 FileSelectionDialog - A popup window to select a file name.
-Copyright (c) 2008-2022 Oliver Kreylos
+Copyright (c) 2008-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -19,13 +19,12 @@ with the GLMotif Widget Library; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ***********************************************************************/
 
-#include <iostream>
 #include <ctype.h>
 #include <string.h>
-#include <stdio.h>
 #include <string>
 #include <vector>
 #include <algorithm>
+#include <Misc/StringPrintf.h>
 #include <Misc/FileNameExtensions.h>
 #include <Misc/GetCurrentDirectory.h>
 #include <Misc/FileTests.h>
@@ -301,9 +300,7 @@ bool FileSelectionDialog::selectListItem(int selectedItem)
 			
 			/* Add a new path button for the selected directory: */
 			item.erase(item.end()-1);
-			char pathButtonName[20];
-			snprintf(pathButtonName,sizeof(pathButtonName),"PathButton%04d",selectedPathButton);
-			Button* pathButton=new Button(pathButtonName,pathButtonBox,item.c_str());
+			Button* pathButton=new Button(Misc::stringPrintf("PathButton%04d",selectedPathButton).c_str(),pathButtonBox,item.c_str());
 			pathButton->setBorderWidth(pathButton->getBorderWidth()*0.5f);
 			pathButton->getSelectCallbacks().add(this,&FileSelectionDialog::pathButtonSelectedCallback);
 			
@@ -432,9 +429,7 @@ void FileSelectionDialog::createDialog(const char* sFileNameFilters)
 	for(unsigned int buttonIndex=0;buttonIndex<numParents;++buttonIndex)
 		{
 		/* Create a button for the current parent directory: */
-		char buttonName[40];
-		snprintf(buttonName,sizeof(buttonName),"PathButton%04u",buttonIndex);
-		Button* pathButton=new Button(buttonName,pathButtonBox,parents[numParents-1-buttonIndex]->getName().c_str());
+		Button* pathButton=new Button(Misc::stringPrintf("PathButton%04u",buttonIndex).c_str(),pathButtonBox,parents[numParents-1-buttonIndex]->getName().c_str());
 		pathButton->setBorderWidth(pathButton->getBorderWidth()*0.5f);
 		pathButton->getSelectCallbacks().add(this,&FileSelectionDialog::pathButtonSelectedCallback);
 		

@@ -32,7 +32,7 @@ LINUXDISTRO=Unknown
 PACKAGE_INSTALL_CMD=
 LINUXDISTRO_ID=$(sed -n "s/^ID=\(.*\)$/\1/p" /etc/os-release)
 LINUXDISTRO_ID=$(sed "s/^\(\"\)\(.*\)\1\$/\2/g" <<<"$LINUXDISTRO_ID")
-if [[ "${LINUXDISTRO_ID}" == "fedora" || "${LINUXDISTRO_ID}" == "centos" || "${LINUXDISTRO_ID}" == "rhel" ]]; then
+if [[ "${LINUXDISTRO_ID}" == "fedora" || "${LINUXDISTRO_ID}" == "centos" || "${LINUXDISTRO_ID}" == "rhel" || "${LINUXDISTRO_ID}" == "almalinux" ]]; then
 	LINUXDISTRO=Fedora
 	PACKAGE_INSTALL_CMD="dnf -y install"
 elif [[ "${LINUXDISTRO_ID}" == "ubuntu" ]]; then
@@ -106,10 +106,10 @@ if [[ "${LINUXDISTRO}" == "Fedora" ]]; then
 	OPTIONAL_PKGS+=(libpng-devel libjpeg-devel libtiff-devel)
 	
 	# Sound libraries
-	OPTIONAL_PKGS+=(alsa-lib-devel pulseaudio-libs-devel openal-soft-devel speex-devel)
+	OPTIONAL_PKGS+=(alsa-lib-devel pulseaudio-libs-devel libogg-devel speex-devel opus-devel openal-soft-devel)
 	
 	# Video codec and video device support libraries
-	OPTIONAL_PKGS+=(libv4l-devel libdc1394-devel libogg-devel libtheora-devel)
+	OPTIONAL_PKGS+=(libv4l-devel libdc1394-devel libtheora-devel)
 	
 	# 2D and 3D desktop graphics and input device abstraction packages
 	OPTIONAL_PKGS+=(libXi-devel libXrandr-devel)
@@ -167,10 +167,10 @@ elif [[ "${LINUXDISTRO}" == "Ubuntu" || "${LINUXDISTRO}" == "Mint" ]]; then
 	OPTIONAL_PKGS+=(libpng-dev libjpeg-dev libtiff-dev)
 	
 	# Sound libraries
-	OPTIONAL_PKGS+=(libasound2-dev libpulse-dev libopenal-dev libspeex-dev libopus-dev)
+	OPTIONAL_PKGS+=(libasound2-dev libpulse-dev libogg-dev libspeex-dev libopus-dev libopenal-dev)
 	
 	# Video codec and video device support libraries
-	OPTIONAL_PKGS+=(libv4l-dev libogg-dev libtheora-dev)
+	OPTIONAL_PKGS+=(libv4l-dev libtheora-dev)
 	
 	# 2D and 3D desktop graphics and input device abstraction packages
 	OPTIONAL_PKGS+=(libxi-dev libxrandr-dev)

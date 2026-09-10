@@ -2,7 +2,7 @@
 VruiSceneGraphDemo - Demonstration program for the Vrui scene graph
 architecture; shows how to construct a scene graph programmatically, or
 load one from one or more VRML 2.0 / 97 files.
-Copyright (c) 2010-2021 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -19,10 +19,10 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ***********************************************************************/
 
-#include <stdio.h>
 #include <string>
 #include <vector>
 #include <iostream>
+#include <Misc/StringPrintf.h>
 #include <Geometry/ComponentArray.h>
 #include <Geometry/Point.h>
 #include <Geometry/OrthogonalTransformation.h>
@@ -184,9 +184,7 @@ VruiSceneGraphDemo::VruiSceneGraphDemo(int& argc,char**& argv)
 	unsigned int numSceneGraphs=sceneGraphs.size();
 	for(unsigned int i=0;i<numSceneGraphs;++i)
 		{
-		char toggleName[40];
-		snprintf(toggleName,sizeof(toggleName),"SceneGraphToggle%u",i);
-		GLMotif::ToggleButton* sceneGraphToggle=new GLMotif::ToggleButton(toggleName,mainMenu,sceneGraphNames[i].c_str());
+		GLMotif::ToggleButton* sceneGraphToggle=new GLMotif::ToggleButton(Misc::stringPrintf("SceneGraphToggle%u",i).c_str(),mainMenu,sceneGraphNames[i].c_str());
 		sceneGraphToggle->setToggle(sceneGraphEnableds[i]);
 		sceneGraphToggle->getValueChangedCallbacks().add(this,&VruiSceneGraphDemo::sceneGraphToggleCallback,i);
 		}

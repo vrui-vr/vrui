@@ -710,8 +710,8 @@ class RunLoop
 	void stopOnSignal(int signum); // Instructs this run loop to stop if the OS signal of the given number is received; throws exception if another run loop already listens to that signal
 	
 	/* Methods to wake up or terminate a potentially blocked run loop: */
-	void wakeUp(void); // Wakes up a potentially blocked run loop; dispatchNextEvents() call will return true
-	void stop(void); // Orders the run loop to stop dispatching events; some subsequent dispatchNextEvents() call will return false
+	void wakeUp(void); // Wakes up a potentially blocked run loop; waitForEvents() call will return true
+	void stop(void); // Orders the run loop to stop dispatching events; some subsequent waitForEvents() call will return false
 	
 	/* Event dispatching methods; must only be called from the thread to which the run loop is attached: */
 	void attachToThread(void); // Attaches the run loop to the calling thread; it is the caller's responsibility to prevent asynchronous use around this call

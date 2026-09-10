@@ -2,7 +2,7 @@
 FiveAxisSurfaceNavigationTool - Class for navigation tools that use a
 six-axis spaceball or similar input device to move along an application-
 defined surface.
-Copyright (c) 2012-2021 Oliver Kreylos
+Copyright (c) 2012-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -303,7 +303,8 @@ const ToolFactory* FiveAxisSurfaceNavigationTool::getFactory(void) const
 void FiveAxisSurfaceNavigationTool::valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData)
 	{
 	/* Check if the valuator became active or inactive: */
-	if(cbData->oldValuatorValue==0.0&&cbData->newValuatorValue!=0.0)
+	double oldValue=getValuatorState(valuatorSlotIndex);
+	if(oldValue==0.0&&cbData->newValuatorValue!=0.0)
 		{
 		/* Activate the axis: */
 		++numActiveAxes;
@@ -315,7 +316,7 @@ void FiveAxisSurfaceNavigationTool::valuatorCallback(int valuatorSlotIndex,Input
 			initNavState();
 			}
 		}
-	if(cbData->oldValuatorValue!=0.0&&cbData->newValuatorValue==0.0)
+	if(oldValue!=0.0&&cbData->newValuatorValue==0.0)
 		{
 		/* Deactivate the axis: */
 		--numActiveAxes;

@@ -1,7 +1,7 @@
 /***********************************************************************
 JsonEntityTypes - Classes for concrete entities parsed from JSON
-(JavaScript Object Notation) files.
-Copyright (c) 2018-2025 Oliver Kreylos
+(JavaScript Object Notation) texts, as defined by IETF RFC 8259.
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -84,28 +84,41 @@ class JsonNumber:public JsonEntity // Class for floating-point numerical values
 
 class JsonString:public JsonEntity // Class for string values
 	{
+	/*********************************************************************
+	Important note: JsonString objects contain *raw* string values, i.e.,
+	not using escape sequences to encode characters that can not appear in
+	a JSON text per the IETF specification. Special characters are
+	replaced by escape sequences on-the-fly only when writing JsonString
+	objects to an output stream, creating a JSON text.
+	Bottom line: DO NOT escape strings when creating JsonString objects!
+	*********************************************************************/
+	
 	/* Elements: */
 	private:
-	std::string string; // The represented string
+	std::string string; // The represented string in UTF-8 in raw form, i.e., without escaped special characters
 	
 	/* Constructors and destructors: */
 	public:
-	JsonString(const char* sString)
+	JsonString(const char* sString) // Creates a string value for the given "raw" C string
 		:string(sString)
 		{
 		}
-	JsonString(const std::string& sString)
+	JsonString(const std::string& sString) // Ditto, with a C++ string
 		:string(sString)
+		{
+		}
+	JsonString(std::string&& sString) // Ditto, with move semantics
+		:string(std::move(sString))
 		{
 		}
 	
 	/* Methods from class JsonEntity: */
 	virtual EntityType getType(void) const;
 	virtual std::string getTypeName(void) const;
-	virtual void print(std::ostream& os) const;
+	virtual void print(std::ostream& os) const; // The represented string will be printed in correct JSON syntax, i.e., with escaped special characters
 	
 	/* New methods: */
-	const std::string& getString(void) const // Returns the represented string
+	const std::string& getString(void) const // Returns the represented "raw" string
 		{
 		return string;
 		}

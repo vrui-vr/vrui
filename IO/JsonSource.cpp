@@ -31,15 +31,162 @@ namespace IO {
 Methods of class JsonSource:
 ***************************/
 
+namespace {
+
+/****************
+Helper functions:
+****************/
+
+inline bool isHex(int c)
+	{
+	if(c>='A')
+		{
+		if(c>='a')
+			return c<='f';
+		else
+			return c<='F';
+		}
+	else
+		return c>='0'&&c<='9';
+	}
+
+inline int fromHex(int c)
+	{
+	/* Check whether the character is an uppercase or lowercase character or a decimal digit: */
+	if(c>='A')
+		{
+		/* Check if it's uppercase or lowercase: */
+		if(c>='a')
+			return (c-'a')+10;
+		else
+			return (c-'A')+10;
+		}
+	else
+		return c-'0';
+	}
+
+}
+
+std::string JsonSource::parseJsonString(void)
+	{
+	std::string result;
+	
+	/* Skip the opening quote: */
+	file.getChar();
+	
+	/* Read until end-of-file or the closing quote: */
+	while(!file.eof()&&file.peekc()!='"')
+		{
+		/* Check for a regular character: */
+		if(file.peekc()!='\\')
+			{
+			/* Read the character as-is: */
+			result.push_back(file.getChar());
+			}
+		else
+			{
+			/* Skip the escape character: */
+			file.getChar();
+			
+			/* Handle and skip the escape sequence: */
+			switch(file.peekc())
+				{
+				case 'b': // Backspace
+					result.push_back('\b');
+					file.getChar();
+					break;
+				
+				case 't': // Tab
+					result.push_back('\t');
+					file.getChar();
+					break;
+				
+				case 'n': // Line feed
+					result.push_back('\n');
+					file.getChar();
+					break;
+				
+				case 'f': // Form feed
+					result.push_back('\f');
+					file.getChar();
+					break;
+				
+				case 'r': // Carriage return
+					result.push_back('\r');
+					file.getChar();
+					break;
+				
+				case '"': // Quotation mark
+					result.push_back('"');
+					file.getChar();
+					break;
+				
+				case '/': // Solidus -- why is there an escape sequence for the solidus? It's a valid regular character!
+					result.push_back('/');
+					file.getChar();
+					break;
+				
+				case '\\': // Reverse solidus
+					result.push_back('\\');
+					file.getChar();
+					break;
+				
+				case 'u': // Four-digit hexadeximal number
+					{
+					/* Skip the u tag: */
+					file.getChar();
+					
+					/* Parse the hexadecimal character code: */
+					int charCode=0;
+					int i;
+					for(i=0;i<4&&isHex(file.peekc());++i)
+						charCode=(charCode<<4)|fromHex(file.getChar());
+					if(i<4)
+						throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Illegal digit %c in \\u escape sequence",file.peekc());
+					
+					/* Encode the character code as UTF-8: */
+					if(charCode>=0x800)
+						{
+						/* Encode the character as a three-byte sequence: */
+						result.push_back(0xe0|(charCode>>12));
+						result.push_back(0x80|((charCode>>6)&0x3f));
+						result.push_back(0x80|(charCode&0x3f));
+						}
+					else if(charCode>=0x80)
+						{
+						/* Encode the character as a two-byte sequence: */
+						result.push_back(0xc0|(charCode>>6));
+						result.push_back(0x80|(charCode&0x3f));
+						}
+					else
+						{
+						/* Encode the character as a one-byte sequence: */
+						result.push_back(charCode);
+						}
+					
+					break;
+					}
+				
+				default:
+					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Illegal escape sequence \\%c",file.peekc());
+				}
+			}
+		}
+	
+	/* Check for and skip the closing quote and whitespace: */
+	if(!file.isLiteral('"'))
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unterminated string");
+	
+	return result;
+	}
+
 JsonSource::JsonSource(const char* fileName)
 	:file(openFile(fileName))
 	{
 	/* Set up the JSON file syntax: */
 	file.setWhitespace('\n',true);
 	file.setWhitespace('\r',true);
-	file.setPunctuation("{}[]:,");
-	file.setQuote('"',true);
-	file.setEscape('\\');
+	file.setPunctuation("{}[]:,\"");
 	
 	/* Prepare for reading: */
 	file.skipWs();
@@ -51,9 +198,7 @@ JsonSource::JsonSource(FilePtr sFile)
 	/* Set up the JSON file syntax: */
 	file.setWhitespace('\n',true);
 	file.setWhitespace('\r',true);
-	file.setPunctuation("{}[]:,");
-	file.setQuote('"',true);
-	file.setEscape('\\');
+	file.setPunctuation("{}[]:,\"");
 	
 	/* Prepare for reading: */
 	file.skipWs();
@@ -65,9 +210,7 @@ JsonSource::JsonSource(File& sFile)
 	/* Set up the JSON file syntax: */
 	file.setWhitespace('\n',true);
 	file.setWhitespace('\r',true);
-	file.setPunctuation("{}[]:,");
-	file.setQuote('"',true);
-	file.setEscape('\\');
+	file.setPunctuation("{}[]:,\"");
 	
 	/* Prepare for reading: */
 	file.skipWs();
@@ -75,92 +218,103 @@ JsonSource::JsonSource(File& sFile)
 
 JsonPointer JsonSource::parseEntity(void)
 	{
+	/* Check for end-of-file (not necessary, but gives more descriptive error message): */
+	if(file.eof())
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unexpected end-of-file");
+	
 	/* Determine the type of the next entity: */
 	switch(file.peekc())
 		{
 		case '"': // String
 			{
-			/* Parse a string: */
-			return new JsonString(file.readString());
+			/* Parse a JSON string: */
+			// return new JsonString(std::move(parseJsonString()));
+			return new JsonString(parseJsonString());
 			}
 		
 		case '[': // Array
 			{
-			/* Skip the opening bracket: */
-			file.skipString();
+			/* Skip the opening bracket and whitespace: */
+			file.readChar();
 			
 			/* Create a new array entity: */
 			JsonArray* array=new JsonArray;
+			JsonPointer result(array);
 			
 			/* Parse array items until the closing bracket: */
-			while(true)
+			bool needComma=false;
+			while(!file.eof()&&file.peekc()!=']')
 				{
+				/* Check for and skip a comma and whitespace if there was a previous array item: */
+				if(needComma&&!file.isLiteral(','))
+					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Missing comma in array");
+				
+				/* Check for a missing array item (not necessary, but gives more descriptive error message): */
+				if(file.eof()||file.peekc()==','||file.peekc()==']')
+					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Extra comma in array");
+				
 				/* Parse the next array item: */
 				JsonPointer item=parseEntity();
 				array->getArray().push_back(item);
 				
-				/* Check for comma or closing bracket: */
-				if(file.peekc()==',')
-					{
-					/* Skip the comma: */
-					file.skipString();
-					}
-				else if(file.peekc()==']')
-					{
-					/* Skip the closing bracket and end the array: */
-					file.skipString();
-					break;
-					}
-				else
-					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Illegal token in array");
+				needComma=true;
 				}
 			
-			return array;
+			/* Check for and skip the closing bracket and whitespace: */
+			if(!file.isLiteral(']'))
+				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unterminated array");
+			
+			return result;
 			}
 		
 		case '{': // Object
 			{
-			/* Skip the opening brace: */
-			file.skipString();
+			/* Skip the opening brace and whitespace: */
+			file.readChar();
 			
 			/* Create a new object entity: */
 			JsonObject* object=new JsonObject;
+			JsonPointer result(object);
 			
-			/* Parse (name, value) pairs until the closing brace: */
-			while(true)
+			/* Parse object properties until the closing brace: */
+			bool needComma=false;
+			while(!file.eof()&&file.peekc()!='}')
 				{
-				/* Parse the next entity name: */
-				if(file.peekc()!='"')
-					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"No name in object item");
-				std::string name=file.readString();
+				/* Check for and skip a comma and whitespace if there was a previous object property: */
+				if(needComma&&!file.isLiteral(','))
+					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Missing comma in object");
 				
-				/* Check for the colon: */
+				/* Check for a missing property (not necessary, but gives more descriptive error message): */
+				if(file.eof()||file.peekc()==','||file.peekc()=='}')
+					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Extra comma in object");
+				
+				/* Parse the next property name: */
+				if(file.peekc()!='"')
+					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Missing opening quote in object property name");
+				std::string name=parseJsonString();
+				
+				/* Check for the name/value separator: */
 				if(!file.isLiteral(':'))
 					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Missing colon in object item");
 				
-				/* Parse the next entity: */
-				JsonPointer entity=parseEntity();
+				/* Check for a missing value (not necessary, but gives more descriptive error message): */
+				if(file.eof()||file.peekc()=='}')
+					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Missing object property value");
+					
+				/* Parse the next property value: */
+				JsonPointer value=parseEntity();
 				
 				/* Store the association: */
-				object->getMap()[name]=entity;
+				object->getMap()[name]=value;
 				
-				/* Check for comma or closing brace: */
-				if(file.peekc()==',')
-					{
-					/* Skip the comma: */
-					file.skipString();
-					}
-				else if(file.peekc()=='}')
-					{
-					/* Skip the closing brace and end the object: */
-					file.skipString();
-					break;
-					}
-				else
-					throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Illegal token in object");
+				needComma=true;
 				}
 			
-			return object;
+			/* Check for and skip the closing brace and whitespace: */
+			if(!file.isLiteral('}'))
+				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unterminated object");
+			
+			return result;
 			}
 		
 		case 'F': // Boolean literal
@@ -169,22 +323,22 @@ JsonPointer JsonSource::parseEntity(void)
 		case 't':
 			{
 			std::string value=file.readString();
-			if(strcasecmp(value.c_str(),"true")==0)
+			if(strcmp(value.c_str(),"true")==0)
 				return new JsonBoolean(true);
-			else if(strcasecmp(value.c_str(),"false")==0)
+			else if(strcmp(value.c_str(),"false")==0)
 				return new JsonBoolean(false);
 			else
-				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Illegal boolean literal");
+				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Illegal literal %s",value.c_str());
 			}
 		
-		case 'n': // NULL value
+		case 'n': // NULL literal
 		case 'N':
 			{
 			std::string null=file.readString();
-			if(strcasecmp(null.c_str(),"null")==0)
+			if(strcmp(null.c_str(),"null")==0)
 				return 0;
 			else
-				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Illegal null value");
+				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Illegal literal %s",null.c_str());
 			}
 		
 		case '+': // Number
@@ -206,8 +360,17 @@ JsonPointer JsonSource::parseEntity(void)
 			return new JsonNumber(number);
 			}
 		
+		case ',':
+			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Comma outside array or object");
+		
+		case ']':
+			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Missing opening bracket in array");
+		
+		case '}':
+			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Missing opening brace in object");
+		
 		default:
-			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Illegal token");
+			throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Illegal character %c",file.peekc());
 		}
 	}
 

@@ -1,7 +1,7 @@
 /***********************************************************************
 ImageWriterPNM - Class to write images to files in Portable aNyMap
 format.
-Copyright (c) 2024 Oliver Kreylos
+Copyright (c) 2024-2026 Oliver Kreylos
 
 This file is part of the Image Handling Library (Images).
 
@@ -102,7 +102,7 @@ void ImageWriterPNM::writeImage(const BaseImage& image)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Incompatible image format");
 	
 	/* Write the appropriate PNM header to file: */
-	char header[1024];
+	char header[64];
 	int headerSize=snprintf(header,sizeof(header),"P%d\n%u %u\n%u\n",pnmFormat,image.getWidth(),image.getHeight(),maxValue);
 	file->writeRaw(header,headerSize);
 	

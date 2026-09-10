@@ -1,7 +1,7 @@
 /***********************************************************************
 ScriptExecutorTool - Class for tools to execute an external program or
 shell script when a button is pressed.
-Copyright (c) 2016-2021 Oliver Kreylos
+Copyright (c) 2016-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -23,6 +23,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/Tools/ScriptExecutorTool.h>
 
+#include <stdlib.h>
 #include <string.h>
 #include <errno.h>
 #include <unistd.h>
@@ -240,7 +241,8 @@ void ScriptExecutorTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonC
 				scriptArgv[scriptArgc]=0;
 				
 				/* Execute the script: */
-				execvp(scriptArgv[0],scriptArgv);
+				if(execvp(scriptArgv[0],scriptArgv)<0)
+					exit(EXIT_FAILURE);
 				}
 			}
 		else

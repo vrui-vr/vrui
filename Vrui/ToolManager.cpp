@@ -28,7 +28,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <iostream>
 #endif
 
-#include <stdio.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/StandardValueCoders.h>
@@ -221,9 +221,7 @@ void ToolManagerToolCreationState::cancelButtonSelectCallback(Misc::CallbackData
 
 void ToolManagerToolCreationState::createProgressDialog(void)
 	{
-	char titleBuffer[256];
-	snprintf(titleBuffer,sizeof(titleBuffer),"Creating \"%s\" Tool...",factory->getName());
-	progressDialog=new GLMotif::PopupWindow("ToolCreationProgressDialog",getWidgetManager(),titleBuffer);
+	progressDialog=new GLMotif::PopupWindow("ToolCreationProgressDialog",getWidgetManager(),Misc::stringPrintf("Creating \"%s\" Tool...",factory->getName()).c_str());
 	progressDialog->setResizableFlags(false,false);
 	progressDialog->setHideButton(false);
 	
@@ -276,10 +274,8 @@ void ToolManagerToolCreationState::createProgressDialog(void)
 		}
 	
 	/* Create the cancellation / confirmation line: */
-	char cancelLineBuffer[256];
 	bool isButton=firstFeature.isButton();
-	snprintf(cancelLineBuffer,sizeof(cancelLineBuffer),"%s %s again to %s",isButton?"Press":"Move",firstFeatureName.c_str(),(requireButtons||requireValuators)?"cancel":"confirm");
-	cancelLine=new GLMotif::Label("CancelLine",progressBox,cancelLineBuffer);
+	cancelLine=new GLMotif::Label("CancelLine",progressBox,Misc::stringPrintf("%s %s again to %s",isButton?"Press":"Move",firstFeatureName.c_str(),(requireButtons||requireValuators)?"cancel":"confirm").c_str());
 	
 	/* Create explicit confirmation/cancellation buttons: */
 	GLMotif::Margin* confirmButtonsMargin=new GLMotif::Margin("ConfirmButtonsMargin",progressBox,false);
@@ -365,9 +361,7 @@ void ToolManagerToolCreationState::updateProgressDialog(void)
 	if(!(requireButtons||requireValuators))
 		{
 		/* Update the confirmation line: */
-		char cancelLineBuffer[256];
-		snprintf(cancelLineBuffer,sizeof(cancelLineBuffer),"%s %s again to confirm",firstFeature.isButton()?"Press":"Move",firstFeatureName.c_str());
-		cancelLine->setString(cancelLineBuffer);
+		cancelLine->setString(Misc::stringPrintf("%s %s again to confirm",firstFeature.isButton()?"Press":"Move",firstFeatureName.c_str()).c_str());
 		
 		/* Enable the OK button: */
 		okButton->setEnabled(true);
@@ -478,9 +472,7 @@ Methods of class ToolManager:
 
 GLMotif::PopupMenu* ToolManager::createToolSubmenu(const Plugins::Factory& factory)
 	{
-	char popupName[256];
-	snprintf(popupName,sizeof(popupName),"%sSubmenu",factory.getClassName());
-	GLMotif::PopupMenu* toolSubmenu=new GLMotif::PopupMenu(popupName,getWidgetManager());
+	GLMotif::PopupMenu* toolSubmenu=new GLMotif::PopupMenu(Misc::stringPrintf("%sSubmenu",factory.getClassName()).c_str(),getWidgetManager());
 	
 	/* Create entries for all tool subclasses: */
 	for(Plugins::Factory::ClassList::const_iterator chIt=factory.childrenBegin();chIt!=factory.childrenEnd();++chIt)
@@ -570,9 +562,7 @@ void ToolManager::addClassToMenu(ToolFactory* newFactory)
 			/* Create a new cascade button and tool submenu for the ancestor: */
 			GLMotif::CascadeButton* ancestorCascade=new GLMotif::CascadeButton((*aIt)->getClassName(),menu,(*aIt)->getName());
 			
-			char popupName[256];
-			snprintf(popupName,sizeof(popupName),"%sSubmenu",(*aIt)->getClassName());
-			GLMotif::PopupMenu* ancestorSubmenu=new GLMotif::PopupMenu(popupName,getWidgetManager());
+			GLMotif::PopupMenu* ancestorSubmenu=new GLMotif::PopupMenu(Misc::stringPrintf("%sSubmenu",(*aIt)->getClassName()).c_str(),getWidgetManager());
 			
 			ancestorCascade->setPopup(ancestorSubmenu);
 			ancestorSubmenu->manageMenu();

@@ -1,7 +1,7 @@
 /***********************************************************************
 ImageExtractorMJPG - Class to extract images from raw video frames
 encoded in Motion JPEG format.
-Copyright (c) 2010-2022 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 /* Forward declarations: */
 struct jpeg_error_mgr;
+struct jpeg_common_struct;
 struct jpeg_decompress_struct;
 
 namespace Video {
@@ -40,6 +41,9 @@ class ImageExtractorMJPG:public ImageExtractor
 	static const unsigned char huffmanBits[4][17]; // Huffman bit tables (DC luminance/chrominance, AC luminance/chrominance)
 	static const unsigned char huffmanValues[4][256]; // Huffman value tables (DC luminance/chrominance, AC luminance/chrominance)
 	unsigned char** imageRows; // Array of image row pointers needed by the JPEG decompressor
+	
+	/* Private methods: */
+	static void errorExitFunction(jpeg_common_struct* cinfo); // Custom error handler to cleanly ignore bad JPEG frames
 	
 	/* Constructors and destructors: */
 	public:

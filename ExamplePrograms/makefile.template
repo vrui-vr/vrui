@@ -279,8 +279,9 @@ $(EXEDIR)/SharedJello: $(OBJDIR)/JelloAtom.o \
 # and interactive isosurface extraction:
 #
 
-$(EXEDIR)/VirtualClay: PACKAGES += MYGLMOTIF MYIO
+$(EXEDIR)/VirtualClay: PACKAGES += MYSCENEGRAPH MYGLMOTIF MYIO MYREALTIME
 $(EXEDIR)/VirtualClay: $(OBJDIR)/EditableGrid.o \
+                       $(OBJDIR)/TriangleKdTree.o \
                        $(OBJDIR)/GridEditor.o
 
 #

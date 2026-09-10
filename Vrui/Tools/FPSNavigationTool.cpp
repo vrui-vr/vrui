@@ -1,7 +1,7 @@
 /***********************************************************************
 FPSNavigationTool - Class encapsulating the navigation behaviour of a
 typical first-person shooter (FPS) game.
-Copyright (c) 2005-2024 Oliver Kreylos
+Copyright (c) 2005-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -479,8 +479,6 @@ void FPSNavigationTool::frame(void)
 	/* Act depending on this tool's current state: */
 	if(isActive())
 		{
-		bool update=false;
-		
 		/* Get the device's linear velocity and calculate its left/right and up/down components: */
 		Vector right=getForwardDirection()^getUpDirection();
 		right.normalize();
@@ -498,8 +496,6 @@ void FPSNavigationTool::frame(void)
 				Scalar zenith=Math::rad(Scalar(90));
 				elevation=Math::clamp(elevation+y/config.rotateFactors[1],-zenith,zenith);
 				}
-			
-			update=true;
 			}
 		
 		/* Calculate the new head and foot positions: */
@@ -507,12 +503,8 @@ void FPSNavigationTool::frame(void)
 		Point newFootPos=calcFloorPoint(newHeadPos);
 		headHeight=Geometry::dist(newHeadPos,newFootPos);
 		
-		/* Check for movement: */
-		if(controlVelocity!=Vector::zero||moveVelocity!=Vector::zero||newFootPos!=footPos||jump)
-			update=true;
-		
 		/* Update the movement velocity based on the control velocity: */
-		#if 0
+		#if 0 // Use acceleration
 		Scalar maxAccel=Scalar(4)*getMeterFactor()*getCurrentFrameTime();
 		for(int i=0;i<2;++i)
 			{
@@ -522,86 +514,82 @@ void FPSNavigationTool::frame(void)
 			else
 				moveVelocity[i]+=Math::copysign(maxAccel,dv);
 			}
-		#else
+		#else // Use instantaneous velocity
 		for(int i=0;i<2;++i)
 			moveVelocity[i]=controlVelocity[i];
 		#endif
 		
-		if(update)
+		/* Create a physical navigation frame around the new foot position: */
+		calcPhysicalFrame(newFootPos);
+		
+		/* Calculate the movement from walking: */
+		Vector move=physicalFrame.inverseTransform(newFootPos-footPos);
+		footPos=newFootPos;
+		
+		/* Add movement velocity: */
+		move+=moveVelocity*getCurrentFrameTime();
+		
+		/* Rotate by the current azimuth angle: */
+		move=Rotation::rotateZ(-azimuth).transform(move);
+		
+		/* Move the surface frame: */
+		NavTransform newSurfaceFrame=surfaceFrame;
+		newSurfaceFrame*=NavTransform::translate(move);
+		
+		/* Re-align the surface frame with the surface: */
+		Point initialOrigin=newSurfaceFrame.getOrigin();
+		Rotation initialOrientation=newSurfaceFrame.getRotation();
+		AlignmentData ad(surfaceFrame,newSurfaceFrame,config.probeSize,config.maxClimb);
+		align(ad);
+		
+		if(!config.fixAzimuth)
 			{
-			/* Create a physical navigation frame around the new foot position: */
-			calcPhysicalFrame(newFootPos);
+			/* Have the azimuth angle track changes in the surface frame's rotation: */
+			Rotation rot=Geometry::invert(initialOrientation)*newSurfaceFrame.getRotation();
+			rot.leftMultiply(Rotation::rotateFromTo(rot.getDirection(2),Vector(0,0,1)));
+			Vector x=rot.getDirection(0);
+			azimuth=wrapAngle(azimuth+Math::atan2(x[1],x[0]));
+			}
+		
+		/* Check if the initial surface frame is above the surface: */
+		Scalar z=newSurfaceFrame.inverseTransform(initialOrigin)[2];
+		if(z>(airborne?Scalar(0):Math::div2(config.maxClimb)))
+			{
+			/* Lift the aligned frame back up to the original altitude and fall: */
+			newSurfaceFrame*=NavTransform::translate(Vector(Scalar(0),Scalar(0),z));
+			airborne=true;
+			moveVelocity[2]-=config.fallAcceleration*getCurrentFrameTime();
+			}
+		else
+			{
+			/* Stop falling: */
+			moveVelocity[2]=Scalar(0);
+			airborne=false;
 			
-			/* Calculate the movement from walking: */
-			Vector move=physicalFrame.inverseTransform(newFootPos-footPos);
-			footPos=newFootPos;
-			
-			/* Add movement velocity: */
-			move+=moveVelocity*getCurrentFrameTime();
-			
-			/* Rotate by the current azimuth angle: */
-			move=Rotation::rotateZ(-azimuth).transform(move);
-			
-			/* Move the surface frame: */
-			NavTransform newSurfaceFrame=surfaceFrame;
-			newSurfaceFrame*=NavTransform::translate(move);
-			
-			/* Re-align the surface frame with the surface: */
-			Point initialOrigin=newSurfaceFrame.getOrigin();
-			Rotation initialOrientation=newSurfaceFrame.getRotation();
-			AlignmentData ad(surfaceFrame,newSurfaceFrame,config.probeSize,config.maxClimb);
-			align(ad);
-			
-			if(!config.fixAzimuth)
+			/* Check if the user wants to jump: */
+			if(jump)
 				{
-				/* Have the azimuth angle track changes in the surface frame's rotation: */
-				Rotation rot=Geometry::invert(initialOrientation)*newSurfaceFrame.getRotation();
-				rot.leftMultiply(Rotation::rotateFromTo(rot.getDirection(2),Vector(0,0,1)));
-				Vector x=rot.getDirection(0);
-				azimuth=wrapAngle(azimuth+Math::atan2(x[1],x[0]));
-				}
-			
-			/* Check if the initial surface frame is above the surface: */
-			Scalar z=newSurfaceFrame.inverseTransform(initialOrigin)[2];
-			if(z>(airborne?Scalar(0):Math::div2(config.maxClimb)))
-				{
-				/* Lift the aligned frame back up to the original altitude and fall: */
-				newSurfaceFrame*=NavTransform::translate(Vector(Scalar(0),Scalar(0),z));
+				moveVelocity[2]=config.jumpVelocity;
 				airborne=true;
-				moveVelocity[2]-=config.fallAcceleration*getCurrentFrameTime();
-				}
-			else
-				{
-				/* Stop falling: */
-				moveVelocity[2]=Scalar(0);
-				airborne=false;
-				
-				/* Check if the user wants to jump: */
-				if(jump)
-					{
-					moveVelocity[2]=config.jumpVelocity;
-					airborne=true;
-					}
-				}
-			
-			/* Apply the newly aligned surface frame: */
-			surfaceFrame=newSurfaceFrame;
-			applyNavState();
-			
-			if(moveVelocity[0]!=Scalar(0)||moveVelocity[1]!=Scalar(0)||airborne)
-				{
-				/* Request another frame: */
-				scheduleUpdate(getNextAnimationTime());
 				}
 			}
 		
-		/* Reset the jump request flag: */
-		jump=false;
+		/* Apply the newly aligned surface frame: */
+		surfaceFrame=newSurfaceFrame;
+		applyNavState();
+		
+		if(moveVelocity[0]!=Scalar(0)||moveVelocity[1]!=Scalar(0)||airborne)
+			{
+			/* Request another frame: */
+			scheduleUpdate(getNextAnimationTime());
+			}
 		}
 	
+	/* Reset the jump request flag: */
+	jump=false;
+	
 	/* Update the virtual input device: */
-	buttonDevice->setDeviceRay(device->getDeviceRayDirection(),device->getDeviceRayStart());
-	buttonDevice->setTransformation(device->getTransformation());
+	buttonDevice->copyTrackingState(device);
 	}
 
 void FPSNavigationTool::display(GLContextData& contextData) const

@@ -35,6 +35,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <sys/mman.h>
 #include <string>
 #include <vector>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/StandardValueCoders.h>
@@ -54,6 +55,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Video/Config.h>
 #include <Video/Internal/ImageExtractorY8.h>
 #include <Video/Internal/ImageExtractorY10B.h>
+#include <Video/Internal/ImageExtractorY16.h>
 #include <Video/Internal/ImageExtractorYUYV.h>
 #include <Video/Internal/ImageExtractorUYVY.h>
 #include <Video/Internal/ImageExtractorYV12.h>
@@ -731,6 +733,8 @@ ImageExtractor* V4L2VideoDevice::createImageExtractor(void) const
 		return new ImageExtractorY8(format.size);
 	else if(format.isPixelFormat("Y10B"))
 		return new ImageExtractorY10B(format.size);
+	else if(format.isPixelFormat("Y16 "))
+		return new ImageExtractorY16(format.size);
 	else if(format.isPixelFormat("YUYV"))
 		return new ImageExtractorYUYV(format.size);
 	else if(format.isPixelFormat("UYVY"))
@@ -790,18 +794,15 @@ GLMotif::Widget* V4L2VideoDevice::createControlPanel(GLMotif::WidgetManager* wid
 		if(getVideoDeviceControl(videoFd,queryControl.id,controlValue)==0)
 			{
 			/* Create a control row for the current control: */
-			char widgetName[40];
 			
 			/* Create a label naming the control: */
-			snprintf(widgetName,sizeof(widgetName),"Label%u",queryControl.id);
-			new GLMotif::Label(widgetName,controlPanel,reinterpret_cast<char*>(queryControl.name));
+			new GLMotif::Label(Misc::stringPrintf("Label%u",queryControl.id).c_str(),controlPanel,reinterpret_cast<char*>(queryControl.name));
 			
 			/* Create a widget to change the control's value: */
 			if(queryControl.type==V4L2_CTRL_TYPE_INTEGER)
 				{
 				/* Create a slider: */
-				snprintf(widgetName,sizeof(widgetName),"Slider%u",queryControl.id);
-				GLMotif::TextFieldSlider* controlSlider=new GLMotif::TextFieldSlider(widgetName,controlPanel,6,ss->fontHeight*10.0f);
+				GLMotif::TextFieldSlider* controlSlider=new GLMotif::TextFieldSlider(Misc::stringPrintf("Slider%u",queryControl.id).c_str(),controlPanel,6,ss->fontHeight*10.0f);
 				controlSlider->setSliderMapping(GLMotif::TextFieldSlider::LINEAR);
 				controlSlider->setValueType(GLMotif::TextFieldSlider::INT);
 				controlSlider->setValueRange(queryControl.minimum,queryControl.maximum,queryControl.step);
@@ -814,12 +815,10 @@ GLMotif::Widget* V4L2VideoDevice::createControlPanel(GLMotif::WidgetManager* wid
 			else if(queryControl.type==V4L2_CTRL_TYPE_BOOLEAN)
 				{
 				/* Create a toggle button inside a margin: */
-				snprintf(widgetName,sizeof(widgetName),"Margin%u",queryControl.id);
-				GLMotif::Margin* controlMargin=new GLMotif::Margin(widgetName,controlPanel,false);
+				GLMotif::Margin* controlMargin=new GLMotif::Margin(Misc::stringPrintf("Margin%u",queryControl.id).c_str(),controlPanel,false);
 				controlMargin->setAlignment(GLMotif::Alignment::LEFT);
 				
-				snprintf(widgetName,sizeof(widgetName),"ToggleButton%u",queryControl.id);
-				GLMotif::ToggleButton* controlToggleButton=new GLMotif::ToggleButton(widgetName,controlMargin,"Enabled");
+				GLMotif::ToggleButton* controlToggleButton=new GLMotif::ToggleButton(Misc::stringPrintf("ToggleButton%u",queryControl.id).c_str(),controlMargin,"Enabled");
 				controlToggleButton->setBorderWidth(0.0f);
 				controlToggleButton->setHAlignment(GLFont::Left);
 				controlToggleButton->setToggle(controlValue!=0);
@@ -849,12 +848,10 @@ GLMotif::Widget* V4L2VideoDevice::createControlPanel(GLMotif::WidgetManager* wid
 					}
 				
 				/* Create a drop-down box inside a margin: */
-				snprintf(widgetName,sizeof(widgetName),"Margin%u",queryControl.id);
-				GLMotif::Margin* controlMargin=new GLMotif::Margin(widgetName,controlPanel,false);
+				GLMotif::Margin* controlMargin=new GLMotif::Margin(Misc::stringPrintf("Margin%u",queryControl.id).c_str(),controlPanel,false);
 				controlMargin->setAlignment(GLMotif::Alignment::LEFT);
 				
-				snprintf(widgetName,sizeof(widgetName),"DropdownBox%u",queryControl.id);
-				GLMotif::DropdownBox* controlDropdownBox=new GLMotif::DropdownBox(widgetName,controlMargin,menuChoices);
+				GLMotif::DropdownBox* controlDropdownBox=new GLMotif::DropdownBox(Misc::stringPrintf("DropDownBox%u",queryControl.id).c_str(),controlMargin,menuChoices);
 				
 				/* Set the currently selected menu item: */
 				for(unsigned int itemIndex=0;itemIndex<menuEntryIds.size();++itemIndex)
@@ -1133,7 +1130,7 @@ void V4L2VideoDevice::enumerateDevices(std::vector<VideoDevice::DeviceIdPtr>& de
 		/* Check if the device can capture video in streaming mode: */
 		v4l2_capability videoCap;
 		if(ioctl(videoFd,VIDIOC_QUERYCAP,&videoCap)==0)
-			if((videoCap.capabilities&V4L2_CAP_VIDEO_CAPTURE)!=0&&(videoCap.capabilities&V4L2_CAP_STREAMING)!=0)
+			if((videoCap.device_caps&V4L2_CAP_VIDEO_CAPTURE)!=0&&(videoCap.device_caps&V4L2_CAP_STREAMING)!=0)
 				{
 				/* Query the device's name: */
 				std::string name=reinterpret_cast<const char*>(videoCap.card);

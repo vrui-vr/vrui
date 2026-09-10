@@ -1,6 +1,6 @@
 /***********************************************************************
 Environment-dependent part of Vrui virtual reality development toolkit.
-Copyright (c) 2000-2025 Oliver Kreylos
+Copyright (c) 2000-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -35,6 +35,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <stdexcept>
 #include <Misc/Utility.h>
 #include <Misc/Size.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/StringHashFunctions.h>
 #include <Misc/HashTable.h>
@@ -141,6 +142,7 @@ struct VruiWindowGroup
 	/* Elements: */
 	Display* display; // Display connection shared by all windows in the window group
 	int displayFd; // File descriptor for the display connection
+	bool hasPendingEvents; // Flag if the display connection has unhandled events in its event queue
 	GLContextPtr context; // OpenGL context shared by all windows in the group
 	DisplayState* displayState; // Display state structure shared by all windows in the group
 	std::vector<Window> windows; // List of pointers to windows in the window group
@@ -149,7 +151,7 @@ struct VruiWindowGroup
 	
 	/* Constructors and destructors: */
 	VruiWindowGroup(void)
-		:display(0),displayFd(-1),displayState(0)
+		:display(0),displayFd(-1),hasPendingEvents(false),displayState(0)
 		{
 		}
 	};
@@ -202,6 +204,7 @@ Threads::Barrier vruiRenderingBarrier;
 volatile bool vruiStopRenderingThreads=false;
 int vruiNumSoundContexts=0;
 SoundContext** vruiSoundContexts=0;
+SoundContext* vruiRecordingSoundContext=0;
 Cluster::Multiplexer* vruiMultiplexer=0;
 Cluster::MulticastPipe* vruiPipe=0;
 int vruiNumSlaves=0;
@@ -1371,13 +1374,12 @@ void init(int& argc,char**& argv,char**&)
 		/* Count the number of windows on all cluster nodes: */
 		for(unsigned int nodeIndex=0;nodeIndex<vruiMultiplexer->getNumNodes();++nodeIndex)
 			{
+			/* Remember the index of the first window on this node: */
 			if(nodeIndex==vruiMultiplexer->getNodeIndex())
 				vruiFirstLocalWindowIndex=vruiTotalNumWindows;
-			char windowNamesTag[40];
-			snprintf(windowNamesTag,sizeof(windowNamesTag),"./node%uWindowNames",nodeIndex);
-			typedef std::vector<std::string> StringList;
-			StringList windowNames=vruiConfigFile->retrieveValue<StringList>(windowNamesTag);
-			vruiTotalNumWindows+=int(windowNames.size());
+			
+			/* Add the number of windows in the node's window list to the total: */
+			vruiTotalNumWindows+=int(vruiConfigFile->retrieveValue<StringList>(Misc::stringPrintf("./node%uWindowNames",nodeIndex).c_str()).size());
 			}
 		}
 	else
@@ -1632,11 +1634,7 @@ void startDisplay(void)
 		typedef std::vector<std::string> StringList;
 		StringList windowNames;
 		if(vruiState->multiplexer!=0)
-			{
-			char windowNamesTag[40];
-			snprintf(windowNamesTag,sizeof(windowNamesTag),"./node%dWindowNames",vruiState->multiplexer->getNodeIndex());
-			windowNames=vruiConfigFile->retrieveValue<StringList>(windowNamesTag);
-			}
+			windowNames=vruiConfigFile->retrieveValue<StringList>(Misc::stringPrintf("./node%dWindowNames",vruiState->multiplexer->getNodeIndex()).c_str());
 		else
 			windowNames=vruiConfigFile->retrieveValue<StringList>("./windowNames");
 		
@@ -1779,14 +1777,10 @@ void startSound(void)
 	/* Retrieve the name of the sound context: */
 	std::string soundContextName;
 	if(vruiState->multiplexer!=0)
-		{
-		char soundContextNameTag[40];
-		snprintf(soundContextNameTag,sizeof(soundContextNameTag),"./node%dSoundContextName",vruiState->multiplexer->getNodeIndex());
-		soundContextName=vruiConfigFile->retrieveValue<std::string>(soundContextNameTag,"");
-		}
+		soundContextName=vruiConfigFile->retrieveValue<std::string>(Misc::stringPrintf("./node%dSoundContextName",vruiState->multiplexer->getNodeIndex()).c_str(),"");
 	else
 		soundContextName=vruiConfigFile->retrieveValue<std::string>("./soundContextName","");
-	if(soundContextName=="")
+	if(soundContextName.empty())
 		return;
 	
 	/* Ready the ALObject manager to initialize its objects per-context: */
@@ -1806,6 +1800,10 @@ void startSound(void)
 		vruiNumSoundContexts=1;
 		vruiSoundContexts=new SoundContext*[1];
 		vruiSoundContexts[0]=sc;
+		
+		/* Set the recording sound context if the created sound context can record: */
+		if(vruiSoundContexts[0]->canRecord())
+			vruiRecordingSoundContext=vruiSoundContexts[0];
 		
 		/* Initialize all ALObjects for this sound context's context data: */
 		vruiSoundContexts[0]->makeCurrent();
@@ -1854,6 +1852,14 @@ bool vruiHandleAllEvents(bool allowBlocking)
 	{
 	/* Flag to keep track if anything meaningful really happened: */
 	bool handledEvents=false;
+	
+	/* Check if any X event queues have unhandled events in them: */
+	for(int windowGroupIndex=0;windowGroupIndex<vruiNumWindowGroups;++windowGroupIndex)
+		{
+		VruiWindowGroup& windowGroup=vruiWindowGroups[windowGroupIndex];
+		windowGroup.hasPendingEvents=XQLength(windowGroup.display)>0;
+		allowBlocking=allowBlocking&&!windowGroup.hasPendingEvents;
+		}
 	
 	/* If there are no pending events, and blocking is allowed, block until something happens: */
 	Misc::FdSet readFdSet(vruiReadFdSet);
@@ -1906,31 +1912,33 @@ bool vruiHandleAllEvents(bool allowBlocking)
 		VruiWindowGroup& windowGroup=vruiWindowGroups[windowGroupIndex];
 		
 		/* For some reason, the following check drops X events in non-blocking mode: */
-		// if(readFdSet.isSet(windowGroup.displayFd))
+		if(windowGroup.hasPendingEvents||readFdSet.isSet(windowGroup.displayFd))
 			{
 			/* Process all pending events for this display connection: */
 			bool isKeyRepeat=false; // Flag if the next event is a key repeat event
-			while(XPending(windowGroup.display))
+			int numPendingEvents=XPending(windowGroup.display);
+			while(numPendingEvents>0)
 				{
 				/* Get the next event: */
 				XEvent event;
 				XNextEvent(windowGroup.display,&event);
+				--numPendingEvents;
 				
 				/* Check for key repeat events (a KeyRelease immediately followed by a KeyPress with the same time stamp and key code): */
-				if(event.type==KeyRelease&&XPending(windowGroup.display))
+				if(event.type==KeyRelease&&numPendingEvents>0)
 					{
 					/* Check if the next event is a KeyPress with the same time stamp: */
 					XEvent nextEvent;
 					XPeekEvent(windowGroup.display,&nextEvent);
 					if(nextEvent.type==KeyPress&&nextEvent.xkey.window==event.xkey.window&&nextEvent.xkey.time==event.xkey.time&&nextEvent.xkey.keycode==event.xkey.keycode)
 						{
-						/* Mark the next event as a key repeat: */
+						/* Mark the next event as a key repeat and ignore this event: */
 						isKeyRepeat=true;
 						continue;
 						}
 					}
 				
-				/* Pass the next event to all windows interested in it: */
+				/* Pass the event to all windows interested in it: */
 				bool finishProcessing=false;
 				for(std::vector<VruiWindowGroup::Window>::iterator wIt=windowGroup.windows.begin();wIt!=windowGroup.windows.end();++wIt)
 					if(wIt->window->isEventForWindow(event))
@@ -1938,9 +1946,13 @@ bool vruiHandleAllEvents(bool allowBlocking)
 				handledEvents=!isKeyRepeat||finishProcessing;
 				isKeyRepeat=false;
 				
+				#if 0
+				
 				/* Stop processing events if something significant happened: */
 				if(finishProcessing)
 					goto doneWithXEvents;
+				
+				#endif
 				}
 			}
 		}
@@ -2519,6 +2531,11 @@ void shutdown(void)
 		}
 	}
 
+const char* getApplicationName(void)
+	{
+	return vruiApplicationName;
+	}
+
 const char* getRootSectionName(void)
 	{
 	return vruiConfigRootSectionName;
@@ -2552,6 +2569,11 @@ int getNumSoundContexts(void)
 SoundContext* getSoundContext(int index)
 	{
 	return vruiSoundContexts[index];
+	}
+
+SoundContext* getRecordingSoundContext(void)
+	{
+	return vruiRecordingSoundContext;
 	}
 
 void addSynchronousIOCallback(int fd,SynchronousIOCallback newIOCallback,void* newIOCallbackData)

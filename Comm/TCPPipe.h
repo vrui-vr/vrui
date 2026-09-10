@@ -1,7 +1,7 @@
 /***********************************************************************
 TCPPipe - Class for high-performance reading/writing from/to connected
 TCP sockets.
-Copyright (c) 2010-2015 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -62,6 +62,7 @@ class TCPPipe:public NetPipe
 	virtual bool waitForData(void) const;
 	virtual bool waitForData(const Misc::Time& timeout) const;
 	virtual void shutdown(bool read,bool write);
+	virtual void abort(void);
 	
 	/* Methods from NetPipe: */
 	virtual int getPortId(void) const;

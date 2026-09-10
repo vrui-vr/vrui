@@ -2,7 +2,7 @@
 AlignTrackingMarkers - Utility to define a reasonable coordinate system
 based on tracking marker positions detected by an optical tracking
 system.
-Copyright (c) 2008-2024 Oliver Kreylos
+Copyright (c) 2008-2026 Oliver Kreylos
 
 This file is part of the Vrui calibration utility package.
 
@@ -28,6 +28,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <utility>
 #include <vector>
 #include <iostream>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Math/Math.h>
 #include <Math/Constants.h>
@@ -266,9 +267,7 @@ AlignTrackingMarkers::MarkerTool::MarkerTool(const Vrui::ToolFactory* sFactory,c
 	
 	for(int i=0;i<3;++i)
 		{
-		char labelName[40];
-		snprintf(labelName,sizeof(labelName),"Pos1-%d",i+1);
-		pos[0][i]=new GLMotif::TextField(labelName,pos1Box,12);
+		pos[0][i]=new GLMotif::TextField(Misc::stringPrintf("Pos1-%d",i+1).c_str(),pos1Box,12);
 		pos[0][i]->setPrecision(6);
 		}
 	
@@ -282,9 +281,7 @@ AlignTrackingMarkers::MarkerTool::MarkerTool(const Vrui::ToolFactory* sFactory,c
 	
 	for(int i=0;i<3;++i)
 		{
-		char labelName[40];
-		snprintf(labelName,sizeof(labelName),"Pos2-%d",i+1);
-		pos[1][i]=new GLMotif::TextField(labelName,pos2Box,12);
+		pos[1][i]=new GLMotif::TextField(Misc::stringPrintf("Pos2-%d",i+1).c_str(),pos2Box,12);
 		pos[1][i]->setPrecision(6);
 		}
 	

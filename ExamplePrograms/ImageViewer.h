@@ -30,11 +30,13 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <GL/GLObject.h>
 #include <Images/Types.h>
 #include <Images/BaseImage.h>
+#include <GLMotif/TextFieldSlider.h>
 #include <GLMotif/FileSelectionDialog.h>
 #include <GLMotif/FileSelectionHelper.h>
 #include <Vrui/Application.h>
 #include <Vrui/Tool.h>
 #include <Vrui/GenericToolFactory.h>
+#include <Vrui/TransformTool.h>
 
 /* Forward declarations: */
 namespace Threads {
@@ -45,6 +47,7 @@ namespace GLMotif {
 class PopupMenu;
 class PopupWindow;
 class Label;
+class ToggleButton;
 class TextField;
 }
 
@@ -57,7 +60,6 @@ class ImageViewer:public Vrui::Application,public GLObject
 	typedef Geometry::Vector<Scalar,2> Vector; // Type for vectors in image space
 	typedef GLColor<GLfloat,4> Color; // Type for RGBA image colors
 	
-	private:
 	struct ImageSource // Structure describing the source of an image that can be loaded
 		{
 		/* Elements: */
@@ -76,6 +78,7 @@ class ImageViewer:public Vrui::Application,public GLObject
 			}
 		};
 	
+	private:
 	typedef std::vector<ImageSource> ImageSourceList; // Type for lists of image sources
 	
 	struct DataItem:public GLObject::DataItem
@@ -90,6 +93,28 @@ class ImageViewer:public Vrui::Application,public GLObject
 		/* Constructors and destructors: */
 		DataItem(void);
 		virtual ~DataItem(void);
+		};
+	
+	class PixelSnapperTool; // Forward declaration
+	typedef Vrui::GenericToolFactory<PixelSnapperTool> PixelSnapperToolFactory; // Pixel snapper tool class uses the generic factory class
+	
+	class PixelSnapperTool:public Vrui::TransformTool,public Vrui::Application::Tool<ImageViewer> // A tool class to snap input device positions to pixel corners
+		{
+		friend class Vrui::GenericToolFactory<PixelSnapperTool>;
+		
+		/* Elements: */
+		private:
+		static PixelSnapperToolFactory* factory; // Pointer to the factory object for this class
+		
+		/* Constructors and destructors: */
+		public:
+		static void initClass(void); // Initializes the pixel snapper tool factory class
+		PixelSnapperTool(const Vrui::ToolFactory* factory,const Vrui::ToolInputAssignment& inputAssignment);
+		
+		/* Methods: */
+		virtual void initialize(void);
+		virtual const Vrui::ToolFactory* getFactory(void) const;
+		virtual void frame(void);
 		};
 	
 	class PipetteTool; // Forward declaration
@@ -162,11 +187,18 @@ class ImageViewer:public Vrui::Application,public GLObject
 	
 	/* Elements: */
 	ImageSourceList imageSources; // List of image sources that can be loaded
-	ImageSourceList::iterator isIt; // Iterator to the currently displayed image source
+	unsigned int numImages; // The number of image sources in the list
+	unsigned int currentImage; // Index of the currently displayed image source
+	int request; // A counter to order image loading requests
 	Images::BaseImage image; // The currently displayed image
+	int loaded; // Loading request counter of the currently displayed image
 	unsigned int imageVersion; // Version number of the currently displayed image
 	GLMotif::FileSelectionHelper imageHelper; // Helper object to load image files
+	bool smoothPixels; // Flag to enable bilinear interpolation when magnifying images
+	bool flipH; // Flag to flip images horizontally
 	GLMotif::PopupMenu* mainMenu; // The application's main menu
+	GLMotif::PopupWindow* selectorDialog; // Dialog window to select the currently displayed image
+	GLMotif::TextFieldSlider* imageIndexSlider; // Slider to select the currently displayed image
 	GLMotif::PopupWindow* infoDialog; // Dialog window displaying information about the currently displayed image
 	GLMotif::TextField* imageIndex; // Index of the currently displayed image in the set
 	GLMotif::TextField* imageNumImages; // Total number of images in the set
@@ -185,8 +217,11 @@ class ImageViewer:public Vrui::Application,public GLObject
 	void updateInfoDialog(void); // Updates the image information dialog after an image has been loaded
 	void loadImageCompleteCallback(Threads::FunctionCall<int>& job); // Callback called when a new image has been loaded
 	void loadImageCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData); // Callback called when a new image is to be loaded
+	void showSelectorDialogButtonSelectedCallback(Misc::CallbackData* cbData); // Callback called when the image selector dialog is to be shown
 	void showInfoDialogButtonSelectedCallback(Misc::CallbackData* cbData); // Callback called when the image information dialog is to be shown
 	GLMotif::PopupMenu* createMainMenu(void); // Creates the application's main menu
+	void imageIndexSliderValueChangedCallback(GLMotif::TextFieldSlider::ValueChangedCallbackData* cbData);
+	GLMotif::PopupWindow* createSelectorDialog(void); // Creates the image selector dialog
 	GLMotif::PopupWindow* createInfoDialog(void); // Creates the image information dialog
 	
 	/* Constructors and destructors: */

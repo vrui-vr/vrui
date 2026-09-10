@@ -1,7 +1,7 @@
 /***********************************************************************
 VRDevice - Abstract base class for hardware devices delivering
 position, orientation, button events and valuator values.
-Copyright (c) 2002-2020 Oliver Kreylos
+Copyright (c) 2002-2026 Oliver Kreylos
 
 This file is part of the Vrui VR Device Driver Daemon (VRDeviceDaemon).
 
@@ -23,6 +23,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <VRDeviceDaemon/VRDevice.h>
 
+#include <Misc/StringPrintf.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Math/Math.h>
@@ -64,9 +65,7 @@ void VRDevice::setNumTrackers(int newNumTrackers,const Misc::ConfigurationFile& 
 	for(int i=0;i<numTrackers;++i)
 		{
 		/* Read post transformation: */
-		char transformationTagName[40];
-		snprintf(transformationTagName,sizeof(transformationTagName),"./trackerPostTransformation%d",i);
-		trackerPostTransformations[i]=configFile.retrieveValue<TrackerPostTransformation>(transformationTagName,TrackerPostTransformation::identity);
+		trackerPostTransformations[i]=configFile.retrieveValue<TrackerPostTransformation>(Misc::stringPrintf("./trackerPostTransformation%d",i).c_str(),TrackerPostTransformation::identity);
 		}
 	
 	if(calibrator!=0)
@@ -120,14 +119,10 @@ void VRDevice::setNumValuators(int newNumValuators,const Misc::ConfigurationFile
 	for(int i=0;i<numValuators;++i)
 		{
 		/* Read valuator threshold: */
-		char thresholdTagName[40];
-		snprintf(thresholdTagName,sizeof(thresholdTagName),"./valuatorThreshold%d",i);
-		valuatorThresholds[i]=configFile.retrieveValue<float>(thresholdTagName,valuatorThreshold);
+		valuatorThresholds[i]=configFile.retrieveValue<float>(Misc::stringPrintf("./valuatorThreshold%d",i).c_str(),valuatorThreshold);
 		
 		/* Read valuator exponent: */
-		char exponentTagName[40];
-		snprintf(exponentTagName,sizeof(exponentTagName),"./valuatorExponent%d",i);
-		valuatorExponents[i]=configFile.retrieveValue<float>(exponentTagName,valuatorExponent);
+		valuatorExponents[i]=configFile.retrieveValue<float>(Misc::stringPrintf("./valuatorExponent%d",i).c_str(),valuatorExponent);
 		}
 	
 	/* Add the valuators to the device daemon's namespace: */

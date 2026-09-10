@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterMouse - Class to convert mouse and keyboard into a
 Vrui input device.
-Copyright (c) 2004-2025 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -58,8 +58,10 @@ class InputDeviceAdapterMouse:public InputDeviceAdapter
 	int* buttonKeysyms; // Map from key symbols to button key indices
 	int numModifierKeys; // Number of used modifier keys
 	int* modifierKeysyms; // Map from key codes to modifier key indices
+	bool copyButtons; // Flag to copy button states from the previous to the new modifier layer when switching layers
+	bool stickyButtons; // Flag to keep buttons pressed when switching away from their modifier layer
 	bool modifiersAsButtons; // Flag to add the defined modifier keys as additional buttons
-	int numButtonStates; // Number of button states (number of buttons times number of modifier key states)
+	int numButtonStates; // Number of button states (number of buttons times number of modifier layers)
 	KeyMapper::QualifiedKey keyboardModeToggleKey; // Qualified key which switches keyboard between button and key mode
 	ControlKeyMap controlKeyMap; // Map from qualified keys to GLMotif text control events
 	int modifierKeyMask; // Current modifier key mask
@@ -69,7 +71,7 @@ class InputDeviceAdapterMouse:public InputDeviceAdapter
 	int* numMouseWheelTicks; // Number of mouse wheel ticks for each modifier key mask accumulated during frame processing
 	VRWindow* window; // VR window containing the last reported mouse position
 	Scalar mousePos[2]; // Current mouse position in window (pixel) coordinates of window containing the last known mouse position
-	bool mousePosChanged; // Flag whether the mouse position has changed since the last call to updateInputDevices
+	int numMousePosChanges; // Counts how many times the mouse position has changed since the last update(), to estimate mouse velocity
 	bool mousePosChangedLastFrame; // Flag whether the mouse position changed during the previous frame
 	bool grabPointer; // Flag whether the input device adapter should attempt to grab the mouse pointer while keys/buttons are pressed
 	VRWindow* grabWindow; // Window that currently has a pointer grab
@@ -87,7 +89,17 @@ class InputDeviceAdapterMouse:public InputDeviceAdapter
 	/* Private methods: */
 	int getButtonIndex(int keysym) const; // Returns the button key index of the given key, or -1
 	int getModifierIndex(int keysym) const; // Returns the modifier key index of the given key, or -1
-	bool changeButtonState(int stateIndex,bool newState); // Changes the state of a button and does related processing; returns true if button state actually changed
+	void changeButtonStateNoCheck(int stateIndex,bool newState); // Changes the state of a button and does related processing; must only be called if the button state actually changed
+	bool changeButtonState(int stateIndex,bool newState) // Changes the state of a button and does related processing; returns true if button state actually changed
+		{
+		/* Bail out if the button state didn't actually change: */
+		if(buttonStates[stateIndex]==newState)
+			return false;
+		
+		/* Change the button state: */
+		changeButtonStateNoCheck(stateIndex,newState);
+		return true;
+		}
 	void changeModifierKeyMask(int newModifierKeyMask); // Called whenever the current modifier key mask changes
 	void hideCursor(bool newCursorHidden); // Sets the cursor's visibility in all windows
 	

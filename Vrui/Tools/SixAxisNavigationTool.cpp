@@ -1,7 +1,7 @@
 /***********************************************************************
 SixAxisNavigationTool - Class to convert an input device with six
 valuators into a navigation tool.
-Copyright (c) 2010-2025 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -233,7 +233,8 @@ const ToolFactory* SixAxisNavigationTool::getFactory(void) const
 void SixAxisNavigationTool::valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData)
 	{
 	/* Check if the valuator became active or inactive: */
-	if(cbData->oldValuatorValue==0.0&&cbData->newValuatorValue!=0.0)
+	double oldValue=getValuatorState(valuatorSlotIndex);
+	if(oldValue==0.0&&cbData->newValuatorValue!=0.0)
 		{
 		/* Activate the axis: */
 		++numActiveAxes;
@@ -245,7 +246,7 @@ void SixAxisNavigationTool::valuatorCallback(int valuatorSlotIndex,InputDevice::
 			navTransform=getNavigationTransformation();
 			}
 		}
-	if(cbData->oldValuatorValue!=0.0&&cbData->newValuatorValue==0.0)
+	if(oldValue!=0.0&&cbData->newValuatorValue==0.0)
 		{
 		/* Deactivate the axis: */
 		--numActiveAxes;

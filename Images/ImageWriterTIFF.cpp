@@ -1,6 +1,6 @@
 /***********************************************************************
 ImageWriterTIFF - Class to write images to files in TIFF format.
-Copyright (c) 2024 Oliver Kreylos
+Copyright (c) 2024-2026 Oliver Kreylos
 
 This file is part of the Image Handling Library (Images).
 
@@ -41,7 +41,7 @@ void ImageWriterTIFF::tiffErrorFunction(const char* module,const char* fmt,va_li
 	/* Throw an exception with the error message: */
 	char msg[1024];
 	vsnprintf(msg,sizeof(msg),fmt,ap);
-	throw Misc::makeStdErr("Images::ImageWriterTIF",msg);
+	throw Misc::makeStdErr("Images::ImageWriterTIFF",msg);
 	}
 
 void ImageWriterTIFF::tiffWarningFunction(const char* module,const char* fmt,va_list ap)

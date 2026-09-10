@@ -73,11 +73,13 @@ include $(VRUI_MAKEDIR)/Packages.System
 # SYSTEM_HAVE_LIBTIFF = 0
 # SYSTEM_HAVE_ALSA = 0
 # SYSTEM_HAVE_PULSEAUDIO = 0
+# SYSTEM_HAVE_OGG = 0
+# SYSTEM_HAVE_SPEEX = 0
+# SYSTEM_HAVE_OPUS = 0
 # SYSTEM_HAVE_OPENAL = 0
 # SYSTEM_HAVE_V4L2 = 0
 # SYSTEM_HAVE_BLUETOOTH = 0
 # SYSTEM_HAVE_DC1394 = 0
-# SYSTEM_HAVE_SPEEX = 0
 # SYSTEM_HAVE_THEORA = 0
 # SYSTEM_HAVE_FREETYPE = 0
 # SYSTEM_HAVE_XRANDR = 0
@@ -1420,21 +1422,55 @@ ifneq ($(SYSTEM_HAVE_ALSA),0)
 else
 	@echo "ALSA sound device support disabled"
 endif
+ifneq ($(SYSTEM_HAVE_PULSEAUDIO),0)
+	@echo "PulseAudio sound device support enabled"
+else
+	@echo "PulseAudio sound device support disabled"
+endif
+ifneq ($(SYSTEM_HAVE_OGG),0)
+	@echo "Ogg multimedia container support enabled"
+else
+	@echo "Ogg multimedia container support disabled"
+endif
 ifneq ($(SYSTEM_HAVE_SPEEX),0)
 	@echo "SPEEX speech compression support enabled"
 else
 	@echo "SPEEX speech compression support disabled"
 endif
+ifneq ($(SYSTEM_HAVE_OPUS),0)
+	@echo "Opus audio compression support enabled"
+else
+	@echo "Opus audio compression support disabled"
+endif
 	@cp Sound/Config.h.template Sound/Config.h.temp
 	@$(call CONFIG_SETVAR,Sound/Config.h.temp,SOUND_CONFIG_HAVE_ALSA,$(SYSTEM_HAVE_ALSA))
 	@$(call CONFIG_SETVAR,Sound/Config.h.temp,SOUND_CONFIG_HAVE_PULSEAUDIO,$(SYSTEM_HAVE_PULSEAUDIO))
+	@$(call CONFIG_SETVAR,Sound/Config.h.temp,SOUND_CONFIG_HAVE_OGG,$(SYSTEM_HAVE_OGG))
 	@$(call CONFIG_SETVAR,Sound/Config.h.temp,SOUND_CONFIG_HAVE_SPEEX,$(SYSTEM_HAVE_SPEEX))
+	@$(call CONFIG_SETVAR,Sound/Config.h.temp,SOUND_CONFIG_HAVE_OPUS,$(SYSTEM_HAVE_OPUS))
 	@if ! diff -qN Sound/Config.h.temp Sound/Config.h > /dev/null ; then cp Sound/Config.h.temp Sound/Config.h ; fi
 	@rm Sound/Config.h.temp
 	@touch $(DEPDIR)/Configure-Sound
 
-SOUND_HEADERS = $(wildcard Sound/*.h) \
-                $(wildcard Sound/*.icpp)
+SOUND_HEADERS = Sound/Config.h \
+                Sound/SoundDataFormat.h \
+                Sound/FrameBuffer.h \
+                Sound/AudioCaptureDevice.h \
+                Sound/SoundRecorder.h \
+                Sound/SoundPlayer.h \
+                Sound/WAVFile.h
+ifneq ($(SYSTEM_HAVE_OGG),0)
+  SOUND_HEADERS += Sound/Ogg.h
+endif
+ifneq ($(SYSTEM_HAVE_OPUS),0)
+  SOUND_HEADERS += Sound/OpusEncoder.h \
+                   Sound/OpusDecoder.h
+  ifneq ($(SYSTEM_HAVE_OGG),0)
+    SOUND_HEADERS += Sound/OggOpusSink.h \
+                     Sound/OggOpusSource.h
+  endif
+endif
+
 ifeq ($(SYSTEM),LINUX)
   SOUND_LINUX_HEADERS = 
   ifneq ($(SYSTEM_HAVE_ALSA),0)
@@ -1450,7 +1486,22 @@ ifeq ($(SYSTEM),LINUX)
   endif
 endif
 
-SOUND_SOURCES = $(wildcard Sound/*.cpp)
+SOUND_SOURCES = Sound/SoundDataFormat.cpp \
+                Sound/AudioCaptureDevice.cpp \
+                Sound/SoundRecorder.cpp \
+                Sound/SoundPlayer.cpp \
+                Sound/WAVFile.cpp
+ifneq ($(SYSTEM_HAVE_OGG),0)
+  SOUND_SOURCES += Sound/Ogg.cpp
+endif
+ifneq ($(SYSTEM_HAVE_OPUS),0)
+  SOUND_SOURCES += Sound/OpusEncoder.cpp \
+                   Sound/OpusDecoder.cpp
+  ifneq ($(SYSTEM_HAVE_OGG),0)
+    SOUND_SOURCES += Sound/OggOpusSink.cpp \
+                     Sound/OggOpusSource.cpp
+  endif
+endif
 ifeq ($(SYSTEM),LINUX)
   ifneq ($(SYSTEM_HAVE_ALSA),0)
     SOUND_SOURCES += Sound/Linux/ALSAPCMDevice.cpp \
@@ -1478,8 +1529,14 @@ else
     SOUND_PACKAGES += PULSEAUDIO
   endif
 endif
+ifneq ($(SYSTEM_HAVE_OGG),0)
+  SOUND_PACKAGES += OGG
+endif
 ifneq ($(SYSTEM_HAVE_SPEEX),0)
   SOUND_PACKAGES += SPEEX
+endif
+ifneq ($(SYSTEM_HAVE_OPUS),0)
+  SOUND_PACKAGES += OPUS
 endif
 $(call LIBRARYNAME,libSound): PACKAGES = $(SOUND_PACKAGES)
 $(call LIBRARYNAME,libSound): EXTRACINCLUDEFLAGS += $(MYSOUND_INCLUDE)
@@ -1550,6 +1607,7 @@ VIDEO_SOURCES = Video/VideoDataFormat.cpp \
                 Video/Internal/ImageExtractorRGB8.cpp \
                 Video/Internal/ImageExtractorY8.cpp \
                 Video/Internal/ImageExtractorY10B.cpp \
+                Video/Internal/ImageExtractorY16.cpp \
                 Video/Internal/ImageExtractorYUYV.cpp \
                 Video/Internal/ImageExtractorUYVY.cpp \
                 Video/Internal/ImageExtractorYV12.cpp \
@@ -2317,7 +2375,7 @@ $(EXEDIR)/OnHMD: $(VRUI_SCRIPTDIR)/OnHMD $(DEPDIR)/Configure-Vrui
 $(VRUI_ETCDIR)/OpenVRDevices.conf: | $(DEPDIR)/config $(EXEDIR)/FindHMD
 $(VRUI_ETCDIR)/OpenVRDevices.conf: $(VRUI_ETCDIR)/OpenVRDevices.conf.template
 	@echo Creating configuration file for OnHMD script...
-	@$(VRUI_MAKEDIR)/ConfigureOpenVRDevices.sh $(EXEDIR) $(VRUI_ETCDIR) OpenVRDevices.conf
+	@(LD_LIBRARY_PATH=$(VRUI_LIBDIR) $(VRUI_MAKEDIR)/ConfigureOpenVRDevices.sh $(EXEDIR) $(VRUI_ETCDIR) OpenVRDevices.conf)
 
 #
 # The Vrui eye calibration program:
@@ -2640,7 +2698,8 @@ BUILDROOT_FILES = $(VRUI_MAKEDIR)/SystemDefinitions \
                   $(VRUI_MAKEDIR)/ConfigureOpenVRDevices.sh \
                   $(VRUI_MAKEDIR)/BackupIfNEqual.sh \
                   $(VRUI_MAKEDIR)/InstallUnlessExists.sh \
-                  $(VRUI_MAKEDIR)/InstallLink.sh \
+                  $(VRUI_MAKEDIR)/InstallLinks.sh \
+                  $(VRUI_MAKEDIR)/InstallLinksUnlessExists.sh \
                   $(VRUI_MAKEDIR)/CleanDir.sh \
                   $(VRUI_MAKEDIR)/CleanDirIfEqual.sh \
                   $(VRUI_MAKEDIR)/makefile
@@ -2783,8 +2842,8 @@ endif
 # Install full build system in MAKEINSTALLDIR:
 	@echo Installing build system in $(MAKEINSTALLDIR)...
 	@install -d $(MAKEINSTALLDIR)
-	@chmod a+x $(VRUI_MAKEDIR)/StripPackages $(VRUI_MAKEDIR)/*.sh
 	@install -m u=rw,go=r $(BUILDROOT_FILES) $(MAKEINSTALLDIR)
+	@chmod a+x $(MAKEINSTALLDIR)/StripPackages $(MAKEINSTALLDIR)/*.sh
 # Install pkg-config metafile in PKGCONFIGINSTALLDIR:
 	@echo Installing pkg-config metafile in $(PKGCONFIGINSTALLDIR)...
 	@install -d $(PKGCONFIGINSTALLDIR)

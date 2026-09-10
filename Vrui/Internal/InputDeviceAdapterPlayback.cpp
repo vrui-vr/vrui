@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterPlayback - Class to read input device states from a
 pre-recorded file for playback and/or movie generation.
-Copyright (c) 2004-2025 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -29,6 +29,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <sys/types.h>
 #include <sys/wait.h>
 #include <Misc/PrintfTemplateTests.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/Endianness.h>
 #include <Misc/MessageLogger.h>
@@ -294,11 +295,7 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 		
 		/* Initialize the new device's glyph from the current configuration file section: */
 		Glyph& deviceGlyph=inputDeviceManager->getInputGraphManager()->getInputDeviceGlyph(newDevice);
-		char deviceGlyphTypeTag[32];
-		snprintf(deviceGlyphTypeTag,sizeof(deviceGlyphTypeTag),"./device%dGlyphType",i);
-		char deviceGlyphMaterialTag[32];
-		snprintf(deviceGlyphMaterialTag,sizeof(deviceGlyphMaterialTag),"./device%dGlyphMaterial",i);
-		deviceGlyph.configure(configFileSection,deviceGlyphTypeTag,deviceGlyphMaterialTag);
+		deviceGlyph.configure(configFileSection,Misc::stringPrintf("./device%dGlyphType",i).c_str(),Misc::stringPrintf("./device%dGlyphMaterial",i).c_str());
 		
 		/* Store the input device: */
 		inputDevices[i]=newDevice;
@@ -552,17 +549,15 @@ void InputDeviceAdapterPlayback::updateInputDevices(void)
 			if(childPid==0)
 				{
 				/* Create the old and new file names: */
-				char oldImageFileName[1024];
-				snprintf(oldImageFileName,sizeof(oldImageFileName),movieFileNameTemplate.c_str(),nextMovieFrameCounter-movieFrameStart+movieFrameOffset-1);
-				char imageFileName[1024];
-				snprintf(imageFileName,sizeof(imageFileName),movieFileNameTemplate.c_str(),nextMovieFrameCounter-movieFrameStart+movieFrameOffset);
+				std::string oldImageFileName=Misc::stringPrintf(movieFileNameTemplate.c_str(),nextMovieFrameCounter-movieFrameStart+movieFrameOffset-1);
+				std::string imageFileName=Misc::stringPrintf(movieFileNameTemplate.c_str(),nextMovieFrameCounter-movieFrameStart+movieFrameOffset);
 				
 				/* Execute the cp system command: */
 				char* cpArgv[10];
 				int cpArgc=0;
 				cpArgv[cpArgc++]=const_cast<char*>("/bin/cp");
-				cpArgv[cpArgc++]=oldImageFileName;
-				cpArgv[cpArgc++]=imageFileName;
+				cpArgv[cpArgc++]=const_cast<char*>(oldImageFileName.c_str());
+				cpArgv[cpArgc++]=const_cast<char*>(imageFileName.c_str());
 				cpArgv[cpArgc++]=0;
 				execvp(cpArgv[0],cpArgv);
 				}
@@ -582,9 +577,7 @@ void InputDeviceAdapterPlayback::updateInputDevices(void)
 			if(nextMovieFrameCounter>=movieFrameStart)
 				{
 				/* Request a screenshot from the movie window: */
-				char imageFileName[1024];
-				snprintf(imageFileName,sizeof(imageFileName),movieFileNameTemplate.c_str(),nextMovieFrameCounter-movieFrameStart+movieFrameOffset);
-				movieWindow->requestScreenshot(imageFileName);
+				movieWindow->requestScreenshot(Misc::stringPrintf(movieFileNameTemplate.c_str(),nextMovieFrameCounter-movieFrameStart+movieFrameOffset).c_str());
 				}
 			
 			/* Advance the movie frame counters: */

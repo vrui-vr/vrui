@@ -22,8 +22,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Sound/Linux/ALSAPCMDevice.h>
 
-#include <stdio.h>
 #include <poll.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Threads/FunctionCalls.h>
 #include <Threads/RunLoop.h>
@@ -98,10 +98,8 @@ ALSAPCMDevice::PCMList ALSAPCMDevice::enumeratePCMs(bool recording)
 	while(snd_card_next(&cardIndex)==0&&cardIndex>=0)
 		{
 		/* Open the sound card of the current index: */
-		char cardName[20];
-		snprintf(cardName,sizeof(cardName),"hw:%d",cardIndex);
 		snd_ctl_t* control=0;
-		if(snd_ctl_open(&control,cardName,SND_CTL_NONBLOCK)==0)
+		if(snd_ctl_open(&control,Misc::stringPrintf("hw:%d",cardIndex).c_str(),SND_CTL_NONBLOCK)==0)
 			{
 			/* Get the card's info structure: */
 			snd_ctl_card_info_t* cardInfo=0;
@@ -113,10 +111,8 @@ ALSAPCMDevice::PCMList ALSAPCMDevice::enumeratePCMs(bool recording)
 			while(snd_ctl_pcm_next_device(control,&deviceIndex)==0&&deviceIndex>=0)
 				{
 				/* Open the PCM device of the current index: */
-				char pcmName[40];
-				snprintf(pcmName,sizeof(pcmName),"hw:%d,%d",cardIndex,deviceIndex);
 				snd_pcm_t* pcm=0;
-				if(snd_pcm_open(&pcm,pcmName,recording?SND_PCM_STREAM_CAPTURE:SND_PCM_STREAM_PLAYBACK,SND_PCM_NONBLOCK)==0)
+				if(snd_pcm_open(&pcm,Misc::stringPrintf("hw:%d,%d",cardIndex,deviceIndex).c_str(),recording?SND_PCM_STREAM_CAPTURE:SND_PCM_STREAM_PLAYBACK,SND_PCM_NONBLOCK)==0)
 					{
 					/* Get the PCM device's info structure: */
 					snd_pcm_info_t* pcmInfo=0;
@@ -131,9 +127,7 @@ ALSAPCMDevice::PCMList ALSAPCMDevice::enumeratePCMs(bool recording)
 					const char* cardName=snd_ctl_card_info_get_name(cardInfo);
 					const char* cardId=snd_ctl_card_info_get_id(cardInfo);
 					const char* pcmName=snd_pcm_info_get_name(pcmInfo);
-					char name[512];
-					snprintf(name,sizeof(name),"%s, %s (CARD=%s,DEV=%d)",cardName,pcmName,cardId,deviceIndex);
-					newPcm.name=name;
+					newPcm.name=Misc::stringPrintf("%s, %s (CARD=%s,DEV=%d)",cardName,pcmName,cardId,deviceIndex);
 					
 					/* Close the PCM device: */
 					snd_pcm_close(pcm);

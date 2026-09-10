@@ -35,6 +35,8 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 // DEBUGGING
 #include <iostream>
+#include <Misc/PrintInteger.h>
+#include <Comm/NetPipe.h>
 
 namespace Comm {
 
@@ -59,9 +61,6 @@ Methods of class HttpServer::Connection:
 
 void HttpServer::Connection::close(void)
 	{
-	// DEBUGGING
-	std::cout<<"Comm::HttpServer: Closing HTTP connection"<<std::endl;
-	
 	/* Remove this connection from the server's set of active connections: */
 	server.connections.remove(this);
 	
@@ -203,7 +202,7 @@ void HttpServer::Connection::pipeCallback(Threads::RunLoop::IOWatcher::Event& ev
 							{
 							case HttpRequestHeader::Options:
 								{
-								/* Print the OPTIONS request for posterity: */
+								// DEBUGGING
 								std::cout<<"Comm::HttpServer: Received OPTIONS request with header fields:"<<std::endl;
 								const HttpRequestHeader::NameValueList& headerFields=requestHeader->getHeaderFields();
 								for(HttpRequestHeader::NameValueList::const_iterator hfIt=headerFields.begin();hfIt!=headerFields.end();++hfIt)
@@ -239,7 +238,7 @@ void HttpServer::Connection::pipeCallback(Threads::RunLoop::IOWatcher::Event& ev
 									eventSink=true;
 									
 									// DEBUGGING
-									std::cout<<"Comm::HttpServer: Connection marked as event sink"<<std::endl;
+									std::cout<<"Comm::HttpServer: Connection with "<<peerName<<" marked as event sink"<<std::endl;
 									
 									/* Check if "I'm still alive" events are enabled: */
 									if(server.stillAliveInterval.tv_sec!=0||server.stillAliveInterval.tv_nsec!=0)
@@ -430,7 +429,7 @@ void HttpServer::Connection::pipeCallback(Threads::RunLoop::IOWatcher::Event& ev
 void HttpServer::Connection::stillAliveCallback(Threads::RunLoop::Timer::Event& event)
 	{
 	// DEBUGGING
-	std::cout<<"Comm::HttpServer: Sending \"I'm still alive\" event to client"<<std::endl;
+	std::cout<<"Comm::HttpServer: Sending \"I'm still alive\" event to client "<<peerName<<std::endl;
 	
 	/* Write an event to the connection's pipe: */
 	{
@@ -455,13 +454,51 @@ HttpServer::Connection::Connection(HttpServer& sServer)
 	 state(Start),requestHeader(0),contentLength(0)
 	{
 	// DEBUGGING
-	std::cout<<"Comm::HttpServer: Opening HTTP connection"<<std::endl;
+	
+	/* Retrieve the peer's IP address and port: */
+	NetPipe* np=dynamic_cast<NetPipe*>(pipe.getPointer());
+	if(np!=0)
+		{
+		peerName=np->getPeerAddress();
+		peerName.push_back(':');
+		char port[6];
+		Misc::print(np->getPeerPortId(),port+5);
+		peerName.append(port);
+		}
+	else
+		peerName="<UNIX domain socket>";
+	
+	// DEBUGGING
+	std::cout<<"Comm::HttpServer: Opening HTTP connection with "<<peerName<<std::endl;
 	}
 
 HttpServer::Connection::~Connection(void)
 	{
+	// DEBUGGING
+	std::cout<<"Comm::HttpServer: Closing HTTP connection with "<<peerName<<std::endl;
+	
 	/* Delete a potential lingering HTTP request header: */
 	delete requestHeader;
+	
+	#if 0 // This doesn't really help at all with the TIME_WAIT problem :(
+	
+	/* Try shutting down the connection politely: */
+	try
+		{
+		/* Signal to the peer that we have nothing left to write: */
+		pipe->shutdown(false,true);
+		
+		/* Skip all incoming data until the peer hangs up: */
+		void* buffer;
+		while(!pipe->eof())
+			pipe->readInBuffer(buffer);
+		}
+	catch(const std::runtime_error& err)
+		{
+		/* Just carry on... */
+		}
+	
+	#endif
 	}
 
 /***************************
@@ -494,6 +531,9 @@ HttpServer::HttpServer(Threads::RunLoop& sRunLoop,int listenPort)
 
 HttpServer::~HttpServer(void)
 	{
+	/* Abort all still active connections to notify clients that the server is going down: */
+	for(Misc::SimpleObjectSet<Connection>::iterator cIt=connections.begin();cIt!=connections.end();++cIt)
+		cIt->pipe->abort();
 	}
 
 int HttpServer::getPort(void) const

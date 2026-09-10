@@ -1,7 +1,7 @@
 /***********************************************************************
 Pipe - Base class derived from IO::File for files representing pipes
 supporting waiting and automatic endianness negotiation.
-Copyright (c) 2011-2024 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -53,6 +53,11 @@ void Pipe::negotiateEndianness(void)
 	}
 
 void Pipe::shutdown(bool read,bool write)
+	{
+	/* Don't do anything */
+	}
+
+void Pipe::abort(void)
 	{
 	/* Don't do anything */
 	}

@@ -2,7 +2,7 @@
 InputDeviceAdapterIndexMap - Base class for input device adapters that
 use index maps to translate from "flat" device states to Vrui input
 devices.
-Copyright (c) 2004-2025 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -24,7 +24,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/Internal/InputDeviceAdapterIndexMap.h>
 
-#include <stdio.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
@@ -82,9 +82,7 @@ void InputDeviceAdapterIndexMap::initializeInputDevice(int deviceIndex,const Mis
 		int buttonIndexBase=configFileSection.retrieveValue<int>("./buttonIndexBase",0);
 		for(int j=0;j<numButtons;++j)
 			{
-			char buttonIndexTag[40];
-			snprintf(buttonIndexTag,sizeof(buttonIndexTag),"./buttonIndex%d",j);
-			int buttonIndex=configFileSection.retrieveValue(buttonIndexTag,buttonIndexBase+j);
+			int buttonIndex=configFileSection.retrieveValue(Misc::stringPrintf("./buttonIndex%d",j).c_str(),buttonIndexBase+j);
 			if(buttonIndex>=numRawButtons)
 				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Button index out of valid range");
 			buttonIndexMapping[deviceIndex][j]=buttonIndex;
@@ -101,9 +99,7 @@ void InputDeviceAdapterIndexMap::initializeInputDevice(int deviceIndex,const Mis
 		int valuatorIndexBase=configFileSection.retrieveValue<int>("./valuatorIndexBase",0);
 		for(int j=0;j<numValuators;++j)
 			{
-			char valuatorIndexTag[40];
-			snprintf(valuatorIndexTag,sizeof(valuatorIndexTag),"./valuatorIndex%d",j);
-			int valuatorIndex=configFileSection.retrieveValue(valuatorIndexTag,valuatorIndexBase+j);
+			int valuatorIndex=configFileSection.retrieveValue(Misc::stringPrintf("./valuatorIndex%d",j).c_str(),valuatorIndexBase+j);
 			if(valuatorIndex>=numRawValuators)
 				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Valuator index out of valid range");
 			valuatorIndexMapping[deviceIndex][j]=valuatorIndex;

@@ -1,7 +1,7 @@
 /***********************************************************************
 DropdownBox - Class for labels that show one string out of a list of
 strings and allow changing the selection by choosing from a pop-up list.
-Copyright (c) 2006-2022 Oliver Kreylos
+Copyright (c) 2006-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <GLMotif/DropdownBox.h>
 
-#include <stdio.h>
+#include <Misc/StringPrintf.h>
 #include <Math/Math.h>
 #include <GL/gl.h>
 #include <GL/GLColorTemplates.h>
@@ -164,9 +164,7 @@ DropdownBox::DropdownBox(const char* sName,Container* sParent,const std::vector<
 	/* Create a button for each list item: */
 	for(int i=0;i<numItems;++i)
 		{
-		char itemButtonName[40];
-		snprintf(itemButtonName,sizeof(itemButtonName),"ItemButton%d",i);
-		Button* button=new Button(itemButtonName,items,sItems[i].c_str());
+		Button* button=new Button(Misc::stringPrintf("ItemButton%d",i).c_str(),items,sItems[i].c_str());
 		button->setBorderType(Widget::PLAIN);
 		button->setBorderWidth(0.0f);
 		button->setHAlignment(GLFont::Left);
@@ -515,9 +513,7 @@ Widget* DropdownBox::addItem(const char* newItem)
 	// const GLMotif::StyleSheet& ss=*getManager()->getStyleSheet();
 	
 	/* Create a new button in the drop-down list: */
-	char itemButtonName[40];
-	snprintf(itemButtonName,sizeof(itemButtonName),"ItemButton%d",numItems);
-	Button* button=new Button(itemButtonName,items,newItem);
+	Button* button=new Button(Misc::stringPrintf("ItemButton%d",numItems).c_str(),items,newItem);
 	button->setBorderType(Widget::PLAIN);
 	button->setBorderWidth(0.0f);
 	button->setHAlignment(GLFont::Left);

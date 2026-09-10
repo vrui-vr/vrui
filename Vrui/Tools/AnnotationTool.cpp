@@ -1,6 +1,6 @@
 /***********************************************************************
 AnnotationTool - Tool to interactively annotate 3D models.
-Copyright (c) 2011-2023 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -22,7 +22,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/Tools/AnnotationTool.h>
 
-#include <stdio.h>
+#include <Misc/StringPrintf.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Math/Math.h>
@@ -252,9 +252,7 @@ void AnnotationTool::Position::updateLabels(void)
 	GLfloat y=GLfloat(factory->markerSize);
 	for(int i=2;i>=0;--i)
 		{
-		char posLabelText[40];
-		snprintf(posLabelText,sizeof(posLabelText),"%g",double(pos[i]));
-		posLabels[i].setString(posLabelText);
+		posLabels[i].setString(Misc::stringPrintf("%g",double(pos[i])).c_str());
 		GLLabel::Box::Vector labelSize=posLabels[i].getLabelSize();
 		posLabels[i].setOrigin(GLLabel::Box::Vector(-labelSize[0]*0.5f,y,0.0f));
 		y+=labelSize[1];
@@ -401,9 +399,7 @@ Methods of class AnnotationTool::Distance:
 
 void AnnotationTool::Distance::updateLabel(void)
 	{
-	char distLabelText[40];
-	snprintf(distLabelText,sizeof(distLabelText),"%g",double(Geometry::dist(pos[0],pos[1])));
-	distLabel.setString(distLabelText);
+	distLabel.setString(Misc::stringPrintf("%g",double(Geometry::dist(pos[0],pos[1]))).c_str());
 	GLLabel::Box::Vector labelSize=distLabel.getLabelSize();
 	distLabel.setOrigin(GLLabel::Box::Vector(-labelSize[0]*0.5f,0.0f,0.0f));
 	}
@@ -637,12 +633,10 @@ Methods of class AnnotationTool::Angle:
 
 void AnnotationTool::Angle::updateLabel(void)
 	{
-	char angleLabelText[40];
 	Vector d1=pos[1]-pos[0];
 	Vector d2=pos[2]-pos[0];
 	angle=Math::acos((d1*d2)/(Geometry::mag(d1)*Geometry::mag(d2)));
-	snprintf(angleLabelText,sizeof(angleLabelText),"%g",double(Math::deg(angle)));
-	angleLabel.setString(angleLabelText);
+	angleLabel.setString(Misc::stringPrintf("%g",double(Math::deg(angle))).c_str());
 	GLLabel::Box::Vector labelSize=angleLabel.getLabelSize();
 	angleLabel.setOrigin(GLLabel::Box::Vector(-labelSize[0]*0.5f,-labelSize[1]*0.5f,0.0f));
 	}

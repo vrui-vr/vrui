@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDevice - Class to represent input devices (6-DOF tracker with
 associated buttons and valuators) in virtual reality environments.
-Copyright (c) 2000-2024 Oliver Kreylos
+Copyright (c) 2000-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -28,6 +28,55 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 namespace Vrui {
 
+/*************************************************
+Declaration of struct InputDevice::ChangeListItem:
+*************************************************/
+
+struct InputDevice::ChangeListItem
+	{
+	/* Embedded classes: */
+	enum ChangeTypes // Enumerated type for types of state changes
+		{
+		DeviceRayChanged,TrackingChanged,ButtonChanged,ValuatorChanged,
+		Invalid // Type to invalidate events that have already been handled
+		};
+	
+	/* Elements: */
+	public:
+	int changeType; // Type of this change, i.e., the affected state component
+	union
+		{
+		struct
+			{
+			int index; // Index of the changed button
+			bool newState; // The new button state for a button change
+			} button;
+		struct
+			{
+			int index; // Index of the changed valuator
+			double newValue; // The new valuator value for a valuator change
+			} valuator;
+		};
+	
+	/* Constructors and destructors: */
+	ChangeListItem(int sChangeType) // Constructor for device ray or tracking changes
+		:changeType(sChangeType)
+		{
+		}
+	ChangeListItem(int sButtonIndex,bool sNewButtonState) // Constructor for button state changes
+		:changeType(ButtonChanged)
+		{
+		button.index=sButtonIndex;
+		button.newState=sNewButtonState;
+		}
+	ChangeListItem(int sValuatorIndex,double sNewValuatorValue) // Constructor for valuator state changes
+		:changeType(ValuatorChanged)
+		{
+		valuator.index=sValuatorIndex;
+		valuator.newValue=sNewValuatorValue;
+		}
+	};
+
 /****************************
 Methods of class InputDevice:
 ****************************/
@@ -39,8 +88,7 @@ InputDevice::InputDevice(void)
 	 deviceRayDirection(0,1,0),deviceRayStart(0),
 	 transformation(TrackerState::identity),linearVelocity(Vector::zero),angularVelocity(Vector::zero),
 	 buttonStates(0),valuatorValues(0),
-	 callbacksEnabled(true),deviceRayChanged(false),trackingChanged(false),
-	 savedButtonStates(0),savedValuatorValues(0)
+	 callbacksEnabled(true)
 	{
 	deviceName[0]='\0';
 	}
@@ -54,24 +102,16 @@ InputDevice::InputDevice(const char* sDeviceName,int sTrackType,int sNumButtons,
 	 transformation(TrackerState::identity),linearVelocity(Vector::zero),angularVelocity(Vector::zero),
 	 buttonStates(numButtons>0?new bool[numButtons]:0),
 	 valuatorValues(numValuators>0?new double[numValuators]:0),
-	 callbacksEnabled(true),deviceRayChanged(false),trackingChanged(false),
-	 savedButtonStates(numButtons>0?new bool[numButtons]:0),
-	 savedValuatorValues(numValuators>0?new double[numValuators]:0)
+	 callbacksEnabled(true)
 	{
 	/* Copy device name: */
 	strcpy(deviceName,sDeviceName);
 	
 	/* Initialize button and valuator states: */
 	for(int i=0;i<numButtons;++i)
-		{
 		buttonStates[i]=false;
-		savedButtonStates[i]=false;
-		}
 	for(int i=0;i<numValuators;++i)
-		{
 		valuatorValues[i]=0.0;
-		savedValuatorValues[i]=0.0;
-		}
 	}
 
 InputDevice::InputDevice(const InputDevice& source)
@@ -81,8 +121,7 @@ InputDevice::InputDevice(const InputDevice& source)
 	 deviceRayDirection(0,1,0),deviceRayStart(0),
 	 transformation(TrackerState::identity),linearVelocity(Vector::zero),angularVelocity(Vector::zero),
 	 buttonStates(0),valuatorValues(0),
-	 callbacksEnabled(true),deviceRayChanged(false),trackingChanged(false),
-	 savedButtonStates(0),savedValuatorValues(0)
+	 callbacksEnabled(true)
 	{
 	deviceName[0]='\0';
 	
@@ -105,8 +144,6 @@ InputDevice::~InputDevice(void)
 	delete[] valuatorCallbacks;
 	delete[] buttonStates;
 	delete[] valuatorValues;
-	delete[] savedButtonStates;
-	delete[] savedValuatorValues;
 	}
 
 InputDevice& InputDevice::set(const char* sDeviceName,int sTrackType,int sNumButtons,int sNumValuators)
@@ -118,8 +155,6 @@ InputDevice& InputDevice::set(const char* sDeviceName,int sTrackType,int sNumBut
 	delete[] valuatorCallbacks;
 	delete[] buttonStates;
 	delete[] valuatorValues;
-	delete[] savedButtonStates;
-	delete[] savedValuatorValues;
 	
 	/* Set new device layout: */
 	deviceName=new char[strlen(sDeviceName)+1];
@@ -133,20 +168,12 @@ InputDevice& InputDevice::set(const char* sDeviceName,int sTrackType,int sNumBut
 	valuatorCallbacks=numValuators>0?new Misc::CallbackList[numValuators]:0;
 	buttonStates=numButtons!=0?new bool[numButtons]:0;
 	valuatorValues=numValuators>0?new double[numValuators]:0;
-	savedButtonStates=numButtons!=0?new bool[numButtons]:0;
-	savedValuatorValues=numValuators>0?new double[numValuators]:0;
 	
 	/* Clear all button and valuator states: */
 	for(int i=0;i<numButtons;++i)
-		{
 		buttonStates[i]=false;
-		savedButtonStates[i]=false;
-		}
 	for(int i=0;i<numValuators;++i)
-		{
 		valuatorValues[i]=0.0;
-		savedValuatorValues[i]=0.0;
-		}
 	
 	return *this;
 	}
@@ -171,7 +198,10 @@ void InputDevice::setDeviceRay(const Vector& newDeviceRayDirection,Scalar newDev
 		deviceRayCallbacks.call(&cbData);
 		}
 	else
-		deviceRayChanged=true;
+		{
+		/* Keep track of a device ray change: */
+		changes.push_back(ChangeListItem(ChangeListItem::DeviceRayChanged));
+		}
 	}
 
 void InputDevice::setTransformation(const TrackerState& newTransformation)
@@ -187,7 +217,10 @@ void InputDevice::setTransformation(const TrackerState& newTransformation)
 		trackingCallbacks.call(&cbData);
 		}
 	else
-		trackingChanged=true;
+		{
+		/* Keep track of a tracking change: */
+		changes.push_back(ChangeListItem(ChangeListItem::TrackingChanged));
+		}
 	}
 
 void InputDevice::setLinearVelocity(const Vector& newLinearVelocity)
@@ -203,7 +236,10 @@ void InputDevice::setLinearVelocity(const Vector& newLinearVelocity)
 		trackingCallbacks.call(&cbData);
 		}
 	else
-		trackingChanged=true;
+		{
+		/* Keep track of a tracking change: */
+		changes.push_back(ChangeListItem(ChangeListItem::TrackingChanged));
+		}
 	}
 
 void InputDevice::setAngularVelocity(const Vector& newAngularVelocity)
@@ -219,7 +255,10 @@ void InputDevice::setAngularVelocity(const Vector& newAngularVelocity)
 		trackingCallbacks.call(&cbData);
 		}
 	else
-		trackingChanged=true;
+		{
+		/* Keep track of a tracking change: */
+		changes.push_back(ChangeListItem(ChangeListItem::TrackingChanged));
+		}
 	}
 
 void InputDevice::setTrackingState(const TrackerState& newTransformation,const Vector& newLinearVelocity,const Vector& newAngularVelocity)
@@ -237,7 +276,10 @@ void InputDevice::setTrackingState(const TrackerState& newTransformation,const V
 		trackingCallbacks.call(&cbData);
 		}
 	else
-		trackingChanged=true;
+		{
+		/* Keep track of a tracking change: */
+		changes.push_back(ChangeListItem(ChangeListItem::TrackingChanged));
+		}
 	}
 
 void InputDevice::copyTrackingState(const InputDevice* source)
@@ -261,150 +303,228 @@ void InputDevice::copyTrackingState(const InputDevice* source)
 		}
 	else
 		{
-		deviceRayChanged=true;
-		trackingChanged=true;
+		/* Keep track of a tracking change: */
+		changes.push_back(ChangeListItem(ChangeListItem::DeviceRayChanged));
+		changes.push_back(ChangeListItem(ChangeListItem::TrackingChanged));
 		}
 	}
 
 void InputDevice::clearButtonStates(void)
 	{
-	for(int i=0;i<numButtons;++i)
+	if(callbacksEnabled)
 		{
-		if(buttonStates[i])
-			{
-			buttonStates[i]=false;
-			if(callbacksEnabled)
+		/* Call callbacks for and set the states of all currently pressed buttons: */
+		for(int i=0;i<numButtons;++i)
+			if(buttonStates[i])
 				{
+				/* Call the button's callbacks: */
 				ButtonCallbackData cbData(this,i,false);
 				buttonCallbacks[i].call(&cbData);
+				
+				/* Clear the button's state: */
+				buttonStates[i]=false;
 				}
-			}
+		}
+	else
+		{
+		/*******************************************************************
+		Unfortunately, we have to queue a potential change for all buttons,
+		because we don't know current states.
+		Fortunately, this method is never called. :)
+		*******************************************************************/
+		
+		for(int i=0;i<numButtons;++i)
+			changes.push_back(ChangeListItem(i,false));
 		}
 	}
 
 void InputDevice::setButtonState(int index,bool newButtonState)
 	{
-	ButtonCallbackData cbData(this,index,newButtonState);
-	if(buttonStates[index]!=newButtonState)
+	if(callbacksEnabled)
 		{
-		buttonStates[index]=newButtonState;
-		if(callbacksEnabled)
+		/* Call callbacks for and set the state of the button if it actually changed: */
+		if(buttonStates[index]!=newButtonState)
+			{
+			ButtonCallbackData cbData(this,index,newButtonState);
 			buttonCallbacks[index].call(&cbData);
+			buttonStates[index]=newButtonState;
+			}
+		}
+	else
+		{
+		/* Keep track of a potential button state change: */
+		changes.push_back(ChangeListItem(index,newButtonState));
 		}
 	}
 
 void InputDevice::setSingleButtonPressed(int index)
 	{
-	for(int i=0;i<numButtons;++i)
+	if(callbacksEnabled)
 		{
-		if(i!=index)
+		/* Set the states of all buttons: */
+		for(int i=0;i<numButtons;++i)
 			{
-			if(buttonStates[i])
+			bool newState=i==index;
+			if(buttonStates[i]!=newState)
 				{
-				buttonStates[i]=false;
-				if(callbacksEnabled)
-					{
-					ButtonCallbackData cbData(this,i,false);
-					buttonCallbacks[i].call(&cbData);
-					}
+				/* Call the button's callbacks: */
+				ButtonCallbackData cbData(this,i,newState);
+				buttonCallbacks[i].call(&cbData);
+				
+				/* Set the button's state: */
+				buttonStates[i]=newState;
 				}
 			}
 		}
-	ButtonCallbackData cbData(this,index,true);
-	if(!buttonStates[index])
+	else
 		{
-		buttonStates[index]=true;
-		if(callbacksEnabled)
-			buttonCallbacks[index].call(&cbData);
+		/*******************************************************************
+		Unfortunately, we have to queue a potential change for all buttons,
+		because we don't know current states.
+		Fortunately, this method is never called. :)
+		*******************************************************************/
+		
+		for(int i=0;i<numButtons;++i)
+			changes.push_back(ChangeListItem(i,i==index));
 		}
 	}
 
-void InputDevice::setValuator(int index,double value)
+void InputDevice::setValuator(int index,double newValuatorValue)
 	{
-	ValuatorCallbackData cbData(this,index,valuatorValues[index],value);
-	if(valuatorValues[index]!=value)
+	if(callbacksEnabled)
 		{
-		valuatorValues[index]=value;
-		if(callbacksEnabled)
+		/* Call callbacks for and set the value of the valuator if it actually changed: */
+		if(valuatorValues[index]!=newValuatorValue)
+			{
+			ValuatorCallbackData cbData(this,index,newValuatorValue);
 			valuatorCallbacks[index].call(&cbData);
+			
+			valuatorValues[index]=newValuatorValue;
+			}
+		}
+	else
+		{
+		/* Keep track of a potential valuator value change: */
+		changes.push_back(ChangeListItem(index,newValuatorValue));
 		}
 	}
 
 void InputDevice::disableCallbacks(void)
 	{
+	/* Disable callbacks: */
 	callbacksEnabled=false;
-	
-	/* Reset the device ray and tracking change tracker: */
-	deviceRayChanged=false;
-	trackingChanged=false;
-	
-	/* Save all button states and valuator values to call the appropriate callbacks once callbacks are enabled again: */
-	for(int i=0;i<numButtons;++i)
-		savedButtonStates[i]=buttonStates[i];
-	for(int i=0;i<numValuators;++i)
-		savedValuatorValues[i]=valuatorValues[i];
 	}
 
 void InputDevice::triggerFeatureCallback(int featureIndex)
 	{
+	/* Bail out if callbacks are currently enabled: */
+	if(callbacksEnabled)
+		return;
+	
+	/*********************************************************************
+	Unfortunately, we have to go through the entire change list to find
+	all changes for the requested feature.
+	Fortunately, this method is never called. :)
+	*********************************************************************/
+	
 	/* Check if the given feature is a button or a valuator: */
 	if(featureIndex>=numButtons)
 		{
 		/* Check a valuator: */
 		int valuatorIndex=featureIndex-numButtons;
-		if(savedValuatorValues[valuatorIndex]!=valuatorValues[valuatorIndex])
-			{
-			/* Call the callback: */
-			ValuatorCallbackData cbData(this,valuatorIndex,savedValuatorValues[valuatorIndex],valuatorValues[valuatorIndex]);
-			valuatorCallbacks[valuatorIndex].call(&cbData);
-			
-			/* Update the saved valuator value so the callback won't be called again: */
-			savedValuatorValues[valuatorIndex]=valuatorValues[valuatorIndex];
-			}
+		for(ChangeList::iterator clIt=changes.begin();clIt!=changes.end();++clIt)
+			if(clIt->changeType==ChangeListItem::ValuatorChanged&&clIt->valuator.index==valuatorIndex&&valuatorValues[valuatorIndex]!=clIt->valuator.newValue)
+				{
+				ValuatorCallbackData cbData(this,valuatorIndex,clIt->valuator.newValue);
+				valuatorCallbacks[valuatorIndex].call(&cbData);
+				
+				valuatorValues[valuatorIndex]=clIt->valuator.newValue;
+				
+				/* Mark the change as invalid so the callbacks won't be called again later: */
+				clIt->changeType=ChangeListItem::Invalid;
+				}
 		}
 	else
 		{
 		/* Check a button: */
 		int buttonIndex=featureIndex;
-		if(savedButtonStates[buttonIndex]!=buttonStates[buttonIndex])
-			{
-			/* Call the callback: */
-			ButtonCallbackData cbData(this,buttonIndex,buttonStates[buttonIndex]);
-			buttonCallbacks[buttonIndex].call(&cbData);
-			
-			/* Update the saved button state so the callback won't be called again: */
-			savedButtonStates[buttonIndex]=buttonStates[buttonIndex];
-			}
+		for(ChangeList::iterator clIt=changes.begin();clIt!=changes.end();++clIt)
+			if(clIt->changeType==ChangeListItem::ButtonChanged&&clIt->button.index==buttonIndex&&buttonStates[buttonIndex]!=clIt->button.newState)
+				{
+				ButtonCallbackData cbData(this,buttonIndex,clIt->button.newState);
+				buttonCallbacks[buttonIndex].call(&cbData);
+				
+				buttonStates[buttonIndex]=clIt->button.newState;
+				
+				/* Mark the change as invalid so the callbacks won't be called again later: */
+				clIt->changeType=ChangeListItem::Invalid;
+				}
 		}
 	}
 
 void InputDevice::enableCallbacks(void)
 	{
+	/* We have to enable callbacks here so that any changes made to the device while we're processing changes don't get added to the list: */
 	callbacksEnabled=true;
 	
-	/* Call callbacks for everything that has changed, to update the user program's state: */
-	if(deviceRayChanged)
+	/* Call the appropriate callbacks for every change in the change list: */
+	bool deviceRayChangeCalled=false; // Flag to ensure that this type of callback gets called at most once
+	bool trackingChangeCalled=false; // Flag to ensure that this type of callback gets called at most once
+	for(ChangeList::iterator clIt=changes.begin();clIt!=changes.end();++clIt)
 		{
-		CallbackData deviceRayCbData(this);
-		deviceRayCallbacks.call(&deviceRayCbData);
-		}
-	if(trackingChanged)
-		{
-		CallbackData trackingCbData(this);
-		trackingCallbacks.call(&trackingCbData);
-		}
-	for(int i=0;i<numButtons;++i)
-		if(savedButtonStates[i]!=buttonStates[i])
+		switch(clIt->changeType)
 			{
-			ButtonCallbackData cbData(this,i,buttonStates[i]);
-			buttonCallbacks[i].call(&cbData);
+			case ChangeListItem::DeviceRayChanged:
+				if(!deviceRayChangeCalled)
+					{
+					CallbackData cbData(this);
+					deviceRayCallbacks.call(&cbData);
+					
+					deviceRayChangeCalled=true;
+					}
+				
+				break;
+			
+			case ChangeListItem::TrackingChanged:
+				if(!trackingChangeCalled)
+					{
+					CallbackData cbData(this);
+					trackingCallbacks.call(&cbData);
+					
+					trackingChangeCalled=true;
+					}
+				
+				break;
+			
+			case ChangeListItem::ButtonChanged:
+				if(buttonStates[clIt->button.index]!=clIt->button.newState)
+					{
+					ButtonCallbackData cbData(this,clIt->button.index,clIt->button.newState);
+					buttonCallbacks[clIt->button.index].call(&cbData);
+					
+					buttonStates[clIt->button.index]=clIt->button.newState;
+					}
+				
+				break;
+			
+			case ChangeListItem::ValuatorChanged:
+				if(valuatorValues[clIt->valuator.index]!=clIt->valuator.newValue)
+					{
+					ValuatorCallbackData cbData(this,clIt->valuator.index,clIt->valuator.newValue);
+					valuatorCallbacks[clIt->valuator.index].call(&cbData);
+					
+					valuatorValues[clIt->valuator.index]=clIt->valuator.newValue;
+					}
+				
+				break;
+			
+			default:
+				; // Nothing to do
 			}
-	for(int i=0;i<numValuators;++i)
-		if(savedValuatorValues[i]!=valuatorValues[i])
-			{
-			ValuatorCallbackData cbData(this,i,savedValuatorValues[i],valuatorValues[i]);
-			valuatorCallbacks[i].call(&cbData);
-			}
+		}
+	
+	/* Clear the change list: */
+	changes.clear();
 	}
 
 }

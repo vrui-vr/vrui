@@ -495,6 +495,7 @@ Private Vrui function prototypes:
 /* Forward declarations: */
 struct VruiWindowGroup;
 
+extern const char* getApplicationName(void); // Returns the name of the Vrui application
 extern void setRandomSeed(unsigned int newRandomSeed); // Sets Vrui's random seed; can only be called by InputDeviceAdapterPlayback during its initialization
 extern EnvironmentDefinition& modifyEnvironmentDefinition(void); // Allows caller to modify Vrui's environment definition; can only be called by InputDeviceAdapterDeviceDaemon during its initialization
 extern void vruiDelay(double interval);

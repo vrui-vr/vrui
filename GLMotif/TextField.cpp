@@ -1,6 +1,6 @@
 /***********************************************************************
 TextField - Class for labels displaying values as text.
-Copyright (c) 2006-2022 Oliver Kreylos
+Copyright (c) 2006-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -362,35 +362,35 @@ void TextField::pointerMotion(Event& event)
 
 bool TextField::giveTextFocus(void)
 	{
-	if(editable)
+	/* Reject focus if the text field is not editable: */
+	if(!editable)
+		return false;
+	
+	/* Select the entire text field: */
+	anchorPos=0;
+	setCursorPos(label.getLength());
+	
+	/* Remember that this text field has text focus: */
+	focus=true;
+	
+	/* Request text entry based on the text field's value type: */
+	if(valueType==ALPHA)
 		{
-		#if 0
-		/* Adjust the selection range: */
-		anchorPos=0;
-		setCursorPos(label.getLength());
-		#endif
-		
-		focus=true;
-		
-		/* Request text entry based on the value type: */
-		if(valueType==ALPHA)
-			{
-			/* Request alphanumeric text entry: */
-			getManager()->requestAlphaNumericEntry(this);
-			}
-		else
-			{
-			/* Request numeric text entry: */
-			getManager()->requestNumericEntry(this);
-			}
-		
-		/* Invalidate the visual representation: */
-		label.invalidate();
-		update();
+		/* Request alphanumeric text entry: */
+		getManager()->requestAlphaNumericEntry(this);
+		}
+	else
+		{
+		/* Request numeric text entry: */
+		getManager()->requestNumericEntry(this);
 		}
 	
-	/* Accept focus if the text field is editable: */
-	return editable;
+	/* Invalidate the visual representation: */
+	label.invalidate();
+	update();
+	
+	/* Accept focus: */
+	return true;
 	}
 
 void TextField::takeTextFocus(void)

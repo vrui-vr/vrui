@@ -100,6 +100,10 @@ class HttpServer
 		/* Elements: */
 		HttpServer& server; // Reference to the HTTP server owning this connection
 		PipePtr pipe; // Pipe connected to the client on the other end of this connection
+		
+		// DEBUGGING
+		std::string peerName; // Name of the connection's peer
+		
 		Threads::RunLoop::IOWatcherOwner pipeWatcher; // I/O watcher for the pipe
 		bool eventSink; // Flag if this connection can be used to send server-sent events to a client
 		Threads::RunLoop::TimerOwner stillAliveTimer; // Timer to send "I'm still alive" events on a connection marked as an event sink

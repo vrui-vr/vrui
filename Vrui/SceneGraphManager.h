@@ -1,7 +1,7 @@
 /***********************************************************************
 SceneGraphManager - Class to manage a scene graph used to represent
 renderable objects in physical and navigational space.
-Copyright (c) 2021-2025 Oliver Kreylos
+Copyright (c) 2021-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -82,6 +82,7 @@ class SceneGraphManager
 	private:
 	SceneGraph::NodeCreator nodeCreator; // A node creator to load scene graphs from VRML 2.0 or binary files
 	SceneGraph::GroupNodePointer physicalRoot; // The root of the physical-space scene graph and also the root of the entire scene graph
+	SceneGraph::GroupNodePointer devices; // A group containing sub-graphs representing input devices and any nodes attached to them
 	SceneGraph::DOGTransformNodePointer navigationalRoot; // The root of the navigational-space scene graph
 	SceneGraph::GroupNodePointer clippedRoot; // The root of the clipped navigational-space scene graph
 	DeviceSceneGraphMap deviceSceneGraphMap; // Map of scene graphs representing Vrui input devices

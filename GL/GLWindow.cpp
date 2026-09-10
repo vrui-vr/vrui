@@ -1,7 +1,7 @@
 /***********************************************************************
 GLWindow - Class to encapsulate details of the underlying window system
 implementation from an application wishing to use OpenGL windows.
-Copyright (c) 2001-2025 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the OpenGL/GLX Support Library (GLXSupport).
 
@@ -383,6 +383,7 @@ void GLWindow::setRect(const GLWindow::Rect& newRect)
 	
 	/* As this request will go to the redirected parent window, calculate its intended position by taking this window's parent offset into account: */
 	XMoveResizeWindow(context->getDisplay(),window,newRect.offset[0]-parentOffset[0],newRect.offset[1]-parentOffset[1],newRect.size[0],newRect.size[1]);
+	XFlush(context->getDisplay());
 	
 	#endif
 	
@@ -555,8 +556,9 @@ void GLWindow::hideCursor(void)
 	                               0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
 	                               0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00};
 	Pixmap emptyCursorPixmap=XCreatePixmapFromBitmapData(context->getDisplay(),window,emptyCursorBits,16,16,1,0,1);
-	XColor black,white; // Actually, both are dummy colors
-	Cursor emptyCursor=XCreatePixmapCursor(context->getDisplay(),emptyCursorPixmap,emptyCursorPixmap,&black,&white,0,0);
+	XColor color; // We only need one color, and it doesn't even have to be initialized
+	memset(&color,0,sizeof(color)); // We're still initializing it to shut up valgrind
+	Cursor emptyCursor=XCreatePixmapCursor(context->getDisplay(),emptyCursorPixmap,emptyCursorPixmap,&color,&color,0,0);
 	XDefineCursor(context->getDisplay(),window,emptyCursor);
 	XFreeCursor(context->getDisplay(),emptyCursor);
 	XFreePixmap(context->getDisplay(),emptyCursorPixmap);

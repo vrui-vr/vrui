@@ -1,6 +1,6 @@
 /***********************************************************************
 TheoraInfo - Wrapper class for th_info structure from Theora v1.1 API.
-Copyright (c) 2010-2022 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Basic Video Library (Video).
 
@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Video/TheoraInfo.h>
 
+#include <Misc/Utility.h>
 #include <Misc/Size.h>
 
 namespace Video {
@@ -50,14 +51,16 @@ void TheoraInfo::setImageSize(const Size& imageSize)
 	pic_y=((frame_height-pic_height)/2U)&~0x1U; // Use only even offsets to prevent chroma shifts
 	}
 
+void TheoraInfo::setBitrate(int newBitrate)
+	{
+	/* Limit the bit rate to the valid range: */
+	target_bitrate=Misc::max(newBitrate,0);
+	}
+
 void TheoraInfo::setQuality(int newQuality)
 	{
-	/* Limit the quality to the legal range: */
-	if(newQuality<0)
-		newQuality=0;
-	if(newQuality>63)
-		newQuality=63;
-	quality=newQuality;
+	/* Silently limit the quality to the legal range: */
+	quality=Misc::clamp(newQuality,0,63);
 	}
 
 void TheoraInfo::setGopSize(int newGopSize)

@@ -293,6 +293,7 @@ Listener* findListener(const char* name); // Returns pointer to listener of give
 void requestSound(void); // Called during Vrui initialization to request sound processing during the main loop
 int getNumSoundContexts(void); // Returns the number of active sound contexts
 SoundContext* getSoundContext(int index); // Returns pointer to sound context of given index
+SoundContext* getRecordingSoundContext(void); // Returns pointer to a sound context that can record sound; returns 0 if no recording-capable sound context exists
 
 /* Query information about the physical environment: */
 const EnvironmentDefinition& getEnvironmentDefinition(void); // Returns the definition of the Vrui environment in physical space
@@ -393,6 +394,7 @@ Misc::CallbackList& getPostRenderingCallbacks(void); // Returns the list of call
 Misc::CommandDispatcher& getCommandDispatcher(void); // Returns a dispatcher for pipe and console commands
 void addSynchronousIOCallback(int fd,SynchronousIOCallback newIOCallback,void* newIOCallbackData); // Adds a callback that is called synchronously at the beginning of a Vrui frame if there is readable data on the given file descriptor
 void removeSynchronousIOCallback(int fd); // Removes a previously installed synchronous I/O callback for the given file descriptor
+void submitJob(Threads::FunctionCall<int>& job); // Submits a job for asynchronous execution by a background thread
 void submitJob(Threads::FunctionCall<int>& job,Threads::FunctionCall<Threads::FunctionCall<int>&>& completeCallback); // Submits a job for asynchronous execution by a background thread; given callback is called from main thread, synchronously before an application's frame method
 
 /* Rendering management: */

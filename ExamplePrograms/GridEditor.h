@@ -25,8 +25,9 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #define GRIDEDITOR_INCLUDED
 
 #include <string>
-#include <vector>
 #include <Misc/Array.h>
+#include <Threads/MutexCond.h>
+#include <Threads/WorkerPool.h>
 #include <Geometry/Point.h>
 #include <Geometry/OrthogonalTransformation.h>
 #include <GL/gl.h>
@@ -49,6 +50,7 @@ namespace GLMotif {
 class PopupMenu;
 class PopupWindow;
 }
+class TriangleKdTree;
 
 class GridEditor:public Vrui::Application,GLObject
 	{
@@ -122,6 +124,29 @@ class GridEditor:public Vrui::Application,GLObject
 	
 	friend class EditTool;
 	
+	class MeshSlicer:public Threads::WorkerPool::JobFunction // Helper class to convert a mesh into a grid in parallel
+		{
+		/* Elements: */
+		private:
+		EditableGrid& grid; // The grid to be created
+		int z; // The z index of the grid slice produced by this job
+		const TriangleKdTree& triangleTree; // The kd-tree containing the mesh's triangles
+		double maxDist2; // Squared maximum distance to search for closest triangles
+		Threads::MutexCond& completionCond; // Condition variable signaled when the slice has been created
+		int& slicesComplete; // Counter for completed slices
+		
+		/* Constructors and destructors: */
+		public:
+		MeshSlicer(EditableGrid& sGrid,int sZ,const TriangleKdTree& sTriangleTree,double sMaxDist2,Threads::MutexCond& sCompletionCond,int& sSlicesComplete) // Elementwise constructor
+			:grid(sGrid),z(sZ),triangleTree(sTriangleTree),maxDist2(sMaxDist2),
+			 completionCond(sCompletionCond),slicesComplete(sSlicesComplete)
+			{
+			}
+		
+		/* Methods from class Threads::WorkerPool::JobFunction: */
+		virtual void operator()(int parameter);
+		};
+	
 	/* Elements: */
 	private:
 	EditableGrid* grid; // Editable 3D grid
@@ -133,6 +158,9 @@ class GridEditor:public Vrui::Application,GLObject
 	void saveGridCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData);
 	void exportSurfaceCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData);
 	GLMotif::PopupMenu* createMainMenu(void); // Creates the program's main menu
+	EditableGrid* loadFvolFile(const std::string& fileName,const EditableGrid::Point& origin); // Creates an editable grid from a float-valued .vol file
+	EditableGrid* loadSdfFile(const std::string& fileName); // Creates an editable grid from a signed distance field file in ASCII format
+	EditableGrid* loadMeshFile(const std::string& fileName,double resolutionScale); // Creates an editable grid from a mesh file in a supported format
 	
 	/* Constructors and destructors: */
 	public:

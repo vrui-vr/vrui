@@ -1,7 +1,7 @@
 /***********************************************************************
 SceneGraphList - Helper class to manage a dynamic list of scene graphs
 collected under a common root node.
-Copyright (c) 2025 Oliver Kreylos
+Copyright (c) 2025-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -65,6 +65,13 @@ SceneGraph::GraphNodePointer SceneGraphList::loadSceneGraph(IO::Directory& direc
 		/* Open and parse the VRML v2.0 scene graph file: */
 		VRMLFile vrmlFile(directory,fileName,nodeCreator);
 		vrmlFile.parse(*root);
+		
+		/* Check if the VRML file only contained a single root node: */
+		if(root->getChildren().size()==1)
+			{
+			/* Return the group's single child node instead of the redundant single-element group: */
+			sceneGraph=root->getChildren().front();
+			}
 		}
 	else
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Scene graph file name %s has unrecognized extension",fileName);

@@ -1,7 +1,7 @@
 /***********************************************************************
 Pipe - Base class derived from IO::File for files representing pipes
 supporting waiting and automatic endianness negotiation.
-Copyright (c) 2011-2023 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -51,6 +51,7 @@ class Pipe:public IO::File
 	virtual bool waitForData(void) const =0; // Waits for incoming data on the pipe; returns true if data is ready
 	virtual bool waitForData(const Misc::Time& timeout) const =0; // Waits for incoming data on the pipe until timeout; returns true if data is ready
 	virtual void shutdown(bool read,bool write); // Shuts down reading and/or writing part of pipe
+	virtual void abort(void); // Marks a pipe as aborted, i.e., subsequent destruction will discard all unsent data and possibly signal an error to the peer; no further reads or writes are possible
 	};
 
 typedef Misc::Autopointer<Pipe> PipePtr; // Type for pointers to reference-counted pipe objects

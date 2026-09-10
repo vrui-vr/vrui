@@ -8745,6 +8745,168 @@ Vrui-15.0-001:
   - Move sampling of lastDispatchTime from beginning of
     dispatchPendingEvents to end of waitForEvents.
   - Added getDispatchTime method.
+- Added getCommandMap method to Misc::CommandDispatcher to query the set
+  of defined commands.
+- Fixed initialization of selection in
+  GLMotif::TextField::giveTextFocus.
+- Mark scripts and executables in share/make installation directory as
+  executable after installation.
+- Added missing scripts to install target in makefile.
+- Set LD_LIBRARY_PATH when running FindHMD in makefile to find not-yet-
+  installed libraries.
+- Added Vrui::getApplicationName function to internal Vrui kernel
+  interface.
+- Check that Vrui settings dialog exists before changing widgets in
+  Vrui::setBackgroundColor, Vrui::setForegroundColor,
+  Vrui::setBackplaneDist, and Vrui::setFrontplaneDist.
+- Added recordingBitsPerSample, recordingChannels, recordingFrequency,
+  and recordingLatency settings to Vrui::SoundContext to configure a
+  central audio recording server.
+  - Updated Vrui configuration file reference documentation.
+- Improved debugging code in Sound::PulseAudio classes.
+- Sound::PulseAudio::Source starts in corked mode; corked/uncorked on
+  demand by start/stop methods.
+- No longer list OpenAL device/HRTF options in Vrui::SoundContext in
+  Vrui verbose mode; instead, list in any mode when configuration fails.
+- Added central sound recording facility via Vrui::SoundContext class:
+  - Added recordingBitsPerSample, recordingChannels, recordingFrequency,
+    and recordingLatency configuration file settings to
+    Vrui::SoundContext.
+  - If a sound context has a non-empty recordingDeviceName, it will
+    create a (paused) recording source on construction.
+  - Added canRecord() method to check if a sound context can record
+    sound.
+  - Added getRecordingFormat and getRecordingLatency methods to query
+    sound recording settings.
+  - Added addRecordingCallback and removeRecordingCallback methods;
+    can be called from any thread, and callbacks will be called from
+    some sound recording background thread. The recording sound source
+    will be unpaused/paused as needed.
+  - Added getRecordingSoundContext function to Vrui kernel interface;
+    returns a pointer to a recording-capable sound context, or a null
+    pointer if none exist.
+- Added dispatchCommand method to Misc::CommandDispatcher to dispatch
+  a single command from a string.
+  - Also fixed dispatchCommands method for very long commands.
+- Created Sound/Ogg.h containing C++ wrappers for structures and
+  functions from the Ogg multimedia container library, deprecating the
+  Ogg* classes in the Video library.
+  - Made Sound library optionally dependent on Ogg library.
+- Added support for the Opus audio codec library to Vrui's build system.
+- Several fixes and improvements in JSON parsing/printing code in IO
+  library:
+  - IO::JsonSource correctly parses JSON strings according to IETF RFC
+    8259, in string entities and object property names.
+  - IO::JsonString::print properly encodes JSON strings according to
+    IETF RFC 8259.
+    - Comments clarify that JsonString constructors expect "raw" strings
+      without JSON escape sequences, and that getString returns "raw"
+      strings.
+  - Added move constructor to JsonString to avoid string copies where
+    possible.
+  - Fixed handling of null entities in print methods of JsonArray and
+    JsonObject.
+  - Added ostream::operator<< function for IO::JsonPointer to
+    IO/JsonEntity.h with proper handling of null entities.
+  - Fixed handling of empty arrays and objects and several minor issues
+    in IO::JsonSource::parseEntity method.
+    - Improved error messages on JSON syntax errors.
+- Changed Theora video encoding/decoding classes in Video library to use
+  new Ogg wrapper classes in Sound library.
+  - Minor improvements to Theora class interfaces in Video library.
+- Updated Vrui::TheoraMovieSaver to use Ogg classes from Sound library
+  and new Theora wrapper class interfaces.
+- Improved Theora stream packing and error handling in
+  Vrui::TheoraMovieSaver.
+- Added Sound::OpusEncoder and Sound::OggOpusSink classes to Sound
+  library.
+  - Made Sound library optionally dependent on Opus library.
+- Fixed bug in Vrui::SoundContext::removeRecordingCallback.
+- Added Sound::OpusDecoder class.
+- Added Sound::OggOpusSource class.
+- Added getShapes and setBaseDirectory methods to
+  SceneGraph::MeshFileNode.
+- Fixed a bug in DisableIOWatcher pipe command in Threads::RunLoop.
+- Slight improvement to isPointInsideTriangle function in
+  Geometry/IntersectionTests.icpp.
+- Added version of Vrui::submitJob without a completion callback to
+  Vrui's kernel interface.
+- Added error checking for execve in Vrui::ScriptExecutorTool to avoid
+  crashes when the selected script cannot be executed.
+- Added more debugging code to Comm::HttpServer.
+- Improved HTTP connection management in VRServerLauncher.
+- No need to shutdown() before close() in Comm::HttpServer::~HttpServer.
+- Add more politeness when disconnecting from server in
+  Vrui::VRDeviceClient::~VRDeviceClient.
+- Add abort() method to Comm::Pipe class to shut down a pipe with an
+  error condition, such as TCP RST for a TCP pipe.
+  - Implement abort() in Comm::TCPPipe using SO_LINGER socket option.
+- Abort all remaining client connections in
+  Comm::HttpServer::~HttpServer.
+- Replaced snprintf with Misc::stringPrintf in all sources where doing
+  so makes sense.
+- Fixed bug in Vrui::InputGraphManager::saveInputGraph that caused
+  issues with forwarding tools controlling more than one input device.
+- Changed device naming scheme when saving input graphs that might break
+  saved input graphs created by previous versions.
+  - Change is necessary to avoid device name ambiguities.
+- Save ungrabbed virtual input device's names in scene graph files using
+  the "name" tag.
+- Adapted comments in Threads/RunLoop.h to changed API.
+- Create a separate sub-graph to represent input devices in
+  Vrui::SceneGraphManager.
+- When loading a VRML file defining a single root node in
+  SceneGraph::SceneGraphList or Vrui::SceneGraphManager, return that
+  node instead of a group containing a single child.
+- Use Vrui::SceneGraphManager::loadSceneGraph to load device glyph files
+  in Vrui::DeviceRenderer vislet.
+- Initialize the pixmap color in GLWindow::hideCursor. It's never used,
+  but valgrind complains about it.
+- Large update to Vrui input device handling and specifically mouse
+  handling:
+  - Replaced saved state arrays in Vrui::InputDevice with change lists;
+    this enables multiple state changes in a single Vrui frame,
+    improving responsiveness and simplifying X event handling.
+  - Button/valuators in Vrui::InputDevice change state *after* callbacks
+    are called, making the oldValuatorValue field in callback redundant.
+  - API change in Vrui::InputDevice: ValuatorCallbackData no longer has
+    oldValuatorValue field; old value can be queried from input device
+    via getValuator(...) instead, as value only changes after callbacks.
+    - Adapted Vrui::FiveAxisNavigationTool and
+      Vrui::SixAxisNavigationTool.
+  - Updated Vrui::InputDeviceAdapterMouse to use new capabilities of
+    Vrui::InputDevice.
+    - Added copyButtons and stickyButtons configuration settings,
+      defaulting to old behavior.
+      - Added settings to Vrui.cfg and ControlWindow.cfg.
+    - Some general code clean-up.
+    - Improved(?) mouse velocity estimation by basing it on frequency of
+      mouse position updates sent by X.
+  - Cleaned up some code in Vrui::FPSNavigationTool.
+  - In Vrui::VRWindow::processEvent, ignore FocusIn events resulting
+    from pointer grabs.
+  - Improved X event handling in vruiHandleAllEvents in
+    Vrui.Workbench.cpp due to new capabilities in Vrui::InputDevice and
+    in preparation for move to Threads::RunLoop.
+- Fixed up and added playback control functionality to
+  ImageSequenceViewer example application.
+- Added ImageExtractorY16 class to Video library to process video in Y16
+  (16-bit luminance) pixel format.
+  - Added support for Y16 pixel format to Video::V4L2VideoDevice.
+- Fixed Y'CbCr extraction methods in Video::ImageExtractorY8 and
+  Video::ImageExtractorY10B.
+- Added proper JPEG decompression error handling to
+  Video::ImageExtractorMJPG.
+- Improved decompression set-up in Video::ImageExtractorMJPG.
+- Fixed a couple of bugs in Video::ImageExtractor classes.
+- Added Almalinux to list of supported linux distributions in
+  InstallPrerequisites.sh script.
+- In Vrui.Workbench.cpp, moved recording sound context initialization
+  before ALObjects are initialized.
+- Rewrote VruiSoundConfigTest to use new recording sound context API.
+- Fixed recording device selection in Vrui::SoundContext.
+  - Remove list of recording devices from vruiVerbose output; instead,
+    print list if the configured recording device does not exist.
 - Replaced use of Misc::TimerEventScheduler in GLMotif widget classes
   with new GLMotif::ClickRepeatWidget mix-in class, offloading repeat
   click handling to UI interaction code in higher-level toolkits, such

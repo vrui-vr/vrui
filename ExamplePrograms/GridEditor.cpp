@@ -24,12 +24,22 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include "GridEditor.h"
 
 #include <string.h>
+#include <string>
+#include <vector>
+#include <algorithm>
 #include <iostream>
+#include <iomanip>
+#include <Misc/Utility.h>
 #include <Misc/SelfDestructPointer.h>
 #include <Misc/StdError.h>
 #include <Misc/FileNameExtensions.h>
+#include <Misc/MessageLogger.h>
+#include <Misc/CommandLineParser.h>
+#include <Realtime/Time.h>
 #include <IO/ValueSource.h>
 #include <IO/OpenFile.h>
+#include <Math/Math.h>
+#include <Math/Constants.h>
 #include <Geometry/Box.h>
 #include <Geometry/OrthogonalTransformation.h>
 #include <Geometry/OutputOperators.h>
@@ -49,9 +59,15 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <GLMotif/Label.h>
 #include <GLMotif/TextField.h>
 #include <GLMotif/ToggleButton.h>
+#include <SceneGraph/CoordinateNode.h>
+#include <SceneGraph/IndexedFaceSetNode.h>
+#include <SceneGraph/ShapeNode.h>
+#include <SceneGraph/MeshFileNode.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/GlyphRenderer.h>
 #include <Vrui/DisplayState.h>
+
+#include "TriangleKdTree.h"
 
 /*************************************
 Methods of class GridEditor::DataItem:
@@ -484,6 +500,63 @@ void GridEditor::EditTool::glRenderActionTransparent(GLContextData& contextData)
 	glPopAttrib();
 	}
 
+/***************************************
+Methods of class GridEditor::MeshSlicer:
+***************************************/
+
+void GridEditor::MeshSlicer::operator()(int)
+	{
+	/* Get the grid layout: */
+	int numRows=grid.getNumVertices()[1];
+	int numColumns=grid.getNumVertices()[0];
+	TriangleKdTree::Scalar cellSize[3];
+	for(int i=0;i<3;++i)
+		cellSize[i]=TriangleKdTree::Scalar(grid.getCellSize()[i]);
+	
+	for(int y=0;y<numRows;++y)
+		{
+		/* Calculate all intersections of the current grid line with the triangle set: */
+		TriangleKdTree::Point start=grid.getBox().min;
+		start[1]+=TriangleKdTree::Scalar(y)*cellSize[1];
+		start[2]+=TriangleKdTree::Scalar(z)*cellSize[2];
+		TriangleKdTree::RayIntersectionList intersections=triangleTree.intersectXray(start);
+		
+		/* Add a sentinel to the intersection list: */
+		intersections.push_back(TriangleKdTree::RayIntersection(TriangleKdTree::nil,Math::Constants<TriangleKdTree::Scalar>::max));
+		
+		/* Process all voxels on the current grid line: */
+		EditableGrid::Index i(0,y,z);
+		float inside=-1.0f/Math::sqrt(maxDist2); // Start from the outside
+		TriangleKdTree::RayIntersectionList::iterator iIt=intersections.begin();
+		while(i[0]<numColumns)
+			{
+			/* Process any crossed intersections since the previous voxel: */
+			while(start[0]>=iIt->lambda)
+				{
+				/* Flip the inside/outside flag: */
+				inside=-inside;
+				
+				/* Go to the next intersection: */
+				++iIt;
+				}
+			
+			/* Calculate and assign the voxel's value: */
+			grid.setValue(i,float(Math::sqrt(triangleTree.calcTriangleDistance(start,maxDist2).dist2))*inside+0.5f);
+			
+			/* Go to the next voxel: */
+			++i[0];
+			start[0]+=cellSize[0];
+			}
+		}
+	
+	/* Signal completion of this slice: */
+	{
+	Threads::MutexCond::Lock completionLock(completionCond);
+	++slicesComplete;
+	completionCond.signal();
+	}
+	}
+
 /***************************
 Methods of class GridEditor:
 ***************************/
@@ -547,6 +620,198 @@ GLMotif::PopupMenu* GridEditor::createMainMenu(void)
 	return mainMenu;
 	}
 
+EditableGrid* GridEditor::loadFvolFile(const std::string& fileName,const EditableGrid::Point& origin)
+	{
+	/* Load the grid from a float-valued vol file: */
+	IO::FilePtr volFile=IO::openFile(fileName.c_str());
+	volFile->setEndianness(Misc::BigEndian);
+	
+	/* Read the file header: */
+	EditableGrid::Index numVertices;
+	volFile->read(numVertices.getComponents(),3);
+	int borderSize=volFile->read<int>();
+	for(int i=0;i<3;++i)
+		numVertices[i]+=borderSize*2;
+	float domainSize[3];
+	volFile->read(domainSize,3);
+	EditableGrid::Size cellSize;
+	for(int i=0;i<3;++i)
+		cellSize[i]=domainSize[i]/float(numVertices[i]-borderSize*2-1);
+	
+	/* Create the grid: */
+	Misc::SelfDestructPointer<EditableGrid> result(new EditableGrid(origin,numVertices,cellSize));
+	EditableGrid* grid=result.getTarget();
+	
+	std::cout<<"Creating grid with "<<numVertices[0]<<'x'<<numVertices[1]<<'x'<<numVertices[2]<<" vertices"<<std::endl;
+	std::cout<<"Cell size "<<cellSize[0]<<'x'<<cellSize[1]<<'x'<<cellSize[2]<<std::endl;
+	std::cout<<"Domain box: ["<<grid->getBox().min<<", "<<grid->getBox().max<<"]"<<std::endl;
+	
+	/* Read all grid values: */
+	for(EditableGrid::Index i(0);i[0]<grid->getNumVertices(0);i.preInc(grid->getNumVertices()))
+		grid->setValue(i,volFile->read<float>());
+	grid->invalidateVertices(EditableGrid::Index(0,0,0),grid->getNumVertices());
+	
+	return result.releaseTarget();
+	}
+
+EditableGrid* GridEditor::loadSdfFile(const std::string& fileName)
+	{
+	/* Load the grid from a signed distance field in ASCII format: */
+	IO::ValueSource sdfFile(IO::openFile(fileName.c_str()));
+	sdfFile.setWhitespace(" \t\r\n");
+	sdfFile.skipWs();
+	EditableGrid::Index numVertices;
+	for(int i=0;i<3;++i)
+		numVertices[i]=sdfFile.readUnsignedInteger();
+	EditableGrid::Point origin;
+	for(int i=0;i<3;++i)
+		origin[i]=float(sdfFile.readNumber());
+	EditableGrid::Size cellSize;
+	cellSize[2]=cellSize[1]=cellSize[0]=float(sdfFile.readNumber());
+	
+	/* Create the grid: */
+	Misc::SelfDestructPointer<EditableGrid> result(new EditableGrid(origin,numVertices,cellSize));
+	EditableGrid* grid=result.getTarget();
+	
+	std::cout<<"Creating grid with "<<numVertices[0]<<'x'<<numVertices[1]<<'x'<<numVertices[2]<<" vertices"<<std::endl;
+	std::cout<<"Cell size "<<cellSize[0]<<'x'<<cellSize[1]<<'x'<<cellSize[2]<<std::endl;
+	std::cout<<"Domain box: ["<<grid->getBox().min<<", "<<grid->getBox().max<<"]"<<std::endl;
+	
+	/* Read all grid values: */
+	float minValue=Math::Constants<float>::max;
+	float maxValue=Math::Constants<float>::min;
+	EditableGrid::Index i;
+	for(i[2]=0;i[2]<numVertices[2];++i[2])
+		for(i[1]=0;i[1]<numVertices[1];++i[1])
+			for(i[0]=0;i[0]<numVertices[0];++i[0])
+				{
+				float value=float(sdfFile.readNumber());
+				if(minValue>value)
+					minValue=value;
+				if(maxValue<value)
+					maxValue=value;
+				grid->setValue(i,value+0.5f);
+				}
+	grid->invalidateVertices(EditableGrid::Index(0,0,0),grid->getNumVertices());
+	
+	return result.releaseTarget();
+	}
+
+EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,double resolutionScale)
+	{
+	/* Use a scene graph mesh file node to load the mesh file: */
+	Realtime::TimePointMonotonic timer1;
+	SceneGraph::MeshFileNode meshFile;
+	meshFile.url.setValue(fileName);
+	meshFile.update();
+	std::cout<<"Loaded input file in "<<double(timer1.setAndDiff())*1000.0<<" ms"<<std::endl;
+	
+	/* Calculate a grid cell size to approximate a target number of cells: */
+	SceneGraph::Box meshBox=meshFile.calcBoundingBox();
+	std::cout<<"Mesh bounding box: "<<meshBox.min<<", "<<meshBox.max<<std::endl;
+	double meshVolume=(meshBox.max[0]-meshBox.min[0])*(meshBox.max[1]-meshBox.min[1])*(meshBox.max[2]-meshBox.min[2])*Math::pow(1.1,3.0);
+	double targetNumCells=256.0*256.0*256.0;
+	SceneGraph::Scalar cs(Math::pow(meshVolume/(targetNumCells*resolutionScale),1.0/3.0));
+	EditableGrid::Size cellSize(cs,cs,cs);
+	
+	/* Fit a grid around the mesh: */
+	EditableGrid::Point origin;
+	EditableGrid::Index numVertices;
+	for(int i=0;i<3;++i)
+		{
+		SceneGraph::Scalar border=(meshBox.max[i]-meshBox.min[i])*SceneGraph::Scalar(0.05);
+		SceneGraph::Scalar min=Math::floor((meshBox.min[i]-border)/cellSize[i]);
+		origin[i]=min*cellSize[i];
+		SceneGraph::Scalar max=Math::ceil((meshBox.max[i]+border)/cellSize[i]);
+		numVertices[i]=int(max-min)+1;
+		}
+	
+	/* Create the grid: */
+	Misc::SelfDestructPointer<EditableGrid> result(new EditableGrid(origin,numVertices,cellSize));
+	EditableGrid* grid=result.getTarget();
+	
+	std::cout<<"Creating grid with "<<numVertices[0]<<'x'<<numVertices[1]<<'x'<<numVertices[2]<<" vertices"<<std::endl;
+	std::cout<<"Cell size "<<cellSize[0]<<'x'<<cellSize[1]<<'x'<<cellSize[2]<<std::endl;
+	std::cout<<"Domain box: ["<<grid->getBox().min<<", "<<grid->getBox().max<<"]"<<std::endl;
+	
+	/* Enter all shapes contained in the loaded mesh file to the grid: */
+	Realtime::TimePointMonotonic timer2;
+	TriangleKdTree::TriangleList triangles;
+	for(std::vector<SceneGraph::ShapeNodePointer>::const_iterator sIt=meshFile.getShapes().begin();sIt!=meshFile.getShapes().end();++sIt)
+		{
+		/* Check if the shape node has an indexed face set as geometry: */
+		const SceneGraph::IndexedFaceSetNode* faceSet=dynamic_cast<const SceneGraph::IndexedFaceSetNode*>((*sIt)->geometry.getValue().getPointer());
+		if(faceSet!=0)
+			{
+			/* Extract the indexed face set node's triangles: */
+			const SceneGraph::MFPoint::ValueList& points=faceSet->coord.getValue()->point.getValues();
+			const SceneGraph::MFInt::ValueList& coordIndex=faceSet->coordIndex.getValues();
+			SceneGraph::MFInt::ValueList::const_iterator ciIt=coordIndex.begin();
+			while(ciIt!=coordIndex.end())
+				{
+				/* Find the end of the current face: */
+				SceneGraph::MFInt::ValueList::const_iterator faceEnd=ciIt;
+				while(faceEnd!=coordIndex.end()&&*faceEnd>=0)
+					++faceEnd;
+				
+				/* Triangulate the current face: */
+				if(faceEnd-ciIt>=3)
+					{
+					SceneGraph::MFInt::ValueList::const_iterator v1It=ciIt+1;
+					SceneGraph::MFInt::ValueList::const_iterator v2It=ciIt+2;
+					while(v2It!=faceEnd)
+						{
+						/* Add the triangle to the triangle set: */
+						triangles.push_back(TriangleKdTree::Triangle(points[*ciIt],points[*v1It],points[*v2It]));
+						
+						/* Go to the next triangle: */
+						v1It=v2It;
+						++v2It;
+						}
+					}
+				
+				/* Go to the next face: */
+				if(faceEnd!=coordIndex.end())
+					++faceEnd;
+				ciIt=faceEnd;
+				}
+			}
+		}
+	std::cout<<"Extracted "<<triangles.size()<<" triangles from input mesh file in "<<double(timer2.setAndDiff())*1000.0<<" ms"<<std::endl;
+	
+	/* Create a triangle kd-tree: */
+	Realtime::TimePointMonotonic timer3;
+	TriangleKdTree triangleTree(triangles);
+	triangleTree.createTree(meshBox,16);
+	std::cout<<"Created triangle kd-tree in "<<double(timer3.setAndDiff())*1000.0<<" ms"<<std::endl;
+	
+	/* Create a job for each of the grid's z slices and submit it to the worker pool: */
+	TriangleKdTree::Scalar maxDist2=Math::sqr(cellSize[0])+Math::sqr(cellSize[1])+Math::sqr(cellSize[2])*Math::sqr(TriangleKdTree::Scalar(2));
+	Threads::MutexCond completionCond;
+	int slicesComplete=0;
+	std::cout<<"Creating grid...   0%"<<std::flush;
+	Realtime::TimePointMonotonic timer4;
+	for(int z=0;z<numVertices[2];++z)
+		Vrui::submitJob(*new MeshSlicer(*grid,z,triangleTree,maxDist2,completionCond,slicesComplete));
+	
+	/* Wait until all slices are completed: */
+	{
+	Threads::MutexCond::Lock completionLock(completionCond);
+	while(slicesComplete<numVertices[2])
+		{
+		completionCond.wait(completionLock);
+		std::cout<<"\rCreating grid... "<<std::setw(3)<<(slicesComplete*100)/numVertices[2]<<'%'<<std::flush;
+		}
+	}
+	std::cout<<"\rCreated grid in "<<double(timer4.setAndDiff())*1000.0<<" ms"<<std::endl;
+	
+	Realtime::TimePointMonotonic timer5;
+	grid->invalidateVertices(EditableGrid::Index(0,0,0),grid->getNumVertices());
+	std::cout<<"Extracted initial surface in "<<double(timer5.setAndDiff())*1000.0<<" ms"<<std::endl;
+	
+	return result.releaseTarget();
+	}
+
 GridEditor::GridEditor(int& argc,char**& argv)
 	:Vrui::Application(argc,argv),
 	 grid(0),
@@ -555,165 +820,65 @@ GridEditor::GridEditor(int& argc,char**& argv)
 	 mainMenu(0)
 	{
 	/* Parse the command line: */
+	Misc::CommandLineParser parser;
+	parser.setDescription("Three-dimensional sculpting application based on a virtual clay metaphor.");
+	parser.setArguments("[<input file name>]","Sets the name of an input file, either a 3D distance field in .fvol or .sdf format, or a mesh file. If no input file name is given, an empty grid is created.");
+	std::vector<std::string> inputFileNames;
+	parser.addArgumentsToList(inputFileNames);
 	EditableGrid::Point newOrigin=EditableGrid::Point::origin;
+	parser.addArrayOption("origin","o",3,newOrigin.getComponents(),"<x> <y> <z>","Sets the origin of a newly-created grid. Default 0 0 0.");
+	EditableGrid::Size newCellSize(1,1,1);
+	parser.addArrayOption("cellSize","cs",3,newCellSize.getComponents(),"<cx> <cy> <cz>","Sets the cell size of a newly-created grid in some coordinate unit. Default 1 1 1.");
 	EditableGrid::Index newGridSize(256,256,256);
-	EditableGrid::Size newCellSize(1.0f,1.0f,1.0f);
-	const char* gridFileName=0;
-	for(int i=1;i<argc;++i)
+	parser.addArrayOption("gridSize","gs",3,newGridSize.getComponents(),"<sx> <sy> <sz>","Sets the size of a newly-created grid. Default 256 256 256.");
+	double resolutionScale=1.0;
+	parser.addValueOption("resolutionScale","rs",resolutionScale,"<resolution scale factor>","Scale factor to increase or decrase the number grid cells generated for mesh files. Default 1.0, generating approx. 256^3 grid cells.");
+	parser.parse(argv,argv+argc);
+	if(parser.hadHelp())
 		{
-		if(argv[i][0]=='-')
-			{
-			if(strcasecmp(argv[i]+1,"h")==0)
-				{
-				std::cout<<"Usage:"<<std::endl;
-				std::cout<<"  "<<argv[0]<<" [-gridSize <sx> <sy> <sz>] [-cellSize <cx> <cy> <cz>] [<grid file name>]"<<std::endl;
-				std::cout<<"Options:"<<std::endl;
-				std::cout<<"  -origin <x> <y> <z>"<<std::endl;
-				std::cout<<"    Origin point of grid. Defaults to (0, 0, 0)."<<std::endl;
-				std::cout<<"  -gridSize <sx> <sy> <sz>"<<std::endl;
-				std::cout<<"    Number of vertices for newly-created grids in x, y, and z. Defaults to 256 256 256."<<std::endl;
-				std::cout<<"  -cellSize <cx> <cy> <cz>"<<std::endl;
-				std::cout<<"    Grid cell dimensions for newly-created grids in x, y, and z in some arbitrary unit of measurement. Defaults to 1.0 1.0 1.0."<<std::endl;
-				std::cout<<"  <grid file name>"<<std::endl;
-				std::cout<<"    Name of a grid file (extension .fvol or .sdf) to load upon start-up. If not provided, a new grid will be created."<<std::endl;
-				}
-			else if(strcasecmp(argv[i]+1,"origin")==0)
-				{
-				if(i+3<argc)
-					{
-					/* Read the requested origin: */
-					for(int j=0;j<3;++j)
-						{
-						++i;
-						newOrigin[j]=float(atof(argv[i]));
-						}
-					}
-				else
-					{
-					std::cerr<<"Ignoring dangling -origin option"<<std::endl;
-					i=argc;
-					}
-				}
-			else if(strcasecmp(argv[i]+1,"gridSize")==0)
-				{
-				if(i+3<argc)
-					{
-					/* Read the requested size for new grids: */
-					for(int j=0;j<3;++j)
-						{
-						++i;
-						newGridSize[j]=atoi(argv[i]);
-						}
-					}
-				else
-					{
-					std::cerr<<"Ignoring dangling -gridSize option"<<std::endl;
-					i=argc;
-					}
-				}
-			else if(strcasecmp(argv[i]+1,"cellSize")==0)
-				{
-				if(i+3<argc)
-					{
-					/* Read the requested cell size for new grids: */
-					for(int j=0;j<3;++j)
-						{
-						++i;
-						newCellSize[j]=EditableGrid::Size::Scalar(atof(argv[i]));
-						}
-					}
-				else
-					{
-					std::cerr<<"Ignoring dangling -gridSize option"<<std::endl;
-					i=argc;
-					}
-				}
-			}
-		else if(gridFileName==0)
-			gridFileName=argv[i];
+		Vrui::shutdown();
+		return;
 		}
+	if(inputFileNames.size()>1)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"More than one input file name provided");
 	
-	if(gridFileName!=0)
+	/* Create the grid: */
+	if(!inputFileNames.empty())
 		{
-		try
+		if(Misc::hasCaseExtension(inputFileNames.front().c_str(),".fvol"))
 			{
-			/* Determine the type of grid file based on its extension: */
-			if(Misc::hasCaseExtension(gridFileName,".fvol"))
+			try
 				{
-				/* Load the grid from a float-valued vol file: */
-				IO::FilePtr volFile=IO::openFile(gridFileName);
-				volFile->setEndianness(Misc::BigEndian);
-				
-				/* Read the file header: */
-				EditableGrid::Index numVertices;
-				volFile->read(numVertices.getComponents(),3);
-				int borderSize=volFile->read<int>();
-				for(int i=0;i<3;++i)
-					numVertices[i]+=borderSize*2;
-				float domainSize[3];
-				volFile->read(domainSize,3);
-				EditableGrid::Size cellSize;
-				for(int i=0;i<3;++i)
-					cellSize[i]=domainSize[i]/float(numVertices[i]-borderSize*2-1);
-				
-				/* Create the grid: */
-				grid=new EditableGrid(newOrigin,numVertices,cellSize);
-				
-				/* Read all grid values: */
-				for(EditableGrid::Index i(0);i[0]<grid->getNumVertices(0);i.preInc(grid->getNumVertices()))
-					grid->setValue(i,volFile->read<float>());
-				grid->invalidateVertices(EditableGrid::Index(0,0,0),grid->getNumVertices());
+				/* Create a grid from a float-valued .vol file: */
+				grid=loadFvolFile(inputFileNames.front(),newOrigin);
 				}
-			else if(Misc::hasCaseExtension(gridFileName,".sdf"))
+			catch(const std::runtime_error& err)
 				{
-				/* Load the grid from a signed distance field in ASCII format: */
-				IO::ValueSource sdfFile(IO::openFile(gridFileName));
-				sdfFile.setWhitespace(" \t\r\n");
-				sdfFile.skipWs();
-				EditableGrid::Index numVertices;
-				for(int i=0;i<3;++i)
-					numVertices[i]=sdfFile.readUnsignedInteger();
-				EditableGrid::Point origin;
-				for(int i=0;i<3;++i)
-					origin[i]=float(sdfFile.readNumber());
-				EditableGrid::Size cellSize;
-				cellSize[2]=cellSize[1]=cellSize[0]=float(sdfFile.readNumber());
+				Misc::formattedUserError("Cannot load float-valued .vol input file %s due to exception %s",inputFileNames.front().c_str(),err.what());
 				
-				/* Create the grid: */
-				grid=new EditableGrid(origin,numVertices,cellSize);
-				
-				std::cout<<"Loading distance field with "<<numVertices[0]<<'x'<<numVertices[1]<<'x'<<numVertices[2]<<" cells"<<std::endl;
-				std::cout<<"Cell size "<<cellSize[0]<<'x'<<cellSize[1]<<'x'<<cellSize[2]<<std::endl;
-				std::cout<<"Domain box: ["<<grid->getBox().min<<", "<<grid->getBox().max<<"]"<<std::endl;
-				
-				/* Read all grid values: */
-				float minValue=Math::Constants<float>::max;
-				float maxValue=Math::Constants<float>::min;
-				EditableGrid::Index i;
-				for(i[2]=0;i[2]<numVertices[2];++i[2])
-					for(i[1]=0;i[1]<numVertices[1];++i[1])
-						for(i[0]=0;i[0]<numVertices[0];++i[0])
-							{
-							float value=float(sdfFile.readNumber());
-							if(minValue>value)
-								minValue=value;
-							if(maxValue<value)
-								maxValue=value;
-							grid->setValue(i,value+0.5f);
-							}
-				grid->invalidateVertices(EditableGrid::Index(0,0,0),grid->getNumVertices());
-				
-				std::cout<<"Signed distance field value range: ["<<minValue<<", "<<maxValue<<"]"<<std::endl;
+				/* Create a new grid instead: */
+				grid=new EditableGrid(newOrigin,newGridSize,newCellSize);
 				}
-			else
-				throw std::runtime_error("Unrecognized file extension");
 			}
-		catch(const std::runtime_error& err)
+		else if(Misc::hasCaseExtension(inputFileNames.front().c_str(),".sdf"))
 			{
-			std::cerr<<"Unable to load grid file "<<gridFileName<<" due to exception "<<err.what()<<std::endl;
-			
-			/* Create a new grid: */
-			grid=new EditableGrid(newOrigin,newGridSize,newCellSize);
+			try
+				{
+				/* Create a grid from a signed distance field in ASCII format: */
+				grid=loadSdfFile(inputFileNames.front());
+				}
+			catch(const std::runtime_error& err)
+				{
+				Misc::formattedUserError("Cannot load ASCII signed distance field input file %s due to exception %s",inputFileNames.front().c_str(),err.what());
+				
+				/* Create a new grid instead: */
+				grid=new EditableGrid(newOrigin,newGridSize,newCellSize);
+				}
+			}
+		else
+			{
+			/* Create a grid from a mesh file: */
+			grid=loadMeshFile(inputFileNames.front(),resolutionScale);
 			}
 		}
 	else

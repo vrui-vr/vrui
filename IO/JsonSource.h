@@ -1,6 +1,6 @@
 /***********************************************************************
 JsonSource - Class to retrieve JSON entities from JSON files.
-Copyright (c) 2018-2022 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef IO_JSONSOURCE_INCLUDED
 #define IO_JSONSOURCE_INCLUDED
 
+#include <string>
 #include <IO/File.h>
 #include <IO/ValueSource.h>
 #include <IO/JsonEntity.h>
@@ -33,6 +34,9 @@ class JsonSource
 	/* Elements: */
 	private:
 	IO::ValueSource file; // The underlying JSON file
+	
+	/* Private methods: */
+	std::string parseJsonString(void); // Parses a JSON string from the file; can't use ValueSource's readString method because JSON defines different escape sequences
 	
 	/* Constructors and destructors: */
 	public:

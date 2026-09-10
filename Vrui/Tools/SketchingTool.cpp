@@ -1,6 +1,6 @@
 /***********************************************************************
 SketchingTool - Tool to create and edit 3D curves.
-Copyright (c) 2009-2024 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -23,6 +23,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Tools/SketchingTool.h>
 
 #include <stdexcept>
+#include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Misc/SelfDestructArray.h>
 #include <Misc/StandardValueCoders.h>
@@ -587,9 +588,7 @@ SketchingTool::SketchingTool(const ToolFactory* sFactory,const ToolInputAssignme
 	/* Add the color buttons: */
 	for(int i=0;i<8;++i)
 		{
-		char colorButtonName[16];
-		snprintf(colorButtonName,sizeof(colorButtonName),"ColorButton%d",i);
-		GLMotif::NewButton* colorButton=new GLMotif::NewButton(colorButtonName,colorBox,GLMotif::Vector(ss->fontHeight,ss->fontHeight,0.0f));
+		GLMotif::NewButton* colorButton=new GLMotif::NewButton(Misc::stringPrintf("ColorButton%d",i).c_str(),colorBox,GLMotif::Vector(ss->fontHeight,ss->fontHeight,0.0f));
 		colorButton->setBackgroundColor(GLMotif::Color(colors[i]));
 		colorButton->getSelectCallbacks().add(this,&SketchingTool::colorButtonSelectCallback);
 		}
