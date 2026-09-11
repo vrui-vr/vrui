@@ -1,0 +1,79 @@
+We're finally doing it, boys, we're replacing Vrui's main loop!
+===============================================================
+
+This is where setup happens:
+----------------------------
+- Vrui.Workbench.cpp 185-216
+    int vruiEventPipe[2]={-1,-1}; -- Replace with RunLoop
+    int vruiCommandPipe=-1;
+    int vruiCommandPipeHolder=-1;
+    Threads::Mutex vruiFrameMutex;
+    Misc::FdSet vruiReadFdSet;
+    int vruiNumWindows=0;
+    VRWindow** vruiWindows=0;
+    int vruiNumWindowGroups=0;
+    VruiWindowGroup* vruiWindowGroups=0;
+    int vruiTotalNumWindows=0;
+    int vruiFirstLocalWindowIndex=0;
+    VRWindow** vruiTotalWindows=0;
+    Threads::Thread* vruiRenderingThreads=0;
+    Threads::Barrier vruiRenderingBarrier;
+    volatile bool vruiStopRenderingThreads=false;
+    Cluster::Multiplexer* vruiMultiplexer=0;
+    Cluster::MulticastPipe* vruiPipe=0;
+    int vruiNumSlaves=0;
+    volatile bool vruiAsynchronousShutdown=false;
+- Vrui.Workbench.cpp 1052-1058
+  - Do we actually need to set the pipe to non-blocking?
+    - Hold up, this is the internal pipe. It will be replaced
+- Vrui.Workbench.cpp 2347-2380
+  - Initialize file watchers
+
+This is where the actual main loop stuff happens:
+-------------------------------------------------
+- Vrui.Workbench.cpp 1850-1998
+  - vruiHandleAllEvents(bool allowBlocking)
+- Vrui.Workbench.cpp 2021-2214
+	- vruiInnerLoopMultiWindow()
+- Vrui.Workbench.cpp 2215-2306
+	- vruiInnerLoopSingleWindow()
+- Vrui.Workbench.cpp 2307-2458
+	- vruiMainLoop()
+- Vrui.Workbench.cpp 2614-2626
+  - requestUpdate()
+
+This is what we change:
+-----------------------
+
+- Integrate GLMotif click repeat into WidgetManager
+  - Centralize management of repeat intervals
+  - Centralize callback management
+  - Actual dispatch implemented by derived class?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+This is how it breaks client code:
+----------------------------------
+- SynchronousIOCallbackSlot and SynchronousIOCallbackList will no longer exist
+  - Vrui.Workbench.cpp 98-128
+	- Vrui.Workbench.cpp 2578-2613
+  - Replace with I/O watchers in client code
+  - Vrui.h 395-397
+		- addSynchronousIOCallback(...)
+		- removeSynchronousIOCallback(...)
+- Misc::TimerEventScheduler will no longer work
+  - Vrui.h 340-341
+    - getTimerEventScheduler()

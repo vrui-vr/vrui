@@ -8919,3 +8919,5 @@ Vrui-15.0-001:
   ability to load images from entire directory trees; replaced use of
   broken Images::TextureSet class.
 - Removed unused vruiFrameMutex from Vrui.Workbench.cpp.
+- Added initial versions of Threads::RingBufferLF and
+  Threads::WorkerBarrier classes.
