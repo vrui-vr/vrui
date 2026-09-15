@@ -8907,3 +8907,7 @@ Vrui-15.0-001:
 - Fixed recording device selection in Vrui::SoundContext.
   - Remove list of recording devices from vruiVerbose output; instead,
     print list if the configured recording device does not exist.
+- Added a Scalar typedef to Math::Matrix to make the class interoperable
+  with transformation classes in the Geometry library.
+- Also added Math::Matrix::getSubMatrix method to extract regions from
+  larger matrices.
