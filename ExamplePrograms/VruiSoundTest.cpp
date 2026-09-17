@@ -234,7 +234,7 @@ void VruiSoundTest::initContext(ALContextData& contextData) const
 	if(!wavFileName.empty())
 		{
 		/* Open the WAV file and access its sound data format: */
-		Sound::WAVFile wav(IO::openFile(wavFileName.c_str()));
+		Sound::WAVFile wav(*IO::openFile(wavFileName.c_str()));
 		const Sound::SoundDataFormat& format=wav.getFormat();
 		
 		/* Create a mono sound buffer matching the file's sample format: */

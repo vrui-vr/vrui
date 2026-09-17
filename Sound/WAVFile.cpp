@@ -66,8 +66,8 @@ void WAVFile::writeWAVHeader(size_t numAudioFrames)
 	file->write<Misc::UInt32>(dataChunkSize);
 	}
 
-WAVFile::WAVFile(IO::FilePtr sFile)
-	:file(std::move(sFile))
+WAVFile::WAVFile(IO::File& sFile)
+	:file(&sFile)
 	{
 	/* Check if the file is opened for reading: */
 	if(file->getReadBufferSize()==0)
@@ -152,8 +152,8 @@ WAVFile::WAVFile(IO::FilePtr sFile)
 	numAudioFrames=numPresetAudioFrames;
 	}
 
-WAVFile::WAVFile(IO::FilePtr sFile,const SoundDataFormat& sFormat)
-	:file(std::move(sFile)),
+WAVFile::WAVFile(IO::File& sFile,const SoundDataFormat& sFormat)
+	:file(&sFile),
 	 format(sFormat),
 	 bytesPerFrame(size_t(format.samplesPerFrame)*size_t(format.bytesPerSample)),
 	 numPresetAudioFrames(0),numAudioFrames(0)
@@ -170,8 +170,8 @@ WAVFile::WAVFile(IO::FilePtr sFile,const SoundDataFormat& sFormat)
 	file->flush();
 	}
 
-WAVFile::WAVFile(IO::FilePtr sFile,const SoundDataFormat& sFormat,size_t sNumPresetAudioFrames)
-	:file(std::move(sFile)),
+WAVFile::WAVFile(IO::File& sFile,const SoundDataFormat& sFormat,size_t sNumPresetAudioFrames)
+	:file(&sFile),
 	 format(sFormat),
 	 bytesPerFrame(size_t(format.samplesPerFrame)*size_t(format.bytesPerSample)),
 	 numPresetAudioFrames(sNumPresetAudioFrames),numAudioFrames(0)

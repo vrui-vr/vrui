@@ -8915,3 +8915,5 @@ Vrui-15.0-001:
   to avoid redundant ref/unref cycles when passing pointers around.
   - Use std::move in construction of many classes that contain
     Misc::Autopointer elements.
+- API change: Replaced IO::FilePtr with IO::File& in Sound::WAVFile
+  constructors.

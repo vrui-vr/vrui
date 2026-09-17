@@ -501,7 +501,7 @@ VruiSoundConfig::VruiSoundConfig(int& argc,char**& argv)
 	#if SOUND_CONFIG_HAVE_ALSA
 	
 	/* Open a sound file: */
-	Sound::WAVFile soundFile(IO::openFile(soundFileName));
+	Sound::WAVFile soundFile(*IO::openFile(soundFileName));
 	soundFormat=soundFile.getFormat();
 	soundBytesPerFrame=soundFormat.samplesPerFrame*soundFormat.bytesPerSample;
 	soundNumFrames=soundFile.getNumAudioFrames();

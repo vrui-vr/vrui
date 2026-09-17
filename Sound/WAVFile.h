@@ -1,7 +1,7 @@
 /***********************************************************************
 WAVFile - Class to read from or write to audio files in WAV format using
 an IO::File abstraction.
-Copyright (c) 2019-2020 Oliver Kreylos
+Copyright (c) 2019-2026 Oliver Kreylos
 
 This file is part of the Basic Sound Library (Sound).
 
@@ -44,9 +44,9 @@ class WAVFile
 	
 	/* Constructors and destructors: */
 	public:
-	WAVFile(IO::FilePtr sFile); // Creates a read-only WAV file representation for the given underlying file object, which must be opened for reading
-	WAVFile(IO::FilePtr sFile,const SoundDataFormat& sFormat); // Creates a write-only WAV file representation for the given underlying file object, which must be seekable and opened for writing
-	WAVFile(IO::FilePtr sFile,const SoundDataFormat& sFormat,size_t sNumPresetAudioFrames); // Creates a write-only WAV file representation for the given underlying file object and the known number of audio frames
+	WAVFile(IO::File& sFile); // Creates a read-only WAV file representation for the given underlying file object, which must be opened for reading
+	WAVFile(IO::File& sFile,const SoundDataFormat& sFormat); // Creates a write-only WAV file representation for the given underlying file object, which must be seekable and opened for writing
+	WAVFile(IO::File& sFile,const SoundDataFormat& sFormat,size_t sNumPresetAudioFrames); // Creates a write-only WAV file representation for the given underlying file object and the known number of audio frames
 	~WAVFile(void); // Finishes writing a WAV file opened for writing and closes the file
 	
 	/* Methods: */
