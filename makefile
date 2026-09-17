@@ -556,7 +556,8 @@ EXECUTABLES += $(EXEDIR)/PrintInputDeviceDataFile
 # The Vrui calibration utilities:
 #
 
-EXECUTABLES += $(EXEDIR)/TransformCalculator \
+EXECUTABLES += $(EXEDIR)/TableSaw \
+               $(EXEDIR)/TransformCalculator \
                $(EXEDIR)/XBackground \
                $(EXEDIR)/MeasureEnvironment \
                $(EXEDIR)/ScreenCalibrator \
@@ -2272,6 +2273,15 @@ UTILITIES_SOURCES = $(wildcard Vrui/Utilities/*.cpp) \
                     $(wildcard Calibration/*.cpp) \
 
 $(UTILITIES_SOURCES:%.cpp=$(OBJDIR)/%.o): | $(DEPDIR)/config
+
+#
+# Utility to do calculations on tables loaded from CSV files:
+#
+
+$(EXEDIR)/TableSaw: PACKAGES += MYIO MYMISC
+$(EXEDIR)/TableSaw: $(OBJDIR)/Vrui/Utilities/TableSaw.o
+.PHONY: TableSaw
+TableSaw: $(EXEDIR)/TableSaw
 
 #
 # Utility to concatenate orthogonal transformations:

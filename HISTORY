@@ -8917,3 +8917,4 @@ Vrui-15.0-001:
     Misc::Autopointer elements.
 - API change: Replaced IO::FilePtr with IO::File& in Sound::WAVFile
   constructors.
+- Added TableSaw to Vrui utilities.
