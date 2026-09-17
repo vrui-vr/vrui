@@ -8911,3 +8911,7 @@ Vrui-15.0-001:
   with transformation classes in the Geometry library.
 - Also added Math::Matrix::getSubMatrix method to extract regions from
   larger matrices.
+- Added move constructors and assignment operators to Misc::Autopointer
+  to avoid redundant ref/unref cycles when passing pointers around.
+  - Use std::move in construction of many classes that contain
+    Misc::Autopointer elements.

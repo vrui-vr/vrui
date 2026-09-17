@@ -1,7 +1,7 @@
 /***********************************************************************
 IFFChunk - Class to represent component chunks of IFF (Interchange File
 Format) as read-only File abstractions.
-Copyright (c) 2011-2024 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -50,7 +50,7 @@ size_t IFFChunk::readData(File::Byte* buffer,size_t bufferSize)
 
 IFFChunk::IFFChunk(FilePtr sSource,bool subChunk)
 	:File(),
-	 source(sSource)
+	 source(std::move(sSource))
 	{
 	/* Read the chunk ID: */
 	source->read(chunkId,4);

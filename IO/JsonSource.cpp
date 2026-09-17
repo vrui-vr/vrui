@@ -1,6 +1,6 @@
 /***********************************************************************
 JsonSource - Class to retrieve JSON entities from JSON files.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -193,7 +193,7 @@ JsonSource::JsonSource(const char* fileName)
 	}
 
 JsonSource::JsonSource(FilePtr sFile)
-	:file(sFile)
+	:file(std::move(sFile))
 	{
 	/* Set up the JSON file syntax: */
 	file.setWhitespace('\n',true);

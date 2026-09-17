@@ -1,6 +1,6 @@
 /***********************************************************************
 ValueSource - Class to read strings or numbers from files.
-Copyright (c) 2009-2022 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -122,7 +122,7 @@ char ValueSource::processEscape(void)
 	}
 
 ValueSource::ValueSource(FilePtr sSource)
-	:source(sSource),
+	:source(std::move(sSource)),
 	 cc(characterClasses+1),
 	 escapeChar(-1)
 	{

@@ -1,7 +1,7 @@
 /***********************************************************************
 Directory - Base class to access directory-like objects in a generic
 fashion.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -138,7 +138,7 @@ Directory::~Directory(void)
 
 void Directory::setCurrent(DirectoryPtr newCurrentDirectory)
 	{
-	currentDirectory=newCurrentDirectory;
+	currentDirectory=std::move(newCurrentDirectory);
 	}
 
 std::string Directory::createNumberedFileName(const char* fileNameTemplate,int numDigits)

@@ -1,6 +1,6 @@
 /***********************************************************************
 OStream - Class to layer a std::ostream over an IO::File.
-Copyright (c) 2015 Oliver Kreylos
+Copyright (c) 2015-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -80,7 +80,7 @@ int OStream::FileBuf::overflow(int c)
 	}
 
 OStream::FileBuf::FileBuf(IO::FilePtr sFile)
-	:file(sFile)
+	:file(std::move(sFile))
 	{
 	/* Set up the streambuf's buffer pointers: */
 	void* buffer;
@@ -104,7 +104,7 @@ Methods of class OStream:
 
 OStream::OStream(IO::FilePtr file)
 	:std::ostream(0),
-	 fb(file)
+	 fb(std::move(file))
 	{
 	/* Set the ostream object's stream buffer: */
 	rdbuf(&fb);

@@ -1,7 +1,7 @@
 /***********************************************************************
 ReadAheadFilter - Class to add background read-ahead to other IO::File
 abstractions to improve read throughput.
-Copyright (c) 2011-2018 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -115,7 +115,7 @@ void* ReadAheadFilter::readAheadThreadMethod(void)
 
 ReadAheadFilter::ReadAheadFilter(FilePtr sSource)
 	:File(),
-	 source(sSource),
+	 source(std::move(sSource)),
 	 halfBufferSize(Misc::max(source->getReadBufferSize(),size_t(8192))),
 	 inBuffer(1),outBuffer(1),numFullBuffers(0),
 	 haveReadOnce(false)

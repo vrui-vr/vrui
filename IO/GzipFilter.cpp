@@ -1,7 +1,7 @@
 /***********************************************************************
 GzipFilter - Class for read/write access to gzip-compressed files using
 a IO::File abstraction.
-Copyright (c) 2011-2024 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -225,7 +225,7 @@ void GzipFilter::init(void)
 
 GzipFilter::GzipFilter(FilePtr sGzippedFile)
 	:File(),
-	 gzippedFile(sGzippedFile),
+	 gzippedFile(std::move(sGzippedFile)),
 	 readEof(false)
 	{
 	init();
