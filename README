@@ -70,6 +70,7 @@ Recommended:
 * libtiff      (library to read/write TIFF images)
 * alsa-lib     (low-level sound library)
 * pulseaudio   (distributed sound server library)
+* opus         (low-latency and high-quality audio compression library)
 * openal-soft  (OpenAL 3D audio library)
 * libv4l       (Video4Linux2, user-space video capture library)
 * libfreetype  (Outline font processor)
