@@ -8918,3 +8918,8 @@ Vrui-15.0-001:
 - API change: Replaced IO::FilePtr with IO::File& in Sound::WAVFile
   constructors.
 - Added TableSaw to Vrui utilities.
+- Replaced all uses of Threads::Atomic class with std::atomic and deemed
+  Threads::Atomic obsolete and deprecated.
+  - Also improved all uses of atomic variables by selecting the least
+    restrictive C++ memory ordering possible.
+    - It's only been 15 years since C++11 came out...

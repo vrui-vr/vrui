@@ -1,7 +1,7 @@
 /***********************************************************************
 RefCountedArray - Generic class for fixed-size arrays with copy-on-write
 sharing and automatic garbage collection. Thread-safe version.
-Copyright (c) 2010-2015 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Portable Threading Library (Threads).
 
@@ -55,6 +55,8 @@ void
 RefCountedArray<ElementParam>::destroy(
 	typename RefCountedArray<ElementParam>::Header* header)
 	{
+	std::atomic_thread_fence(std::memory_order_acquire);
+	
 	/* Destruct the elements in-place, in case they have custom destructors: */
 	for(size_t i=0;i<header->size;++i)
 		header->elements[i].~Element();
@@ -73,7 +75,7 @@ RefCountedArray<ElementParam>::modify(
 	void)
 	{
 	/* Bail out if the array is already private: */
-	if(header->refCount.get()==1)
+	if(header->refCount.load(std::memory_order_relaxed)==1)
 		return;
 	
 	/* Allocate a bare memory block of the required size: */

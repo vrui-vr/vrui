@@ -1,7 +1,7 @@
 /***********************************************************************
 DoubleBuffer - Class for lock-free atomic transmission of data between a
 single writer and any number of readers through a double buffer.
-Copyright (c) 2014-2022 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This file is part of the Portable Threading Library (Threads).
 
@@ -23,10 +23,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef THREADS_DOUBLEBUFFER_INCLUDED
 #define THREADS_DOUBLEBUFFER_INCLUDED
 
-#include <Threads/Config.h>
-#if !THREADS_CONFIG_HAVE_BUILTIN_ATOMICS
-#include <Threads/Spinlock.h>
-#endif
+#include <atomic>
 
 namespace Threads {
 
@@ -39,10 +36,7 @@ class DoubleBuffer
 	
 	/* Elements: */
 	private:
-	#if !THREADS_CONFIG_HAVE_BUILTIN_ATOMICS
-	Spinlock mutex; // Busy-wait (if available) mutual exclusion semaphore protecting the counter
-	#endif
-	unsigned int counter; // A counter to protect non-atomic updates of the shared data
+	std::atomic<unsigned int> counter; // A counter to protect non-atomic updates of the shared data
 	Data data[2]; // A double buffer of shared data values to prevent long read times when writes are slow or interrupted; the counter's LSB determines which buffer half contains readable data
 	
 	/* Constructors and destructors: */
@@ -60,48 +54,23 @@ class DoubleBuffer
 	/* Writer-side methods: */
 	const Data& readBack(void) const // Allows writer to read back the most recently written data
 		{
-		return data[counter&0x1U];
+		return data[counter.load(std::memory_order_relaxed)&0x1U];
 		}
 	Data& startWrite(void) // Returns the buffer half not currently used by readers
 		{
-		#if THREADS_CONFIG_HAVE_BUILTIN_ATOMICS
-		return data[(~__atomic_load_n(&counter,__ATOMIC_ACQUIRE))&0x1U];
-		#else
-		Spinlock::Lock lock(mutex);
-		return data[(~counter)&0x1U];
-		#endif
+		return data[(~counter.load(std::memory_order_acquire))&0x1U];
 		}
 	void finishWrite(void) // Updates the double buffer after the writer has written into the buffer half not currently used by readers
 		{
-		/* Increment the counter to invalidate previous data and flip the readable buffer half: */
-		#if THREADS_CONFIG_HAVE_BUILTIN_ATOMICS
-		__atomic_add_fetch(&counter,1,__ATOMIC_RELEASE);
-		#else
-		Spinlock::Lock lock(mutex);
-		++counter;
-		#endif
+		counter.fetch_add(1,std::memory_order_release);
 		}
 	void write(const Data& newData) // Atomically writes the given data into the double buffer
 		{
 		/* Write the given data into the buffer half not currently used by readers: */
-		#if THREADS_CONFIG_HAVE_BUILTIN_ATOMICS
-		data[(~__atomic_load_n(&counter,__ATOMIC_ACQUIRE))&0x1U]=newData;
-		#else
-		{
-		Spinlock::Lock lock(mutex);
-		data[(~counter)&0x1U]=newData;
-		}
-		#endif
+		data[(~counter.load(std::memory_order_relaxed))&0x1U]=newData;
 		
 		/* Increment the counter to invalidate previous data and flip the readable buffer half: */
-		#if THREADS_CONFIG_HAVE_BUILTIN_ATOMICS
-		__atomic_add_fetch(&counter,1,__ATOMIC_RELEASE);
-		#else
-		{
-		Spinlock::Lock lock(mutex);
-		++counter;
-		}
-		#endif
+		counter.fetch_add(1,std::memory_order_release);
 		}
 	
 	/* Reader-side methods: */
@@ -112,27 +81,13 @@ class DoubleBuffer
 		do
 			{
 			/* Read the counter to determine which buffer half contains readable data: */
-			#if THREADS_CONFIG_HAVE_BUILTIN_ATOMICS
-			counter0=__atomic_load_n(&counter,__ATOMIC_ACQUIRE);
-			#else
-			{
-			Spinlock::Lock lock(mutex);
-			counter0=counter;
-			}
-			#endif
+			counter0=counter.load(std::memory_order_acquire);
 			
 			/* Copy the readable buffer half into the result: */
 			readData=data[counter0&0x1U];
 			
 			/* Read the counter again to detect changes during the read: */
-			#if THREADS_CONFIG_HAVE_BUILTIN_ATOMICS
-			counter1=__atomic_load_n(&counter,__ATOMIC_ACQUIRE);
-			#else
-			{
-			Spinlock::Lock lock(mutex);
-			counter1=counter;
-			}
-			#endif
+			counter1=counter.load(std::memory_order_acquire);
 			}
 		while(counter0!=counter1);
 		

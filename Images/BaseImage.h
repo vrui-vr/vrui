@@ -2,7 +2,7 @@
 BaseImage - Generic base class to represent images of arbitrary pixel
 formats. The image coordinate system is such that pixel (0,0) is in the
 lower-left corner.
-Copyright (c) 2016-2023 Oliver Kreylos
+Copyright (c) 2016-2026 Oliver Kreylos
 
 This file is part of the Image Handling Library (Images).
 
@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define IMAGES_BASEIMAGE_INCLUDED
 
 #include <stddef.h>
-#include <Threads/Atomic.h>
+#include <atomic>
 #include <GL/gl.h>
 #include <Images/Types.h>
 
@@ -44,7 +44,7 @@ class BaseImage
 		{
 		/* Elements: */
 		public:
-		Threads::Atomic<unsigned int> refCount; // Number of Image objects referencing this representation
+		std::atomic<unsigned int> refCount; // Number of Image objects referencing this representation
 		Size size; // Image size (width, height)
 		unsigned int numChannels; // Number of interleaved channels in the image
 		unsigned int channelSize; // Storage size of one pixel component in bytes
@@ -60,13 +60,16 @@ class BaseImage
 		/* Methods: */
 		ImageRepresentation* attach(void)
 			{
-			refCount.preAdd(1);
+			refCount.fetch_add(1,std::memory_order_relaxed);
 			return this;
 			}
 		void detach(void)
 			{
-			if(refCount.preSub(1)==0)
+			if(refCount.fetch_sub(1,std::memory_order_release)==1)
+				{
+				std::atomic_thread_fence(std::memory_order_acquire);
 				delete this;
+				}
 			}
 		};
 	
@@ -79,7 +82,7 @@ class BaseImage
 	void ownRepresentation(bool copyPixels) // Ensures that image representation is not shared; copies current pixels if flag is true
 		{
 		/* Copy the image representation if it is shared: */
-		if(rep->refCount.get()>1U)
+		if(rep->refCount.load(std::memory_order_relaxed)>1)
 			{
 			ImageRepresentation* newRep=copyPixels?new ImageRepresentation(*rep):new ImageRepresentation(rep->size,rep->numChannels,rep->channelSize,rep->format,rep->scalarType);
 			rep->detach();

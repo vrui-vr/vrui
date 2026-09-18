@@ -26,8 +26,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef THREADS_OWNABLE_INCLUDED
 #define THREADS_OWNABLE_INCLUDED
 
+#include <atomic>
 #include <Misc/Autopointer.h>
-#include <Threads/Atomic.h>
 
 namespace Threads {
 
@@ -35,7 +35,7 @@ class Ownable
 	{
 	/* Elements: */
 	private:
-	Atomic<unsigned int> refCount; // Current number of references to this object held by pointers of any type
+	std::atomic<unsigned int> refCount; // Current number of references to this object held by pointers of any type
 	bool owned; // Flag if the object currently has an owner
 	
 	/* Protected methods: */
@@ -66,13 +66,16 @@ class Ownable
 	void ref(void) // Method called when a non-owning pointer starts referencing this object
 		{
 		/* Increment the reference counter: */
-		refCount.preAdd(1);
+		refCount.fetch_add(1,std::memory_order_relaxed);
 		}
 	void unref(void) // Method called when a non-owning autopointer stops referencing this object; destroys this object when the reference count reaches zero
 		{
 		/* Decrement the reference counter, and delete this object if the count reached zero: */
-		if(refCount.preSub(1)==0)
+		if(refCount.fetch_sub(1,std::memory_order_release)==1)
+			{
+			std::atomic_thread_fence(std::memory_order_acquire);
 			delete this;
+			}
 		}
 	bool isOwned(void) const // Returns true if this object has an owner
 		{
@@ -84,7 +87,7 @@ class Ownable
 		// owned=true; This is actually a no-op; we don't need to know when an object was owned, only when it was disowned
 		
 		/* Increment the reference counter: */
-		refCount.preAdd(1);
+		refCount.fetch_add(1,std::memory_order_relaxed);
 		}
 	void disown(void) // Method called when an ownership-establishing pointer stops referencing this object
 		{
@@ -95,8 +98,11 @@ class Ownable
 		disowned();
 		
 		/* Decrement the reference counter, and delete this object if the count reached zero: */
-		if(refCount.preSub(1)==0)
+		if(refCount.fetch_sub(1,std::memory_order_release)==1)
+			{
+			std::atomic_thread_fence(std::memory_order_acquire);
 			delete this;
+			}
 		}
 	};
 
