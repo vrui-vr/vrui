@@ -84,8 +84,11 @@ class TripleBuffer
 		Misc::UInt8 bs,newBs;
 		do
 			{
+			/* Read the current buffer state from shared memory: */
+			bs=bufferState.load(std::memory_order_acquire);
+			
 			/* Swap the most recent and available buffer indices and set the written flag to true: */
-			Misc::UInt8 newBs=writtenMask|(bs&lockedMask)|((bs&mostRecentMask)>>2)|((bs&availableMask)<<2);
+			newBs=writtenMask|(bs&lockedMask)|((bs&mostRecentMask)>>2)|((bs&availableMask)<<2);
 			
 			/* Try writing the new buffer state to shared memory and try again if it did not succeed: */
 			}
