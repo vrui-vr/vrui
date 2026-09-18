@@ -8923,3 +8923,5 @@ Vrui-15.0-001:
   - Also improved all uses of atomic variables by selecting the least
     restrictive C++ memory ordering possible.
     - It's only been 15 years since C++11 came out...
+- Added Threads::LockFreeRingBuffer for high-performance and low-latency
+  streaming between a single producer and a single consumer of data.
