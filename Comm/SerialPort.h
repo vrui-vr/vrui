@@ -1,7 +1,7 @@
 /***********************************************************************
 SerialPort - Class for high-performance reading/writing from/to serial
 ports.
-Copyright (c) 2001-2015 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -59,6 +59,7 @@ class SerialPort:public Comm::Pipe
 	
 	/* Methods from IO::File: */
 	virtual int getFd(void) const;
+	virtual Threads::IOWatcher* watch(Threads::RunLoop& runLoop,unsigned int eventMask,bool enabled,Threads::IOWatcherEventHandler& eventHandler);
 	
 	/* Methods from Pipe: */
 	virtual bool waitForData(void) const;

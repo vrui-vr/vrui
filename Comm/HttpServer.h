@@ -28,7 +28,9 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <vector>
 #include <Misc/Autopointer.h>
 #include <Misc/SimpleObjectSet.h>
-#include <Threads/RunLoop.h>
+#include <Threads/EventTypes.h>
+#include <Threads/IOWatcher.h>
+#include <Threads/Timer.h>
 #include <Comm/Pipe.h>
 #include <Comm/ListeningSocket.h>
 
@@ -36,6 +38,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
+class RunLoop;
 }
 namespace IO {
 class JsonEntity;
@@ -104,9 +107,9 @@ class HttpServer
 		// DEBUGGING
 		std::string peerName; // Name of the connection's peer
 		
-		Threads::RunLoop::IOWatcherOwner pipeWatcher; // I/O watcher for the pipe
+		Threads::IOWatcherOwner pipeWatcher; // I/O watcher for the pipe
 		bool eventSink; // Flag if this connection can be used to send server-sent events to a client
-		Threads::RunLoop::TimerOwner stillAliveTimer; // Timer to send "I'm still alive" events on a connection marked as an event sink
+		Threads::TimerOwner stillAliveTimer; // Timer to send "I'm still alive" events on a connection marked as an event sink
 		State state; // Current state of this connection
 		HttpRequestHeader* requestHeader; // Pointer to an HTTP request header currently being read from the connection
 		RequestParameter parameter; // The currently parsed parameter in an HTTP POST request's body
@@ -117,8 +120,8 @@ class HttpServer
 		void close(void); // Closes the connection immediately
 		bool processRequest(bool valid); // Processes a complete valid or invalid HTTP request; returns true if the I/O callback needs to bail out immediately
 		bool ignoreRequest(void); // Ignores the current HTTP request; returns true if the I/O callback needs to bail out immediately
-		void pipeCallback(Threads::RunLoop::IOWatcher::Event& event); // Callback called when data can be read from and/or written to the pipe
-		void stillAliveCallback(Threads::RunLoop::Timer::Event& event); // Callback called when an "I'm still alive" event is due on a connection marked as an event sink
+		void pipeCallback(Threads::IOWatcherEvent& event); // Callback called when data can be read from and/or written to the pipe
+		void stillAliveCallback(Threads::TimerEvent& event); // Callback called when an "I'm still alive" event is due on a connection marked as an event sink
 		
 		/* Constructors and destructors: */
 		public:
@@ -131,13 +134,13 @@ class HttpServer
 	/* Elements: */
 	Threads::RunLoop& runLoop; // Reference to a run loop handling I/O on the listening socket and all active connections
 	ListeningSocketPtr listenSocket; // Socket listening for incoming HTTP connections
-	Threads::RunLoop::IOWatcherOwner listenSocketWatcher; // I/O watcher for the HTTP listening socket
+	Threads::IOWatcherOwner listenSocketWatcher; // I/O watcher for the HTTP listening socket
 	Misc::SimpleObjectSet<Connection> connections; // List of currently active HTTP connections
-	Threads::RunLoop::Interval stillAliveInterval; // Interval at which to send "I'm still alive" messages on client connections marked as event sinks
+	Threads::EventInterval stillAliveInterval; // Interval at which to send "I'm still alive" messages on client connections marked as event sinks
 	Misc::Autopointer<PostRequestHandler> postRequestHandler; // Pointer to a handler for complete HTTP POST requests
 	
 	/* Private methods: */
-	void listenSocketCallback(Threads::RunLoop::IOWatcher::Event& event); // Callback called when a new connection is available on the HTTP listening socket
+	void listenSocketCallback(Threads::IOWatcherEvent& event); // Callback called when a new connection is available on the HTTP listening socket
 	
 	/* Constructors and destructors: */
 	public:
@@ -146,7 +149,7 @@ class HttpServer
 	
 	/* Methods: */
 	int getPort(void) const; // Returns the TCP port on which the HTTP server is listening for incoming connections
-	void setStillAliveInterval(const Threads::RunLoop::Interval newStillAliveInterval); // Sets the interval at which to send "I'm still alive" events on all client connections registered to receive events; an interval of 0 disables events
+	void setStillAliveInterval(const Threads::EventInterval newStillAliveInterval); // Sets the interval at which to send "I'm still alive" events on all client connections registered to receive events; an interval of 0 disables events
 	void setPostRequestHandler(PostRequestHandler& newPostRequestHandler); // Sets the function to be called to handle complete HTTP POST requests
 	void sendEvent(const char* eventName,const IO::JsonEntity& eventData); // Sends an event of the given name with the given JSON payload to all clients that registered to receive events
 	};

@@ -1,6 +1,6 @@
 /***********************************************************************
 Matrix - Class to represent double-valued matrices of dynamic sizes.
-Copyright (c) 2000-2017 Oliver Kreylos
+Copyright (c) 2000-2026 Oliver Kreylos
 
 This file is part of the Templatized Math Library (Math).
 
@@ -225,6 +225,15 @@ Matrix::Matrix(unsigned int sNumRows,unsigned int sNumColumns,double sDiag)
 	for(unsigned int i=0;i<numRows;++i)
 		for(unsigned int j=0;j<numColumns;++j,++mPtr)
 			*mPtr=i==j?sDiag:0.0;
+	}
+
+Matrix Matrix::getSubMatrix(unsigned int subNumRows,unsigned int subNumColumns,unsigned int row0,unsigned int column0) const
+	{
+	Matrix result(subNumRows,subNumColumns);
+	for(unsigned int i=0;i<subNumRows;++i)
+		for(unsigned int j=0;j<subNumColumns;++j)
+			result(i,j)=m[(row0+i)*numColumns+(column0+j)];
+	return result;
 	}
 
 Matrix Matrix::getRow(unsigned int rowIndex) const

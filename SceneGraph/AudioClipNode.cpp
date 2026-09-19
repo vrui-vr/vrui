@@ -1,6 +1,6 @@
 /***********************************************************************
 AudioClipNode - Class for audio clips that can be played by Sound nodes.
-Copyright (c) 2021-2024 Oliver Kreylos
+Copyright (c) 2021-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -295,7 +295,7 @@ ALuint AudioClipNode::getBufferObject(ALRenderState& renderState) const
 			if(soundFileFormat==0)
 				{
 				/* Read the sound file as aWAV file: */
-				Sound::WAVFile wav(soundFile->getReader());
+				Sound::WAVFile wav(*soundFile->getReader());
 				
 				/* Check if the WAV file's sound format is OpenAL-compatible: */
 				const Sound::SoundDataFormat& sdf=wav.getFormat();

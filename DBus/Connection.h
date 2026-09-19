@@ -23,7 +23,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #define DBUS_CONNECTION_INCLUDED
 
 #include <string>
-#include <Threads/RunLoop.h>
 #include <dbus/dbus.h>
 #include <DBus/Message.h>
 
@@ -32,6 +31,7 @@ namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 class RunLoop;
+class ProcessFunction;
 }
 namespace DBus {
 class PendingCall;
@@ -61,7 +61,7 @@ class Connection
 	static void removeTimeoutFunction(DBusTimeout* timeout,void* data);
 	static void timeoutToggledFunction(DBusTimeout* timeout,void* data);
 	static void wakeupMainFunction(void* data);
-	static void dispatchFunction(Threads::RunLoop::ProcessFunction& processFunction,DBusConnection* connection);
+	static void dispatchFunction(Threads::ProcessFunction& processFunction,DBusConnection* connection);
 	static void dispatchStatusFunction(DBusConnection* connection,DBusDispatchStatus newStatus,void* data);
 	static DBusHandlerResult filterFunction(DBusConnection* connection,DBusMessage* message,void* userData); // Trampoline to call user-defined message handlers
 	static void replyNotifyFunction(DBusPendingCall* pendingCall,void* userData); // Trampoline to call user-defined messsage reply handlers

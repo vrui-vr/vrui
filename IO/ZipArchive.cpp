@@ -2,7 +2,7 @@
 ZipArchive - Class to represent ZIP archive files, with functionality to
 traverse contained directory hierarchies and extract files using a File
 interface.
-Copyright (c) 2011-2024 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -961,7 +961,7 @@ ZipArchive::ZipArchive(const char* archiveFileName)
 	}
 
 ZipArchive::ZipArchive(SeekableFilePtr sArchive)
-	:archive(sArchive),
+	:archive(std::move(sArchive)),
 	 root(0)
 	{
 	/* Initialize the archive and handle errors: */

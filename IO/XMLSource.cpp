@@ -1249,7 +1249,7 @@ void XMLSource::processElement(XMLSource::Processor& processor)
 	}
 
 XMLSource::XMLSource(FilePtr sSource)
-	:source(sSource),
+	:source(std::move(sSource)),
 	 readNextChar(UTF8::read),
 	 charBufferSize(32),charBuffer(new int[charBufferSize]),
 	 cbEnd(charBuffer+charBufferSize/2),cbNext(charBuffer+charBufferSize/2),

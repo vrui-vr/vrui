@@ -30,12 +30,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Misc/HashTable.h>
 #include <Threads/Mutex.h>
 #include <Threads/Thread.h>
-#include <Threads/RunLoop.h>
+#include <Threads/IOWatcher.h>
 
 /* Forward declarations: */
 namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
+class RunLoop;
 }
 
 namespace IO {
@@ -112,11 +113,11 @@ class FileMonitor
 	size_t eventBufferSize; // Size of the current event buffer
 	char* eventBuffer; // Current event buffer
 	Threads::Thread* eventHandlingThread; // Background thread receiving monitoring events from the OS and dispatching callbacks to clients
-	Threads::RunLoop::IOWatcherOwner ioWatcher; // I/O watcher for the file monitor's file descriptor registered with a run loop
+	Threads::IOWatcherOwner ioWatcher; // I/O watcher for the file monitor's file descriptor registered with a run loop
 	
 	/* Private methods: */
 	void* eventHandlingThreadMethod(void); // Method for the background event handling thread
-	void processEventsCallback(Threads::RunLoop::IOWatcher::Event& event); // Event handler called from a run loop
+	void processEventsCallback(Threads::IOWatcherEvent& event); // Event handler called from a run loop
 	
 	/* Constructors and destructors: */
 	public:

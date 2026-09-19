@@ -1,7 +1,7 @@
 /***********************************************************************
 TLSPipe - Class to represent a TLS-secured TCP connection to a remote
 server.
-Copyright (c) 2019-2024 Oliver Kreylos
+Copyright (c) 2019-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -30,6 +30,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StdError.h>
 #include <Misc/FdSet.h>
 #include <Threads/Mutex.h>
+#include <Threads/IOWatcher.h>
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
@@ -281,6 +282,12 @@ TLSPipe::~TLSPipe(void)
 int TLSPipe::getFd(void) const
 	{
 	return fd;
+	}
+
+Threads::IOWatcher* TLSPipe::watch(Threads::RunLoop& runLoop,unsigned int eventMask,bool enabled,Threads::IOWatcherEventHandler& eventHandler)
+	{
+	/* Return a new I/O watcher: */
+	return new Threads::IOWatcher(runLoop,fd,eventMask,enabled,eventHandler);
 	}
 
 bool TLSPipe::waitForData(void) const

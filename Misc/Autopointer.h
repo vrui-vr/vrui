@@ -1,7 +1,7 @@
 /***********************************************************************
 Autopointer - Class for pointers to reference-counted objects. Uses the
 destination class' ref() and unref() methods.
-Copyright (c) 2007-2022 Oliver Kreylos
+Copyright (c) 2007-2026 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -93,6 +93,12 @@ class Autopointer
 		if(target!=0)
 			target->ref();
 		}
+	Autopointer(Autopointer&& source) // Move constructor
+		:target(source.target)
+		{
+		/* Invalidate the source: */
+		source.target=0;
+		}
 	Autopointer& operator=(const Autopointer& source) // Assignment operator; removes reference from previous target object and references new target object
 		{
 		/* Reference the new target and unreference the old one: */
@@ -114,6 +120,15 @@ class Autopointer
 		if(target!=0)
 			target->unref();
 		target=newTarget;
+		
+		return *this;
+		}
+	Autopointer& operator=(Autopointer&& source) // Move assignment operator
+		{
+		/* Take the source's reference and invalidate the source if it's not us: */
+		target=source.target;
+		if(this!=&source)
+			source.target=0;
 		
 		return *this;
 		}

@@ -1,7 +1,7 @@
 /***********************************************************************
 CSVSource - Class to read tabular data from input streams in generalized
 comma-separated value (CSV) format.
-Copyright (c) 2010-2025 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -512,7 +512,7 @@ void CSVSource::updateCharacterClasses(void)
 	}
 
 CSVSource::CSVSource(FilePtr sSource)
-	:source(sSource),
+	:source(std::move(sSource)),
 	 cc(characterClasses+1),
 	 recordIndex(0),fieldIndex(0),
 	 fieldBuffer(new char[33]),

@@ -3,7 +3,7 @@ TripleBuffer - Class to allow one-way asynchronous non-blocking
 communication between a producer and a consumer, in which the producer
 writes a stream of data into a buffer, and the consumer can retrieve the
 most recently written value at any time.
-Copyright (c) 2005-2019 Oliver Kreylos
+Copyright (c) 2005-2026 Oliver Kreylos
 
 This file is part of the Portable Threading Library (Threads).
 
@@ -25,8 +25,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef THREADS_TRIPLEBUFFER_INCLUDED
 #define THREADS_TRIPLEBUFFER_INCLUDED
 
+#include <atomic>
 #include <Misc/SizedTypes.h>
-#include <Threads/Atomic.h>
 
 namespace Threads {
 
@@ -50,7 +50,7 @@ class TripleBuffer
 	static const Misc::UInt8 availableMask=0x03U; // Bits containing the available buffer index
 	
 	Value buffer[3]; // The triple-buffer of values
-	Threads::Atomic<volatile Misc::UInt8> bufferState; // Bit field encoding written flag and locked, most recent, and available buffer indices
+	std::atomic<Misc::UInt8> bufferState; // Bit field encoding written flag and locked, most recent, and available buffer indices
 	
 	/* Constructors and destructors: */
 	public:
@@ -76,31 +76,28 @@ class TripleBuffer
 	Value& startNewValue(void) // Prepares buffer to receive a new value
 		{
 		/* Return the buffer slot currently locked for writing from shared memory: */
-		return buffer[(bufferState.get()&availableMask)>>availableShift];
+		return buffer[(bufferState.load(std::memory_order_acquire)&availableMask)>>availableShift];
 		}
 	void postNewValue(void) // Marks a new buffer value as most recent after data has been written
 		{
-		/* Read the current buffer state from shared memory: */
-		Misc::UInt8 bs=bufferState.get();
-		
 		/* Try swapping the most recent and available buffer slots atomically until it succeeds (at most two attempts): */
-		while(true)
+		Misc::UInt8 bs,newBs;
+		do
 			{
+			/* Read the current buffer state from shared memory: */
+			bs=bufferState.load(std::memory_order_acquire);
+			
 			/* Swap the most recent and available buffer indices and set the written flag to true: */
-			Misc::UInt8 newBs=writtenMask|(bs&lockedMask)|((bs&mostRecentMask)>>2)|((bs&availableMask)<<2);
+			newBs=writtenMask|(bs&lockedMask)|((bs&mostRecentMask)>>2)|((bs&availableMask)<<2);
 			
-			/* Try writing the new buffer state to shared memory and bail out if it succeeded: */
-			if((newBs=bufferState.compareAndSwap(bs,newBs))==bs)
-				break;
-			
-			/* Try again: */
-			bs=newBs;
+			/* Try writing the new buffer state to shared memory and try again if it did not succeed: */
 			}
+		while(!bufferState.compare_exchange_weak(bs,newBs,std::memory_order_release));
 		}
 	void postNewValue(const Value& newValue) // Pushes a new data value into the buffer
 		{
 		/* Read the current buffer state from shared memory: */
-		Misc::UInt8 bs=bufferState.get();
+		Misc::UInt8 bs=bufferState.load(std::memory_order_acquire);
 		
 		/* Write the new value: */
 		buffer[(bs&availableMask)>>availableShift]=newValue;
@@ -112,29 +109,29 @@ class TripleBuffer
 			Misc::UInt8 newBs=writtenMask|(bs&lockedMask)|((bs&mostRecentMask)>>2)|((bs&availableMask)<<2);
 			
 			/* Try writing the new buffer state to shared memory and bail out if it succeeded: */
-			if((newBs=bufferState.compareAndSwap(bs,newBs))==bs)
+			if(bufferState.compare_exchange_weak(bs,newBs,std::memory_order_release))
 				break;
 			
-			/* Try again: */
-			bs=newBs;
+			/* Re-read the current buffer state from shared memory and try again: */
+			bs=bufferState.load(std::memory_order_acquire);
 			}
 		}
 	const Value& getMostRecentValue(void) const // Returns the last posted value; must not be called in cases where consumer might change locked value
 		{
 		/* Read the most recent buffer index from shared memory: */
-		return buffer[(bufferState.get()&mostRecentMask)>>mostRecentShift];
+		return buffer[(bufferState.load(std::memory_order_acquire)&mostRecentMask)>>mostRecentShift];
 		}
 	
 	/* Consumer-side methods: */
 	bool hasNewValue(void) const // Returns true if a new data value is available for the consumer
 		{
 		/* Return the value of the "written" flag from shared memory: */
-		return (bufferState.get()&writtenMask)!=0x00U;
+		return (bufferState.load(std::memory_order_acquire)&writtenMask)!=0x00U;
 		}
 	bool lockNewValue(void) // Locks the most recently written value; returns true if the value is new
 		{
 		/* Read the current buffer state from shared memory: */
-		Misc::UInt8 bs=bufferState.get();
+		Misc::UInt8 bs=bufferState.load(std::memory_order_acquire);
 		
 		/* Check the "written" flag and bail out if there is no new value: */
 		if((bs&writtenMask)==0x00U)
@@ -147,11 +144,11 @@ class TripleBuffer
 			Misc::UInt8 newBs=((bs&lockedMask)>>2)|((bs&mostRecentMask)<<2)|(bs&availableMask);
 			
 			/* Try writing the new buffer state to shared memory and bail out if it succeeded: */
-			if((newBs=bufferState.compareAndSwap(bs,newBs))==bs)
+			if(bufferState.compare_exchange_weak(bs,newBs,std::memory_order_release))
 				break;
 			
-			/* Try again: */
-			bs=newBs;
+			/* Re-read the current buffer state from shared memory and try again: */
+			bs=bufferState.load(std::memory_order_acquire);
 			}
 		
 		return true;
@@ -159,12 +156,12 @@ class TripleBuffer
 	const Value& getLockedValue(void) const // Returns the currently locked value
 		{
 		/* Read the locked buffer index from shared memory: */
-		return buffer[(bufferState.get()&lockedMask)>>lockedShift];
+		return buffer[(bufferState.load(std::memory_order_acquire)&lockedMask)>>lockedShift];
 		}
 	Value& getLockedValue(void) // Ditto
 		{
 		/* Read the locked buffer index from shared memory: */
-		return buffer[(bufferState.get()&lockedMask)>>lockedShift];
+		return buffer[(bufferState.load(std::memory_order_acquire)&lockedMask)>>lockedShift];
 		}
 	};
 

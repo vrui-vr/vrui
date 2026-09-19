@@ -1,6 +1,6 @@
 /***********************************************************************
 Matrix - Class to represent double-valued matrices of dynamic sizes.
-Copyright (c) 2000-2017 Oliver Kreylos
+Copyright (c) 2000-2026 Oliver Kreylos
 
 This file is part of the Templatized Math Library (Math).
 
@@ -34,6 +34,7 @@ class Matrix
 	{
 	/* Embedded classes: */
 	public:
+	typedef double Scalar; // Scalar type
 	struct Error:public std::runtime_error // Generic exception class to signal errors when handling matrices
 		{
 		/* Constructors and destructors: */
@@ -116,6 +117,7 @@ class Matrix
 		{
 		return m[index];
 		}
+	Matrix getSubMatrix(unsigned int subNumRows,unsigned int subNumColumns,unsigned int row0 =0,unsigned int column0 =0) const; // Returns a sub-matrix of the given number of rows and columns starting at the given row and column
 	Matrix getRow(unsigned int rowIndex) const; // Returns a matrix row as a 1 x numColumns matrix
 	Matrix getColumn(unsigned int columnIndex) const; // Returns a matrix column as a numRows x 1 matrix
 	

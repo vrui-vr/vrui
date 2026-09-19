@@ -34,6 +34,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StdError.h>
 #include <Misc/Time.h>
 #include <Misc/FdSet.h>
+#include <Threads/IOWatcher.h>
 #include <Comm/IPv4Address.h>
 #include <Comm/IPv4SocketAddress.h>
 
@@ -131,6 +132,12 @@ UDPSocket& UDPSocket::operator=(const UDPSocket& source)
 UDPSocket::~UDPSocket(void)
 	{
 	close(socketFd);
+	}
+
+Threads::IOWatcher* UDPSocket::watch(Threads::RunLoop& runLoop,unsigned int eventMask,bool enabled,Threads::IOWatcherEventHandler& eventHandler)
+	{
+	/* Return a new I/O watcher: */
+	return new Threads::IOWatcher(runLoop,socketFd,eventMask,enabled,eventHandler);
 	}
 
 IPv4SocketAddress UDPSocket::getAddress(void) const

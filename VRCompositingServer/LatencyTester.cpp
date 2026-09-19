@@ -30,6 +30,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifdef STANDALONE
 #include <unistd.h>
 #include <termios.h>
+#include <Threads/RunLoop.h>
 #endif
 
 /******************************
@@ -65,7 +66,7 @@ inline LatencyTester::Color decodeColor(Misc::UInt8*& bufPtr)
 
 }
 
-void LatencyTester::ioCallback(Threads::RunLoop::IOWatcher::Event& event)
+void LatencyTester::ioCallback(Threads::IOWatcherEvent& event)
 	{
 	/* Read the next raw HID report: */
 	Misc::UInt8 buffer[64]; // 64 is largest message size
@@ -171,13 +172,13 @@ LatencyTester::LatencyTester(int busTypeMask,unsigned int index,Threads::RunLoop
 	 nextTestId(1U)
 	{
 	/* Watch the raw HID device with the run loop: */
-	ioWatcher=runLoop.createIOWatcher(getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&LatencyTester::ioCallback));
+	ioWatcher=watch(runLoop,true,*Threads::createFunctionCall(this,&LatencyTester::ioCallback));
 	}
 
 LatencyTester::~LatencyTester(void)
 	{
 	/* Stop watching the raw HID device: */
-	ioWatcher=0;
+	ioWatcher=0; // We don't actually need to do this...
 	}
 
 void LatencyTester::setLatencyConfiguration(bool sendSamples,const LatencyTester::Color& threshold)
@@ -260,7 +261,7 @@ void LatencyTester::setButtonEventCallback(LatencyTester::ButtonEventCallback& n
 
 Threads::RunLoop runLoop;
 
-void stdinCallback(Threads::RunLoop::IOWatcher::Event& event)
+void stdinCallback(Threads::IOWatcherEvent& event)
 	{
 	/* Read from stdin: */
 	char buffer[2048];
@@ -280,7 +281,7 @@ int main(void)
 	tcsetattr(STDIN_FILENO,TCSANOW,&term);
 	
 	/* Listen for input on stdin: */
-	Threads::RunLoop::IOWatcherOwner stdinWatcher=runLoop.createIOWatcher(STDIN_FILENO,Threads::RunLoop::IOWatcher::Read,*Threads::createFunctionCall(stdinCallback));
+	Threads::EventSourceOwner stdinWatcher=new Threads::IOWatcher(runLoop,STDIN_FILENO,Threads::IOWatcher::Read,*Threads::createFunctionCall(stdinCallback));
 	
 	/* Connect to the first Oculus latency tester on the USB bus: */
 	LatencyTester latencyTester(RawHID::BUSTYPE_USB,0,runLoop);

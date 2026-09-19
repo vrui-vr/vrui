@@ -2,7 +2,7 @@
 XBaseTable - Class to read records and extract fields from database
 tables in XBase (dBASE III, FoxPro, ...) format based on a File
 abstraction.
-Copyright (c) 2009-2024 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -33,7 +33,7 @@ Methods of class XBaseTable:
 ***************************/
 
 XBaseTable::XBaseTable(const char* fileName,SeekableFilePtr sFile)
-	:file(sFile)
+	:file(std::move(sFile))
 	{
 	/* Read the table header: */
 	file->setEndianness(Misc::LittleEndian);

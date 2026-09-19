@@ -1,7 +1,7 @@
 /***********************************************************************
 Base64Filter - Class for read/write access to base64-encoded files using
 a IO::File abstraction.
-Copyright (c) 2019-2024 Oliver Kreylos
+Copyright (c) 2019-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -231,7 +231,7 @@ size_t Base64Filter::writeDataUpTo(const File::Byte* buffer,size_t bufferSize)
 
 Base64Filter::Base64Filter(FilePtr sEncodedFile)
 	:File(),
-	 encodedFile(sEncodedFile),
+	 encodedFile(std::move(sEncodedFile)),
 	 decodeBuffer(0x0U),decodeBufferBits(0),readEof(false),
 	 encodeBuffer(0x0U),encodeBufferBits(0)
 	{

@@ -1,6 +1,6 @@
 /***********************************************************************
 TokenSource - Class to read tokens from files.
-Copyright (c) 2009-2020 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -59,7 +59,7 @@ void TokenSource::resizeTokenBuffer(void)
 	}
 
 TokenSource::TokenSource(FilePtr sSource)
-	:source(sSource),
+	:source(std::move(sSource)),
 	 cc(characterClasses+1),
 	 tokenBufferSize(40),tokenBuffer(new char[tokenBufferSize+1]),tokenSize(0)
 	{

@@ -161,7 +161,7 @@ bool HttpServer::Connection::ignoreRequest(void)
 		}
 	}
 
-void HttpServer::Connection::pipeCallback(Threads::RunLoop::IOWatcher::Event& event)
+void HttpServer::Connection::pipeCallback(Threads::IOWatcherEvent& event)
 	{
 	try
 		{
@@ -244,7 +244,7 @@ void HttpServer::Connection::pipeCallback(Threads::RunLoop::IOWatcher::Event& ev
 									if(server.stillAliveInterval.tv_sec!=0||server.stillAliveInterval.tv_nsec!=0)
 										{
 										/* Register a timer to send "I'm still alive" events: */
-										stillAliveTimer=server.runLoop.createTimer(event.getDispatchTime()+server.stillAliveInterval,*Threads::createFunctionCall(this,&HttpServer::Connection::stillAliveCallback));
+										stillAliveTimer=new Threads::Timer(server.runLoop,event.getDispatchTime()+server.stillAliveInterval,*Threads::createFunctionCall(this,&HttpServer::Connection::stillAliveCallback));
 										}
 									
 									/* Go back to Start state: */
@@ -426,7 +426,7 @@ void HttpServer::Connection::pipeCallback(Threads::RunLoop::IOWatcher::Event& ev
 		}
 	}
 
-void HttpServer::Connection::stillAliveCallback(Threads::RunLoop::Timer::Event& event)
+void HttpServer::Connection::stillAliveCallback(Threads::TimerEvent& event)
 	{
 	// DEBUGGING
 	std::cout<<"Comm::HttpServer: Sending \"I'm still alive\" event to client "<<peerName<<std::endl;
@@ -449,7 +449,7 @@ void HttpServer::Connection::stillAliveCallback(Threads::RunLoop::Timer::Event& 
 HttpServer::Connection::Connection(HttpServer& sServer)
 	:server(sServer),
 	 pipe(server.listenSocket->accept()),
-	 pipeWatcher(server.runLoop.createIOWatcher(pipe->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&HttpServer::Connection::pipeCallback))),
+	 pipeWatcher(pipe->watch(server.runLoop,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&HttpServer::Connection::pipeCallback))),
 	 eventSink(false),
 	 state(Start),requestHeader(0),contentLength(0)
 	{
@@ -479,33 +479,13 @@ HttpServer::Connection::~Connection(void)
 	
 	/* Delete a potential lingering HTTP request header: */
 	delete requestHeader;
-	
-	#if 0 // This doesn't really help at all with the TIME_WAIT problem :(
-	
-	/* Try shutting down the connection politely: */
-	try
-		{
-		/* Signal to the peer that we have nothing left to write: */
-		pipe->shutdown(false,true);
-		
-		/* Skip all incoming data until the peer hangs up: */
-		void* buffer;
-		while(!pipe->eof())
-			pipe->readInBuffer(buffer);
-		}
-	catch(const std::runtime_error& err)
-		{
-		/* Just carry on... */
-		}
-	
-	#endif
 	}
 
 /***************************
 Methods of class HttpServer:
 ***************************/
 
-void HttpServer::listenSocketCallback(Threads::RunLoop::IOWatcher::Event& event)
+void HttpServer::listenSocketCallback(Threads::IOWatcherEvent& event)
 	{
 	try
 		{
@@ -522,7 +502,7 @@ void HttpServer::listenSocketCallback(Threads::RunLoop::IOWatcher::Event& event)
 HttpServer::HttpServer(Threads::RunLoop& sRunLoop,int listenPort)
 	:runLoop(sRunLoop),
 	 listenSocket(new ListeningTCPSocket(listenPort,5)),
-	 listenSocketWatcher(runLoop.createIOWatcher(listenSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&HttpServer::listenSocketCallback))),
+	 listenSocketWatcher(listenSocket->watch(runLoop,true,*Threads::createFunctionCall(this,&HttpServer::listenSocketCallback))),
 	 stillAliveInterval(0,0)
 	{
 	/* Set the listening socket to non-blocking mode: */
@@ -541,7 +521,7 @@ int HttpServer::getPort(void) const
 	return static_cast<Comm::ListeningTCPSocket*>(listenSocket.getPointer())->getPortId();
 	}
 
-void HttpServer::setStillAliveInterval(const Threads::RunLoop::Interval newStillAliveInterval)
+void HttpServer::setStillAliveInterval(const Threads::EventInterval newStillAliveInterval)
 	{
 	/* Update the event interval: */
 	stillAliveInterval=newStillAliveInterval;
@@ -556,7 +536,7 @@ void HttpServer::setPostRequestHandler(PostRequestHandler& newPostRequestHandler
 void HttpServer::sendEvent(const char* eventName,const IO::JsonEntity& eventData)
 	{
 	/* Send the event to all active connections marked as event sinks: */
-	Threads::RunLoop::Time now;
+	Threads::EventTime now;
 	for(Misc::SimpleObjectSet<Connection>::iterator cIt=connections.begin();cIt!=connections.end();++cIt)
 		if(cIt->eventSink)
 			{

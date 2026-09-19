@@ -1,7 +1,7 @@
 /***********************************************************************
 ListeningSocket - Abstract base class for half-sockets that can accept
 incoming connections.
-Copyright (c) 2022 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -31,6 +31,14 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 /* Forward declarations: */
 namespace Misc {
 class Time;
+}
+namespace Threads {
+template <class ParameterParam>
+class FunctionCall;
+class RunLoop;
+class IOWatcher;
+class IOWatcherEvent;
+typedef Threads::FunctionCall<IOWatcherEvent&> IOWatcherEventHandler;
 }
 
 namespace Comm {
@@ -63,6 +71,7 @@ class ListeningSocket:public Threads::RefCounted
 	void setBlocking(bool newBlocking); // Sets the listening socket to blocking or non-blocking mode
 	bool waitForConnection(const Misc::Time& timeout) const; // Waits for an incoming connection until timeout; returns true if a connection is waiting to be accepted
 	virtual PipePtr accept(void) =0; // Returns a new pipe object for an incoming connection
+	Threads::IOWatcher* watch(Threads::RunLoop& runLoop,bool enabled,Threads::IOWatcherEventHandler& eventHandler); // Returns an unreferenced I/O watcher on the given run loop to watch for read events on the listening socket
 	};
 
 typedef Misc::Autopointer<ListeningSocket> ListeningSocketPtr; // Type for pointers to reference-counted listening socket objects

@@ -24,7 +24,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
 #include <Threads/FunctionCalls.h>
+#include <Threads/EventTypes.h>
 #include <Threads/RunLoop.h>
+#include <Threads/IOWatcher.h>
+#include <Threads/Timer.h>
+#include <Threads/ProcessFunction.h>
 #include <DBus/Error.h>
 #include <DBus/Message.h>
 #include <DBus/PendingCall.h>
@@ -75,7 +79,7 @@ void disown(void* memory) // Destructor function for objects derived from Thread
 Declaration of class Connection::WatchHandler:
 *********************************************/
 
-class Connection::WatchHandler:public Threads::RunLoop::IOWatcher::EventHandler
+class Connection::WatchHandler:public Threads::IOWatcherEventHandler
 	{
 	/* Elements: */
 	private:
@@ -91,8 +95,8 @@ class Connection::WatchHandler:public Threads::RunLoop::IOWatcher::EventHandler
 		{
 		}
 	
-	/* Methods from class Threads::RunLoop::IOWatcher::EventHandler: */
-	virtual void operator()(Threads::RunLoop::IOWatcher::Event& event)
+	/* Methods from class Threads::IOWatcherEventHandler: */
+	virtual void operator()(Threads::IOWatcherEvent& event)
 		{
 		/* Assemble an event mask: */
 		unsigned int flags=0x0U;
@@ -114,7 +118,7 @@ class Connection::WatchHandler:public Threads::RunLoop::IOWatcher::EventHandler
 		}
 	};
 
-class Connection::TimeoutHandler:public Threads::RunLoop::Timer::EventHandler
+class Connection::TimeoutHandler:public Threads::TimerEventHandler
 	{
 	/* Elements: */
 	private:
@@ -130,8 +134,8 @@ class Connection::TimeoutHandler:public Threads::RunLoop::Timer::EventHandler
 		{
 		}
 	
-	/* Methods from class Threads::RunLoop::Timer::EventHandler: */
-	virtual void operator()(Threads::RunLoop::Timer::Event& event)
+	/* Methods from class Threads::TimerEventHandler: */
+	virtual void operator()(Threads::TimerEvent& event)
 		{
 		/* Call the DBus timeout handler: */
 		if(!dbus_timeout_handle(timeout))
@@ -162,10 +166,10 @@ dbus_bool_t Connection::addWatchFunction(DBusWatch* watch,void* data)
 	unsigned int eventMask=0x0U;
 	unsigned int flags=dbus_watch_get_flags(watch);
 	if(flags&DBUS_WATCH_READABLE)
-		eventMask|=Threads::RunLoop::IOWatcher::Read;
+		eventMask|=Threads::IOWatcher::Read;
 	if(flags&DBUS_WATCH_WRITABLE)
-		eventMask|=Threads::RunLoop::IOWatcher::Write;
-	Threads::RunLoop::IOWatcher* ioWatcher=runLoop->createIOWatcher(dbus_watch_get_unix_fd(watch),eventMask,dbus_watch_get_enabled(watch),*new WatchHandler(watch));
+		eventMask|=Threads::IOWatcher::Write;
+	Threads::IOWatcher* ioWatcher=new Threads::IOWatcher(*runLoop,dbus_watch_get_unix_fd(watch),eventMask,dbus_watch_get_enabled(watch),*new WatchHandler(watch));
 	ioWatcher->own();
 	#if DEBUG_PROTOCOL
 	std::cout<<"Created I/O watcher "<<ioWatcher<<std::endl;
@@ -182,6 +186,8 @@ void Connection::removeWatchFunction(DBusWatch* watch,void* data)
 	#if DEBUG_PROTOCOL
 	std::cout<<"Remove watch "<<watch<<" for file descriptor "<<dbus_watch_get_unix_fd(watch)<<std::endl;
 	#endif
+	
+	// WE NEED TO DISOWN THE I/O WATCHER HERE, RIGHT? RIGHT???
 	}
 
 void Connection::watchToggledFunction(DBusWatch* watch,void* data)
@@ -191,7 +197,7 @@ void Connection::watchToggledFunction(DBusWatch* watch,void* data)
 	#endif
 	
 	/* Retrieve the I/O watcher pointer: */
-	Threads::RunLoop::IOWatcher* ioWatcher=static_cast<Threads::RunLoop::IOWatcher*>(dbus_watch_get_data(watch));
+	Threads::IOWatcher* ioWatcher=static_cast<Threads::IOWatcher*>(dbus_watch_get_data(watch));
 	
 	/* Set the I/O watcher's enabled state: */
 	#if DEBUG_PROTOCOL
@@ -208,11 +214,11 @@ dbus_bool_t Connection::addTimeoutFunction(DBusTimeout* timeout,void* data)
 	
 	/* Create a timer for the timeout: */
 	Threads::RunLoop* runLoop=static_cast<Threads::RunLoop*>(data);
-	Threads::RunLoop::Time firstTimeout;
+	Threads::EventTime firstTimeout;
 	long nanoseconds=dbus_timeout_get_interval(timeout)*1000000L;
-	Threads::RunLoop::Interval interval(nanoseconds/1000000000L,nanoseconds%1000000000L);
+	Threads::EventInterval interval(nanoseconds/1000000000L,nanoseconds%1000000000L);
 	firstTimeout+=interval;
-	Threads::RunLoop::Timer* timer=runLoop->createTimer(firstTimeout,interval,dbus_timeout_get_enabled(timeout),*new TimeoutHandler(timeout));
+	Threads::Timer* timer=new Threads::Timer(*runLoop,firstTimeout,interval,dbus_timeout_get_enabled(timeout),*new TimeoutHandler(timeout));
 	timer->own();
 	
 	/* Store the timer pointer with the timeout: */
@@ -226,6 +232,8 @@ void Connection::removeTimeoutFunction(DBusTimeout* timeout,void* data)
 	#if DEBUG_PROTOCOL
 	std::cout<<"Remove timeout "<<timeout<<" with interval "<<dbus_timeout_get_interval(timeout)<<std::endl;
 	#endif
+	
+	// WE NEED TO DISOWN THE TIMER HERE, RIGHT? RIGHT???
 	}
 
 void Connection::timeoutToggledFunction(DBusTimeout* timeout,void* data)
@@ -235,7 +243,7 @@ void Connection::timeoutToggledFunction(DBusTimeout* timeout,void* data)
 	#endif
 	
 	/* Retrieve the timer pointer: */
-	Threads::RunLoop::Timer* timer=static_cast<Threads::RunLoop::Timer*>(dbus_timeout_get_data(timeout));
+	Threads::Timer* timer=static_cast<Threads::Timer*>(dbus_timeout_get_data(timeout));
 	
 	/* Set the timer's enabled state: */
 	#if DEBUG_PROTOCOL
@@ -255,7 +263,7 @@ void Connection::wakeupMainFunction(void* data)
 	runLoop->wakeUp();
 	}
 
-void Connection::dispatchFunction(Threads::RunLoop::ProcessFunction& processFunction,DBusConnection* connection)
+void Connection::dispatchFunction(Threads::ProcessFunction& processFunction,DBusConnection* connection)
 	{
 	#if DEBUG_PROTOCOL
 	std::cout<<"Dispatching messages on connection "<<connection<<std::endl;
@@ -287,7 +295,7 @@ void Connection::dispatchStatusFunction(DBusConnection* connection,DBusDispatchS
 	#endif
 	
 	/* Enable the process function if dispatching is to be done: */
-	Threads::RunLoop::ProcessFunction* processFunction=static_cast<Threads::RunLoop::ProcessFunction*>(data);
+	Threads::ProcessFunction* processFunction=static_cast<Threads::ProcessFunction*>(data);
 	if(newStatus==DBUS_DISPATCH_DATA_REMAINS)
 		processFunction->enable();
 	}
@@ -432,7 +440,7 @@ void Connection::watchConnection(Threads::RunLoop& runLoop)
 	
 	/* Create a process function to dispatch messages: */
 	bool mustDispatch=dbus_connection_get_dispatch_status(connection)==DBUS_DISPATCH_DATA_REMAINS;
-	Threads::RunLoop::ProcessFunction* processFunction=runLoop.createProcessFunction(true,mustDispatch,*Threads::createFunctionCall(dispatchFunction,connection));
+	Threads::ProcessFunction* processFunction=new Threads::ProcessFunction(runLoop,true,mustDispatch,*Threads::createFunctionCall(dispatchFunction,connection));
 	processFunction->own();
 	
 	/* Register a dispatch status function: */

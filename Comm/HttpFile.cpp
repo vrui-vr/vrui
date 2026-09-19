@@ -1,7 +1,7 @@
 /***********************************************************************
 HttpFile - Class for high-performance reading from remote files using
 the HTTP/1.1 protocol.
-Copyright (c) 2011-2024 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -327,7 +327,7 @@ HttpFile::HttpFile(const char* fileUrl,const Misc::Time* timeout)
 
 HttpFile::HttpFile(const HttpFile::URLParts& urlParts,Comm::PipePtr sPipe,const Misc::Time* timeout)
 	:IO::File(),
-	 pipe(sPipe),
+	 pipe(std::move(sPipe)),
 	 chunked(false),haveEof(false),
 	 fixedSize(false),
 	 unreadSize(0),

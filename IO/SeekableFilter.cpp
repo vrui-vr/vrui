@@ -1,7 +1,7 @@
 /***********************************************************************
 SeekableFilter - Class to convert a streaming file into a seekable
 file by caching its contents in memory.
-Copyright (c) 2011-2022 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -129,7 +129,7 @@ void SeekableFilter::readFromSource(void)
 
 SeekableFilter::SeekableFilter(FilePtr sSource,size_t sMemBufferSize)
 	:SeekableFile(),
-	 source(sSource),
+	 source(std::move(sSource)),
 	 memBufferSize(sMemBufferSize),
 	 head(0),tail(0),
 	 totalReadSize(0)

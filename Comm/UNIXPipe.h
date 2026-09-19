@@ -1,7 +1,7 @@
 /***********************************************************************
 UNIXPipe - Class for high-performance reading/writing from/to connected
 UNIX domain sockets.
-Copyright (c) 2022 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -57,6 +57,7 @@ class UNIXPipe:public Pipe
 	
 	/* Methods from IO::File: */
 	virtual int getFd(void) const;
+	virtual Threads::IOWatcher* watch(Threads::RunLoop& runLoop,unsigned int eventMask,bool enabled,Threads::IOWatcherEventHandler& eventHandler);
 	
 	/* Methods from Pipe: */
 	virtual bool waitForData(void) const;

@@ -36,7 +36,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Geometry/GeometryMarshallers.h>
 #include <Misc/ConfigurationFile.h>
 #include <Threads/FunctionCalls.h>
+#include <Threads/EventTypes.h>
 #include <Threads/RunLoop.h>
+#include <Threads/IOWatcher.h>
+#include <Threads/Timer.h>
 #include <IO/File.h>
 #include <IO/OpenFile.h>
 #include <Realtime/Time.h>
@@ -801,7 +804,7 @@ void environmentDefinitionUpdatedCallback(const Vrui::EnvironmentDefinition& new
 
 Threads::RunLoop runLoop;
 
-void stdioCallback(Threads::RunLoop::IOWatcher::Event& event)
+void stdioCallback(Threads::IOWatcherEvent& event)
 	{
 	/* Read everything available on stdin: */
 	char buffer[1024];
@@ -832,7 +835,7 @@ void packetNotificationCallback(Vrui::VRDeviceClient* deviceClient,TrackerPrinte
 	trackerPrinter.print();
 	}
 
-void updateDevicesCallback(Threads::RunLoop::Timer::Event& event,TrackerPrinter& trackerPrinter)
+void updateDevicesCallback(Threads::TimerEvent& event,TrackerPrinter& trackerPrinter)
 	{
 	/* Update the device client's device state: */
 	trackerPrinter.updateDeviceStates();
@@ -1231,13 +1234,13 @@ int main(int argc,char* argv[])
 	tcsetattr(STDIN_FILENO,TCSANOW,&term);
 	
 	/* Register a callback for stdin: */
-	Threads::RunLoop::IOWatcherOwner stdinWatcher=runLoop.createIOWatcher(STDIN_FILENO,Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(stdioCallback));
+	Threads::EventSourceOwner stdinWatcher=new Threads::IOWatcher(runLoop,STDIN_FILENO,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(stdioCallback));
 	
 	/* Activate the device client: */
 	deviceClient->activate();
 	
 	/* Run main loop: */
-	Threads::RunLoop::TimerOwner updateTimer;
+	Threads::TimerOwner updateTimer;
 	if(pipeType==0)
 		{
 		/* Start streaming device data to the packet notification callback: */
@@ -1246,7 +1249,7 @@ int main(int argc,char* argv[])
 	else
 		{
 		/* Register a callback to display device data from the server's shared memory segment at regular intervals: */
-		updateTimer=runLoop.createTimer(Threads::RunLoop::Time(),Threads::RunLoop::Interval(0,20000000),true,*Threads::createFunctionCall(updateDevicesCallback,trackerPrinter));
+		updateTimer=new Threads::Timer(runLoop,Threads::EventTime(),Threads::EventInterval(0,20000000),true,*Threads::createFunctionCall(updateDevicesCallback,trackerPrinter));
 		}
 	
 	/* Dispatch events: */

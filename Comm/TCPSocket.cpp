@@ -1,6 +1,6 @@
 /***********************************************************************
 TCPSocket - Wrapper class for TCP sockets ensuring exception safety.
-Copyright (c) 2002-2024 Oliver Kreylos
+Copyright (c) 2002-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -34,6 +34,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <netdb.h>
 #include <Misc/StdError.h>
 #include <Misc/Time.h>
+#include <Threads/IOWatcher.h>
 #include <Comm/IPv4SocketAddress.h>
 
 namespace Comm {
@@ -102,6 +103,12 @@ TCPSocket::~TCPSocket(void)
 	{
 	if(socketFd>=0)
 		close(socketFd);
+	}
+
+Threads::IOWatcher* TCPSocket::watch(Threads::RunLoop& runLoop,unsigned int eventMask,bool enabled,Threads::IOWatcherEventHandler& eventHandler)
+	{
+	/* Return a new I/O watcher: */
+	return new Threads::IOWatcher(runLoop,socketFd,eventMask,enabled,eventHandler);
 	}
 
 IPv4SocketAddress TCPSocket::getAddress(void) const

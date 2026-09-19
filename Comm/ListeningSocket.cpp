@@ -1,7 +1,7 @@
 /***********************************************************************
 ListeningSocket - Abstract base class for half-sockets that can accept
 incoming connections.
-Copyright (c) 2022-2024 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -29,6 +29,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StdError.h>
 #include <Misc/Time.h>
 #include <Misc/FdSet.h>
+#include <Threads/IOWatcher.h>
 
 namespace Comm {
 
@@ -80,6 +81,12 @@ bool ListeningSocket::waitForConnection(const Misc::Time& timeout) const
 	/* Wait for a connection (socket ready for reading) and return whether one is available: */
 	Misc::FdSet readFds(fd);
 	return Misc::pselect(&readFds,0,0,timeout)>=0&&readFds.isSet(fd);
+	}
+
+Threads::IOWatcher* ListeningSocket::watch(Threads::RunLoop& runLoop,bool enabled,Threads::IOWatcherEventHandler& eventHandler)
+	{
+	/* Return a new I/O watcher watching for read events on this listening socket's file descriptor: */
+	return new Threads::IOWatcher(runLoop,fd,Threads::IOWatcher::Read,enabled,eventHandler);
 	}
 
 }

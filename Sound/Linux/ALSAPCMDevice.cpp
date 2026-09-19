@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
 #include <Threads/FunctionCalls.h>
-#include <Threads/RunLoop.h>
+#include <Threads/IOWatcher.h>
 #include <Sound/SoundDataFormat.h>
 
 namespace Sound {
@@ -35,13 +35,13 @@ namespace Sound {
 Declaration of class ALSAPCMDevice::PCMEventForwarder:
 *****************************************************/
 
-class ALSAPCMDevice::PCMEventForwarder:public Threads::FunctionCall<Threads::RunLoop::IOWatcher::Event&>
+class ALSAPCMDevice::PCMEventForwarder:public Threads::FunctionCall<Threads::IOWatcherEvent&>
 	{
 	/* Elements: */
 	private:
 	ALSAPCMDevice& device; // Reference to the PCM device with which this forwarder is associated
 	struct pollfd& pcmEventPoll; // Reference to the poll request with which this forwarder is associated
-	Threads::RunLoop::IOWatcherOwner ioWatcher; // The I/O watcher registered for this file descriptors
+	Threads::IOWatcherOwner ioWatcher; // The I/O watcher registered for this file descriptors
 	Misc::Autopointer<PCMEventHandler> pcmEventHandler; // The user-supplied PCM event handler
 	
 	/* Constructors and destructors: */
@@ -51,15 +51,15 @@ class ALSAPCMDevice::PCMEventForwarder:public Threads::FunctionCall<Threads::Run
 		pcmEventHandler(&sPcmEventHandler)
 		{
 		/* Create an I/O watcher for the polled file descriptor: */
-		unsigned int eventMask=Threads::RunLoop::IOWatcher::pollEventsToEventMask(pcmEventPoll.events);
-		ioWatcher=runLoop.createIOWatcher(pcmEventPoll.fd,eventMask,true,*this);
+		unsigned int eventMask=Threads::IOWatcher::pollEventsToEventMask(pcmEventPoll.events);
+		ioWatcher=new Threads::IOWatcher(runLoop,pcmEventPoll.fd,eventMask,true,*this);
 		}
 	
-	/* Methods from class Threads::FunctionCall<Threads::RunLoop::IOWatcher::Event&>: */
-	void operator()(Threads::RunLoop::IOWatcher::Event& event)
+	/* Methods from class Threads::FunctionCall<Threads::IOWatcherEvent&>: */
+	void operator()(Threads::IOWatcherEvent& event)
 		{
 		/* Update the poll request's output event mask: */
-		pcmEventPoll.revents=Threads::RunLoop::IOWatcher::eventMaskToPollEvents(event.getEventMask());
+		pcmEventPoll.revents=Threads::IOWatcher::eventMaskToPollEvents(event.getEventMask());
 		
 		/* Parse the event and check whether it indicates that data is available on the PCM device: */
 		unsigned short pcmEvent;

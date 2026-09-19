@@ -1,7 +1,7 @@
 /***********************************************************************
 UNIXPipe - Class for high-performance reading/writing from/to connected
 UNIX domain sockets.
-Copyright (c) 2022-2024 Oliver Kreylos
+Copyright (c) 2022-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -33,6 +33,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/FdSet.h>
+#include <Threads/IOWatcher.h>
 #include <Comm/ListeningUNIXSocket.h>
 
 namespace Comm {
@@ -183,6 +184,12 @@ UNIXPipe::~UNIXPipe(void)
 int UNIXPipe::getFd(void) const
 	{
 	return fd;
+	}
+
+Threads::IOWatcher* UNIXPipe::watch(Threads::RunLoop& runLoop,unsigned int eventMask,bool enabled,Threads::IOWatcherEventHandler& eventHandler)
+	{
+	/* Return a new I/O watcher: */
+	return new Threads::IOWatcher(runLoop,fd,eventMask,enabled,eventHandler);
 	}
 
 bool UNIXPipe::waitForData(void) const

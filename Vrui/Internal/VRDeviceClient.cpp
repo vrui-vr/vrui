@@ -36,6 +36,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Realtime/SharedMemory.h>
 #include <Threads/Config.h>
 #include <Threads/FunctionCalls.h>
+#include <Threads/RunLoop.h>
 #include <Comm/UNIXPipe.h>
 #include <Comm/TCPPipe.h>
 #include <Vrui/EnvironmentDefinition.h>
@@ -200,7 +201,7 @@ void VRDeviceClient::readConnectReply(void)
 		}
 	}
 
-void VRDeviceClient::handlePipeMessage(Threads::RunLoop::IOWatcher::Event& event)
+void VRDeviceClient::handlePipeMessage(Threads::IOWatcherEvent& event)
 	{
 	try
 		{
@@ -452,7 +453,7 @@ void VRDeviceClient::handlePipeMessage(Threads::RunLoop::IOWatcher::Event& event
 		else if(message==STOPSTREAM_REPLY)
 			{
 			/* Disable this I/O watcher: */
-			event.getIOWatcher().disable();
+			event.getSource().disable();
 			}
 		else
 			throw std::runtime_error("Unexpected message");
@@ -471,7 +472,7 @@ void VRDeviceClient::handlePipeMessage(Threads::RunLoop::IOWatcher::Event& event
 		}
 		
 		connectionDead=true;
-		event.getIOWatcher().disable();
+		event.getSource().disable();
 		packetSignalCond.broadcast();
 		}
 	}
@@ -501,7 +502,7 @@ void VRDeviceClient::initClient(void)
 	readConnectReply();
 	
 	/* Register a disabled I/O watcher for the server pipe: */
-	pipeWatcher=runLoop.createIOWatcher(pipe->getFd(),Threads::RunLoop::IOWatcher::Read,false,*Threads::createFunctionCall(this,&VRDeviceClient::handlePipeMessage));
+	pipeWatcher=pipe->watch(runLoop,Threads::IOWatcher::Read,false,*Threads::createFunctionCall(this,&VRDeviceClient::handlePipeMessage));
 	}
 
 VRDeviceClient::VRDeviceClient(Threads::RunLoop& sRunLoop,const char* deviceServerHostName,int deviceServerPort)

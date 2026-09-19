@@ -38,6 +38,8 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Threads/FunctionCalls.h>
+#include <Threads/EventTypes.h>
+#include <Threads/RunLoop.h>
 #include <IO/OpenFile.h>
 #include <Geometry/GeometryValueCoders.h>
 #include <Geometry/OutputOperators.h>
@@ -665,7 +667,7 @@ void OpenVRHost::log(int messageLevel,const char* formatString,...) const
 		}
 	}
 
-void OpenVRHost::runFrameTimerCallback(Threads::RunLoop::Timer::Event& event)
+void OpenVRHost::runFrameTimerCallback(Threads::TimerEvent& event)
 	{
 	/* Call the driver's RunFrame method: */
 	openvrTrackedDeviceProvider->RunFrame();
@@ -1134,8 +1136,8 @@ void OpenVRHost::initialize(void)
 	
 	/* Start the RunFrame timer: */
 	log(1,"Starting event processing\n");
-	Threads::RunLoop::Interval interval(0,100000000); // 10Hz is more than enough
-	runFrameTimer=deviceManager->getRunLoop().createTimer(Threads::RunLoop::Time(),interval,true,*Threads::createFunctionCall(this,&OpenVRHost::runFrameTimerCallback));
+	Threads::EventInterval interval(0,100000000); // 10Hz is more than enough
+	runFrameTimer=new Threads::Timer(deviceManager->getRunLoop(),Threads::EventTime(),interval,true,*Threads::createFunctionCall(this,&OpenVRHost::runFrameTimerCallback));
 	
 	/* Initialize the server-side driver object: */
 	log(1,"Initializing OpenVR driver module\n");

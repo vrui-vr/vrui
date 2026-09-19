@@ -29,7 +29,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Realtime/Time.h>
 #include <Realtime/SharedMemory.h>
 #include <Threads/Mutex.h>
-#include <Threads/RunLoop.h>
 #include <Geometry/Point.h>
 #include <Geometry/Rotation.h>
 #include <Geometry/OrthonormalTransformation.h>
@@ -54,6 +53,10 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include "HMD.h"
 
 /* Forward declarations: */
+namespace Threads {
+class RunLoop;
+class UserSignal;
+}
 namespace Vrui {
 class HMDConfiguration;
 class VRDeviceClient;
@@ -173,7 +176,7 @@ class VRCompositor:public Vrui::VRCompositorProtocol
 		{
 		return inputImages[inputImageIndex].getOffset();
 		}
-	void run(Threads::RunLoop::UserSignal& vsyncSignal); // Runs the compositing loop until shut down; sends the given signal to the given dispatcher on each vblank event
+	void run(Threads::UserSignal& vsyncSignal); // Runs the compositing loop until shut down; sends the given signal to the given dispatcher on each vblank event
 	void shutdown(void); // Shuts down the compositor's main loop
 	void activate(void); // Tells the compositor that a client is connected
 	void deactivate(void); // Tells the compositor that no client is connected

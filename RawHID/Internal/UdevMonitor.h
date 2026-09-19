@@ -25,13 +25,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Misc/Autopointer.h>
 #include <Misc/FdSet.h>
-#include <Threads/RunLoop.h>
+#include <Threads/IOWatcher.h>
 
 /* Forward declarations: */
 struct udev_monitor;
 namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
+class RunLoop;
 }
 namespace RawHID {
 class UdevContext;
@@ -51,11 +52,11 @@ class UdevMonitor
 	udev_monitor* monitor; // Pointer to the low-level udev monitor
 	int fd; // The monitor's event file descriptor
 	bool listening; // Flag if the monitor is already listening to events
-	Threads::RunLoop::IOWatcherOwner ioWatcher; // I/O watcher for the monitor's event file descriptor
+	Threads::IOWatcherOwner ioWatcher; // I/O watcher for the monitor's event file descriptor
 	Misc::Autopointer<DeviceEventHandler> deviceEventHandler; // Event handler for Udev device events
 	
 	/* Private methods: */
-	void ioEventHandler(Threads::RunLoop::IOWatcher::Event& event); // Handler for I/O events on the monitor's event file descriptor
+	void ioEventHandler(Threads::IOWatcherEvent& event); // Handler for I/O events on the monitor's event file descriptor
 	
 	/* Constructors and destructors: */
 	public:
@@ -74,7 +75,7 @@ class UdevMonitor
 	void removeFilters(void); // Remove all filters from the monitor
 	void listen(void); // Starts listening to events on the selected subsystem(s) or tag(s)
 	void watch(Threads::RunLoop& runLoop,DeviceEventHandler& newDeviceEventHandler); // Watches the monitor from the given run loop and calls the given event handler when an event occurs
-	void watch(Threads::RunLoop& runLoop,Threads::RunLoop::IOWatcher::EventHandler& newIoEventHandler); // Ditto, but calls the given raw I/O event handler if a device event can be read via receiveDeviceEvent()
+	void watch(Threads::RunLoop& runLoop,Threads::IOWatcherEventHandler& newIoEventHandler); // Ditto, but calls the given raw I/O event handler if a device event can be read via receiveDeviceEvent()
 	void unwatch(void); // Stops watching the monitor from a run loop
 	void addEvent(Misc::FdSet& fdSet) const // Adds the monitor's event socket to the given wait set
 		{

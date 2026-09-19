@@ -1,6 +1,6 @@
 /***********************************************************************
 Device - Class representing a human interface device for raw access.
-Copyright (c) 2014-2016 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This file is part of the Raw HID Support Library (RawHID).
 
@@ -24,6 +24,16 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <string>
 #include <Misc/SizedTypes.h>
+
+/* Forward declarations: */
+namespace Threads {
+template <class ParameterParam>
+class FunctionCall;
+class RunLoop;
+class IOWatcher;
+class IOWatcherEvent;
+typedef Threads::FunctionCall<IOWatcherEvent&> IOWatcherEventHandler;
+}
 
 namespace RawHID {
 
@@ -76,6 +86,7 @@ class Device
 		{
 		return fd;
 		}
+	Threads::IOWatcher* watch(Threads::RunLoop& runLoop,bool enabled,Threads::IOWatcherEventHandler& eventHandler); // Returns an unreferenced I/O watcher on the given run loop to watch for read events from this device
 	int getBusType(void) const // Returns the bus type
 		{
 		return busType;

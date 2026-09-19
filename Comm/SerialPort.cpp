@@ -1,7 +1,7 @@
 /***********************************************************************
 SerialPort - Class for high-performance reading/writing from/to serial
 ports.
-Copyright (c) 2001-2024 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -33,6 +33,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <errno.h>
 #include <Misc/StdError.h>
 #include <Misc/FdSet.h>
+#include <Threads/IOWatcher.h>
 
 /* Check if ioctl calls are undefined (on BSD-likes), then redefine: */
 #ifndef TIOCMGET
@@ -152,6 +153,12 @@ SerialPort::~SerialPort(void)
 int SerialPort::getFd(void) const
 	{
 	return fd;
+	}
+
+Threads::IOWatcher* SerialPort::watch(Threads::RunLoop& runLoop,unsigned int eventMask,bool enabled,Threads::IOWatcherEventHandler& eventHandler)
+	{
+	/* Return a new I/O watcher: */
+	return new Threads::IOWatcher(runLoop,fd,eventMask,enabled,eventHandler);
 	}
 
 bool SerialPort::waitForData(void) const

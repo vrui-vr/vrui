@@ -27,9 +27,12 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <vector>
 #include <Misc/CallbackData.h>
 #include <Misc/CallbackList.h>
-#include <Threads/RunLoop.h>
+#include <Threads/IOWatcher.h>
 
 /* Forward declarations: */
+namespace Threads {
+class RunLoop;
+}
 namespace RawHID {
 class EventDeviceMatcher;
 }
@@ -213,12 +216,12 @@ class EventDevice
 	Misc::CallbackList absAxisFeatureEventCallbacks;
 	Misc::CallbackList relAxisFeatureEventCallbacks;
 	Misc::CallbackList synReportEventCallbacks;
-	Threads::RunLoop::IOWatcherOwner deviceWatcher; // Watcher for the event device's file
+	Threads::IOWatcherOwner deviceWatcher; // Watcher for the event device's file
 	
 	/* Private methods: */
 	static int findDevice(EventDeviceMatcher& deviceMatcher); // Returns a file descriptor for the event device file matching the given device matcher
 	void initFeatureMaps(void); // Initializes the device's feature maps
-	void ioEventCallback(Threads::RunLoop::IOWatcher::Event& event); // Callback when there is data pending on the device's file
+	void ioEventCallback(Threads::IOWatcherEvent& event); // Callback when there is data pending on the device's file
 	
 	/* Constructors and destructors: */
 	public:

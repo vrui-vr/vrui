@@ -1,7 +1,7 @@
 /***********************************************************************
 RefCountedArray - Generic class for fixed-size arrays with copy-on-write
 sharing and automatic garbage collection. Thread-safe version.
-Copyright (c) 2010-2015 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the Portable Threading Library (Threads).
 
@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef THREADS_REFCOUNTEDARRAY_INCLUDED
 #define THREADS_REFCOUNTEDARRAY_INCLUDED
 
-#include <Threads/Atomic.h>
+#include <atomic>
 
 namespace Threads {
 
@@ -39,7 +39,7 @@ class RefCountedArray
 		{
 		/* Elements: */
 		public:
-		Atomic<unsigned int> refCount; // Number of RefCountedArray objects currently sharing the array
+		std::atomic<unsigned int> refCount; // Number of RefCountedArray objects currently sharing the array
 		size_t size; // Allocated size of the array
 		Element elements[0]; // Beginning of actual array storage
 		
@@ -54,12 +54,12 @@ class RefCountedArray
 		void ref(void) // Increases the array's reference count
 			{
 			/* Increment the reference counter: */
-			refCount.preAdd(1);
+			refCount.fetch_add(1,std::memory_order_relaxed);
 			}
 		bool unref(void) // Decreases the array's reference count; returns true if array has become orphaned
 			{
 			/* Decrement the reference counter and check for abandonment: */
-			return refCount.preSub(1)==0;
+			return refCount.fetch_sub(1,std::memory_order_release)==1;
 			}
 		};
 	
