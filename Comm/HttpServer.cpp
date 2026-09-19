@@ -449,7 +449,7 @@ void HttpServer::Connection::stillAliveCallback(Threads::TimerEvent& event)
 HttpServer::Connection::Connection(HttpServer& sServer)
 	:server(sServer),
 	 pipe(server.listenSocket->accept()),
-	 pipeWatcher(new Threads::IOWatcher(server.runLoop,pipe->getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&HttpServer::Connection::pipeCallback))),
+	 pipeWatcher(pipe->watch(server.runLoop,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&HttpServer::Connection::pipeCallback))),
 	 eventSink(false),
 	 state(Start),requestHeader(0),contentLength(0)
 	{
@@ -502,7 +502,7 @@ void HttpServer::listenSocketCallback(Threads::IOWatcherEvent& event)
 HttpServer::HttpServer(Threads::RunLoop& sRunLoop,int listenPort)
 	:runLoop(sRunLoop),
 	 listenSocket(new ListeningTCPSocket(listenPort,5)),
-	 listenSocketWatcher(new Threads::IOWatcher(runLoop,listenSocket->getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&HttpServer::listenSocketCallback))),
+	 listenSocketWatcher(listenSocket->watch(runLoop,true,*Threads::createFunctionCall(this,&HttpServer::listenSocketCallback))),
 	 stillAliveInterval(0,0)
 	{
 	/* Set the listening socket to non-blocking mode: */

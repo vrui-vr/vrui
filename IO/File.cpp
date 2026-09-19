@@ -357,9 +357,12 @@ int File::getFd(void) const
 	{
 	/* Default behavior is not supported: */
 	throw Misc::makeStdErr(__PRETTY_FUNCTION__,"File does not have file descriptor");
-	
-	/* Just to make compiler happy: */
-	return -1;
+	}
+
+Threads::IOWatcher* File::watch(Threads::RunLoop&,unsigned int,bool,Threads::IOWatcherEventHandler&)
+	{
+	/* Default behavior is not supported: */
+	throw Misc::makeStdErr(__PRETTY_FUNCTION__,"File can not be watched");
 	}
 
 size_t File::getReadBufferSize(void) const

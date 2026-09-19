@@ -1,7 +1,7 @@
 /***********************************************************************
 TLSPipe - Class to represent a TLS-secured TCP connection to a remote
 server.
-Copyright (c) 2019 Oliver Kreylos
+Copyright (c) 2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -64,6 +64,7 @@ class TLSPipe:public NetPipe
 	
 	/* Methods from IO::File: */
 	virtual int getFd(void) const;
+	virtual Threads::IOWatcher* watch(Threads::RunLoop& runLoop,unsigned int eventMask,bool enabled,Threads::IOWatcherEventHandler& eventHandler);
 	
 	/* Methods from Pipe: */
 	virtual bool waitForData(void) const;

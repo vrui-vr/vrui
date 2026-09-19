@@ -502,7 +502,7 @@ void VRDeviceClient::initClient(void)
 	readConnectReply();
 	
 	/* Register a disabled I/O watcher for the server pipe: */
-	pipeWatcher=new Threads::IOWatcher(runLoop,pipe->getFd(),Threads::IOWatcher::Read,false,*Threads::createFunctionCall(this,&VRDeviceClient::handlePipeMessage));
+	pipeWatcher=pipe->watch(runLoop,Threads::IOWatcher::Read,false,*Threads::createFunctionCall(this,&VRDeviceClient::handlePipeMessage));
 	}
 
 VRDeviceClient::VRDeviceClient(Threads::RunLoop& sRunLoop,const char* deviceServerHostName,int deviceServerPort)

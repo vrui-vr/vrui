@@ -543,7 +543,7 @@ void VRDeviceServer::newClientConnection(Threads::IOWatcherEvent& event,Comm::Li
 	#endif
 	
 	/* Create an I/O watcher for the client's communication pipe: */
-	newClient->pipeWatcher=new Threads::IOWatcher(runLoop,newClient->pipe->getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::clientMessage,newClient));
+	newClient->pipeWatcher=newClient->pipe->watch(runLoop,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::clientMessage,newClient));
 	
 	#if VRDEVICEDAEMON_DEBUG_PROTOCOL
 	printf("Client connected\n");
@@ -1011,7 +1011,7 @@ VRDeviceServer::VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDevi
 		{
 		/* Create a listening TCP socket and an I/O watcher for it: */
 		tcpListeningSocket=new Comm::ListeningTCPSocket(configFile.retrieveValue<int>("serverPort"),5);
-		tcpListeningSocketWatcher=new Threads::IOWatcher(runLoop,tcpListeningSocket->getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::newClientConnection,*tcpListeningSocket));
+		tcpListeningSocketWatcher=tcpListeningSocket->watch(runLoop,true,*Threads::createFunctionCall(this,&VRDeviceServer::newClientConnection,*tcpListeningSocket));
 		}
 	
 	/* Check if the server should listen for client connection on a UNIX domain socket: */
@@ -1019,7 +1019,7 @@ VRDeviceServer::VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDevi
 		{
 		/* Create a listening UNIX socket and an I/O watcher for it: */
 		unixListeningSocket=new Comm::ListeningUNIXSocket(configFile.retrieveString("serverSocketName").c_str(),5,configFile.retrieveValue<bool>("serverSocketAbstract",true));
-		unixListeningSocketWatcher=new Threads::IOWatcher(runLoop,unixListeningSocket->getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::newClientConnection,*unixListeningSocket));
+		unixListeningSocketWatcher=unixListeningSocket->watch(runLoop,true,*Threads::createFunctionCall(this,&VRDeviceServer::newClientConnection,*unixListeningSocket));
 		
 		/* Tell the device manager to use a shared memory block for device states: */
 		deviceStateMemoryFd=deviceManager->useSharedMemory(configFile.retrieveString("deviceStateMemoryName","/VRDeviceManagerDeviceState.shmem").c_str());

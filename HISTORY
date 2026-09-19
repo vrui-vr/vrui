@@ -8939,3 +8939,11 @@ Vrui-15.0-001:
     objects to their respective classes.
   - API change: Removed create* methods from Threads::RunLoop; client
     code now directly creates event sources with new.
+- Added virtual IO::File::watch method as a unified interface to watch
+  for events on general files.
+  - Implemented watch() for all IO::File-derived classes in the Comm
+    library.
+- Added watch methods to Comm::ListeningSocket, Comm::TCPSocket, and
+  Comm::UDPSocket.
+- Added watch method to RawHID::Device.
+- Use new watch methods wherever applicable.

@@ -36,6 +36,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StdError.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/FdSet.h>
+#include <Threads/IOWatcher.h>
 #include <Comm/ListeningTCPSocket.h>
 
 namespace Comm {
@@ -227,6 +228,12 @@ TCPPipe::~TCPPipe(void)
 int TCPPipe::getFd(void) const
 	{
 	return fd;
+	}
+
+Threads::IOWatcher* TCPPipe::watch(Threads::RunLoop& runLoop,unsigned int eventMask,bool enabled,Threads::IOWatcherEventHandler& eventHandler)
+	{
+	/* Return a new I/O watcher: */
+	return new Threads::IOWatcher(runLoop,fd,eventMask,enabled,eventHandler);
 	}
 
 bool TCPPipe::waitForData(void) const

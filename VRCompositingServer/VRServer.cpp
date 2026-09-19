@@ -189,7 +189,7 @@ void VRServer::listenSocketHandler(Threads::IOWatcherEvent& event)
 			tempPipe=0;
 			
 			/* Start watching the client connection: */
-			clientPipeWatcher=new Threads::IOWatcher(runLoop,clientPipe->getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::clientPipeHandler));
+			clientPipeWatcher=clientPipe->watch(runLoop,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::clientPipeHandler));
 			}
 		else
 			{
@@ -313,7 +313,7 @@ VRServer::VRServer(const std::string& vrDeviceServerSocketName,bool vrDeviceServ
 	{
 	/* Set up the event dispatcher: */
 	stdioWatcher=new Threads::IOWatcher(runLoop,STDIN_FILENO,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::stdioHandler));
-	listenSocketWatcher=new Threads::IOWatcher(runLoop,listenSocket.getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::listenSocketHandler));
+	listenSocketWatcher=listenSocket.watch(runLoop,true,*Threads::createFunctionCall(this,&VRServer::listenSocketHandler));
 	vsyncSignal=new Threads::UserSignal(runLoop,true,*Threads::createFunctionCall(this,&VRServer::vsyncSignalHandler));
 	
 	/* Check if we should listen for HTTP POST requests: */

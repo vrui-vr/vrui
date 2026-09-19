@@ -57,6 +57,7 @@ class TCPPipe:public NetPipe
 	
 	/* Methods from IO::File: */
 	virtual int getFd(void) const;
+	virtual Threads::IOWatcher* watch(Threads::RunLoop& runLoop,unsigned int eventMask,bool enabled,Threads::IOWatcherEventHandler& eventHandler);
 	
 	/* Methods from Pipe: */
 	virtual bool waitForData(void) const;

@@ -1,6 +1,6 @@
 /***********************************************************************
 UDPSocket - Wrapper class for UDP sockets ensuring exception safety.
-Copyright (c) 2004-2018 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Portable Communications Library (Comm).
 
@@ -29,6 +29,14 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 /* Forward declarations: */
 namespace Misc {
 class Time;
+}
+namespace Threads {
+template <class ParameterParam>
+class FunctionCall;
+class RunLoop;
+class IOWatcher;
+class IOWatcherEvent;
+typedef Threads::FunctionCall<IOWatcherEvent&> IOWatcherEventHandler;
 }
 namespace Comm {
 class IPv4Address;
@@ -79,6 +87,8 @@ class UDPSocket
 		{
 		return socketFd;
 		}
+	Threads::IOWatcher* watch(Threads::RunLoop& runLoop,unsigned int eventMask,bool enabled,Threads::IOWatcherEventHandler& eventHandler);
+	
 	IPv4SocketAddress getAddress(void) const; // Returns the IPv4 socket address to which the socket is bound
 	int getPortId(void) const; // Returns port ID assigned to a socket (deprecated; use getPort() on the socket address returnes by getAddress() instead)
 	void setMulticastLoopback(bool multicastLoopback); // Sets whether outgoing multicast packets are echoed back to the sender

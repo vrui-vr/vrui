@@ -1,6 +1,6 @@
 /***********************************************************************
 Device - Class representing a human interface device for raw access.
-Copyright (c) 2014-2024 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This file is part of the Raw HID Support Library (RawHID).
 
@@ -33,6 +33,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <iostream>
 #include <stdexcept>
 #include <Misc/StdError.h>
+#include <Threads/IOWatcher.h>
 #include <RawHID/BusType.h>
 
 #include <RawHID/Internal/UdevContext.h>
@@ -372,6 +373,12 @@ Device::~Device(void)
 	{
 	/* Close the device file: */
 	close(fd);
+	}
+
+Threads::IOWatcher* Device::watch(Threads::RunLoop& runLoop,bool enabled,Threads::IOWatcherEventHandler& eventHandler)
+	{
+	/* Return a new I/O watcher: */
+	return new Threads::IOWatcher(runLoop,fd,Threads::IOWatcher::Read,enabled,eventHandler);
 	}
 
 size_t Device::readReport(Device::Byte* report,size_t reportSize)

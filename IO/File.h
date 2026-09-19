@@ -1,7 +1,7 @@
 /***********************************************************************
 File - Base class for high-performance buffered binary read/write access
 to file-like objects.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the I/O Support Library (IO).
 
@@ -29,6 +29,16 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Misc/Endianness.h>
 #include <Misc/Autopointer.h>
 #include <Threads/RefCounted.h>
+
+/* Forward declarations: */
+namespace Threads {
+template <class ParameterParam>
+class FunctionCall;
+class RunLoop;
+class IOWatcher;
+class IOWatcherEvent;
+typedef Threads::FunctionCall<IOWatcherEvent&> IOWatcherEventHandler;
+}
 
 namespace IO {
 
@@ -192,6 +202,7 @@ class File:public Threads::RefCounted
 	
 	/* Methods: */
 	virtual int getFd(void) const; // Returns the concrete file's OS file descriptor, if applicable
+	virtual Threads::IOWatcher* watch(Threads::RunLoop& runLoop,unsigned int eventMask,bool enabled,Threads::IOWatcherEventHandler& eventHandler); // Returns an unreferenced I/O watcher on the given run loop to watch for events contained in the given mask on the file
 	virtual size_t getReadBufferSize(void) const; // Returns the (nominal) size of the read buffer in bytes
 	virtual size_t getWriteBufferSize(void) const; // Returns the (nominal) size of the write buffer in bytes
 	virtual size_t resizeReadBuffer(size_t newReadBufferSize); // Resizes the read buffer; increases given size if unread data in buffer would not fit into new buffer; returns actual read buffer size

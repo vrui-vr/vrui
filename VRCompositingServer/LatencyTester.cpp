@@ -172,7 +172,7 @@ LatencyTester::LatencyTester(int busTypeMask,unsigned int index,Threads::RunLoop
 	 nextTestId(1U)
 	{
 	/* Watch the raw HID device with the run loop: */
-	ioWatcher=new Threads::IOWatcher(runLoop,getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&LatencyTester::ioCallback));
+	ioWatcher=watch(runLoop,true,*Threads::createFunctionCall(this,&LatencyTester::ioCallback));
 	}
 
 LatencyTester::~LatencyTester(void)
