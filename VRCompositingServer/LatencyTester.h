@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <Misc/SizedTypes.h>
 #include <Misc/Autopointer.h>
-#include <Threads/RunLoop.h>
+#include <Threads/IOWatcher.h>
 #include <RawHID/BusType.h>
 #include <RawHID/Device.h>
 
@@ -34,6 +34,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
+class RunLoop;
 }
 
 class LatencyTester:public RawHID::Device
@@ -61,14 +62,14 @@ class LatencyTester:public RawHID::Device
 	
 	/* Elements: */
 	private:
-	Threads::RunLoop::IOWatcherOwner ioWatcher; // I/O watcher for the latency tester device
+	Threads::IOWatcherOwner ioWatcher; // I/O watcher for the latency tester device
 	Misc::UInt16 nextTestId; // ID to associate test requests and their results
 	Misc::Autopointer<SampleCallback> sampleCallback; // Callback called when a color sample exceeds the callback reporting threshold
 	Color sampleCallbackThreshold; // Minimal color value to invoke the sampling callback
 	Misc::Autopointer<ButtonEventCallback> buttonEventCallback; // Callback called when the latency tester's button is pressed
 	
 	/* Private methods: */
-	void ioCallback(Threads::RunLoop::IOWatcher::Event& event); // Callback called when a report can be read from the raw HID device
+	void ioCallback(Threads::IOWatcherEvent& event); // Callback called when a report can be read from the raw HID device
 	
 	/* Constructors and destructors: */
 	public:

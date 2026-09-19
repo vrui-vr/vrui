@@ -45,6 +45,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/ConfigurationFile.h>
 #include <Threads/FunctionCalls.h>
 #include <Threads/RunLoop.h>
+#include <Threads/SignalHandler.h>
 #include <DBus/Connection.h>
 #include <IO/OStream.h>
 #include <IO/JsonEntityTypes.h>
@@ -97,7 +98,7 @@ class VRServerLauncher // Class representing a VR server launcher entity
 	std::string activeDisplay; // The X11 display string for the display attached with the current session
 	int sleepInhibitorFd; // A UNIX file descriptor inhibiting the system from going to sleep
 	Comm::HttpServer* httpServer; // An HTTP server handling HTTP POST requests from a web interface
-	Threads::RunLoop::SignalHandlerOwner sigChldHandler; // Signal handler for SIGCHLD signals
+	Threads::SignalHandlerOwner sigChldHandler; // Signal handler for SIGCHLD signals
 	Server servers[2]; // Array of server tracking structures
 	std::vector<Environment> environments; // A list of pre-defined spatial environments that can be loaded into VRDeviceDaemon at run-time
 	
@@ -108,7 +109,7 @@ class VRServerLauncher // Class representing a VR server launcher entity
 	void sendEnvironments(IO::JsonObject& replyRoot);
 	void stopServers(void);
 	void handlePostRequest(Comm::HttpServer::PostRequest& postRequest); // Handles an HTTP POST request received by the HTTP server
-	void childTerminatedCallback(Threads::RunLoop::SignalHandler::Event& event); // Callback called when a child process terminates
+	void childTerminatedCallback(Threads::SignalHandlerEvent& event); // Callback called when a child process terminates
 	
 	/* DBus method calls and message handlers: */
 	void requestSleepInhibitorReply(DBus::Message& message);
@@ -540,7 +541,7 @@ void VRServerLauncher::handlePostRequest(Comm::HttpServer::PostRequest& postRequ
 		std::cout<<"VRServerLauncher: Malformed POST request"<<std::endl;
 	}
 
-void VRServerLauncher::childTerminatedCallback(Threads::RunLoop::SignalHandler::Event& event)
+void VRServerLauncher::childTerminatedCallback(Threads::SignalHandlerEvent& event)
 	{
 	/* Reap any terminated child processes: */
 	for(int serverIndex=0;serverIndex<2;++serverIndex)
@@ -886,7 +887,7 @@ VRServerLauncher::VRServerLauncher(Threads::RunLoop& sRunLoop,int httpPort,const
 	std::cout<<"VRServerLauncher: Servicing HTTP POST requests on TCP port "<<httpPort<<std::endl;
 	
 	/* Install a handler for SIGCHLD to receive a notification when one of the sub-processes dies: */
-	sigChldHandler=runLoop.createSignalHandler(SIGCHLD,true,*Threads::createFunctionCall(this,&VRServerLauncher::childTerminatedCallback));
+	sigChldHandler=new Threads::SignalHandler(runLoop,SIGCHLD,true,*Threads::createFunctionCall(this,&VRServerLauncher::childTerminatedCallback));
 	}
 
 VRServerLauncher::~VRServerLauncher(void)
@@ -902,7 +903,7 @@ VRServerLauncher::~VRServerLauncher(void)
 		close(sleepInhibitorFd);
 	}
 
-void sigHandlerFunction(Threads::RunLoop::SignalHandler::Event& event,bool& flag)
+void sigHandlerFunction(Threads::SignalHandlerEvent& event,bool& flag)
 	{
 	/* Mark that we received the signal: */
 	flag=false;
@@ -1008,13 +1009,13 @@ int main(int argc,char* argv[])
 	
 	/* Install a handler for SIGHUP that restarts the server launcher (and reloads its configuration file), but keeps running: */
 	bool dummy=false; // A dummy flag for the SIGHUP handler
-	Threads::RunLoop::SignalHandlerPtr sigHupHandler=runLoop.createSignalHandler(SIGHUP,true,*Threads::createFunctionCall(sigHandlerFunction,dummy));
+	Threads::EventSourceOwner sighupHandler=new Threads::SignalHandler(runLoop,SIGHUP,true,*Threads::createFunctionCall(sigHandlerFunction,dummy));
 	
 	/* Install handlers for SIGINT and SIGTERM that shut down the daemon: */
 	bool keepRunning=true;
-	Misc::Autopointer<Threads::RunLoop::SignalHandler::EventHandler> intTermHandler=Threads::createFunctionCall(sigHandlerFunction,keepRunning);
-	Threads::RunLoop::SignalHandlerPtr sigIntHandler=runLoop.createSignalHandler(SIGINT,true,*intTermHandler);
-	Threads::RunLoop::SignalHandlerPtr sigTermHandler=runLoop.createSignalHandler(SIGTERM,true,*intTermHandler);
+	Misc::Autopointer<Threads::SignalHandlerEventHandler> intTermHandler=Threads::createFunctionCall(sigHandlerFunction,keepRunning);
+	Threads::EventSourceOwner sigintHandler=new Threads::SignalHandler(runLoop,SIGINT,true,*intTermHandler);
+	Threads::EventSourceOwner sigtermHandler=new Threads::SignalHandler(runLoop,SIGTERM,true,*intTermHandler);
 	
 	int exitCode=0;
 	

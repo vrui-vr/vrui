@@ -106,7 +106,7 @@ void* FileMonitor::eventHandlingThreadMethod(void)
 	return 0;
 	}
 
-void FileMonitor::processEventsCallback(Threads::RunLoop::IOWatcher::Event& event)
+void FileMonitor::processEventsCallback(Threads::IOWatcherEvent& event)
 	{
 	#ifdef __linux__
 	
@@ -240,7 +240,7 @@ void FileMonitor::watch(Threads::RunLoop& runLoop)
 		stopPolling();
 		
 		/* Create an I/O watcher for the inotify instance's file descriptor: */
-		ioWatcher=runLoop.createIOWatcher(fd,Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&FileMonitor::processEventsCallback));
+		ioWatcher=new Threads::IOWatcher(runLoop,fd,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&FileMonitor::processEventsCallback));
 		}
 	}
 

@@ -24,7 +24,9 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <string>
 #include <vector>
 #include <Misc/SimpleObjectSet.h>
-#include <Threads/RunLoop.h>
+#include <Threads/EventTypes.h>
+#include <Threads/IOWatcher.h>
+#include <Threads/Timer.h>
 #include <Comm/ListeningSocket.h>
 #include <Comm/HttpServer.h>
 #include <Vrui/EnvironmentDefinition.h>
@@ -35,6 +37,9 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 /* Forward declarations: */
 namespace Misc {
 class ConfigurationFile;
+}
+namespace Threads {
+class RunLoop;
 }
 namespace IO {
 class JsonObject;
@@ -53,7 +58,7 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 		/* Elements: */
 		public:
 		Comm::PipePtr pipe; // Pipe connected to the client
-		Threads::RunLoop::IOWatcherOwner pipeWatcher; // I/O watcher watching the client pipe
+		Threads::IOWatcherOwner pipeWatcher; // I/O watcher watching the client pipe
 		#ifdef VERBOSE
 		std::string clientName; // Name of the client, to keep track of connections in verbose mode
 		#endif
@@ -120,17 +125,17 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	Vrui::EnvironmentDefinition environmentDefinition; // Definition of physical environment that can be queried by clients
 	
 	Comm::ListeningSocketPtr tcpListeningSocket; // Optional TCP socket on which the server accepts incoming client connections
-	Threads::RunLoop::IOWatcherOwner tcpListeningSocketWatcher; // I/O watcher watching the TCP listening socket
+	Threads::IOWatcherOwner tcpListeningSocketWatcher; // I/O watcher watching the TCP listening socket
 	Comm::ListeningSocketPtr unixListeningSocket; // Optional UNIX domain socket on which the server accepts incoming client connections
-	Threads::RunLoop::IOWatcherOwner unixListeningSocketWatcher; // I/O watcher watching the UNIX listening socket
+	Threads::IOWatcherOwner unixListeningSocketWatcher; // I/O watcher watching the UNIX listening socket
 	int deviceStateMemoryFd; // File descriptor to access the device manager's shared-memory device state
 	Comm::HttpServer* httpServer; // Optional HTTP server to accept HTTP POST requests from a web interface
 	
 	ClientStateList clientStates; // List of currently connected clients
 	unsigned int numActiveClients; // Number of clients that are currently active
 	unsigned int numStreamingClients; // Number of clients that are currently streaming
-	Threads::RunLoop::Interval suspendInterval; // Inactivity interval after which VR devices will be suspended
-	Threads::RunLoop::TimerOwner suspendTimer; // Timer to suspend VR devices a certain time after the last client deactivated
+	Threads::EventInterval suspendInterval; // Inactivity interval after which VR devices will be suspended
+	Threads::TimerOwner suspendTimer; // Timer to suspend VR devices a certain time after the last client deactivated
 	
 	bool haveUpdates; // Flag if any device state components have been updated since last status update was sent
 	bool* trackerUpdateFlags; // Array of flags indicating which trackers have been updated since the last state update was sent
@@ -157,11 +162,11 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	void disconnectClient(ClientState* client,bool removeFromList); // Disconnects the given client; removes the client's state from list if flag is true
 	void disconnectClientOnError(ClientStateList::iterator csIt,const std::runtime_error& err); // Forcefully disconnects a client after a communication error
 	void environmentDefinitionUpdated(ClientState* updatingClient); // Method called after a connected client or an HTTP client updated the server's environment definition
-	void clientMessage(Threads::RunLoop::IOWatcher::Event& event,ClientState* client); // Callback called when a message from a client arrives
-	void newClientConnection(Threads::RunLoop::IOWatcher::Event& event,Comm::ListeningSocket& listeningSocket); // Callback called when an incoming connection is waiting on the TCP or UNIX domain listening sockets
+	void clientMessage(Threads::IOWatcherEvent& event,ClientState* client); // Callback called when a message from a client arrives
+	void newClientConnection(Threads::IOWatcherEvent& event,Comm::ListeningSocket& listeningSocket); // Callback called when an incoming connection is waiting on the TCP or UNIX domain listening sockets
 	void getServerStatus(IO::JsonObject& replyRoot); // Encodes the server's current state in the given JSON object
 	void handlePostRequest(Comm::HttpServer::PostRequest& postRequest); // Handles an HTTP POST request received from a web interface
-	void suspendTimeout(Threads::RunLoop::Timer::Event& event); // Callback called after a period of inactivity
+	void suspendTimeout(Threads::TimerEvent& event); // Callback called after a period of inactivity
 	
 	bool writeStateUpdates(ClientStateList::iterator csIt); // Writes changes in the device manager's device state to the given client; returns false on error
 	bool writeServerState(ClientStateList::iterator csIt); // Writes the device manager's current (locked) state to the given client; returns false on error
@@ -185,9 +190,5 @@ class VRDeviceServer:public VRDeviceManager::VRStreamer,public Vrui::VRDevicePro
 	
 	/* New methods: */
 	void run(void); // Runs the server state machine
-	void stop(void) // Stops the server state machine; can be called asynchronously
-		{
-		/* Stop the run loop's event handling: */
-		runLoop.stop();
-		}
+	void stop(void); // Stops the server state machine; can be called asynchronously
 	};

@@ -30,7 +30,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/Autopointer.h>
 #include <Threads/Mutex.h>
 #include <Threads/MutexCond.h>
-#include <Threads/RunLoop.h>
+#include <Threads/IOWatcher.h>
 #include <Comm/Pipe.h>
 #include <Vrui/Internal/VRDeviceState.h>
 #include <Vrui/Internal/BatteryState.h>
@@ -46,6 +46,7 @@ class SharedMemory;
 namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
+class RunLoop;
 }
 namespace Vrui {
 class EnvironmentDefinition;
@@ -84,7 +85,7 @@ class VRDeviceClient:public VRDeviceProtocol
 	private:
 	Threads::RunLoop& runLoop; // Reference to the run loop dispatching events
 	Comm::PipePtr pipe; // Pipe connected to device server
-	Threads::RunLoop::IOWatcherOwner pipeWatcher; // I/O watcher for events on the device server pipe
+	Threads::IOWatcherOwner pipeWatcher; // I/O watcher for events on the device server pipe
 	bool local; // Flag whether the connected device server runs on the same host, i.e., uses the same time stamp source
 	unsigned int serverProtocolVersionNumber; // Version number of server protocol
 	bool serverHasTimeStamps; // Flag whether the connected device server sends tracker state time stamps
@@ -118,7 +119,7 @@ class VRDeviceClient:public VRDeviceProtocol
 	
 	/* Private methods: */
 	void readConnectReply(void); // Reads the server's initial connect reply message
-	void handlePipeMessage(Threads::RunLoop::IOWatcher::Event& event); // Method called when data can be read from the server connection
+	void handlePipeMessage(Threads::IOWatcherEvent& event); // Method called when data can be read from the server connection
 	void initClient(void); // Initializes communication between device server and client
 	
 	/* Constructors and destructors: */

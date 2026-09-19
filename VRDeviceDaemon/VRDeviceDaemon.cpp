@@ -40,6 +40,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/ConfigurationFile.h>
 #include <Threads/FunctionCalls.h>
 #include <Threads/RunLoop.h>
+#include <Threads/SignalHandler.h>
 #include <Comm/Pipe.h>
 #include <Vrui/Internal/Config.h>
 
@@ -47,7 +48,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <VRDeviceDaemon/VRDeviceManager.h>
 #include <VRDeviceDaemon/VRDeviceServer.h>
 
-void signalHandlerFunction(Threads::RunLoop::SignalHandler::Event& event,bool& flag)
+void signalHandlerFunction(Threads::SignalHandlerEvent& event,bool& flag)
 	{
 	/* Mark that we received the signal: */
 	flag=false;
@@ -179,13 +180,13 @@ int main(int argc,char* argv[])
 		
 		/* Install a handler for SIGHUP that restarts the server launcher (and reloads its configuration file), but keeps running: */
 		bool dummy=false; // A dummy flag for the SIGHUP handler
-		runLoop.createSignalHandler(SIGHUP,true,*Threads::createFunctionCall(signalHandlerFunction,dummy));
+		Threads::EventSourceOwner sighup=new Threads::SignalHandler(runLoop,SIGHUP,true,*Threads::createFunctionCall(signalHandlerFunction,dummy));
 		
 		/* Install handlers for SIGINT and SIGTERM that shut down the daemon: */
 		bool keepRunning=true;
-		Misc::Autopointer<Threads::RunLoop::SignalHandler::EventHandler> intTermHandler=Threads::createFunctionCall(signalHandlerFunction,keepRunning);
-		runLoop.createSignalHandler(SIGINT,true,*intTermHandler);
-		runLoop.createSignalHandler(SIGTERM,true,*intTermHandler);
+		Misc::Autopointer<Threads::SignalHandlerEventHandler> intTermHandler=Threads::createFunctionCall(signalHandlerFunction,keepRunning);
+		Threads::EventSourceOwner sigint=new Threads::SignalHandler(runLoop,SIGINT,true,*intTermHandler);
+		Threads::EventSourceOwner sigterm=new Threads::SignalHandler(runLoop,SIGTERM,true,*intTermHandler);
 		
 		/* Run until shut down: */
 		while(keepRunning)

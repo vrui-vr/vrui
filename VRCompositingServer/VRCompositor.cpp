@@ -28,6 +28,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <iostream>
 #include <Misc/SizedTypes.h>
 #include <Threads/FunctionCalls.h>
+#include <Threads/UserSignal.h>
 #include <IO/OpenFile.h>
 #include <Vulkan/Instance.h>
 #include <Vulkan/Device.h>
@@ -858,7 +859,7 @@ long tonsec(const Realtime::Time& time)
 
 }
 
-void VRCompositor::run(Threads::RunLoop::UserSignal& vsyncSignal)
+void VRCompositor::run(Threads::UserSignal& vsyncSignal)
 	{
 	/* If the device client does not have shared memory, start streaming VR device states: */
 	if(!vrDeviceClient.hasSharedMemory())

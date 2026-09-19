@@ -34,6 +34,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Threads/FunctionCalls.h>
+#include <Threads/RunLoop.h>
 #include <IO/ValueSource.h>
 #include <IO/JsonEntityTypes.h>
 #include <Comm/TCPPipe.h>
@@ -113,7 +114,7 @@ void VRDeviceServer::goInactive(void)
 	
 	/* Set and re-enable the suspend timer if there is one: */
 	if(suspendTimer!=0)
-		suspendTimer->setTimeout(Threads::RunLoop::Time()+suspendInterval,true);
+		suspendTimer->setTimeout(Threads::EventTime()+suspendInterval,true);
 	}
 
 void VRDeviceServer::goActive(void)
@@ -192,7 +193,7 @@ void VRDeviceServer::environmentDefinitionUpdated(VRDeviceServer::ClientState* u
 		}
 	}
 
-void VRDeviceServer::clientMessage(Threads::RunLoop::IOWatcher::Event& event,VRDeviceServer::ClientState* client)
+void VRDeviceServer::clientMessage(Threads::IOWatcherEvent& event,VRDeviceServer::ClientState* client)
 	{
 	try
 		{
@@ -513,7 +514,7 @@ void VRDeviceServer::clientMessage(Threads::RunLoop::IOWatcher::Event& event,VRD
 		}
 	}
 
-void VRDeviceServer::newClientConnection(Threads::RunLoop::IOWatcher::Event& event,Comm::ListeningSocket& listeningSocket)
+void VRDeviceServer::newClientConnection(Threads::IOWatcherEvent& event,Comm::ListeningSocket& listeningSocket)
 	{
 	#if VRDEVICEDAEMON_DEBUG_PROTOCOL
 	printf("Creating new client state..."); fflush(stdout);
@@ -542,7 +543,7 @@ void VRDeviceServer::newClientConnection(Threads::RunLoop::IOWatcher::Event& eve
 	#endif
 	
 	/* Create an I/O watcher for the client's communication pipe: */
-	newClient->pipeWatcher=runLoop.createIOWatcher(newClient->pipe->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::clientMessage,newClient));
+	newClient->pipeWatcher=new Threads::IOWatcher(runLoop,newClient->pipe->getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::clientMessage,newClient));
 	
 	#if VRDEVICEDAEMON_DEBUG_PROTOCOL
 	printf("Client connected\n");
@@ -808,7 +809,7 @@ void VRDeviceServer::handlePostRequest(Comm::HttpServer::PostRequest& postReques
 		}
 	}
 
-void VRDeviceServer::suspendTimeout(Threads::RunLoop::Timer::Event& event)
+void VRDeviceServer::suspendTimeout(Threads::TimerEvent& event)
 	{
 	#ifdef VERBOSE
 	printf("VRDeviceServer: Suspending devices due to inactivity\n");
@@ -1010,7 +1011,7 @@ VRDeviceServer::VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDevi
 		{
 		/* Create a listening TCP socket and an I/O watcher for it: */
 		tcpListeningSocket=new Comm::ListeningTCPSocket(configFile.retrieveValue<int>("serverPort"),5);
-		tcpListeningSocketWatcher=runLoop.createIOWatcher(tcpListeningSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::newClientConnection,*tcpListeningSocket));
+		tcpListeningSocketWatcher=new Threads::IOWatcher(runLoop,tcpListeningSocket->getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::newClientConnection,*tcpListeningSocket));
 		}
 	
 	/* Check if the server should listen for client connection on a UNIX domain socket: */
@@ -1018,7 +1019,7 @@ VRDeviceServer::VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDevi
 		{
 		/* Create a listening UNIX socket and an I/O watcher for it: */
 		unixListeningSocket=new Comm::ListeningUNIXSocket(configFile.retrieveString("serverSocketName").c_str(),5,configFile.retrieveValue<bool>("serverSocketAbstract",true));
-		unixListeningSocketWatcher=runLoop.createIOWatcher(unixListeningSocket->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::newClientConnection,*unixListeningSocket));
+		unixListeningSocketWatcher=new Threads::IOWatcher(runLoop,unixListeningSocket->getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRDeviceServer::newClientConnection,*unixListeningSocket));
 		
 		/* Tell the device manager to use a shared memory block for device states: */
 		deviceStateMemoryFd=deviceManager->useSharedMemory(configFile.retrieveString("deviceStateMemoryName","/VRDeviceManagerDeviceState.shmem").c_str());
@@ -1029,15 +1030,15 @@ VRDeviceServer::VRDeviceServer(Threads::RunLoop& sRunLoop,VRDeviceManager& sDevi
 		{
 		/* Create an HTTP server and register an HTTP POST request handler: */
 		httpServer=new Comm::HttpServer(runLoop,configFile.retrieveValue<int>("httpPort"));
-		httpServer->setStillAliveInterval(Threads::RunLoop::Interval(15,0));
+		httpServer->setStillAliveInterval(Threads::EventInterval(15,0));
 		httpServer->setPostRequestHandler(*Threads::createFunctionCall(this,&VRDeviceServer::handlePostRequest));
 		}
 	
 	/* Create an inactive timer event listener to suspend VR devices after a certain period of inactivity: */
-	suspendInterval=Threads::RunLoop::Interval(configFile.retrieveValue<int>("suspendTimeout",0),0);
+	suspendInterval=Threads::EventInterval(configFile.retrieveValue<int>("suspendTimeout",0),0);
 	if(suspendInterval.tv_sec!=0)
 		{
-		suspendTimer=runLoop.createTimer(Threads::RunLoop::Time()+suspendInterval,*Threads::createFunctionCall(this,&VRDeviceServer::suspendTimeout));
+		suspendTimer=new Threads::Timer(runLoop,Threads::EventTime()+suspendInterval,*Threads::createFunctionCall(this,&VRDeviceServer::suspendTimeout));
 		suspendTimer->disable();
 		}
 	
@@ -1356,4 +1357,10 @@ void VRDeviceServer::run(void)
 	
 	/* Disable update notifications: */
 	deviceManager->setStreamer(0);
+	}
+
+void VRDeviceServer::stop(void)
+	{
+	/* Stop the run loop's event handling: */
+	runLoop.stop();
 	}

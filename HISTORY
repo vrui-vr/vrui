@@ -8925,3 +8925,17 @@ Vrui-15.0-001:
     - It's only been 15 years since C++11 came out...
 - Added Threads::LockFreeRingBuffer for high-performance and low-latency
   streaming between a single producer and a single consumer of data.
+- Break up the massive Threads::RunLoop class to reduce the amount of
+  header code that has to be processed for each use and allow aggressive
+  forward declarations:
+  - Created Threads::EventTypes with common declarations such as
+    EventTime and EventInterval as well as base classes for event
+    sources and events.
+  - Created Threads::IOWatcher, Threads::Timer, Threads::SignalHandler,
+    Threads::UserSignal, and Threads::ProcessFunction.
+    - API change: These classes are no longer part of Threads::RunLoop
+      and are now stand-alone in Threads under the same names.
+  - Moved the private methods of Threads::RunLoop that managed those
+    objects to their respective classes.
+  - API change: Removed create* methods from Threads::RunLoop; client
+    code now directly creates event sources with new.

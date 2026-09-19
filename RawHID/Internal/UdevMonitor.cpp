@@ -36,7 +36,7 @@ namespace RawHID {
 Methods of class UdevMonitor:
 ****************************/
 
-void UdevMonitor::ioEventHandler(Threads::RunLoop::IOWatcher::Event& event)
+void UdevMonitor::ioEventHandler(Threads::IOWatcherEvent& event)
 	{
 	/* Wait for and receive a device event: */
 	UdevDevice eventDevice(udev_monitor_receive_device(monitor));
@@ -158,17 +158,17 @@ void UdevMonitor::watch(Threads::RunLoop& runLoop,DeviceEventHandler& newDeviceE
 	{
 	/* Create an I/O watcher for the monitor's event file descriptor if there isn't one yet: */
 	if(ioWatcher==0)
-		ioWatcher=runLoop.createIOWatcher(fd,Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&UdevMonitor::ioEventHandler));
+		ioWatcher=new Threads::IOWatcher(runLoop,fd,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&UdevMonitor::ioEventHandler));
 	
 	/* Replace the current device event handler: */
 	deviceEventHandler=&newDeviceEventHandler;
 	}
 
-void UdevMonitor::watch(Threads::RunLoop& runLoop,Threads::RunLoop::IOWatcher::EventHandler& newIoEventHandler)
+void UdevMonitor::watch(Threads::RunLoop& runLoop,Threads::IOWatcherEventHandler& newIoEventHandler)
 	{
 	/* Create an I/O watcher for the monitor's event file descriptor if there isn't one yet: */
 	if(ioWatcher==0)
-		ioWatcher=runLoop.createIOWatcher(fd,Threads::RunLoop::IOWatcher::Read,true,newIoEventHandler);
+		ioWatcher=new Threads::IOWatcher(runLoop,fd,Threads::IOWatcher::Read,true,newIoEventHandler);
 	
 	/* Destroy the current device event handler: */
 	deviceEventHandler=0;

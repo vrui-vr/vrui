@@ -290,7 +290,7 @@ void EventDevice::initFeatureMaps(void)
 		}
 	}
 
-void EventDevice::ioEventCallback(Threads::RunLoop::IOWatcher::Event& event)
+void EventDevice::ioEventCallback(Threads::IOWatcherEvent& event)
 	{
 	/* Process pending events: */
 	processEvents();
@@ -697,7 +697,7 @@ void EventDevice::processEvents(void)
 void EventDevice::watch(Threads::RunLoop& runLoop)
 	{
 	/* Replace any current device watcher with a new one: */
-	deviceWatcher=runLoop.createIOWatcher(fd,Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&EventDevice::ioEventCallback));
+	deviceWatcher=new Threads::IOWatcher(runLoop,fd,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&EventDevice::ioEventCallback));
 	}
 
 void EventDevice::unwatch(void)

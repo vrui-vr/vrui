@@ -33,6 +33,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Threads/FunctionCalls.h>
 #include <Threads/Thread.h>
 #include <Threads/RunLoop.h>
+#include <Threads/IOWatcher.h>
+#include <Threads/UserSignal.h>
 #include <IO/JsonEntityTypes.h>
 #include <Comm/Pipe.h>
 #include <Comm/ListeningUNIXSocket.h>
@@ -65,19 +67,19 @@ class VRServer
 	/* A UNIX socket and pipe to communicate with VR application clients: */
 	Comm::ListeningUNIXSocket listenSocket; // UNIX socket listening for incoming client connections
 	Comm::UNIXPipe* clientPipe; // UNIX pipe connected to the current client
-	Threads::RunLoop::IOWatcherOwner stdioWatcher; // Watcher for standard input
-	Threads::RunLoop::IOWatcherOwner listenSocketWatcher; // Watcher for the listening UNIX socket
-	Threads::RunLoop::IOWatcherOwner clientPipeWatcher; // Watcher for the pipe connected to the current client
-	Threads::RunLoop::UserSignalOwner vsyncSignal; // User signal for vsync events from the compositing thread
+	Threads::IOWatcherOwner stdioWatcher; // Watcher for standard input
+	Threads::IOWatcherOwner listenSocketWatcher; // Watcher for the listening UNIX socket
+	Threads::IOWatcherOwner clientPipeWatcher; // Watcher for the pipe connected to the current client
+	Threads::UserSignalOwner vsyncSignal; // User signal for vsync events from the compositing thread
 	
 	/* An optional HTTP server to process HTTP POST requests from a web interface: */
 	Comm::HttpServer* httpServer;
 	
 	/* Private methods: */
-	void stdioHandler(Threads::RunLoop::IOWatcher::Event& event);
-	void listenSocketHandler(Threads::RunLoop::IOWatcher::Event& event);
-	void clientPipeHandler(Threads::RunLoop::IOWatcher::Event& event);
-	void vsyncSignalHandler(Threads::RunLoop::UserSignal::Event& event);
+	void stdioHandler(Threads::IOWatcherEvent& event);
+	void listenSocketHandler(Threads::IOWatcherEvent& event);
+	void clientPipeHandler(Threads::IOWatcherEvent& event);
+	void vsyncSignalHandler(Threads::UserSignalEvent& event);
 	void* compositorThreadMethod(void);
 	void handlePostRequest(Comm::HttpServer::PostRequest& postRequest);
 	
@@ -105,7 +107,7 @@ const unsigned int VRServer::httpProtocolVersion=2U;
 Methods of class VRServer:
 *************************/
 
-void VRServer::stdioHandler(Threads::RunLoop::IOWatcher::Event& event)
+void VRServer::stdioHandler(Threads::IOWatcherEvent& event)
 	{
 	/* Read everything available on stdin: */
 	char buffer[1024];
@@ -154,7 +156,7 @@ void VRServer::stdioHandler(Threads::RunLoop::IOWatcher::Event& event)
 		}
 	}
 
-void VRServer::listenSocketHandler(Threads::RunLoop::IOWatcher::Event& event)
+void VRServer::listenSocketHandler(Threads::IOWatcherEvent& event)
 	{
 	Comm::UNIXPipe* tempPipe=0;
 	try
@@ -187,7 +189,7 @@ void VRServer::listenSocketHandler(Threads::RunLoop::IOWatcher::Event& event)
 			tempPipe=0;
 			
 			/* Start watching the client connection: */
-			clientPipeWatcher=runLoop.createIOWatcher(clientPipe->getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::clientPipeHandler));
+			clientPipeWatcher=new Threads::IOWatcher(runLoop,clientPipe->getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::clientPipeHandler));
 			}
 		else
 			{
@@ -204,7 +206,7 @@ void VRServer::listenSocketHandler(Threads::RunLoop::IOWatcher::Event& event)
 		}
 	}
 
-void VRServer::clientPipeHandler(Threads::RunLoop::IOWatcher::Event& event)
+void VRServer::clientPipeHandler(Threads::IOWatcherEvent& event)
 	{
 	/* Read data and close the client connection if the client hung up: */
 	try
@@ -228,7 +230,7 @@ void VRServer::clientPipeHandler(Threads::RunLoop::IOWatcher::Event& event)
 		}
 	}
 
-void VRServer::vsyncSignalHandler(Threads::RunLoop::UserSignal::Event& event)
+void VRServer::vsyncSignalHandler(Threads::UserSignalEvent& event)
 	{
 	/* Bail out if there is no client connected: */
 	if(clientPipe==0)
@@ -310,16 +312,16 @@ VRServer::VRServer(const std::string& vrDeviceServerSocketName,bool vrDeviceServ
 	 clientPipe(0),httpServer(0)
 	{
 	/* Set up the event dispatcher: */
-	stdioWatcher=runLoop.createIOWatcher(STDIN_FILENO,Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::stdioHandler));
-	listenSocketWatcher=runLoop.createIOWatcher(listenSocket.getFd(),Threads::RunLoop::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::listenSocketHandler));
-	vsyncSignal=runLoop.createUserSignal(true,*Threads::createFunctionCall(this,&VRServer::vsyncSignalHandler));
+	stdioWatcher=new Threads::IOWatcher(runLoop,STDIN_FILENO,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::stdioHandler));
+	listenSocketWatcher=new Threads::IOWatcher(runLoop,listenSocket.getFd(),Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&VRServer::listenSocketHandler));
+	vsyncSignal=new Threads::UserSignal(runLoop,true,*Threads::createFunctionCall(this,&VRServer::vsyncSignalHandler));
 	
 	/* Check if we should listen for HTTP POST requests: */
 	if(httpListenPortId>=0)
 		{
 		/* Create an HTTP server and register an HTTP POST request handler: */
 		httpServer=new Comm::HttpServer(runLoop,httpListenPortId);
-		httpServer->setStillAliveInterval(Threads::RunLoop::Interval(15,0));
+		httpServer->setStillAliveInterval(Threads::EventInterval(15,0));
 		httpServer->setPostRequestHandler(*Threads::createFunctionCall(this,&VRServer::handlePostRequest));
 		}
 	

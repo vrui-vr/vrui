@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <string.h>
 #include <Threads/FunctionCalls.h>
 #include <Threads/Thread.h>
+#include <Threads/RunLoop.h>
 #include <RawHID/Internal/UdevContext.h>
 #include <RawHID/Internal/UdevDevice.h>
 #include <RawHID/Internal/UdevMonitor.h>
@@ -139,7 +140,7 @@ void* DeviceMonitor::eventDispatcherThreadMethod(void)
 	return 0;
 	}
 
-void DeviceMonitor::ioEventHandler(Threads::RunLoop::IOWatcher::Event& event)
+void DeviceMonitor::ioEventHandler(Threads::IOWatcherEvent& event)
 	{
 	/* Handle the next device event: */
 	handleNextDeviceEvent();

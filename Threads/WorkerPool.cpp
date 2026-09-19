@@ -27,6 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Threads/FunctionCalls.h>
 #include <Misc/MessageLogger.h>
 #include <Threads/Thread.h>
+#include <Threads/UserSignal.h>
 
 namespace Threads {
 
@@ -40,7 +41,7 @@ struct WorkerPool::Submission
 	public:
 	Misc::Autopointer<JobFunction> job; // Job function to execute
 	Misc::Autopointer<JobCompleteCallback> completeCallback; // Callback to call from worker thread when job is finished
-	RunLoop::UserSignalPtr completeSignal; // Run loop user signal to raise when job is finished
+	UserSignalPtr completeSignal; // Run loop user signal to raise when job is finished
 	
 	/* Constructors and destructors: */
 	Submission(void) // Dummy constructor
@@ -55,7 +56,7 @@ struct WorkerPool::Submission
 		 completeCallback(&sCompleteCallback)
 		{
 		}
-	Submission(JobFunction& sJob,RunLoop::UserSignal& sCompleteSignal) // Creates a submission for a job with a completion signal
+	Submission(JobFunction& sJob,UserSignal& sCompleteSignal) // Creates a submission for a job with a completion signal
 		:job(&sJob),
 		 completeSignal(&sCompleteSignal)
 		{
@@ -226,7 +227,7 @@ void WorkerPool::submitJob(WorkerPool::JobFunction& job,WorkerPool::JobCompleteC
 	theWorkerPool.submitJob(Submission(job,completeCallback));
 	}
 
-void WorkerPool::submitJob(WorkerPool::JobFunction& job,RunLoop::UserSignal& completeSignal)
+void WorkerPool::submitJob(WorkerPool::JobFunction& job,UserSignal& completeSignal)
 	{
 	/* Submit the job: */
 	theWorkerPool.submitJob(Submission(job,completeSignal));

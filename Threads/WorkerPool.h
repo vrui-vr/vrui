@@ -26,13 +26,13 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stddef.h>
 #include <Misc/RingBuffer.h>
 #include <Threads/MutexCond.h>
-#include <Threads/RunLoop.h>
 
 /* Forward declarations: */
 namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 class Thread;
+class UserSignal;
 }
 
 namespace Threads {
@@ -74,7 +74,7 @@ class WorkerPool
 	static void shutdown(void); // Shuts down the worker pool and blocks until all currently active jobs finish; no completion callbacks or signals will be emitted, and function objects will be destroyed
 	static void submitJob(JobFunction& job); // Executes the given job function asynchronously from a worker pool thread
 	static void submitJob(JobFunction& job,JobCompleteCallback& completeCallback); // Executes the given job function asynchronously from a worker pool thread; calls given callback from worker thread when job is finished
-	static void submitJob(JobFunction& job,RunLoop::UserSignal& userSignal); // Ditto, but signals the given user signal on completion, passing the job function as signal data
+	static void submitJob(JobFunction& job,UserSignal& userSignal); // Ditto, but signals the given user signal on completion, passing the job function as signal data
 	};
 
 }

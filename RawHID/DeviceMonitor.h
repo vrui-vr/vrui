@@ -27,13 +27,14 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <vector>
 #include <Misc/Autopointer.h>
 #include <Threads/Mutex.h>
-#include <Threads/RunLoop.h>
 
 /* Forward declarations: */
 namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
 class Thread;
+class RunLoop;
+class IOWatcherEvent;
 }
 namespace RawHID {
 class UdevContext;
@@ -125,7 +126,7 @@ class DeviceMonitor
 	/* Private methods: */
 	void handleNextDeviceEvent(void); // Receives and handles the next device event from the low-level udev monitor
 	void* eventDispatcherThreadMethod(void); // Thread method for the event dispatcher thread
-	void ioEventHandler(Threads::RunLoop::IOWatcher::Event& event); // Event handler for I/O events on the low-level udev monitor's event file descriptor
+	void ioEventHandler(Threads::IOWatcherEvent& event); // Event handler for I/O events on the low-level udev monitor's event file descriptor
 	
 	/* Constructors and destructors: */
 	public:
