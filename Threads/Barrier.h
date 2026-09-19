@@ -1,7 +1,7 @@
 /***********************************************************************
 Barrier - Class implementing synchronization points where a fixed number
 of threads have to come together before any can proceed.
-Copyright (c) 2006-2011 Oliver Kreylos
+Copyright (c) 2006-2026 Oliver Kreylos
 
 This file is part of the Portable Threading Library (Threads).
 
@@ -55,9 +55,9 @@ class Barrier
 	/* Elements: */
 	private:
 	pthread_mutex_t mutex; // A mutex serializing access to the barrier structure
-	volatile unsigned int numSynchronizingThreads; // Number of threads that have to synchronize before they can proceed
-	volatile unsigned int frame; // A frame counter to catch spurious wake-ups of waiting threads
-	volatile unsigned int numWaitingThreads; // Number of threads that are already waiting at the barrier
+	unsigned int numSynchronizingThreads; // Number of threads that have to synchronize before they can proceed
+	unsigned int frame; // A frame counter to catch spurious wake-ups of waiting threads
+	unsigned int numWaitingThreads; // Number of threads that are already waiting at the barrier
 	pthread_cond_t cond; // A condition variable to wake up waiting threads if the synchronization point is complete
 	
 	/* Constructors and destructors: */

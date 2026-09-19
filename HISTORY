@@ -8947,3 +8947,5 @@ Vrui-15.0-001:
   Comm::UDPSocket.
 - Added watch method to RawHID::Device.
 - Use new watch methods wherever applicable.
+- Remove volatile modifiers from element of Threads::Barrier; turns out,
+  they weren't needed in the first place.
