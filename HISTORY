@@ -8951,8 +8951,12 @@ Vrui-15.0-001:
   they weren't needed in the first place.
 - Replaced use of Misc::TimerEventScheduler in GLMotif widget classes
   with new GLMotif::ClickRepeatWidget mix-in class, offloading repeat
-  click handling to UI interaction code in higher-level toolkits, such
-  as Vrui::GUIInteractor.
+  click handling to window system embedding code.
+  - Added GLMotif::WidgetManager::requestClickRepeat method.
+  - Added clickRepeatDelay and clickRepeatInterval settings to
+		GLMotif::StyleSheet.
+  - Added configuration of multi-click time limit and click repeat
+    settings to Vrui intialization code.
 - API change: removed timerEventScheduler and related get/set methods
   from GLMotif::WidgetManager.
   - Adapted set-up code in Vrui.General.cpp.

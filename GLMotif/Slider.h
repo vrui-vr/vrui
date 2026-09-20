@@ -112,7 +112,6 @@ class Slider:public Widget,public DragWidget,public ClickRepeatWidget,public Var
 	virtual void pointerMotion(Event& event);
 	
 	/* Methods from class ClickRepeatWidget: */
-	virtual bool wantClickRepeat(void);
 	virtual void clickRepeat(void);
 	
 	/* Methods from class VariableTracker: */

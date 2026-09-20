@@ -341,6 +341,7 @@ class WidgetManager
 		}
 	void draw(GLContextData& contextData) const;
 	bool pointerButtonDown(Event& event); // Handles a button down event
+	void requestClickRepeat(Widget* widget); // Lets a widget request click repeat events; widget must currently have a a pointer down on it, and be derived from ClickRepeatWidget
 	bool pointerButtonUp(Event& event); // Handles a button up event
 	bool pointerMotion(Event& event); // Handles a pointer motion event
 	void grabPointer(Widget* widget); // Allows a widget to grab all pointer events

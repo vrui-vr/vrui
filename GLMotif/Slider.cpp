@@ -846,6 +846,11 @@ void Slider::pointerButtonDown(Event& event)
 				increment();
 				isClicking=1;
 				}
+			
+			/* Request click repeat events from now on: */
+			WidgetManager* manager=getManager();
+			if(manager!=0)
+				manager->requestClickRepeat(this);
 			}
 		}
 	}
@@ -931,12 +936,6 @@ void Slider::pointerMotion(Event& event)
 			update();
 			}
 		}
-	}
-
-bool Slider::wantClickRepeat(void)
-	{
-	/* Return true if the slider was increment-clicked: */
-	return isClicking!=0;
 	}
 
 void Slider::clickRepeat(void)

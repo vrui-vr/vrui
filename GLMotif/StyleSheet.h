@@ -1,7 +1,7 @@
 /***********************************************************************
 StyleSheet - Structure providing defaults for the look and feel of user
 interface widgets.
-Copyright (c) 2001-2019 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -72,6 +72,7 @@ struct StyleSheet
 	GLfloat sliderShaftDepth; // Depth (in z direction) of slider shaft
 	Color sliderShaftColor; // Color for slider shafts
 	double multiClickTime; // Maximum multi-click time interval in seconds
+	double clickRepeatDelay,clickRepeatInterval; // Initial delay and repeat interval for click repeat events in seconds
 	
 	/* Constructors and destructors: */
 	StyleSheet(void); // Creates an uninitialized style sheet

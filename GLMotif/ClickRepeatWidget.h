@@ -35,7 +35,6 @@ class ClickRepeatWidget
 	{
 	/* New methods: */
 	public:
-	virtual bool wantClickRepeat(void) =0; // Returns true if the widget wants to receive click repeat events after a pointerButtonDown event
 	virtual void clickRepeat(void) =0; // Sends a repeating click event to the widget
 	};
 

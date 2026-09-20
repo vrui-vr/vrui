@@ -33,7 +33,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 namespace GLMotif {
 
-class ScrollBar:public Widget,public DragWidget
+class ScrollBar:public Widget,public DragWidget,public CickRepeatWidget
 	{
 	/* Embedded classes: */
 	public:
@@ -114,7 +114,6 @@ class ScrollBar:public Widget,public DragWidget
 	virtual void textControlEvent(const TextControlEvent& event);
 	
 	/* Methods from class ClickRepeatWidget: */
-	virtual bool wantClickRepeat(void);
 	virtual void clickRepeat(void);
 	
 	/* New methods: */

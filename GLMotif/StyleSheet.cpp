@@ -1,7 +1,7 @@
 /***********************************************************************
 StyleSheet - Structure providing defaults for the look and feel of user
 interface widgets.
-Copyright (c) 2001-2019 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 
@@ -47,6 +47,8 @@ StyleSheet::StyleSheet(void)
 	sliderHandleColor=Color(0.75f,0.75f,0.75f);
 	sliderShaftColor=Color(0.333f,0.333f,0.333f);
 	multiClickTime=0.5;
+	clickRepeatDelay=0.5;
+	clickRepeatInterval=0.1;
 	}
 
 void StyleSheet::setFont(GLFont* sFont)

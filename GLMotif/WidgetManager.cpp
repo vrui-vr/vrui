@@ -32,6 +32,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <GLMotif/Event.h>
 #include <GLMotif/Widget.h>
 #include <GLMotif/WidgetAlgorithms.h>
+#include <GLMotif/ClickRepeatWidget.h>
 
 namespace GLMotif {
 
@@ -680,6 +681,15 @@ bool WidgetManager::pointerButtonDown(Event& event)
 		}
 	
 	return result;
+	}
+
+void WidgetManager::requestClickRepeat(Widget* widget)
+	{
+	ClickRepeatWidget* crWidget=dynamic_cast<ClickRepeatWidget*>(widget);
+	
+	/* Check that the requesting widget currently has a button down event on it... */
+	
+	/* This is where we register a repeating timer on behalf of the requesting widget... */
 	}
 
 bool WidgetManager::pointerButtonUp(Event& event)

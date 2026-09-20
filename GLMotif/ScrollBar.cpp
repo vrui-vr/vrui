@@ -431,6 +431,8 @@ void ScrollBar::pointerButtonDown(Event& event)
 			isClicking=true;
 			clickPositionIncrement=increment;
 			clickChangeReason=reason;
+			if(manager!=0)
+				manager->requestClickRepeat(this);
 			}
 		
 		/* Invalidate the visual representation: */
@@ -561,12 +563,6 @@ void ScrollBar::textControlEvent(const TextControlEvent& event)
 		/* Invalidate the visual representation: */
 		update();
 		}
-	}
-
-bool ScrollBar::wantClickRepeat(void)
-	{
-	/* Return true if the scroll bar was clicked: */
-	return isClicking;
 	}
 
 void ScrollBar::clickRepeat(void)

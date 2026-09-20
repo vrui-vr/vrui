@@ -925,6 +925,9 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 	configFileSection.updateValue("uiSliderWidth",uiStyleSheet.sliderHandleWidth);
 	configFileSection.updateValue("uiSliderHandleColor",uiStyleSheet.sliderHandleColor);
 	configFileSection.updateValue("uiSliderShaftColor",uiStyleSheet.sliderShaftColor);
+	configFileSection.updateValue("uiMultiClickTime",uiStyleSheet.multiClickTime);
+	configFileSection.updateValue("uiClickRepeatDelay",uiStyleSheet.clickRepeatDelay);
+	configFileSection.updateValue("uiClickRepeatInterval",uiStyleSheet.clickRepeatInterval);
 	
 	/* Finish initializing the input graph manager: */
 	inputGraphManager->finalize(glyphRenderer,virtualInputDevice);
