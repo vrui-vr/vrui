@@ -34,7 +34,6 @@ class Time;
 class CommandDispatcher;
 class CallbackList;
 class ConfigurationFileSection;
-class TimerEventScheduler;
 }
 namespace Threads {
 template <class ParameterParam>
@@ -337,7 +336,6 @@ MutexMenu* getMainMenu(void); // Returns pointer to the application's main menu
 GLMotif::Pager* getSettingsPager(void); // Returns the pager widget holding settings pages, so that applications or modules can add their own pages
 GLMotif::Button* addShowSettingsDialogButton(const char* buttonLabel); // Adds a button to show a pop-up window with application or module settings with the given label to the Vrui system menu and returns a pointer to the widget
 void removeShowSettingsDialogButton(GLMotif::Button* button); // Removes and deletes a previously added button from the Vrui system menu
-Misc::TimerEventScheduler* getTimerEventScheduler(void); // Returns pointer to the scheduler for application timer events
 TextEventDispatcher* getTextEventDispatcher(void); // Returns pointer to the GLMotif text event dispatcher
 GLMotif::WidgetManager* getWidgetManager(void); // Returns pointer to the UI component manager
 UIManager* getUiManager(void); // Returns pointer to the UI manager and widget arranger

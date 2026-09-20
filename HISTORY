@@ -8966,3 +8966,7 @@ Vrui-15.0-001:
   broken Images::TextureSet class.
 - Removed unused vruiFrameMutex from Vrui.Workbench.cpp.
 - Added initial version of Threads::WorkerBarrier class.
+- Removed Misc::TimerEventScheduler from Vrui state.
+  - Removed getTimerEventScheduler function from Vrui kernel interface.
+- Made some methods of GLMotif::WidgetManager virtual to allow window
+  systems to adapt by deriving from it.

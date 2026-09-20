@@ -64,7 +64,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 namespace Misc {
 class ConfigurationFileSection;
 class CallbackData;
-class TimerEventScheduler;
 }
 namespace Cluster {
 class Multiplexer;
@@ -287,7 +286,6 @@ struct VruiState
 	/* Widget management: */
 	GLMaterial widgetMaterial;
 	GLMotif::StyleSheet uiStyleSheet;
-	Misc::TimerEventScheduler* timerEventScheduler; // Scheduler for timer events
 	GLMotif::WidgetManager* widgetManager;
 	UIManager* uiManager;
 	GLMotif::PopupMenu* dialogsMenu;

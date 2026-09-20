@@ -50,7 +50,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Misc/ConfigurationFile.icpp>
-#include <Misc/TimerEventScheduler.h>
 #include <Realtime/Time.h>
 #include <Threads/Thread.h>
 #include <Threads/Barrier.h>
@@ -1863,12 +1862,10 @@ bool vruiHandleAllEvents(bool allowBlocking)
 	if(allowBlocking)
 		{
 		/* Block until any events arrive: */
-		if(vruiState->nextFrameTime!=0.0||vruiState->timerEventScheduler->hasPendingEvents())
+		if(vruiState->nextFrameTime!=0.0)
 			{
 			/* Calculate the time interval until the next scheduled event: */
 			double nextFrameTime=Math::Constants<double>::max;
-			if(vruiState->timerEventScheduler->hasPendingEvents())
-				nextFrameTime=vruiState->timerEventScheduler->getNextEventTime();
 			if(vruiState->nextFrameTime!=0.0&&nextFrameTime>vruiState->nextFrameTime)
 				nextFrameTime=vruiState->nextFrameTime;
 			double dtimeout=nextFrameTime-vruiState->appTime.peekTime();

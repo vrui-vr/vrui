@@ -263,7 +263,7 @@ class WidgetManager
 	/* Constructors and destructors: */
 	public:
 	WidgetManager(void); // Constructs an empty widget manager
-	~WidgetManager(void);
+	virtual ~WidgetManager(void);
 	
 	/* Methods: */
 	void setStyleSheet(const StyleSheet* newStyleSheet); // Sets the widget manager's style sheet
@@ -339,19 +339,19 @@ class WidgetManager
 		{
 		return time;
 		}
-	void draw(GLContextData& contextData) const;
-	bool pointerButtonDown(Event& event); // Handles a button down event
-	void requestClickRepeat(Widget* widget); // Lets a widget request click repeat events; widget must currently have a a pointer down on it, and be derived from ClickRepeatWidget
-	bool pointerButtonUp(Event& event); // Handles a button up event
-	bool pointerMotion(Event& event); // Handles a pointer motion event
-	void grabPointer(Widget* widget); // Allows a widget to grab all pointer events
-	void releasePointer(Widget* widget); // Releases a pointer grab
+	virtual void draw(GLContextData& contextData) const;
+	virtual bool pointerButtonDown(Event& event); // Handles a button down event
+	virtual void requestClickRepeat(Widget* widget); // Lets a widget request click repeat events; widget must currently have a a pointer down on it, and be derived from ClickRepeatWidget
+	virtual bool pointerButtonUp(Event& event); // Handles a button up event
+	virtual bool pointerMotion(Event& event); // Handles a pointer motion event
+	virtual void grabPointer(Widget* widget); // Allows a widget to grab all pointer events
+	virtual void releasePointer(Widget* widget); // Releases a pointer grab
 	bool isPointerGrabbed(void) const // Checks for an active pointer grab (hard or soft)
 		{
 		return pointerGrabWidget!=0;
 		}
-	bool requestFocus(Widget* widget); // Allows a widget to request the text entry focus; returns false if request was denied
-	void releaseFocus(Widget* widget); // Allows a widget to release the text entry focus
+	virtual bool requestFocus(Widget* widget); // Allows a widget to request the text entry focus; returns false if request was denied
+	virtual void releaseFocus(Widget* widget); // Allows a widget to release the text entry focus
 	bool hasFocus(const Widget* widget) const // Returns true if the given widget currently has the text entry focus
 		{
 		return textFocusWidget==widget;

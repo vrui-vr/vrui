@@ -43,7 +43,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Misc/Time.h>
-#include <Misc/TimerEventScheduler.h>
 #include <Threads/FunctionCalls.h>
 #include <Threads/WorkerPool.h>
 #include <IO/File.h>
@@ -933,7 +932,6 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 	inputGraphManager->finalize(glyphRenderer,virtualInputDevice);
 	
 	/* Initialize widget management: */
-	timerEventScheduler=new Misc::TimerEventScheduler;
 	widgetManager=new GLMotif::WidgetManager;
 	widgetManager->setStyleSheet(&uiStyleSheet);
 	widgetManager->setDrawOverlayWidgets(configFileSection.retrieveValue("drawOverlayWidgets",widgetManager->getDrawOverlayWidgets()));
@@ -3509,11 +3507,6 @@ void removeShowSettingsDialogButton(GLMotif::Button* button)
 	/* Remove the button from the system menu and delete it: */
 	vruiState->systemMenu->removeEntry(button);
 	delete button;
-	}
-
-Misc::TimerEventScheduler* getTimerEventScheduler(void)
-	{
-	return vruiState->timerEventScheduler;
 	}
 
 TextEventDispatcher* getTextEventDispatcher(void)
