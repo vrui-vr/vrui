@@ -33,7 +33,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 namespace GLMotif {
 
-class ScrollBar:public Widget,public DragWidget,public CickRepeatWidget
+class ScrollBar:public Widget,public DragWidget,public ClickRepeatWidget
 	{
 	/* Embedded classes: */
 	public:
