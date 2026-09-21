@@ -616,7 +616,6 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 	 pixelFont(0),
 	 useSound(false),
 	 widgetMaterial(GLMaterial::Color(1.0f,1.0f,1.0f),GLMaterial::Color(0.5f,0.5f,0.5f),25.0f),
-	 timerEventScheduler(0),
 	 widgetManager(0),uiManager(0),
 	 dialogsMenu(0),
 	 systemMenu(0),systemMenuTopLevel(false),dialogsMenuCascade(0),visletsMenuCascade(0),
@@ -694,7 +693,6 @@ VruiState::~VruiState(void)
 	inputGraphSelectionHelper.closeDialogs();
 	delete uiStyleSheet.font;
 	delete widgetManager;
-	delete timerEventScheduler;
 	
 	/* Delete the pixel font: */
 	delete pixelFont;
@@ -1202,9 +1200,6 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 		/* Calculate the minimum frame time: */
 		minimumFrameTime=1.0/maxFrameRate;
 		}
-	
-	/* Set the current application time in the timer event scheduler: */
-	timerEventScheduler->triggerEvents(lastFrame);
 	
 	/* Initialize the frame time calculator: */
 	numRecentFrameTimes=5;
@@ -1830,9 +1825,6 @@ void VruiState::update(void)
 	
 	/* Set the widget manager's time: */
 	widgetManager->setTime(lastFrame);
-	
-	/* Trigger all due timer events: */
-	timerEventScheduler->triggerEvents(lastFrame);
 	
 	/* Dispatch all text events: */
 	textEventDispatcher->dispatchEvents(*widgetManager);
