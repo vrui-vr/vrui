@@ -42,28 +42,124 @@ This is where the actual main loop stuff happens:
 - Vrui.Workbench.cpp 2614-2626
   - requestUpdate()
 
+Mainloop- or frame-related Vrui state:
+--------------------------------------
+
+- Vrui/Internal/Vrui.h 356-373
+	PrepareMainLoopFunctionType prepareMainLoopFunction;
+	void* prepareMainLoopFunctionData;
+	FrameFunctionType frameFunction;
+	void* frameFunctionData;
+	Misc::Autopointer<ApplicationDisplayFunctionNode> applicationDisplayFunction;
+	SoundFunctionType soundFunction;
+	void* soundFunctionData;
+	ResetNavigationFunctionType resetNavigationFunction;
+	void* resetNavigationFunctionData;
+	FinishMainLoopFunctionType finishMainLoopFunction;
+	void* finishMainLoopFunctionData;
+
+- Vrui/Internal/Vrui.h 356-373
+	Misc::Timer appTime; // Free-running application timer
+	double minimumFrameTime; // Lower limit on frame times; Vrui's main loop will block to pad frame times to this minimum
+	double lastFrame; // Application time at which the last frame was started
+	double lastFrameDelta; // Duration of last frame
+	double nextFrameTime; // Scheduled time to start next frame, or 0.0 if no frame scheduled
+	double synchFrameTime; // Precise time to be used for next frame
+	bool synchWait; // Flag whether to delay the next frame until wallclock time matches synch time
+	--- state to calculate median duration of previous frames, lot of effort for little gain ---
+	int numRecentFrameTimes; // Number of recent frame times to average from
+	double* recentFrameTimes; // Array of recent times to complete a frame
+	int nextFrameTimeIndex; // Index at which the next frame time is stored in the array
+	double* sortedFrameTimes; // Helper array to calculate median of frame times
+	double currentFrameTime; // Current frame time average
+	--- end of median frame time calculation state
+	double animationFrameInterval; // Suggested frame interval to be used for animations
+	Threads::Mutex frameCallbacksMutex; // Mutex protecting the list of extra frame callbacks
+	std::vector<FrameCallbackSlot> frameCallbacks; // List of extra frame callbacks
+	Misc::CallbackList preRenderingCallbacks; // List of callbacks called for each window group before anything is rendered
+	Misc::CallbackList postRenderingCallbacks; // List of callbacks called after all window groups have finished rendering
+
+- Vrui/Internal/Vrui.h 383-388
+	bool updateContinuously; // Flag if the inner Vrui loop never blocks
+	bool synced; // Flag whether Vrui frames are synchronized to some display
+	TimePoint nextVsync; // Predicted time at which the current frame's vsync event will occur
+	TimeVector vsyncPeriod; // Current estimate of time interval between subsequent vsync events
+	TimeVector exposureDelay; // Time interval between a vsync event and the time a frame submitted before that vsync will actually be visible to the user
+
 This is what we change:
 -----------------------
 
 - Integrate GLMotif click repeat into WidgetManager
-  - Centralize management of repeat intervals
-  - Centralize callback management
-  - Actual dispatch implemented by derived class?
+  - Create GLMotif::ClickRepeatWidget mix-in class
+    - virtual clickRepeat(...) method
+  - Add requestClickRepeat() to GLMotif::WidgetManager
+  - Make some WidgetManager methods virtual
+    - Derive Vrui::WidgetManager and put click repeat management in there
+      - Integrate Vrui::UIManager with Vrui::WidgetManager?
+      - Keep GLMotif window system-independent
+    - Could also apply to widget placement and make WidgetArranger classes obsolete
+  - Add click repeat settings to GLMotif::StyleSheet
+    - Override defaults from Vrui.cfg root section
+      - At some point, move UI configuration into subsection
 
+- New frame-related Vrui state:
+  - Threads::RunLoop - provides Vrui frame timing via lastDispatchTime
+    - Replace Misc::Timer appTime
+  - All Vrui time calculations based on Realtime::TimePointMonotonic and Realtime::TimeVector
+    - Times still reported to client code as double seconds since the first frame
+  - Frame rate cap via minimumFrameTime is enforced at the very beginning of a new frame
+  - lastFrame is the application time at the beginning of the current frame
+    - Usually a timer snapshot, but can get adjusted when running synchronized
+    - Gets reported as Vrui::getApplicationTime
+    - Guaranteed 0.0 during first frame
+  - lastFrameDelta is difference between lastFrame and previous lastFrame, i.e., exact duration of previous frame
+  - animationFrameTime is same as before, using double because exposed to clients
+  - nextFrameTime treated as before, using double because exposed to clients
+    - Initialize to lastFrame if running continuously, otherwise to infinity
+    - Adjust as Vrui::scheduleFrame is called
+    - Limit maximum wait time in Threads::RunLoop::waitForEvents
+      - Need maximum wait parameter for waitForEvents, specified as time point
+  - Do we really need the whole frame time averaging thing? Who uses it?
+    - It's used by fps display in windows, but is it needed?
+  - Ditch frame rate cap; it's from a time before there was Vrui::scheduleFrame and animation had to run with requestUpdate
+  - synchFrameTime/synchWait is used for playing back recordings at real speed
+    - Still need it
 
+- New frame sequence:
 
+- A new Vrui frame starts when RunLoop::waitForEvents returns
 
+1. Calculate the time point at which waitForEvents must return
+  - If there are unhandled events in any of the X11 event queues, don't wait at all -- this sucks, but is unavoidable, should be checked per-connection after rendering is complete
+  - nextFrameTime, result of clients calling Vrui::scheduleFrame or running in continuous mode
+  - synchFrameTime, set during previous frame by playback input device adapter
 
+2. Call RunLoop::waitForEvents with a latest wake-up time point
 
+3. If running in synch mode, set time snapshot to synchFrameTime
+  - If synch is forced, actually wait
+  - How does this play with timers?
+    - It doesn't. Timers are based on wall-clock time, not synch-adjusted time. How fix?
 
+4. Start a new Vrui frame
+  - Send currentTime to slaves in cluster mode
+  - Reset nextFrameTime
+    - Set to currentFrameTime if running continuously, otherwise to infinity
 
+5. Call RunLoop::dispatchPendingEvents
+  - May update states of physical input devices (Mouse/keyboard/multitouch via X11, HID via I/O watchers, some InputDeviceAdapters can use this)
 
+6. Update the rest of physical input devices
+  - Forward device states to slaves in cluster mode
 
+7. Update the input graph
 
+8. Do the rest of frame processing
 
+9. Do rendering
+  - Collect a union of "dirty" flags for all X11 event queues used by window groups; rendering calls may pull events from the socket into the queue
 
-
-
+10. Repeat from 1.
 
 This is how it breaks client code:
 ----------------------------------
