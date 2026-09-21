@@ -1,7 +1,7 @@
 /***********************************************************************
 GLContext - Class to encapsulate state relating to a single OpenGL
 context, to facilitate context sharing between windows.
-Copyright (c) 2013-2025 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This file is part of the OpenGL/GLX Support Library (GLXSupport).
 
@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Misc/Autopointer.h>
 #include <Misc/Rect.h>
 #include <Threads/RefCounted.h>
-#include <X11/X.h>
+#include <X11/Xlib.h>
 #include <GL/glx.h>
 
 /* Forward declarations: */
