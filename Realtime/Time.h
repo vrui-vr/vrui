@@ -1,7 +1,7 @@
 /***********************************************************************
 Time - Wrapper classes for absolute and relative time measured from one
 of a variety of POSIX clocks.
-Copyright (c) 2014-2023 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This file is part of the Realtime Processing Library (Realtime).
 
@@ -165,6 +165,10 @@ class TimeVector:public Time // Class for relative time vectors
 
 class TimePointRealtime:public Time // Class for absolute time points in seconds since the epoch (January 1st, 1970, 12:00 midnight)
 	{
+	/* Elements: */
+	public:
+	static const TimePointRealtime max; // The latest possible time point; all other time points are <= than this
+	
 	/* Constructors and destructors: */
 	public:
 	TimePointRealtime(void) // Creates time point by sampling the realtime clock
@@ -274,6 +278,10 @@ class TimePointRealtime:public Time // Class for absolute time points in seconds
 
 class TimePointMonotonic:public Time // Class for absolute time points in seconds since an unspecified time in the past
 	{
+	/* Elements: */
+	public:
+	static const TimePointMonotonic max; // The latest possible time point; all other time points are <= than this
+	
 	/* Constructors and destructors: */
 	public:
 	TimePointMonotonic(void) // Creates time point by sampling the monotonic clock
@@ -381,6 +389,10 @@ class TimePointMonotonic:public Time // Class for absolute time points in second
 
 class TimePointRaw:public Time // Class for absolute time points in seconds since an unspecified time in the past; does not experience discontinuities or drift
 	{
+	/* Elements: */
+	public:
+	static const TimePointRaw max; // The latest possible time point; all other time points are <= than this
+	
 	/* Constructors and destructors: */
 	public:
 	TimePointRaw(void) // Creates time point by sampling the raw monotonic clock

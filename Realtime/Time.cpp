@@ -1,7 +1,7 @@
 /***********************************************************************
 Time - Wrapper classes for absolute and relative time measured from one
 of a variety of POSIX clocks.
-Copyright (c) 2014-2024 Oliver Kreylos
+Copyright (c) 2014-2026 Oliver Kreylos
 
 This file is part of the Realtime Processing Library (Realtime).
 
@@ -23,6 +23,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Realtime/Time.h>
 
+#include <stdint.h>
 #include <errno.h>
 #include <sys/time.h>
 #include <Misc/StdError.h>
@@ -82,15 +83,60 @@ void Time::sleepUntil(clockid_t clockId,const Time& wakeupTime)
 	#endif
 	}
 
+namespace {
 
+/**********************************************************************************************
+Helper structures to determine the maximum value of an unknown integer type (please send help):
+**********************************************************************************************/
 
+template <class IntegerParam>
+struct MaxInteger
+	{
+	static const IntegerParam maxValue=0;
+	};
 
+template <>
+struct MaxInteger<int32_t>
+	{
+	static const int32_t maxValue=INT32_MAX;
+	};
 
+template <>
+struct MaxInteger<uint32_t>
+	{
+	static const uint32_t maxValue=UINT32_MAX;
+	};
 
+template <>
+struct MaxInteger<int64_t>
+	{
+	static const int64_t maxValue=INT64_MAX;
+	};
 
+template <>
+struct MaxInteger<uint64_t>
+	{
+	static const uint64_t maxValue=UINT64_MAX;
+	};
 
+}
 
+/******************************************
+Static elements of class TimePointRealtime:
+******************************************/
 
+const TimePointRealtime TimePointRealtime::max(MaxInteger<time_t>::maxValue,1000000000L-1L);
 
+/*******************************************
+Static elements of class TimePointMonotonic:
+*******************************************/
+
+const TimePointMonotonic TimePointMonotonic::max(MaxInteger<time_t>::maxValue,1000000000L-1L);
+
+/*************************************
+Static elements of class TimePointRaw:
+*************************************/
+
+const TimePointRaw TimePointRaw::max(MaxInteger<time_t>::maxValue,1000000000L-1L);
 
 }
