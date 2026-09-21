@@ -8949,24 +8949,36 @@ Vrui-15.0-001:
 - Use new watch methods wherever applicable.
 - Remove volatile modifiers from element of Threads::Barrier; turns out,
   they weren't needed in the first place.
-- Replaced use of Misc::TimerEventScheduler in GLMotif widget classes
-  with new GLMotif::ClickRepeatWidget mix-in class, offloading repeat
-  click handling to window system embedding code.
-  - Added GLMotif::WidgetManager::requestClickRepeat method.
-  - Added clickRepeatDelay and clickRepeatInterval settings to
-		GLMotif::StyleSheet.
-  - Added configuration of multi-click time limit and click repeat
-    settings to Vrui intialization code.
-- API change: removed timerEventScheduler and related get/set methods
-  from GLMotif::WidgetManager.
-  - Adapted set-up code in Vrui.General.cpp.
-- Added missing inline dependency on Misc library to Plugins library.
 - Rewrote ImageViewer example program to work with sets of images, added
   ability to load images from entire directory trees; replaced use of
   broken Images::TextureSet class.
-- Removed unused vruiFrameMutex from Vrui.Workbench.cpp.
 - Added initial version of Threads::WorkerBarrier class.
-- Removed Misc::TimerEventScheduler from Vrui state.
-  - Removed getTimerEventScheduler function from Vrui kernel interface.
-- Made some methods of GLMotif::WidgetManager virtual to allow window
-  systems to adapt by deriving from it.
+- Added constant max element to Realtime::TimePoint* classes.
+- Fixed bug that post-rendering callbacks weren't called in multi-window
+  environments.
+- Changed #include <X/X.h> to #include <X/Xlib.h> in GL/GLContext.h.
+- Large-scale restructuring: replace Vrui's ad-hoc main loop and event
+  handling with a Threads::RunLoop to simplify operation and inter-
+  thread communication inside Vrui and give client code a well-defined
+  place to anchor their own synchronous callbacks such as I/O watchers,
+  user signals, or timers.
+  - Replaced use of Misc::TimerEventScheduler in GLMotif widget classes
+    with new GLMotif::ClickRepeatWidget mix-in class, offloading repeat
+    click handling to window system embedding code.
+    - Added GLMotif::WidgetManager::requestClickRepeat method.
+    - Added clickRepeatDelay and clickRepeatInterval settings to
+  		GLMotif::StyleSheet.
+    - Added configuration of multi-click time limit and click repeat
+      settings to Vrui intialization code.
+  - Made some methods of GLMotif::WidgetManager virtual to allow window
+    systems to adapt by deriving from it.
+  - API change: removed timerEventScheduler and related get/set methods
+    from GLMotif::WidgetManager.
+    - Adapted set-up code in Vrui.General.cpp.
+  - Added missing inline dependency on Misc library to Plugins library.
+  - Removed unused vruiFrameMutex from Vrui.Workbench.cpp.
+  - Removed Misc::TimerEventScheduler from Vrui state.
+    - Removed getTimerEventScheduler function from Vrui kernel
+      interface.
+  - Created new internal Vrui::WindowGroup class to move some code out
+    of Vrui.Workbench.cpp.

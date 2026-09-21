@@ -79,6 +79,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/WindowProperties.h>
 #include <Vrui/DisplayState.h>
 #include <Vrui/Internal/MovieSaver.h>
+#include <Vrui/Internal/WindowGroup.h>
 
 #include <Vrui/Internal/VRWindowMono.h>
 #include <Vrui/Internal/VRWindowAnaglyph.h>
@@ -258,7 +259,7 @@ void VRWindow::rectChanged(const Rect& oldRect,const Rect& newRect)
 	if(windowGroup!=0)
 		{
 		/* Notify the Vrui run-time that the window size has changed: */
-		resizeWindow(windowGroup,this,getViewportSize(),getFramebufferSize());
+		windowGroup->resizeWindow(this,getViewportSize(),getFramebufferSize());
 		}
 	
 	/* Remember that the window was resized: */
@@ -917,13 +918,13 @@ void VRWindow::setWindowIndex(int newWindowIndex)
 		}
 	}
 
-void VRWindow::setWindowGroup(VruiWindowGroup* newWindowGroup)
+void VRWindow::setWindowGroup(WindowGroup* newWindowGroup)
 	{
 	/* Store the window group association: */
 	windowGroup=newWindowGroup;
 	
 	/* Inform the new group of the current viewport and frame buffer sizes: */
-	resizeWindow(windowGroup,this,getViewportSize(),getFramebufferSize());
+	windowGroup->resizeWindow(this,getViewportSize(),getFramebufferSize());
 	}
 
 void VRWindow::setVruiState(VruiState* newVruiState,bool newSynchronize)

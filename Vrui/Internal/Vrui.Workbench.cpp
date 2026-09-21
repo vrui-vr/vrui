@@ -85,6 +85,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/Internal/Vrui.h>
 #include <Vrui/Internal/Config.h>
+#include <Vrui/Internal/WindowGroup.h>
 
 #define VRUI_INSTRUMENT_MAINLOOP 0
 #if VRUI_INSTRUMENT_MAINLOOP
@@ -124,36 +125,6 @@ struct SynchronousIOCallbackSlot
 
 typedef std::vector<SynchronousIOCallbackSlot> SynchronousIOCallbackList;
 
-struct VruiWindowGroup
-	{
-	/* Embedded classes: */
-	public:
-	struct Window
-		{
-		/* Elements: */
-		public:
-		VRWindow* window; // Pointer to window
-		ISize viewportSize; // Window's current maximal viewport size
-		ISize frameSize; // Window's current maximal frame buffer size
-		};
-	
-	/* Elements: */
-	Display* display; // Display connection shared by all windows in the window group
-	int displayFd; // File descriptor for the display connection
-	bool hasPendingEvents; // Flag if the display connection has unhandled events in its event queue
-	GLContextPtr context; // OpenGL context shared by all windows in the group
-	DisplayState* displayState; // Display state structure shared by all windows in the group
-	std::vector<Window> windows; // List of pointers to windows in the window group
-	ISize maxViewportSize; // Maximum current viewport size of all windows in the group
-	ISize maxFrameSize; // Maximum current frame buffer size of all windows in the group
-	
-	/* Constructors and destructors: */
-	VruiWindowGroup(void)
-		:display(0),displayFd(-1),hasPendingEvents(false),displayState(0)
-		{
-		}
-	};
-
 /*****************************
 Private Vrui global variables:
 *****************************/
@@ -191,7 +162,7 @@ char* vruiApplicationName=0;
 int vruiNumWindows=0;
 VRWindow** vruiWindows=0;
 int vruiNumWindowGroups=0;
-VruiWindowGroup* vruiWindowGroups=0;
+WindowGroup* vruiWindowGroups=0;
 int vruiTotalNumWindows=0;
 int vruiFirstLocalWindowIndex=0;
 VRWindow** vruiTotalWindows=0;
@@ -259,13 +230,9 @@ void vruiErrorShutdown(bool signalError)
 		}
 	if(vruiWindows!=0)
 		{
-		/* Release all OpenGL state: */
+		/* Release all window groups' and window's OpenGL state: */
 		for(int i=0;i<vruiNumWindowGroups;++i)
-			{
-			for(std::vector<VruiWindowGroup::Window>::iterator wgIt=vruiWindowGroups[i].windows.begin();wgIt!=vruiWindowGroups[i].windows.end();++wgIt)
-				wgIt->window->releaseGLState();
-			vruiWindowGroups[i].windows.front().window->getContext().deinit();
-			}
+			vruiWindowGroups[i].releaseGLState();
 		
 		/* Delete all windows: */
 		for(int i=0;i<vruiNumWindows;++i)
@@ -532,35 +499,7 @@ void vruiGoToRootSection(const char*& rootSectionName,bool verbose)
 	vruiConfigFile->setCurrentSection(rootSectionName);
 	}
 
-struct VruiWindowGroupCreator // Structure defining a group of windows rendered sequentially by the same thread
-	{
-	/* Embedded classes: */
-	public:
-	struct VruiWindow // Structure defining a window inside a window group
-		{
-		/* Elements: */
-		public:
-		int windowIndex; // Index of the window in Vrui's main window array
-		Misc::ConfigurationFileSection windowConfigFileSection; // Configuration file section for the window
-		};
-	
-	/* Elements: */
-	public:
-	int groupId; // ID of the window group
-	std::string displayName; // Display name for this window group
-	int screen; // Screen index for this window group
-	std::vector<VruiWindow> windows; // List of the windows in this group
-	GLContext::Properties contextProperties; // OpenGL context properties for this window group
-	
-	/* Constructors and destructors: */
-	VruiWindowGroupCreator(int sGroupId)
-		:groupId(sGroupId),
-		 screen(-1)
-		{
-		}
-	};
-
-typedef Misc::HashTable<unsigned int,VruiWindowGroupCreator> VruiWindowGroupCreatorMap;
+typedef Misc::HashTable<unsigned int,WindowGroup::Creator> VruiWindowGroupCreatorMap;
 
 void vruiCollectWindowGroups(const std::vector<std::string>& windowNames,VruiWindowGroupCreatorMap& windowGroups)
 	{
@@ -590,7 +529,7 @@ void vruiCollectWindowGroups(const std::vector<std::string>& windowNames,VruiWin
 		if(wgIt.isFinished())
 			{
 			/* Start a new window group: */
-			wgIt=windowGroups.setAndFindEntry(VruiWindowGroupCreatorMap::Entry(groupId,VruiWindowGroupCreator(groupId)));
+			wgIt=windowGroups.setAndFindEntry(VruiWindowGroupCreatorMap::Entry(groupId,WindowGroup::Creator(vruiApplicationName,vruiNumWindows,vruiWindows,groupId)));
 			wgIt->getDest().displayName=displayName.first;
 			wgIt->getDest().screen=displayName.second;
 			vruiState->windowProperties.setContextProperties(wgIt->getDest().contextProperties);
@@ -602,136 +541,12 @@ void vruiCollectWindowGroups(const std::vector<std::string>& windowNames,VruiWin
 			}
 		
 		/* Add this window to the new or existing window group: */
-		VruiWindowGroupCreator::VruiWindow newWindow;
+		WindowGroup::Creator::Window newWindow;
 		newWindow.windowIndex=windowIndex;
 		newWindow.windowConfigFileSection=windowSection;
 		wgIt->getDest().windows.push_back(newWindow);
 		VRWindow::updateContextProperties(wgIt->getDest().contextProperties,windowSection);
 		}
-	}
-
-bool vruiCreateWindowGroup(const VruiWindowGroupCreator& group,const std::string& syncWindowName,InputDeviceAdapterMouse* mouseAdapter,InputDeviceAdapterMultitouch* multitouchAdapter,VruiWindowGroup& windowGroup)
-	{
-	if(vruiVerbose)
-		{
-		std::cout<<vruiErrorHeader<<"Creating window group "<<group.groupId<<" containing "<<group.windows.size()<<(group.windows.size()!=1?" windows":" window")<<" with visual type";
-		if(group.contextProperties.direct)
-			{
-			std::cout<<" direct";
-			if(group.contextProperties.stereo)
-				std::cout<<" stereo";
-			if(group.contextProperties.numSamples>1)
-				std::cout<<" with "<<group.contextProperties.numSamples<<" samples per pixel";
-			}
-		else
-			{
-			std::cout<<" indirect";
-			if(group.contextProperties.backbuffer)
-				std::cout<<" double-buffered";
-			}
-		std::cout<<std::endl;
-		}
-	
-	/* Create an OpenGL context for this window group: */
-	windowGroup.context=new GLContext(group.displayName.c_str());
-	windowGroup.context->initialize(group.screen,group.contextProperties);
-	windowGroup.display=windowGroup.context->getDisplay();
-	windowGroup.displayFd=ConnectionNumber(windowGroup.display);
-	
-	// DEBUGGING
-	// XSynchronize(windowGroup.display,true);
-	
-	/* Create all windows in the group: */
-	windowGroup.maxViewportSize=ISize(0,0);
-	windowGroup.maxFrameSize=ISize(0,0);
-	bool allWindowsOk=true;
-	for(std::vector<VruiWindowGroupCreator::VruiWindow>::const_iterator wIt=group.windows.begin();wIt!=group.windows.end();++wIt)
-		{
-		try
-			{
-			/* Assign a unique name to the window: */
-			std::string windowName=vruiApplicationName;
-			if(vruiNumWindows>1)
-				windowName+=Misc::stringPrintf(" - %d",wIt->windowIndex);
-			if(vruiVerbose)
-				std::cout<<vruiErrorHeader<<"Opening window "<<windowName<<" from configuration section "<<wIt->windowConfigFileSection.getName()<<':'<<std::endl;
-			
-			/* Create the new window and add it to the window group: */
-			VruiWindowGroup::Window newWindow;
-			newWindow.window=VRWindow::createWindow(*windowGroup.context,windowName.c_str(),wIt->windowConfigFileSection);
-			newWindow.window->makeCurrent();
-			newWindow.viewportSize=ISize(0,0);
-			newWindow.frameSize=ISize(0,0);
-			windowGroup.windows.push_back(newWindow);
-			vruiWindows[wIt->windowIndex]=newWindow.window;
-			
-			/* Check if this was the first window in the group: */
-			if(wIt==group.windows.begin())
-				{
-				/* Register the group's OpenGL context with the Vrui kernel: */
-				windowGroup.displayState=vruiState->registerContext(*windowGroup.context);
-			
-				/* Initialize all GLObjects for the group's context data: */
-				windowGroup.context->getContextData().updateThings();
-				}
-			
-			/* Initialize the new window: */
-			newWindow.window->setVruiState(vruiState,wIt->windowConfigFileSection.getName()==syncWindowName);
-			newWindow.window->setWindowGroup(&windowGroup);
-			if(mouseAdapter!=0)
-				newWindow.window->setMouseAdapter(mouseAdapter,wIt->windowConfigFileSection);
-			if(multitouchAdapter!=0)
-				newWindow.window->setMultitouchAdapter(multitouchAdapter,wIt->windowConfigFileSection);
-			newWindow.window->setDisplayState(windowGroup.displayState,wIt->windowConfigFileSection);
-			newWindow.window->init(wIt->windowConfigFileSection);
-			
-			/* Let Vrui quit when the window is closed: */
-			newWindow.window->getCloseCallbacks().add(vruiState,&VruiState::quitCallback);
-			}
-		catch(const std::runtime_error& err)
-			{
-			std::cerr<<vruiErrorHeader<<"Caught exception "<<err.what()<<" while initializing rendering window "<<wIt->windowIndex<<std::endl;
-			
-			/* Bail out: */
-			allWindowsOk=false;
-			break;
-			}
-		}
-	
-	return allWindowsOk;
-	}
-
-void vruiDrawWindowGroup(VruiWindowGroup& windowGroup)
-	{
-	/* Initialize the group's display state object: */
-	windowGroup.displayState->maxViewportSize=windowGroup.maxViewportSize;
-	windowGroup.displayState->maxFrameSize=windowGroup.maxFrameSize;
-	
-	/* Make the window group's shared OpenGL context current with the first window: */
-	std::vector<VruiWindowGroup::Window>::iterator wIt=windowGroup.windows.begin();
-	wIt->window->makeCurrent();
-	
-	/* Update all GLObjects for the group's context data: */
-	windowGroup.context->getContextData().updateThings();
-	
-	/* Call all pre-rendering callbacks: */
-	{
-	PreRenderingCallbackData cbData(windowGroup.context->getContextData());
-	vruiState->preRenderingCallbacks.call(&cbData);
-	}
-	
-	/* Draw the first window: */
-	wIt->window->draw();
-	
-	/* Draw all remaining windows: */
-	for(++wIt;wIt!=windowGroup.windows.end();++wIt)
-		{
-		wIt->window->makeCurrent();
-		wIt->window->draw();
-		}
-	
-	/* Flush the OpenGL context shared by all windows in the group to guarantee timely completion: */
-	glFlush();
 	}
 
 void* vruiRenderingThreadFunction(int windowGroupIndex)
@@ -750,7 +565,7 @@ void* vruiRenderingThreadFunction(int windowGroupIndex)
 		/* Synchronize all rendering threads: */
 		vruiRenderingBarrier.synchronize();
 		
-		VruiWindowGroup& windowGroup=vruiWindowGroups[windowGroupIndex];
+		WindowGroup& windowGroup=vruiWindowGroups[windowGroupIndex];
 		
 		/* Enter the rendering loop and redraw all windows until interrupted: */
 		while(true)
@@ -764,15 +579,9 @@ void* vruiRenderingThreadFunction(int windowGroupIndex)
 			
 			numBarriers=3;
 			
-			/* Draw the window group: */
-			vruiDrawWindowGroup(windowGroup);
-			
-			/* Wait until all windows are done rendering: */
-			for(std::vector<VruiWindowGroup::Window>::iterator wIt=windowGroup.windows.begin();wIt!=windowGroup.windows.end();++wIt)
-				{
-				wIt->window->makeCurrent();
-				wIt->window->waitComplete();
-				}
+			/* Draw the window group and wail until all windows are done rendering: */
+			windowGroup.draw();
+			windowGroup.wait();
 			
 			/* Wait until all other threads are done rendering: */
 			vruiRenderingBarrier.synchronize();
@@ -786,11 +595,7 @@ void* vruiRenderingThreadFunction(int windowGroupIndex)
 			numBarriers=1;
 			
 			/* Present all windows' rendering results: */
-			for(std::vector<VruiWindowGroup::Window>::iterator wIt=windowGroup.windows.begin();wIt!=windowGroup.windows.end();++wIt)
-				{
-				wIt->window->makeCurrent();
-				wIt->window->present();
-				}
+			windowGroup.present();
 			
 			/* Wait until all threads are done presenting rendering results: */
 			vruiRenderingBarrier.synchronize();
@@ -1662,7 +1467,7 @@ void startDisplay(void)
 		
 		/* Initialize the window groups array: */
 		vruiNumWindowGroups=int(windowGroups.getNumEntries());
-		vruiWindowGroups=new VruiWindowGroup[vruiNumWindowGroups];
+		vruiWindowGroups=new WindowGroup[vruiNumWindowGroups];
 		
 		/* Check if window groups should be rendered in parallel: */
 		if(vruiNumWindowGroups>1)
@@ -1694,7 +1499,7 @@ void startDisplay(void)
 		bool allWindowsOk=true;
 		int windowGroupIndex=0;
 		for(VruiWindowGroupCreatorMap::Iterator wgIt=windowGroups.begin();allWindowsOk&&!wgIt.isFinished();++wgIt,++windowGroupIndex)
-			allWindowsOk=vruiCreateWindowGroup(wgIt->getDest(),syncWindowName,mouseAdapter,multitouchAdapter,vruiWindowGroups[windowGroupIndex]);
+			allWindowsOk=vruiWindowGroups[windowGroupIndex].initialize(wgIt->getDest(),syncWindowName,mouseAdapter,multitouchAdapter);
 		
 		if(!allWindowsOk)
 			{
@@ -1721,7 +1526,7 @@ void startDisplay(void)
 			{
 			/* Release the OpenGL contexts of all window groups from this thread: */
 			for(int windowGroupIndex=0;windowGroupIndex<vruiNumWindowGroups;++windowGroupIndex)
-				vruiWindowGroups[windowGroupIndex].context->release();
+				vruiWindowGroups[windowGroupIndex].getContext().release();
 			
 			/* Initialize the rendering barrier: */
 			vruiRenderingBarrier.setNumSynchronizingThreads(vruiNumWindowGroups+1);
@@ -1851,11 +1656,7 @@ bool vruiHandleAllEvents(bool allowBlocking)
 	
 	/* Check if any X event queues have unhandled events in them: */
 	for(int windowGroupIndex=0;windowGroupIndex<vruiNumWindowGroups;++windowGroupIndex)
-		{
-		VruiWindowGroup& windowGroup=vruiWindowGroups[windowGroupIndex];
-		windowGroup.hasPendingEvents=XQLength(windowGroup.display)>0;
-		allowBlocking=allowBlocking&&!windowGroup.hasPendingEvents;
-		}
+		allowBlocking=allowBlocking&&!vruiWindowGroups[windowGroupIndex].hasPendingEvents();
 	
 	/* If there are no pending events, and blocking is allowed, block until something happens: */
 	Misc::FdSet readFdSet(vruiReadFdSet);
@@ -1900,57 +1701,17 @@ bool vruiHandleAllEvents(bool allowBlocking)
 		Misc::select(&readFdSet,0,0,&timeout);
 		}
 	
-	/* Process any pending X events: */
+	/* Process pending X11 events from all window groups: */
 	for(int windowGroupIndex=0;windowGroupIndex<vruiNumWindowGroups;++windowGroupIndex)
 		{
-		VruiWindowGroup& windowGroup=vruiWindowGroups[windowGroupIndex];
+		WindowGroup& windowGroup=vruiWindowGroups[windowGroupIndex];
 		
-		/* For some reason, the following check drops X events in non-blocking mode: */
-		if(windowGroup.hasPendingEvents||readFdSet.isSet(windowGroup.displayFd))
-			{
-			/* Process all pending events for this display connection: */
-			bool isKeyRepeat=false; // Flag if the next event is a key repeat event
-			int numPendingEvents=XPending(windowGroup.display);
-			while(numPendingEvents>0)
-				{
-				/* Get the next event: */
-				XEvent event;
-				XNextEvent(windowGroup.display,&event);
-				--numPendingEvents;
-				
-				/* Check for key repeat events (a KeyRelease immediately followed by a KeyPress with the same time stamp and key code): */
-				if(event.type==KeyRelease&&numPendingEvents>0)
-					{
-					/* Check if the next event is a KeyPress with the same time stamp: */
-					XEvent nextEvent;
-					XPeekEvent(windowGroup.display,&nextEvent);
-					if(nextEvent.type==KeyPress&&nextEvent.xkey.window==event.xkey.window&&nextEvent.xkey.time==event.xkey.time&&nextEvent.xkey.keycode==event.xkey.keycode)
-						{
-						/* Mark the next event as a key repeat and ignore this event: */
-						isKeyRepeat=true;
-						continue;
-						}
-					}
-				
-				/* Pass the event to all windows interested in it: */
-				bool finishProcessing=false;
-				for(std::vector<VruiWindowGroup::Window>::iterator wIt=windowGroup.windows.begin();wIt!=windowGroup.windows.end();++wIt)
-					if(wIt->window->isEventForWindow(event))
-						finishProcessing=wIt->window->processEvent(event)||finishProcessing;
-				handledEvents=!isKeyRepeat||finishProcessing;
-				isKeyRepeat=false;
-				
-				#if 0
-				
-				/* Stop processing events if something significant happened: */
-				if(finishProcessing)
-					goto doneWithXEvents;
-				
-				#endif
-				}
-			}
+		/* Mark the window group's display connection socket as ready if it has unread data: */
+		windowGroup.setSocketReady(readFdSet.isSet(windowGroup.getDisplayFd()));
+		
+		/* Dispatch all X11 events on the window group's display connection: */
+		handledEvents=vruiWindowGroups[windowGroupIndex].dispatchXEvents()||handledEvents;
 		}
-	doneWithXEvents:
 	
 	/* Read pending bytes from the event pipe: */
 	if(readFdSet.isSet(vruiEventPipe[0]))
@@ -2111,15 +1872,11 @@ void vruiInnerLoopMultiWindow(void)
 				{
 				/* Draw all window groups sequentially: */
 				for(int i=0;i<vruiNumWindowGroups;++i)
-					vruiDrawWindowGroup(vruiWindowGroups[i]);
+					vruiWindowGroups[i].draw();
 				
 				/* Wait for all windows in all window groups to finish rendering: */
 				for(int i=0;i<vruiNumWindowGroups;++i)
-					for(std::vector<VruiWindowGroup::Window>::iterator wgIt=vruiWindowGroups[i].windows.begin();wgIt!=vruiWindowGroups[i].windows.end();++wgIt)
-						{
-						wgIt->window->makeCurrent();
-						wgIt->window->waitComplete();
-						}
+					vruiWindowGroups[i].wait();
 				
 				/* Wait until all other nodes in a cluster are finished rendering: */
 				if(vruiState->multiplexer!=0)
@@ -2131,11 +1888,7 @@ void vruiInnerLoopMultiWindow(void)
 				
 				/* Present the rendering results of all windows in all window groups at once: */
 				for(int i=0;i<vruiNumWindowGroups;++i)
-					for(std::vector<VruiWindowGroup::Window>::iterator wgIt=vruiWindowGroups[i].windows.begin();wgIt!=vruiWindowGroups[i].windows.end();++wgIt)
-						{
-						wgIt->window->makeCurrent();
-						wgIt->window->present();
-						}
+					vruiWindowGroups[i].present();
 				
 				#if VRUI_INSTRUMENT_MAINLOOP
 				vruiPrintTime(true);
@@ -2145,14 +1898,10 @@ void vruiInnerLoopMultiWindow(void)
 		else if(vruiNumWindows>0)
 			{
 			/* Draw the only window group: */
-			vruiDrawWindowGroup(vruiWindowGroups[0]);
+			vruiWindowGroups[0].draw();
 			
 			/* Wait for all windows to finish rendering: */
-			for(int i=0;i<vruiNumWindows;++i)
-				{
-				vruiWindows[i]->makeCurrent();
-				vruiWindows[i]->waitComplete();
-				}
+			vruiWindowGroups[0].wait();
 			
 			/* Wait until all other nodes in a cluster are finished rendering: */
 			if(vruiState->multiplexer!=0)
@@ -2163,40 +1912,43 @@ void vruiInnerLoopMultiWindow(void)
 			#endif
 			
 			/* Present the rendering results of all windows at once: */
-			for(int i=0;i<vruiNumWindows;++i)
-				{
-				vruiWindows[i]->makeCurrent();
-				vruiWindows[i]->present();
-				}
+			vruiWindowGroups[0].present();
 			
 			#if VRUI_INSTRUMENT_MAINLOOP
 			vruiPrintTime(true);
 			#endif
 			}
-		else if(vruiState->multiplexer!=0)
+		else
 			{
-			/* Synchronize with other nodes: */
-			vruiState->pipe->barrier();
+			/* If in a cluster, synchronize with other nodes: */
+			if(vruiState->multiplexer!=0)
+				vruiState->pipe->barrier();
 			
 			#if VRUI_INSTRUMENT_MAINLOOP
 			vruiPrintTime(false);
 			vruiPrintTime(true);
 			#endif
-			}
-		
-		/* Print current frame rate on head node's console for window-less Vrui processes: */
-		if(vruiNumWindows==0&&vruiMaster)
-			{
-			++numFrames;
-			TimePoint now;
-			if(now>=nextFrameRate)
+			
+			/* Print current frame rate on head node's console for window-less Vrui processes: */
+			if(vruiMaster)
 				{
-				printf("Current frame rate: %8u fps\r",numFrames);
-				fflush(stdout);
-				nextFrameRate+=TimeVector(1,0);
-				numFrames=0;
+				++numFrames;
+				TimePoint now;
+				if(now>=nextFrameRate)
+					{
+					printf("Current frame rate: %8u fps\r",numFrames);
+					fflush(stdout);
+					nextFrameRate+=TimeVector(1,0);
+					numFrames=0;
+					}
 				}
 			}
+		
+		/* Call all post-rendering callbacks: */
+		{
+		Misc::CallbackData cbData;
+		vruiState->postRenderingCallbacks.call(&cbData);
+		}
 		
 		firstFrame=false;
 		}
@@ -2269,7 +2021,7 @@ void vruiInnerLoopSingleWindow(void)
 		GLContextData::resetThingManager();
 		
 		/* Draw the only window group: */
-		vruiDrawWindowGroup(vruiWindowGroups[0]);
+		vruiWindowGroups[0].draw();
 		
 		/* Wait for the only window to finish rendering: */
 		vruiWindows[0]->waitComplete();
@@ -2342,7 +2094,7 @@ void mainLoop(void)
 	/* Construct the set of file descriptors to watch for events: */
 	vruiReadFdSet.add(vruiEventPipe[0]);
 	for(int i=0;i<vruiNumWindowGroups;++i)
-		vruiReadFdSet.add(vruiWindowGroups[i].displayFd);
+		vruiReadFdSet.add(vruiWindowGroups[i].getDisplayFd());
 	std::string commandPipeName=vruiConfigFile->retrieveString("./commandPipeName",std::string());
 	if(!commandPipeName.empty())
 		{
@@ -2411,14 +2163,7 @@ void mainLoop(void)
 		{
 		/* Release all OpenGL state: */
 		for(int i=0;i<vruiNumWindowGroups;++i)
-			{
-			for(std::vector<VruiWindowGroup::Window>::iterator wgIt=vruiWindowGroups[i].windows.begin();wgIt!=vruiWindowGroups[i].windows.end();++wgIt)
-				{
-				wgIt->window->makeCurrent();
-				wgIt->window->releaseGLState();
-				}
-			vruiWindowGroups[i].windows.front().window->getContext().deinit();
-			}
+			vruiWindowGroups[i].releaseGLState();
 		
 		/* Delete all windows: */
 		for(int i=0;i<vruiNumWindows;++i)
@@ -2617,62 +2362,6 @@ void requestUpdate(void)
 			/* g++ expects me to check the return value, but there's nothing to do... */
 			}
 		}
-	}
-
-void resizeWindow(VruiWindowGroup* windowGroup,const VRWindow* window,const ISize& newViewportSize,const ISize& newFrameSize)
-	{
-	/* Find the window in the window group's list: */
-	for(std::vector<VruiWindowGroup::Window>::iterator wIt=windowGroup->windows.begin();wIt!=windowGroup->windows.end();++wIt)
-		if(wIt->window==window)
-			{
-			/* Check if the window's viewport got bigger in both directions: */
-			bool viewportBigger=wIt->viewportSize[0]<=newViewportSize[0]&&wIt->viewportSize[1]<=newViewportSize[1];
-			
-			/* Update the window's viewport size: */
-			wIt->viewportSize=newViewportSize;
-			
-			if(viewportBigger)
-				{
-				/* Simply update the window group's maximum viewport size: */
-				windowGroup->maxViewportSize.max(newViewportSize);
-				}
-			else
-				{
-				/* Recalculate the window group's maximum viewport size from scratch: */
-				std::vector<VruiWindowGroup::Window>::iterator w2It=windowGroup->windows.begin();
-				windowGroup->maxViewportSize=w2It->viewportSize;
-				for(++w2It;w2It!=windowGroup->windows.end();++w2It)
-					windowGroup->maxViewportSize.max(w2It->viewportSize);
-				}
-			
-			/* Check if the window's frame buffer got bigger: */
-			bool frameBigger=wIt->frameSize[0]<=newFrameSize[0]&&wIt->frameSize[1]<=newFrameSize[1];
-			
-			/* Update the window's frame buffer size: */
-			wIt->frameSize=newFrameSize;
-			
-			if(frameBigger)
-				{
-				/* Simply update the window group's maximum frame buffer size: */
-				windowGroup->maxFrameSize.max(newFrameSize);
-				}
-			else
-				{
-				/* Recalculate the window group's maximum frame buffer size from scratch: */
-				std::vector<VruiWindowGroup::Window>::iterator w2It=windowGroup->windows.begin();
-				windowGroup->maxFrameSize=w2It->frameSize;
-				for(++w2It;w2It!=windowGroup->windows.end();++w2It)
-					windowGroup->maxFrameSize.max(w2It->frameSize);
-				}
-			
-			break;
-			}
-	}
-
-void getMaxWindowSizes(VruiWindowGroup* windowGroup,ISize& viewportSize,ISize& frameSize)
-	{
-	viewportSize=windowGroup->maxViewportSize;
-	frameSize=windowGroup->maxFrameSize;
 	}
 
 }

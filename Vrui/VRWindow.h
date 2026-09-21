@@ -2,7 +2,7 @@
 VRWindow - Abstract base class for OpenGL windows that are used to bind
 together any numbers of viewers and VR screens to render VR
 environments.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -49,7 +49,7 @@ class VRScreen;
 class Viewer;
 class DisplayState;
 class VruiState;
-struct VruiWindowGroup;
+class WindowGroup;
 class MovieSaver;
 }
 
@@ -87,7 +87,7 @@ class VRWindow:public GLWindow
 	/* Vrui integration state: */
 	VruiState* vruiState; // Pointer to the Vrui state object to which this window belongs
 	int windowIndex; // Index of this window in the environment's total window list, i.e., across all cluster nodes
-	VruiWindowGroup* windowGroup; // Pointer to the window group to which this window belongs
+	WindowGroup* windowGroup; // Pointer to the window group to which this window belongs
 	public:
 	bool protectScreens; // Flag whether this window needs to render environmental protection boundaries
 	
@@ -173,7 +173,7 @@ class VRWindow:public GLWindow
 	
 	/* Methods: */
 	void setWindowIndex(int newWindowIndex); // Sets the window's index in the total window list
-	void setWindowGroup(VruiWindowGroup* newWindowGroup); // Sets the window's window group
+	void setWindowGroup(WindowGroup* newWindowGroup); // Sets the window's window group
 	virtual void setVruiState(VruiState* newVruiState,bool newSynchronize); // Associates the window with a Vrui state object; flag indicates whether this window is responsible for synchronizing Vrui frames with its display's vertical retrace period
 	virtual void setMouseAdapter(InputDeviceAdapterMouse* newMouseAdapter,const Misc::ConfigurationFileSection& configFileSection); // Associates the window with the given mouse input device adapter
 	virtual void setMultitouchAdapter(InputDeviceAdapterMultitouch* newMultitouchAdapter,const Misc::ConfigurationFileSection& configFileSection); // Associates the window with the given multitouch input device adapter
