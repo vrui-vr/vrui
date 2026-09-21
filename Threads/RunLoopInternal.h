@@ -109,9 +109,13 @@ struct RunLoop::PipeMessage
 	public:
 	enum MessageType // Enumerated type for pipe message types
 		{
-		/* Messages related to the internal operation of the run loop: */
+		/* Messages indicating events that have to be dispatched: */
 		WakeUp=0, // Wake up a run loop blocked on I/O
 		Stop, // Wake up and stop a run loop
+		Signal, // Sends an OS signal to a run loop
+		SignalUserSignal, // Sends a signal to a user signal
+		
+		/* Internal messages related to run loop operation that should not cause a return from waitForEvents: */
 		
 		/* Messages related to I/O watchers: */
 		SetIOWatcherEventMask, // Change the event mask of an I/O watcher
@@ -131,13 +135,11 @@ struct RunLoop::PipeMessage
 		EnableSignalHandler, // Enable an OS signal handler
 		DisableSignalHandler, // Disable an OS signal handler
 		SetSignalHandlerEventHandler, // Set a signal handler's event handler
-		Signal, // Sends an OS signal to a run loop
 		
 		/* Messages related to user signals: */
 		EnableUserSignal, // Enable a user signal
 		DisableUserSignal, // Disable a user signal
 		SetUserSignalEventHandler, // Set a signal handler's event handler
-		SignalUserSignal, // Sends a signal to a user signal
 		
 		/* Messages related to process functions: */
 		SetProcessFunctionSpinning, // Sets a process function's spinning request flag

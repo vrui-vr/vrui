@@ -222,6 +222,22 @@ void RunLoop::handlePipeMessages(RunLoop::PipeMessage* end)
 				
 				break;
 			
+			case PipeMessage::Signal:
+				/* Forward the signal to whichever OS signal handler registered for it and set the shutdown flag if the signal is set to "stop": */
+				if(SignalHandler::signalPM(this,messagePtr->signal.signum))
+					shutdownRequested=true;
+				
+				break;
+			
+			case PipeMessage::SignalUserSignal:
+				/* Forward the message to the referenced user signal handler and drop the message's references to it and the optional signal data: */
+				messagePtr->signalUserSignal.userSignal->signalPM(messagePtr->signalUserSignal.signalData);
+				messagePtr->signalUserSignal.userSignal->unref();
+				if(messagePtr->signalUserSignal.signalData!=0)
+					messagePtr->signalUserSignal.signalData->unref();
+				
+				break;
+			
 			case PipeMessage::SetIOWatcherEventMask:
 				/* Forward the message to the referenced I/O watcher and drop the message's reference to it: */
 				messagePtr->setIOWatcherEventMask.ioWatcher->setEventMaskPM(messagePtr->setIOWatcherEventMask.newEventMask);
@@ -328,13 +344,6 @@ void RunLoop::handlePipeMessages(RunLoop::PipeMessage* end)
 				
 				break;
 			
-			case PipeMessage::Signal:
-				/* Forward the signal to whichever OS signal handler registered for it and set the shutdown flag if the signal is set to "stop": */
-				if(SignalHandler::signalPM(this,messagePtr->signal.signum))
-					shutdownRequested=true;
-				
-				break;
-			
 			case PipeMessage::EnableUserSignal:
 				/* Forward the message to the referenced user signal handler and drop the message's references to it: */
 				messagePtr->enableUserSignal.userSignal->enablePM();
@@ -360,15 +369,6 @@ void RunLoop::handlePipeMessages(RunLoop::PipeMessage* end)
 				messagePtr->setUserSignalEventHandler.userSignal->setEventHandlerPM(messagePtr->setUserSignalEventHandler.eventHandler);
 				messagePtr->setUserSignalEventHandler.userSignal->unref();
 				messagePtr->setUserSignalEventHandler.eventHandler->unref();
-				
-				break;
-			
-			case PipeMessage::SignalUserSignal:
-				/* Forward the message to the referenced user signal handler and drop the message's references to it and the optional signal data: */
-				messagePtr->signalUserSignal.userSignal->signalPM(messagePtr->signalUserSignal.signalData);
-				messagePtr->signalUserSignal.userSignal->unref();
-				if(messagePtr->signalUserSignal.signalData!=0)
-					messagePtr->signalUserSignal.signalData->unref();
 				
 				break;
 			
@@ -522,12 +522,12 @@ void RunLoop::restart(void)
 
 bool RunLoop::waitForEvents(void)
 	{
-	/* Bail out and signal if shutdown was requested: */
+	/* Bail out and signal shutdown if a shutdown has been requested: */
 	if(shutdownRequested)
 		return false;
 	
-	/* Keep blocking until there's an actual event to report: */
-	bool dontHaveEvents=true;
+	/* Keep polling until there's an actual event to report: */
+	bool keepPolling=true;
 	do
 		{
 		#ifdef __linux__ // On Linux, we have ppoll()
@@ -535,7 +535,7 @@ bool RunLoop::waitForEvents(void)
 		/* Calculate a time-out for the ppoll() call: */
 		EventInterval pollTimeout(0,0); // In case we don't want to block, only poll
 		EventInterval* pt=0; // Assume that we'll block forever
-		if(numSpinningProcessFunctions>0||shutdownRequested)
+		if(numSpinningProcessFunctions>0)
 			{
 			/* Don't block for I/O events; only poll: */
 			pt=&pollTimeout;
@@ -558,7 +558,7 @@ bool RunLoop::waitForEvents(void)
 		
 		/* Calculate a time-out for the poll() call: */
 		int pollTimeout=-1; // Assume that we'll block forever
-		if(numSpinningProcessFunctions>0||shutdownRequested)
+		if(numSpinningProcessFunctions>0)
 			{
 			/* Don't block for I/O events; only poll: */
 			pollTimeout=0;
@@ -600,12 +600,12 @@ bool RunLoop::waitForEvents(void)
 				messageEnd=messageBuffer+numMessages;
 				messagePtr=messageBuffer;
 				
-				/* Find the first actual event message that was read from the self-pipe: */
+				/* Find the first pipe message that is an actual event, i.e., requires returning from this method: */
 				PipeMessage* imPtr;
-				for(imPtr=messageBuffer;imPtr!=messageEnd&&imPtr->messageType!=PipeMessage::WakeUp&&imPtr->messageType!=PipeMessage::Stop&&imPtr->messageType!=PipeMessage::Signal&&imPtr->messageType!=PipeMessage::SignalUserSignal;++imPtr)
+				for(imPtr=messageBuffer;imPtr!=messageEnd&&imPtr->messageType>PipeMessage::PipeMessage::SignalUserSignal;++imPtr)
 					;
 				
-				/* Handle any non-event messages read from the self-pipe: */
+				/* Handle all initial non-event messages read from the self-pipe: */
 				if(imPtr!=messageBuffer)
 					handlePipeMessages(imPtr);
 				
@@ -614,13 +614,13 @@ bool RunLoop::waitForEvents(void)
 					--pollResult;
 				}
 			
-			/* If any watched file descriptors are ready, that's an event: */
-			dontHaveEvents=pollResult==0;
+			/* Stop polling if any watched file descriptors have events: */
+			keepPolling=pollResult==0;
 			}
 		else if(pollResult==0)
 			{
-			/* A timer timed out, that's an event: */
-			dontHaveEvents=false;
+			/* A timer timed out, stop polling: */
+			keepPolling=false;
 			}
 		else
 			{
@@ -629,7 +629,7 @@ bool RunLoop::waitForEvents(void)
 				throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot poll for I/O events");
 			}
 		}
-	while(dontHaveEvents);
+	while(keepPolling);
 	
 	/* Sample the current time: */
 	lastDispatchTime.set();
