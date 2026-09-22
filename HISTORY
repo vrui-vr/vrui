@@ -8982,3 +8982,22 @@ Vrui-15.0-001:
       interface.
   - Created new internal Vrui::WindowGroup class to move some code out
     of Vrui.Workbench.cpp.
+  - API change: removed frame callbacks and synchronous I/O callbacks
+    from Vrui kernel interface; functionality is now available via run
+    loop I/O watchers and process functions, respectively.
+  - API change: removed job-only submitJob function from Vrui kernel
+    interface, given that it adds no functionality over calling
+    Threads::WorkerPool::submitJob directly.
+  - Added declarations Vrui::Job and Vrui::JobCompleteFunction
+    declarations to Vrui/Vrui.h, mirroring same declarations in
+    Threads::WorkerPool.
+  - Added getRunLoop() function to Vrui kernel interface.
+  - Adapted Vrui::HMDConfigurationUpdater to run loop-based Vrui main
+    loop.
+  - Adapted Vrui::MessageLogger to run loop-based Vrui main loop; added
+    a proper console message list along the way to get rid of the "too
+    many error dialogs" issue.
+    - No further need to auto-close error messages; this fixes a long-
+      standing problematic bug.
+  - Adapted Vrui/Utilities/VruiSoundConfig, ExamplePrograms/GridEditor,
+    and ExamplePrograms/ImageViewer to new run loop kernel.

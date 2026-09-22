@@ -26,12 +26,17 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <stdexcept>
 #include <iostream>
 #include <Misc/StringPrintf.h>
+#include <Misc/StandardHashFunction.h>
+#include <Misc/StringHashFunctions.h>
+#include <Misc/StandardValueCoders.h>
+#include <Threads/FunctionCalls.h>
 #include <Vrui/VRWindow.h>
 #include <Vrui/Internal/Vrui.h>
 
 /* External global variables: */
 namespace Vrui {
 extern bool vruiVerbose;
+extern Threads::RunLoop vruiRunLoop;
 extern VruiErrorHeader vruiErrorHeader;
 }
 
@@ -41,6 +46,61 @@ namespace Vrui {
 Methods of class WindowGroup:
 ****************************/
 
+void WindowGroup::displayWatcherCallback(Threads::IOWatcherEvent& event)
+	{
+	/* Mark the window group's socket as ready: */
+	socketReady=true;
+	
+	/* Enable the event dispatching process function: */
+	eventDispatcher->enable();
+	}
+
+void WindowGroup::eventDispatcherCallback(Threads::ProcessFunction& processFunction)
+	{
+	/* We potentially handle events twice; first, those that are already in the display connection's event queue; second, those that are waiting to be read from the connection's socket: */
+	while(numEventsInQueue>0||socketReady)
+		{
+		/* Handle all events in the event queue: */
+		while(numEventsInQueue>0)
+			{
+			/* Grab the next event: */
+			XEvent event;
+			XNextEvent(display,&event); // This is guaranteed not to block...
+			--numEventsInQueue;
+			
+			/* Check if this event is a repeated key press, signaled by a key release immediately followed by a key press for the same key with the same time stamp: */
+			bool dispatchEvent=true;
+			if(event.type==KeyRelease&&numEventsInQueue>0)
+				{
+				/* Peek at the next event: */
+				XEvent nextEvent;
+				XPeekEvent(display,&nextEvent);
+				
+				/* Don't dispatch this event if the next event matches it: */
+				dispatchEvent=nextEvent.type!=KeyPress||nextEvent.xkey.keycode!=event.xkey.keycode||nextEvent.xkey.time!=event.xkey.time;
+				}
+			
+			if(dispatchEvent)
+				{
+				/* Pass the event to all windows interested in it: */
+				for(std::vector<Window>::iterator wIt=windows.begin();wIt!=windows.end();++wIt)
+					if(wIt->window->isEventForWindow(event))
+						wIt->window->processEvent(event);
+				}
+			}
+		
+		/* Read pending events from the display connection's socket into the event queue: */
+		if(socketReady)
+			numEventsInQueue=XEventsQueued(display,QueuedAfterReading);
+		
+		/* Don't read from the display connection's socket again: */
+		socketReady=false;
+		}
+	
+	/* All events have been handled; disable the process function until more arrive: */
+	eventDispatcher->disable();
+	}
+
 WindowGroup::WindowGroup(void)
 	:display(0),displayFd(-1),numEventsInQueue(0),socketReady(false),displayState(0)
 	{
@@ -48,6 +108,58 @@ WindowGroup::WindowGroup(void)
 
 WindowGroup::~WindowGroup(void)
 	{
+	}
+
+WindowGroup::CreatorMap WindowGroup::collectWindowGroups(const char* applicationName,const std::vector<std::string>& windowNames,VRWindow** resultWindows,Misc::ConfigurationFile& configFile)
+	{
+	/* Create a map from display names to default group IDs: */
+	typedef Misc::HashTable<std::string,unsigned int> DisplayGroupMap;
+	DisplayGroupMap displayGroups(7);
+	
+	/* Sort the windows into groups based on their group IDs and collect each group's OpenGL context properties: */
+	CreatorMap creatorMap(7);
+	unsigned int nextGroupId=0;
+	unsigned int numWindows=windowNames.size();
+	for(unsigned int windowIndex=0;windowIndex<numWindows;++windowIndex)
+		{
+		/* Go to the window's configuration section: */
+		Misc::ConfigurationFileSection windowSection=configFile.getSection(windowNames[windowIndex].c_str());
+		
+		/* Read the name of the window's X display: */
+		std::pair<std::string,int> displayName=VRWindow::getDisplayName(windowSection);
+		
+		/* Create a default group ID for the window: */
+		DisplayGroupMap::Iterator dgIt=displayGroups.findEntry(displayName.first);
+		unsigned int groupId=dgIt.isFinished()?nextGroupId:dgIt->getDest();
+		
+		/* Overwrite the window's default group ID from its configuration section: */
+		windowSection.updateValue("./groupId",groupId);
+		
+		/* Look for the group ID in the window groups hash table: */
+		CreatorMap::Iterator wgIt=creatorMap.findEntry(groupId);
+		if(wgIt.isFinished())
+			{
+			/* Start a new window group: */
+			wgIt=creatorMap.setAndFindEntry(CreatorMap::Entry(groupId,Creator(applicationName,numWindows,resultWindows,groupId)));
+			wgIt->getDest().displayName=displayName.first;
+			wgIt->getDest().screen=displayName.second;
+			vruiState->windowProperties.setContextProperties(wgIt->getDest().contextProperties);
+			
+			/* Associate the new window group with this window's display name: */
+			displayGroups.setEntry(DisplayGroupMap::Entry(displayName.first,groupId));
+			if(nextGroupId<=groupId)
+				nextGroupId=groupId+1;
+			}
+		
+		/* Add this window to the new or existing window group: */
+		Creator::Window newWindow;
+		newWindow.windowIndex=windowIndex;
+		newWindow.windowConfigFileSection=windowSection;
+		wgIt->getDest().windows.push_back(newWindow);
+		VRWindow::updateContextProperties(wgIt->getDest().contextProperties,windowSection);
+		}
+	
+	return creatorMap;
 	}
 
 bool WindowGroup::initialize(const WindowGroup::Creator& creator,const std::string& syncWindowName,InputDeviceAdapterMouse* mouseAdapter,InputDeviceAdapterMultitouch* multitouchAdapter)
@@ -140,6 +252,19 @@ bool WindowGroup::initialize(const WindowGroup::Creator& creator,const std::stri
 			}
 		}
 	
+	if(allWindowsOk)
+		{
+		/* Create an I/O watcher for the display connection's socket: */
+		displayWatcher=new Threads::IOWatcher(vruiRunLoop,displayFd,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&WindowGroup::displayWatcherCallback));
+		
+		/* Check if there are unhandled events in the display connection's event queue: */
+		numEventsInQueue=XQLength(display);
+		socketReady=false;
+		
+		/* Create a process function to dispatch X11 events to windows when there are events: */
+		eventDispatcher=new Threads::ProcessFunction(vruiRunLoop,true,numEventsInQueue>0,*Threads::createFunctionCall(this,&WindowGroup::eventDispatcherCallback));
+		}
+	
 	return allWindowsOk;
 	}
 
@@ -195,8 +320,7 @@ void WindowGroup::resizeWindow(const VRWindow* window,const ISize& newViewportSi
 
 bool WindowGroup::dispatchXEvents(void)
 	{
-	/* Keep track if we handled any "real" events: */
-	bool handledEvents=false;
+	bool result=false;
 	
 	/* We potentially handle events twice; first, those that are already in the display connection's event queue; second, those that are waiting to be read from the connection's socket: */
 	while(numEventsInQueue>0||socketReady)
@@ -226,7 +350,10 @@ bool WindowGroup::dispatchXEvents(void)
 				/* Pass the event to all windows interested in it: */
 				for(std::vector<Window>::iterator wIt=windows.begin();wIt!=windows.end();++wIt)
 					if(wIt->window->isEventForWindow(event))
-						handledEvents=wIt->window->processEvent(event)||handledEvents;
+						wIt->window->processEvent(event);
+				
+				/* Tell the caller that we handled at least one event: */
+				result=true;
 				}
 			}
 		
@@ -238,7 +365,7 @@ bool WindowGroup::dispatchXEvents(void)
 		socketReady=false;
 		}
 	
-	return handledEvents;
+	return result;
 	}
 
 void WindowGroup::draw(void)
@@ -293,8 +420,12 @@ void WindowGroup::present(void)
 		wIt->window->present();
 		}
 	
-	/* Since any of the rendering calls may have read from the display connection's socket, it's now time to query the event queue's size: */
+	/* Since any of the rendering calls may internally have read from the display connection's socket, it's now time to query the event queue's size: */
 	numEventsInQueue=XQLength(display);
+	
+	/* Enable the event dispatching process function if there are events in the queue: */
+	if(numEventsInQueue>0)
+		eventDispatcher->enable();
 	}
 
 void WindowGroup::releaseGLState(void)

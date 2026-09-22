@@ -130,7 +130,6 @@ This is what we change:
 - A new Vrui frame starts when RunLoop::waitForEvents returns
 
 1. Calculate the time point at which waitForEvents must return
-  - If there are unhandled events in any of the X11 event queues, don't wait at all -- this sucks, but is unavoidable, should be checked per-connection after rendering is complete
   - nextFrameTime, result of clients calling Vrui::scheduleFrame or running in continuous mode
   - synchFrameTime, set during previous frame by playback input device adapter
 
@@ -148,6 +147,8 @@ This is what we change:
 
 5. Call RunLoop::dispatchPendingEvents
   - May update states of physical input devices (Mouse/keyboard/multitouch via X11, HID via I/O watchers, some InputDeviceAdapters can use this)
+  - If any of the window groups' display connections have pending data, their respective I/O watchers will set their socketReady flags and enable their process functions
+  - May call the process functions that dispatch pending X11 events from the window groups' X11 display connections
 
 6. Update the rest of physical input devices
   - Forward device states to slaves in cluster mode
@@ -157,7 +158,7 @@ This is what we change:
 8. Do the rest of frame processing
 
 9. Do rendering
-  - Collect a union of "dirty" flags for all X11 event queues used by window groups; rendering calls may pull events from the socket into the queue
+	- After each window group is done presenting all its windows, it checks if its display connection has events in the queue; if so, it sets its process function to spinning and enables it
 
 10. Repeat from 1.
 

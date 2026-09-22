@@ -21,7 +21,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 02111-1307 USA
 ***********************************************************************/
 
-#define RENDERFRAMETIMES 0
 #define SAVESHAREDVRUISTATE 0
 
 #include <Vrui/Internal/Vrui.h>
@@ -204,11 +203,6 @@ Global state:
 VruiState* vruiState=0;
 const char* vruiViewpointFileHeader="Vrui viewpoint file v1.0\n";
 
-#if RENDERFRAMETIMES
-const int numFrameTimes=800;
-double frameTimes[numFrameTimes];
-int frameTimeIndex=-1;
-#endif
 #if SAVESHAREDVRUISTATE
 IO::File* vruiSharedStateFile=0;
 #endif
@@ -582,12 +576,30 @@ void VruiState::saveViewpointFile(IO::Directory& directory,const char* viewpoint
 	viewpointFile->write(up.getComponents(),3);
 	}
 
+void VruiState::jobCompleteCallback(Threads::UserSignalEvent& event,Misc::Autopointer<JobCompleteFunction> completeCallback)
+	{
+	/* Call the complete callback with the job function that is the signal data passed along in the signal event: */
+	(*completeCallback)(event.getSignalData<Job>());
+	}
+
+void VruiState::dispatchCommandsCallback(Threads::IOWatcherEvent& event)
+	{
+	/* Dispatch commands from the file descriptor in the event: */
+	commandDispatcher.dispatchCommands(event.getFd());
+	}
+
 VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* sPipe)
 	:screenSaverInhibitor(0),
 	 multiplexer(sMultiplexer),
 	 master(multiplexer==0||multiplexer->isMaster()),
 	 pipe(sPipe),
 	 randomSeed(0),
+	 frameIndex(-1),applicationTime(0),lastFrameDuration(1),
+	 numRecentFrameDurations(5),recentFrameDurations(new double[numRecentFrameDurations]),nextFrameDurationIndex(0),
+	 sortedFrameDurations(new double[numRecentFrameDurations]),medianFrameDuration(1),
+	 updateContinuously(false),
+	 nextFrameTime(0),synchFrameTime(0),synchWait(false),
+	 animationFrameInterval(1.0/125.0),
 	 sceneGraphManager(0),
 	 inputGraphManager(0),
 	 inputGraphSelectionHelper(0,"SavedInputGraph.inputgraph",".inputgraph",0),
@@ -637,18 +649,18 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 	 soundFunction(0),soundFunctionData(0),
 	 resetNavigationFunction(0),resetNavigationFunctionData(0),
 	 finishMainLoopFunction(0),finishMainLoopFunctionData(0),
-	 minimumFrameTime(0.0),lastFrame(0.0),nextFrameTime(0.0),
-	 synchFrameTime(0.0),synchWait(false),
-	 numRecentFrameTimes(0),recentFrameTimes(0),nextFrameTimeIndex(0),sortedFrameTimes(0),
-	 animationFrameInterval(1.0/125.0),
 	 activeNavigationTool(0),
-	 updateContinuously(false),synced(false)
+	 synced(false)
 	{
 	#if SAVESHAREDVRUISTATE
 	vruiSharedStateFile=IO::openFile("/tmp/VruiSharedState.dat",IO::File::WriteOnly);
 	vruiSharedStateFile->setEndianness(IO::File::LittleEndian);
 	#endif
 	
+	/* Initialize the recent frame duration array: */
+	for(int i=0;i<numRecentFrameDurations;++i)
+		recentFrameDurations[i]=1.0;
+
 	/* Create a Vrui-specific message logger: */
 	Misc::MessageLogger::setMessageLogger(new Vrui::MessageLogger);
 	
@@ -661,10 +673,6 @@ VruiState::~VruiState(void)
 	#if SAVESHAREDVRUISTATE
 	delete vruiSharedStateFile;
 	#endif
-	
-	/* Delete time management: */
-	delete[] recentFrameTimes;
-	delete[] sortedFrameTimes;
 	
 	/* Deregister the popup callback: */
 	widgetManager->getWidgetPopCallbacks().remove(this,&VruiState::widgetPopCallback);
@@ -683,8 +691,6 @@ VruiState::~VruiState(void)
 	delete coordinateManager;
 	
 	/* Delete widget management: */
-	for(MessageDialogHeap::Iterator mdIt=messageDialogs.begin();mdIt!=messageDialogs.end();++mdIt)
-		delete mdIt->dialog;
 	if(systemMenuTopLevel)
 		delete systemMenu;
 	delete mainMenu;
@@ -719,16 +725,6 @@ VruiState::~VruiState(void)
 	/* Delete light source management: */
 	delete lightsourceManager;
 	
-	
-	
-	
-	
-	
-	
-	
-	
-	
-	
 	/* Delete virtual input device management: */
 	delete virtualInputDevice;
 	
@@ -746,6 +742,10 @@ VruiState::~VruiState(void)
 	
 	/* Delete the scene graph manager: */
 	delete sceneGraphManager;
+	
+	/* Delete time management: */
+	delete[] recentFrameDurations;
+	delete[] sortedFrameDurations;
 	
 	/* Uninhibit the screen saver: */
 	delete screenSaverInhibitor;
@@ -785,8 +785,11 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 		}
 	
 	/* Initialize random number and time management, but don't distribute it in a cluster yet because input device adapters may change it: */
-	randomSeed=(unsigned int)time(0);
-	lastFrame=appTime.peekTime();
+	frameTimeBase.set();
+	randomSeed=(unsigned int)(frameTimeBase.tv_sec*1000UL+frameTimeBase.tv_nsec/1000000UL);
+	
+	/* Initialize the suggested animation frame interval: */
+	configFileSection.updateValue("./animationFrameInterval",animationFrameInterval);
 	
 	/* Create the scene graph manager: */
 	sceneGraphManager=new SceneGraphManager;
@@ -848,7 +851,7 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 			inputDeviceDataSaver=new InputDeviceDataSaver(iddsSection,*inputDeviceManager,textEventDispatcher,randomSeed);
 			
 			/* Save initial input device state: */
-			inputDeviceDataSaver->saveCurrentState(lastFrame);
+			inputDeviceDataSaver->saveCurrentState(applicationTime);
 			}
 		}
 	
@@ -856,10 +859,10 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 	if(pipe!=0)
 		{
 		pipe->broadcast(randomSeed);
-		pipe->broadcast(lastFrame);
+		pipe->broadcast(applicationTime);
 		}
 	srand(randomSeed);
-	lastFrameDelta=0.0;
+	lastFrameDuration=0.0;
 	
 	if(master)
 		{
@@ -1192,26 +1195,6 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 		{
 		/* Ignore error and continue... */
 		}
-	
-	/* Check if there is a frame rate limit: */
-	double maxFrameRate=configFileSection.retrieveValue("./maximumFrameRate",0.0);
-	if(maxFrameRate>0.0)
-		{
-		/* Calculate the minimum frame time: */
-		minimumFrameTime=1.0/maxFrameRate;
-		}
-	
-	/* Initialize the frame time calculator: */
-	numRecentFrameTimes=5;
-	recentFrameTimes=new double[numRecentFrameTimes];
-	for(int i=0;i<numRecentFrameTimes;++i)
-		recentFrameTimes[i]=1.0;
-	nextFrameTimeIndex=0;
-	sortedFrameTimes=new double[numRecentFrameTimes];
-	currentFrameTime=1.0;
-	
-	/* Initialize the suggested animation frame interval: */
-	configFileSection.updateValue("./animationFrameInterval",animationFrameInterval);
 	}
 
 void VruiState::createSystemMenu(void)
@@ -1602,106 +1585,94 @@ void VruiState::prepareMainLoop(void)
 		/* Check if there is a synchronization request for the first frame: */
 		if(synchFrameTime>0.0)
 			{
-			/* Check if the frame needs to be delayed: */
-			if(synchWait&&lastFrame<synchFrameTime)
-				{
-				/* Sleep for a while to reach the synchronized frame time: */
-				vruiDelay(synchFrameTime-lastFrame);
-				}
-			
-			/* Override the free-running timer: */
-			lastFrame=synchFrameTime;
+			// IMPLEMENT ME -- WE HAVE TO DO SOME STUFF HERE!!
 			}
 		else
 			{
-			/* Take an application timer snapshot: */
-			lastFrame=appTime.peekTime();
-			
-			/* Synchronize the first frame to the new application time: */
-			synchFrameTime=lastFrame;
-			synchWait=false;
+			// FIXME -- WE DON'T NEED THAT RIGHT NOW, BUT MAYBE LATER
 			}
 		}
 	}
 
-void VruiState::update(void)
+bool VruiState::startFrame(void)
 	{
+	/*********************************************************************
+	Close out the current frame:
+	*********************************************************************/
+	
+	/* Check if there is a scheduled time for the next frame: */
+	// IMPLEMENT ME!
+	
+	/* Wait for any events to happen and check if shutdown was requested: */
+	bool keepRunning=vruiRunLoop.waitForEvents();
+	
+	/* Start a new Vrui frame: */
+	++frameIndex;
+	if(multiplexer!=0)
+		pipe->broadcast(keepRunning);
+	if(!keepRunning)
+		{
+		if(multiplexer!=0&&vruiMaster)
+			pipe->flush();
+		
+		/* Bail out and shut down Vrui: */
+		return false;
+		}
+	
 	/*********************************************************************
 	Update the application time and all related state:
 	*********************************************************************/
 	
-	double lastLastFrame=lastFrame;
+	double newApplicationTime;
 	if(master)
 		{
-		/* Take an application timer snapshot: */
-		lastFrame=appTime.peekTime();
-		if(synchFrameTime>0.0)
-			{
-			/* Check if the frame needs to be delayed: */
-			if(synchWait&&lastFrame<synchFrameTime)
-				{
-				/* Sleep for a while to reach the synchronized frame time: */
-				vruiDelay(synchFrameTime-lastFrame);
-				}
-			
-			/* Override the free-running timer: */
-			lastFrame=synchFrameTime;
-			synchFrameTime=0.0;
-			synchWait=false;
-			}
-		else if(minimumFrameTime>0.0)
-			{
-			/* Check if the time for the last frame was less than the allowed minimum: */
-			if(lastFrame-lastLastFrame<minimumFrameTime)
-				{
-				/* Sleep for a while to reach the minimum frame time: */
-				vruiDelay(minimumFrameTime-(lastFrame-lastLastFrame));
-				
-				/* Take another application timer snapshot: */
-				lastFrame=appTime.peekTime();
-				}
-			}
-		if(multiplexer!=0)
-			pipe->write(lastFrame);
+		/* Reset the application time base on the first frame -- ugh: */
+		// FIXME -- THERE MUST BE A BETTER WAY ONCE SYNCHRONIZATION IS BACK ON THE MENU!
+		if(frameIndex==0)
+			frameTimeBase=vruiRunLoop.getDispatchTime();
 		
-		/* Update the Vrui application timer and the frame time history: */
-		recentFrameTimes[nextFrameTimeIndex]=lastFrame-lastLastFrame;
-		++nextFrameTimeIndex;
-		if(nextFrameTimeIndex==numRecentFrameTimes)
-			nextFrameTimeIndex=0;
+		/* Calculate the new application time from the run loop's dispatch time: */
+		newApplicationTime=double(vruiRunLoop.getDispatchTime()-frameTimeBase);
 		
-		/* Calculate current median frame time: */
-		for(int i=0;i<numRecentFrameTimes;++i)
-			{
-			int j;
-			for(j=i-1;j>=0&&sortedFrameTimes[j]>recentFrameTimes[i];--j)
-				sortedFrameTimes[j+1]=sortedFrameTimes[j];
-			sortedFrameTimes[j+1]=recentFrameTimes[i];
-			}
-		currentFrameTime=sortedFrameTimes[numRecentFrameTimes/2];
+		// IMPLEMENT ME -- DO SOME STUFF HERE IF SYNCHRONIZATION IS REQUESTED!
+		
+		/* Share the new application time with a cluster: */
 		if(multiplexer!=0)
-			pipe->write(currentFrameTime);
+			pipe->write(newApplicationTime);
 		}
 	else
 		{
-		/* Receive application time and current median frame time: */
-		pipe->read(lastFrame);
-		pipe->read(currentFrameTime);
+		/* Receive the new application time: */
+		pipe->read(newApplicationTime);
 		}
 	
-	/* Calculate the current frame time delta: */
-	lastFrameDelta=lastFrame-lastLastFrame;
+	/* Calculate the duration of the previous frame: */
+	lastFrameDuration=newApplicationTime-applicationTime;
+	applicationTime=newApplicationTime;
 	
-	#if RENDERFRAMETIMES
-	/* Update the frame time graph: */
-	++frameTimeIndex;
-	if(frameTimeIndex==numFrameTimes)
-		frameTimeIndex=0;
-	frameTimes[frameTimeIndex]=lastFrame-lastLastFrame;
-	#endif
+	/* Update the frame duration history: */
+	recentFrameDurations[nextFrameDurationIndex]=lastFrameDuration;
+	if(++nextFrameDurationIndex==numRecentFrameDurations)
+		nextFrameDurationIndex=0;
+	
+	/* Calculate current median frame duration: */
+	for(int i=0;i<numRecentFrameDurations;++i)
+		{
+		int j;
+		for(j=i-1;j>=0&&sortedFrameDurations[j]>recentFrameDurations[i];--j)
+			sortedFrameDurations[j+1]=sortedFrameDurations[j];
+		sortedFrameDurations[j+1]=recentFrameDurations[i];
+		}
+	medianFrameDuration=sortedFrameDurations[numRecentFrameDurations/2];
 	
 	/* Reset the next scheduled frame time: */
 	nextFrameTime=0.0;
+	
+	/*********************************************************************
+	Dispatch pending events on the run loop and run all process functions:
+	*********************************************************************/
+	
+	vruiRunLoop.dispatchPendingEvents();
 	
 	/*********************************************************************
 	Update input device state and distribute all shared state:
@@ -1738,7 +1709,7 @@ void VruiState::update(void)
 		
 		/* Save input device states to data file if requested: */
 		if(inputDeviceDataSaver!=0)
-			inputDeviceDataSaver->saveCurrentState(lastFrame);
+			inputDeviceDataSaver->saveCurrentState(applicationTime);
 		
 		if(delayNavigationTransformation&&(navigationTransformationChangedMask&0x1))
 			{
@@ -1824,18 +1795,10 @@ void VruiState::update(void)
 	*********************************************************************/
 	
 	/* Set the widget manager's time: */
-	widgetManager->setTime(lastFrame);
+	widgetManager->setTime(applicationTime);
 	
 	/* Dispatch all text events: */
 	textEventDispatcher->dispatchEvents(*widgetManager);
-	
-	/* Close all overdue message dialogs: */
-	while(!messageDialogs.isEmpty()&&messageDialogs.getSmallest().timeout<=lastFrame)
-		{
-		/* Pop down and delete the message dialog: */
-		delete messageDialogs.getSmallest().dialog;
-		messageDialogs.removeSmallest();
-		}
 	
 	/* Update the input graph: */
 	inputGraphManager->update();
@@ -1907,7 +1870,7 @@ void VruiState::update(void)
 		listeners[i].update();
 	
 	/* Call the scene graph root's action method: */
-	const SceneGraph::ActState& sceneGraphActState=sceneGraphManager->act(mainViewer->getHeadPosition(),getUpDirection(),lastFrame,lastFrame+animationFrameInterval);
+	const SceneGraph::ActState& sceneGraphActState=sceneGraphManager->act(mainViewer->getHeadPosition(),getUpDirection(),applicationTime,applicationTime+animationFrameInterval);
 	
 	/* Schedule another frame if any scene graph node requested one: */
 	if(sceneGraphActState.requireFrame())
@@ -1917,28 +1880,14 @@ void VruiState::update(void)
 	if(visletManager!=0)
 		visletManager->frame();
 	
-	/* Call all additional frame callbacks: */
-	{
-	Threads::Mutex::Lock frameCallbacksLock(frameCallbacksMutex);
-	for(std::vector<FrameCallbackSlot>::iterator fcIt=frameCallbacks.begin();fcIt!=frameCallbacks.end();++fcIt)
-		{
-		/* Call the callback and check if it wants to be removed: */
-		if(fcIt->callback(fcIt->userData))
-			{
-			/* Remove the callback from the list: */
-			*fcIt=frameCallbacks.back();
-			frameCallbacks.pop_back();
-			--fcIt;
-			}
-		}
-	}
-	
-	/* Call frame function: */
+	/* Call the main frame function: */
 	frameFunction(frameFunctionData);
 	
 	/* Finish any pending messages on the main pipe, in case an application didn't clean up: */
 	if(multiplexer!=0)
 		pipe->flush();
+	
+	return true;
 	}
 
 void VruiState::display(DisplayState* displayState,GLContextData& contextData) const
@@ -2881,22 +2830,19 @@ void vruiDelay(double interval)
 double peekApplicationTime(void)
 	{
 	/* Take an application timer snapshot: */
-	double result=vruiState->appTime.peekTime();
+	Threads::EventTime now;
+	double result(now-vruiState->frameTimeBase);
 	
 	/* Check if the next frame will be delayed due to playback synchronization: */
 	if(result<vruiState->synchFrameTime)
 		result=vruiState->synchFrameTime;
-	
-	/* Check if the next frame will be delayed due to frame rate cap: */
-	if(result<vruiState->lastFrame+vruiState->minimumFrameTime)
-		result=vruiState->lastFrame+vruiState->minimumFrameTime;
 	
 	return result;
 	}
 
 void synchronize(double firstFrameTime)
 	{
-	vruiState->lastFrame=firstFrameTime;
+	vruiState->applicationTime=firstFrameTime;
 	}
 
 void synchronize(double nextFrameTime,bool wait)
@@ -3605,14 +3551,6 @@ void closeWindowCallback(Misc::CallbackData* cbData,void*)
 		topLevel=windowCbData->popupWindow;
 		}
 	
-	/* Remove the top-level widget from the message dialog heap: */
-	for(VruiState::MessageDialogHeap::Iterator mdIt=vruiState->messageDialogs.begin();mdIt!=vruiState->messageDialogs.end();++mdIt)
-		if(mdIt->dialog==topLevel)
-			{
-			vruiState->messageDialogs.remove(mdIt);
-			break;
-			}
-	
 	/* Delete the top-level widget: */
 	getWidgetManager()->deleteWidget(topLevel);
 	}
@@ -3685,9 +3623,6 @@ void showErrorMessage(const char* title,const char* message,const char* buttonLa
 	
 	/* Show the popup window: */
 	popupPrimaryWidget(errorDialog);
-	
-	/* Add the popup window to the message heap: */
-	vruiState->messageDialogs.insert(VruiState::MessageDialog(errorDialog,getApplicationTime()+60.0)); // Auto-close dialog in one minute
 	}
 
 Scalar getPointPickDistance(void)
@@ -4029,43 +3964,40 @@ Misc::Time getTimeOfDay(void)
 	return result;
 	}
 
+unsigned long getFrameIndex(void)
+	{
+	return vruiState->frameIndex;
+	}
+
 double getApplicationTime(void)
 	{
-	return vruiState->lastFrame;
+	return vruiState->applicationTime;
 	}
 
 double getFrameTime(void)
 	{
-	return vruiState->lastFrameDelta;
+	return vruiState->lastFrameDuration;
 	}
 
 double getCurrentFrameTime(void)
 	{
-	return vruiState->currentFrameTime;
+	return vruiState->medianFrameDuration;
 	}
 
 double getNextAnimationTime(void)
 	{
-	return vruiState->lastFrame+vruiState->animationFrameInterval;
+	return vruiState->applicationTime+vruiState->animationFrameInterval;
 	}
 
-void addFrameCallback(FrameCallback newFrameCallback,void* newFrameCallbackUserData)
+void updateContinuously(void)
 	{
-	Threads::Mutex::Lock frameCallbacksLock(vruiState->frameCallbacksMutex);
-	
-	/* Check if the callback is already in the list: */
-	for(std::vector<VruiState::FrameCallbackSlot>::iterator fcIt=vruiState->frameCallbacks.begin();fcIt!=vruiState->frameCallbacks.end();++fcIt)
-		if(fcIt->callback==newFrameCallback&&fcIt->userData==newFrameCallbackUserData)
-			{
-			/* Callback already exists; bail out: */
-			return;
-			}
-	
-	/* Add the callback to the list: */
-	VruiState::FrameCallbackSlot fcs;
-	fcs.callback=newFrameCallback;
-	fcs.userData=newFrameCallbackUserData;
-	vruiState->frameCallbacks.push_back(fcs);
+	vruiState->updateContinuously=true;
+	}
+
+void scheduleUpdate(double nextFrameTime)
+	{
+	if(vruiState->nextFrameTime==0.0||vruiState->nextFrameTime>nextFrameTime)
+		vruiState->nextFrameTime=nextFrameTime;
 	}
 
 Misc::CallbackList& getPreRenderingCallbacks(void)
@@ -4083,95 +4015,13 @@ Misc::CommandDispatcher& getCommandDispatcher(void)
 	return vruiState->commandDispatcher;
 	}
 
-namespace {
-
-/**************
-Helper classes:
-**************/
-
-class VruiJobCompleteCallback:public Threads::WorkerPool::JobCompleteCallback
+void submitJob(Job& job,JobCompleteFunction& completeCallback)
 	{
-	/* Embedded classes: */
-	private:
-	struct FrameCallbackData // Structure passed to the frontend frame callback
-		{
-		/* Elements: */
-		public:
-		Misc::Autopointer<Threads::WorkerPool::JobFunction> job; // The user-provided job object
-		Misc::Autopointer<Threads::WorkerPool::JobCompleteCallback> completeCallback; // The completion callback provided by the caller
-		};
+	/* Create a new user signal with our complete callback as callback and the given complete callback as additional parameter: */
+	Threads::UserSignal* signal=new Threads::UserSignal(vruiRunLoop,true,*Threads::createFunctionCall(VruiState::jobCompleteCallback,Misc::Autopointer<JobCompleteFunction>(&completeCallback)));
 	
-	/* Elements: */
-	Misc::Autopointer<Threads::WorkerPool::JobCompleteCallback> completeCallback; // The completion callback provided by the caller
-	
-	/* Private methods: */
-	static bool frameCallback(void* userData) // Callback called from the Vrui front end
-		{
-		/* Access the callback structure: */
-		FrameCallbackData* frameCb=static_cast<FrameCallbackData*>(userData);
-		
-		/* Call the caller-provided callback with the caller-provided job object: */
-		(*frameCb->completeCallback)(*frameCb->job);
-		
-		/* Clean up: */
-		delete frameCb;
-		
-		/* Remove this callback immediately: */
-		return true;
-		};
-	
-	/* Constructors and destructors: */
-	public:
-	VruiJobCompleteCallback(Threads::WorkerPool::JobCompleteCallback& sCompleteCallback) // Creates a backend job completion callback with the given caller-provided completion callback
-		:completeCallback(&sCompleteCallback)
-		{
-		}
-	
-	/* Methods from class Threads::WorkerPool::JobCompleteCallback: */
-	virtual void operator()(Threads::WorkerPool::JobFunction& parameter) const
-		{
-		/* This can't be done: */
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot call on const object");
-		}
-	virtual void operator()(Threads::WorkerPool::JobFunction& parameter)
-		{
-		/* Register a frame callback with the Vrui front end: */
-		FrameCallbackData* frameCb=new FrameCallbackData;
-		frameCb->job=&parameter;
-		frameCb->completeCallback=completeCallback;
-		addFrameCallback(frameCallback,frameCb);
-		
-		/* Request a front end update to call the just-installed frame callback as soon as possible: */
-		requestUpdate();
-		}
-	};
-
-}
-
-void submitJob(Threads::FunctionCall<int>& job)
-	{
-	/* Submit the job to the worker pool: */
-	Threads::WorkerPool::submitJob(job);
-	}
-
-void submitJob(Threads::FunctionCall<int>& job,Threads::FunctionCall<Threads::FunctionCall<int>&>& completeCallback)
-	{
-	/* Wrap the caller-provided completion callback in our own callback to signal the front end from a background thread: */
-	VruiJobCompleteCallback* backendCompleteCallback=new VruiJobCompleteCallback(completeCallback);
-	
-	/* Submit the job to the worker pool: */
-	Threads::WorkerPool::submitJob(job,*backendCompleteCallback);
-	}
-
-void updateContinuously(void)
-	{
-	vruiState->updateContinuously=true;
-	}
-
-void scheduleUpdate(double nextFrameTime)
-	{
-	if(vruiState->nextFrameTime==0.0||vruiState->nextFrameTime>nextFrameTime)
-		vruiState->nextFrameTime=nextFrameTime;
+	/* Submit the given job with the new user signal as completion signal: */
+	Threads::WorkerPool::submitJob(job,*signal);
 	}
 
 const DisplayState& getDisplayState(GLContextData& contextData)

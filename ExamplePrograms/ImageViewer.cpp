@@ -1139,9 +1139,10 @@ class ImageLoader:public Threads::WorkerPool::JobFunction // Class to load an im
 
 }
 
-void ImageViewer::loadImageCompleteCallback(Threads::FunctionCall<int>& job)
+void ImageViewer::loadImageCompleteCallback(Threads::UserSignalEvent& event)
 	{
-	ImageLoader& imageLoader=static_cast<ImageLoader&>(job);
+	/* Retrieve the submitted image loader job: */
+	ImageLoader& imageLoader=event.getSignalData<ImageLoader>();
 	
 	/* Check if this request is the most recent one: */
 	if((imageLoader.getRequest()-loaded)>0) // This will work if wrap-around happens, 2 billion load request in :)
@@ -1173,7 +1174,7 @@ void ImageViewer::loadImageCallback(GLMotif::FileSelectionDialog::OKCallbackData
 	
 	/* Submit a job to load the newly-added image file in the background: */
 	currentImage=numImages-1;
-	Vrui::submitJob(*new ImageLoader(imageSources[currentImage],++request),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+	Threads::WorkerPool::submitJob(*new ImageLoader(imageSources[currentImage],++request),*loadImageCompleteSignal);
 	}
 
 void ImageViewer::showSelectorDialogButtonSelectedCallback(Misc::CallbackData* cbData)
@@ -1225,7 +1226,7 @@ void ImageViewer::imageIndexSliderValueChangedCallback(GLMotif::TextFieldSlider:
 	currentImage=(unsigned int)(Math::floor(cbData->value+0.5))-1;
 	
 	/* Load the image source in the background: */
-	Vrui::submitJob(*new ImageLoader(imageSources[currentImage],++request),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+	Threads::WorkerPool::submitJob(*new ImageLoader(imageSources[currentImage],++request),*loadImageCompleteSignal);
 	}
 
 GLMotif::PopupWindow* ImageViewer::createSelectorDialog(void)
@@ -1409,6 +1410,7 @@ std::string createImageExtensionFilter(void)
 ImageViewer::ImageViewer(int& argc,char**& argv)
 	:Vrui::Application(argc,argv),
 	 imageVersion(0),
+	 loadImageCompleteSignal(new Threads::UserSignal(Vrui::getRunLoop(),true,*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback))),
 	 imageHelper(Vrui::getWidgetManager(),"",createImageExtensionFilter().c_str()),
 	 smoothPixels(true),flipH(false),
 	 mainMenu(0),selectorDialog(0),infoDialog(0)
@@ -1585,7 +1587,7 @@ void ImageViewer::eventCallback(Vrui::Application::EventID eventId,Vrui::InputDe
 				--currentImage;
 				
 				/* Load the image source in the background: */
-				Vrui::submitJob(*new ImageLoader(imageSources[currentImage],++request),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+				Threads::WorkerPool::submitJob(*new ImageLoader(imageSources[currentImage],++request),*loadImageCompleteSignal);
 				
 				/* Update the image selector dialog: */
 				imageIndexSlider->setValue(currentImage+1);
@@ -1599,7 +1601,7 @@ void ImageViewer::eventCallback(Vrui::Application::EventID eventId,Vrui::InputDe
 					currentImage=0;
 				
 				/* Load the image source in the background: */
-				Vrui::submitJob(*new ImageLoader(imageSources[currentImage],++request),*Threads::createFunctionCall(this,&ImageViewer::loadImageCompleteCallback));
+				Threads::WorkerPool::submitJob(*new ImageLoader(imageSources[currentImage],++request),*loadImageCompleteSignal);
 				
 				/* Update the image selector dialog: */
 				imageIndexSlider->setValue(currentImage+1);

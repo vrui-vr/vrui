@@ -26,7 +26,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <string>
 #include <vector>
+#include <Misc/HashTable.h>
 #include <Misc/ConfigurationFile.h>
+#include <Threads/IOWatcher.h>
+#include <Threads/ProcessFunction.h>
 #include <X11/Xlib.h>
 #include <GL/GLContext.h>
 #include <Vrui/Types.h>
@@ -71,7 +74,7 @@ class WindowGroup
 		const char* applicationName; // Name of the Vrui application
 		int numWindows; // Total number of windows on this node
 		VRWindow** resultWindows; // Array of pointers to all windows on this node
-		int groupId; // ID of the window group
+		unsigned int groupId; // ID of the window group
 		std::string displayName; // Display name for this window group
 		int screen; // Screen index for this window group
 		std::vector<Window> windows; // List of the windows in this group
@@ -86,17 +89,25 @@ class WindowGroup
 			}
 		};
 	
+	typedef Misc::HashTable<unsigned int,Creator> CreatorMap; // Hash table mapping from window group IDs to window group creator structures
+	
 	/* Elements: */
 	private:
 	Display* display; // Display connection shared by all windows in the window group
-	int displayFd; // File descriptor for the display connection
+	int displayFd; // File descriptor for the display connection's socket
 	int numEventsInQueue; // Number of unhandled events in the display connection's event queue
 	bool socketReady; // Flag if the display connection's socket has data available to read
+	Threads::IOWatcherOwner displayWatcher; // An I/O watcher for the display connection's socket
+	Threads::ProcessFunctionOwner eventDispatcher; // A process function to dispatch X11 events to windows
 	GLContextPtr context; // OpenGL context shared by all windows in the group
 	DisplayState* displayState; // Display state structure shared by all windows in the group
 	std::vector<Window> windows; // List of pointers to windows in the window group
 	ISize maxViewportSize; // Maximum current viewport size of all windows in the group
 	ISize maxFrameSize; // Maximum current frame buffer size of all windows in the group
+	
+	/* Private methods: */
+	void displayWatcherCallback(Threads::IOWatcherEvent& event); // Function called when the display connection's socket becomes ready
+	void eventDispatcherCallback(Threads::ProcessFunction& processFunction); // Function called to dispatch X11 events to windows
 	
 	/* Constructors and destructors: */
 	public:
@@ -104,6 +115,7 @@ class WindowGroup
 	~WindowGroup(void); // Destroys this window group
 	
 	/* Methods: */
+	static CreatorMap collectWindowGroups(const char* applicationName,const std::vector<std::string>& windowNames,VRWindow** resultWindows,Misc::ConfigurationFile& configFile); // Sorts a set of windows defined by the given names into a set of window groups with shared OpenGL contexts
 	bool initialize(const Creator& creator,const std::string& syncWindowName,InputDeviceAdapterMouse* mouseAdapter,InputDeviceAdapterMultitouch* multitouchAdapter); // Initializes this window group from the given group creator and additional information
 	int getDisplayFd(void) const // Returns the file descriptor of the display connection's socket
 		{
@@ -127,7 +139,7 @@ class WindowGroup
 		{
 		socketReady=newSocketReady;
 		}
-	bool dispatchXEvents(void); // Dispatches all X11 events in the display connection's event queue and on its socket to the windows in this window group; returns true if any "real" events were dispatched
+	bool dispatchXEvents(void); // Dispatches all X11 events in the display connection's event queue and on its socket to the windows in this window group; returns true if any events were dispatched
 	void draw(void); // Draws all windows in this window group
 	void wait(void); // Waits until all windows in this window group are done rendering
 	void present(void); // Presents the most recent rendering results of all windows in this group

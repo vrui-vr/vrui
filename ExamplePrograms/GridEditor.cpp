@@ -1,7 +1,7 @@
 /***********************************************************************
 GridEditor - Vrui application for interactive virtual clay modeling
 using a density grid and interactive isosurface extraction.
-Copyright (c) 2006-2024 Oliver Kreylos
+Copyright (c) 2006-2026 Oliver Kreylos
 
 This file is part of the Virtual Clay Editing Package.
 
@@ -36,6 +36,7 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/MessageLogger.h>
 #include <Misc/CommandLineParser.h>
 #include <Realtime/Time.h>
+#include <Threads/WorkerPool.h>
 #include <IO/ValueSource.h>
 #include <IO/OpenFile.h>
 #include <Math/Math.h>
@@ -792,7 +793,7 @@ EditableGrid* GridEditor::loadMeshFile(const std::string& fileName,double resolu
 	std::cout<<"Creating grid...   0%"<<std::flush;
 	Realtime::TimePointMonotonic timer4;
 	for(int z=0;z<numVertices[2];++z)
-		Vrui::submitJob(*new MeshSlicer(*grid,z,triangleTree,maxDist2,completionCond,slicesComplete));
+		Threads::WorkerPool::submitJob(*new MeshSlicer(*grid,z,triangleTree,maxDist2,completionCond,slicesComplete));
 	
 	/* Wait until all slices are completed: */
 	{

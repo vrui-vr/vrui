@@ -42,40 +42,33 @@ namespace Vrui {
 Methods of class HMDConfigurationUpdater:
 ****************************************/
 
-bool HMDConfigurationUpdater::hmdConfigurationUpdatedFrame(void* userData)
+void HMDConfigurationUpdater::ipdDialogActiveFunction(Threads::ProcessFunction& processFunction)
 	{
-	HMDConfigurationUpdater* thisPtr=static_cast<HMDConfigurationUpdater*>(userData);
-	
 	/* Lock the HMD configuration: */
-	VRDeviceClient& dc=thisPtr->hmdAdapter->getDeviceClient();
+	VRDeviceClient& dc=hmdAdapter->getDeviceClient();
 	dc.lockHmdConfigurations();
 	
 	/* Check if the eye position changed: */
-	if(thisPtr->eyePosVersion!=thisPtr->hmdConfiguration->getEyePosVersion())
+	if(eyePosVersion!=hmdConfiguration->getEyePosVersion())
 		{
 		/* Calculate the new IPD in mm: */
-		Scalar newIpd=Geometry::dist(thisPtr->hmdConfiguration->getEyePosition(0),thisPtr->hmdConfiguration->getEyePosition(1))*getMeterFactor()*Scalar(1000);
-		bool ipdDifferent=Math::abs(newIpd-thisPtr->lastShownIpd)>=(thisPtr->ipdDisplayDialog!=0?Scalar(0.2):Scalar(0.5));
-		if(thisPtr->ipdDisplayDialog!=0)
+		Scalar newIpd=Geometry::dist(hmdConfiguration->getEyePosition(0),hmdConfiguration->getEyePosition(1))*getMeterFactor()*Scalar(1000);
+		bool ipdDifferent=Math::abs(newIpd-lastShownIpd)>=(ipdDisplayDialog!=0?Scalar(0.2):Scalar(0.5));
+		
+		/* Check if the IPD display dialog needs to be shown or updated: */
+		if(ipdDisplayDialog!=0)
 			{
 			/* Update the IPD display field: */
-			GLMotif::TextField* ipdDisplay=static_cast<GLMotif::TextField*>(static_cast<GLMotif::RowColumn*>(thisPtr->ipdDisplayDialog->getChild())->getChild(1));
+			GLMotif::TextField* ipdDisplay=static_cast<GLMotif::TextField*>(static_cast<GLMotif::RowColumn*>(ipdDisplayDialog->getChild())->getChild(1));
 			ipdDisplay->setValue(newIpd);
-			
-			/* Extend the dialog's display time if the IPD is different enough: */
-			if(ipdDifferent)
-				{
-				thisPtr->ipdDisplayDialogTakedownTime=getApplicationTime()+thisPtr->ipdDisplayDialogTimeout;
-				thisPtr->lastShownIpd=newIpd;
-				}
 			}
 		else if(ipdDifferent)
 			{
 			/* Create the IPD display dialog: */
-			thisPtr->ipdDisplayDialog=new GLMotif::PopupWindow("IpdDisplayDialog",getWidgetManager(),"IPD Update");
-			thisPtr->ipdDisplayDialog->setHideButton(false);
+			ipdDisplayDialog=new GLMotif::PopupWindow("IpdDisplayDialog",getWidgetManager(),"IPD Update");
+			ipdDisplayDialog->setHideButton(false);
 			
-			GLMotif::RowColumn* ipdDisplayBox=new GLMotif::RowColumn("IpdDisplayBox",thisPtr->ipdDisplayDialog,false);
+			GLMotif::RowColumn* ipdDisplayBox=new GLMotif::RowColumn("IpdDisplayBox",ipdDisplayDialog,false);
 			ipdDisplayBox->setOrientation(GLMotif::RowColumn::HORIZONTAL);
 			ipdDisplayBox->setPacking(GLMotif::RowColumn::PACK_TIGHT);
 			ipdDisplayBox->setNumMinorWidgets(1);
@@ -93,47 +86,48 @@ bool HMDConfigurationUpdater::hmdConfigurationUpdatedFrame(void* userData)
 			ipdDisplayBox->manageChild();
 			
 			/* Pop up the IPD display dialog in the viewer's sight line: */
-			Point hotspot=thisPtr->hmdViewer->getHeadPosition()+thisPtr->hmdViewer->getViewDirection()*(Scalar(24)*getInchFactor());
-			popupPrimaryWidget(thisPtr->ipdDisplayDialog,hotspot,false);
-			
-			/* Set the dialog's display time: */
-			thisPtr->ipdDisplayDialogTakedownTime=getApplicationTime()+thisPtr->ipdDisplayDialogTimeout;
-			thisPtr->lastShownIpd=newIpd;
+			Point hotspot=hmdViewer->getHeadPosition()+hmdViewer->getViewDirection()*(Scalar(24)*getInchFactor());
+			popupPrimaryWidget(ipdDisplayDialog,hotspot,false);
 			}
 		
-		thisPtr->eyePosVersion=thisPtr->hmdConfiguration->getEyePosVersion();
+		/* Extend the dialog's display time if the IPD is different enough: */
+		if(ipdDifferent)
+			{
+			ipdDisplayDialogTakedownTime=getApplicationTime()+ipdDisplayDialogTimeout;
+			lastShownIpd=newIpd;
+			}
+		
+		/* Mark the eye position as up-to-date: */
+		eyePosVersion=hmdConfiguration->getEyePosVersion();
 		}
 	
 	/* Call the configuration updated callback: */
-	(*thisPtr->configurationChangedCallback)(*thisPtr->hmdConfiguration);
+	(*configurationChangedCallback)(*hmdConfiguration);
 	
 	/* Unlock the HMD configuration: */
 	dc.unlockHmdConfigurations();
 	
 	/* Check if an active IPD display dialog needs to be taken down: */
-	if(thisPtr->ipdDisplayDialog!=0&&getApplicationTime()>=thisPtr->ipdDisplayDialogTakedownTime)
+	if(ipdDisplayDialog!=0&&getApplicationTime()>=ipdDisplayDialogTakedownTime)
 		{
-		popdownPrimaryWidget(thisPtr->ipdDisplayDialog);
-		delete thisPtr->ipdDisplayDialog;
-		thisPtr->ipdDisplayDialog=0;
+		popdownPrimaryWidget(ipdDisplayDialog);
+		delete ipdDisplayDialog;
+		ipdDisplayDialog=0;
 		
-		/* Remove this callback: */
-		return true;
+		/* Disable this process function: */
+		ipdDialogActive->disable();
 		}
 	else
 		{
 		/* Request another Vrui frame at the takedown time: */
-		scheduleUpdate(thisPtr->ipdDisplayDialogTakedownTime);
-		
-		/* Keep this callback active: */
-		return false;
+		scheduleUpdate(ipdDisplayDialogTakedownTime);
 		}
 	}
 
 void HMDConfigurationUpdater::hmdConfigurationUpdated(const HMDConfiguration& hmdConfiguration)
 	{
-	/* Hook a callback into Vrui's frame processing (will be ignored if the callback is already active): */
-	addFrameCallback(hmdConfigurationUpdatedFrame,this);
+	/* Enable the IPD dialog update function: */
+	ipdDialogActive->enable();
 	}
 
 HMDConfigurationUpdater::HMDConfigurationUpdater(Viewer* sHmdViewer,HMDConfigurationUpdater::ConfigurationChangedCallback& sConfigurationChangedCallback)
@@ -167,6 +161,9 @@ HMDConfigurationUpdater::HMDConfigurationUpdater(Viewer* sHmdViewer,HMDConfigura
 	
 	/* Unlock the HMD configuration: */
 	dc.unlockHmdConfigurations();
+	
+	/* Create a process function to manage the IPD display dialog: */
+	ipdDialogActive=new Threads::ProcessFunction(getRunLoop(),false,false,*Threads::createFunctionCall(this,&HMDConfigurationUpdater::ipdDialogActiveFunction));
 	}
 
 HMDConfigurationUpdater::~HMDConfigurationUpdater(void)

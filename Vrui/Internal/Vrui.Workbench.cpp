@@ -37,8 +37,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/Size.h>
 #include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
-#include <Misc/StringHashFunctions.h>
-#include <Misc/HashTable.h>
 #include <Misc/FdSet.h>
 #include <Misc/File.h>
 #include <Misc/Timer.h>
@@ -68,7 +66,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <GL/Config.h>
 #include <GL/GLValueCoders.h>
 #include <GL/GLContextData.h>
-#include <X11/keysym.h>
 #include <GLMotif/Event.h>
 #include <GLMotif/Popup.h>
 #include <AL/Config.h>
@@ -94,43 +91,13 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 namespace Vrui {
 
-struct SynchronousIOCallbackSlot
-	{
-	/* Elements: */
-	public:
-	int fd; // Watched file descriptor
-	SynchronousIOCallback callback; // Pointer to the callback function
-	void* callbackData; // Opaque pointer passed to callback function
-	
-	/* Constructors and destructors: */
-	SynchronousIOCallbackSlot(int sFd,SynchronousIOCallback sCallback,void* sCallbackData)
-		:fd(sFd),callback(sCallback),callbackData(sCallbackData)
-		{
-		}
-	
-	/* Methods: */
-	bool callIfPending(const Misc::FdSet& readFds) const // Calls the callback if there is pending data on its file descriptor
-		{
-		/* Check if the file descriptor has pending data: */
-		bool result=readFds.isSet(fd);
-		if(result)
-			{
-			/* Call the callback: */
-			(*callback)(fd,callbackData);
-			}
-		
-		return result;
-		}
-	};
-
-typedef std::vector<SynchronousIOCallbackSlot> SynchronousIOCallbackList;
-
 /*****************************
 Private Vrui global variables:
 *****************************/
 
 bool vruiVerbose=false;
 bool vruiMaster=true;
+Threads::RunLoop vruiRunLoop;
 
 std::ostream& operator<<(std::ostream& os,const VruiErrorHeader& veh)
 	{
@@ -151,11 +118,10 @@ namespace {
 Workbench-specific global variables:
 ***********************************/
 
-int vruiEventPipe[2]={-1,-1};
+Threads::IOWatcherOwner vruiStdinWatcher;
+Threads::IOWatcherOwner vruiCommandPipeWatcher;
 int vruiCommandPipe=-1;
 int vruiCommandPipeHolder=-1;
-SynchronousIOCallbackList vruiSynchronousIOCallbacks;
-Misc::FdSet vruiReadFdSet;
 Misc::ConfigurationFile* vruiConfigFile=0;
 char* vruiConfigRootSectionName=0;
 char* vruiApplicationName=0;
@@ -180,22 +146,10 @@ pid_t* vruiSlavePids=0;
 int vruiSlaveArgc=0;
 char** vruiSlaveArgv=0;
 char** vruiSlaveArgvShadow=0;
-volatile bool vruiAsynchronousShutdown=false;
 
 /*****************************************
 Workbench-specific private Vrui functions:
 *****************************************/
-
-#if 0
-
-/* Signal handler to shut down Vrui if something goes wrong: */
-void vruiTerminate(int)
-	{
-	/* Request an asynchronous shutdown: */
-	vruiAsynchronousShutdown=true;
-	}
-
-#endif
 
 /* Generic cleanup function called in case of an error: */
 void vruiErrorShutdown(bool signalError)
@@ -299,10 +253,6 @@ void vruiErrorShutdown(bool signalError)
 		close(vruiCommandPipeHolder);
 		close(vruiCommandPipe);
 		}
-	
-	/* Close the event pipe: */
-	close(vruiEventPipe[0]);
-	close(vruiEventPipe[1]);
 	}
 
 int vruiXErrorHandler(Display* display,XErrorEvent* event)
@@ -497,56 +447,6 @@ void vruiGoToRootSection(const char*& rootSectionName,bool verbose)
 		std::cout<<"Vrui: Going to root section /Vrui/"<<rootSectionName<<std::endl;
 	vruiConfigFile->setCurrentSection("/Vrui");
 	vruiConfigFile->setCurrentSection(rootSectionName);
-	}
-
-typedef Misc::HashTable<unsigned int,WindowGroup::Creator> VruiWindowGroupCreatorMap;
-
-void vruiCollectWindowGroups(const std::vector<std::string>& windowNames,VruiWindowGroupCreatorMap& windowGroups)
-	{
-	/* Create a map from display names to default group IDs: */
-	typedef Misc::HashTable<std::string,unsigned int> DisplayGroupMap;
-	DisplayGroupMap displayGroups(7);
-	
-	/* Sort the windows into groups based on their group IDs and collect each group's OpenGL context properties: */
-	unsigned int nextGroupId=0;
-	for(int windowIndex=0;windowIndex<vruiNumWindows;++windowIndex)
-		{
-		/* Go to the window's configuration section: */
-		Misc::ConfigurationFileSection windowSection=vruiConfigFile->getSection(windowNames[windowIndex].c_str());
-		
-		/* Read the name of the window's X display: */
-		std::pair<std::string,int> displayName=VRWindow::getDisplayName(windowSection);
-		
-		/* Create a default group ID for the window: */
-		DisplayGroupMap::Iterator dgIt=displayGroups.findEntry(displayName.first);
-		unsigned int groupId=dgIt.isFinished()?nextGroupId:dgIt->getDest();
-		
-		/* Overwrite the window's default group ID from its configuration section: */
-		windowSection.updateValue("./groupId",groupId);
-		
-		/* Look for the group ID in the window groups hash table: */
-		VruiWindowGroupCreatorMap::Iterator wgIt=windowGroups.findEntry(groupId);
-		if(wgIt.isFinished())
-			{
-			/* Start a new window group: */
-			wgIt=windowGroups.setAndFindEntry(VruiWindowGroupCreatorMap::Entry(groupId,WindowGroup::Creator(vruiApplicationName,vruiNumWindows,vruiWindows,groupId)));
-			wgIt->getDest().displayName=displayName.first;
-			wgIt->getDest().screen=displayName.second;
-			vruiState->windowProperties.setContextProperties(wgIt->getDest().contextProperties);
-			
-			/* Associate the new window group with this window's display name: */
-			displayGroups.setEntry(DisplayGroupMap::Entry(displayName.first,groupId));
-			if(nextGroupId<=groupId)
-				nextGroupId=groupId+1;
-			}
-		
-		/* Add this window to the new or existing window group: */
-		WindowGroup::Creator::Window newWindow;
-		newWindow.windowIndex=windowIndex;
-		newWindow.windowConfigFileSection=windowSection;
-		wgIt->getDest().windows.push_back(newWindow);
-		VRWindow::updateContextProperties(wgIt->getDest().contextProperties,windowSection);
-		}
 	}
 
 void* vruiRenderingThreadFunction(int windowGroupIndex)
@@ -841,21 +741,6 @@ void init(int& argc,char**& argv,char**&)
 					--argc;
 					}
 				}
-			}
-		
-		/* Open the Vrui event pipe: */
-		if(pipe(vruiEventPipe)!=0||vruiEventPipe[0]<0||vruiEventPipe[1]<0)
-			{
-			/* This is bad; need to shut down: */
-			std::cerr<<"Error while opening event pipe"<<std::endl;
-			vruiErrorShutdown(true);
-			}
-		
-		/* Set both ends of the pipe to non-blocking I/O: */
-		for(int i=0;i<2;++i)
-			{
-			long flags=fcntl(vruiEventPipe[i],F_GETFL);
-			fcntl(vruiEventPipe[i],F_SETFL,flags|O_NONBLOCK);
 			}
 		
 		/* Get the full name of the global per-user configuration file: */
@@ -1462,8 +1347,7 @@ void startDisplay(void)
 			}
 		
 		/* Sort the windows into groups based on their group IDs and collect each group's OpenGL context properties: */
-		VruiWindowGroupCreatorMap windowGroups(7);
-		vruiCollectWindowGroups(windowNames,windowGroups);
+		WindowGroup::CreatorMap windowGroups=WindowGroup::collectWindowGroups(vruiApplicationName,windowNames,vruiWindows,*vruiConfigFile);
 		
 		/* Initialize the window groups array: */
 		vruiNumWindowGroups=int(windowGroups.getNumEntries());
@@ -1498,7 +1382,7 @@ void startDisplay(void)
 		/* Create all windows in all window groups: */
 		bool allWindowsOk=true;
 		int windowGroupIndex=0;
-		for(VruiWindowGroupCreatorMap::Iterator wgIt=windowGroups.begin();allWindowsOk&&!wgIt.isFinished();++wgIt,++windowGroupIndex)
+		for(WindowGroup::CreatorMap::Iterator wgIt=windowGroups.begin();allWindowsOk&&!wgIt.isFinished();++wgIt,++windowGroupIndex)
 			allWindowsOk=vruiWindowGroups[windowGroupIndex].initialize(wgIt->getDest(),syncWindowName,mouseAdapter,multitouchAdapter);
 		
 		if(!allWindowsOk)
@@ -1649,107 +1533,10 @@ void startSound(void)
 	#endif
 	}
 
-bool vruiHandleAllEvents(bool allowBlocking)
+void vruiDispatchCommands(Threads::IOWatcherEvent& event)
 	{
-	/* Flag to keep track if anything meaningful really happened: */
-	bool handledEvents=false;
+	/* Dispatch commands from the file descriptor in this event: */
 	
-	/* Check if any X event queues have unhandled events in them: */
-	for(int windowGroupIndex=0;windowGroupIndex<vruiNumWindowGroups;++windowGroupIndex)
-		allowBlocking=allowBlocking&&!vruiWindowGroups[windowGroupIndex].hasPendingEvents();
-	
-	/* If there are no pending events, and blocking is allowed, block until something happens: */
-	Misc::FdSet readFdSet(vruiReadFdSet);
-	if(allowBlocking)
-		{
-		/* Block until any events arrive: */
-		if(vruiState->nextFrameTime!=0.0)
-			{
-			/* Calculate the time interval until the next scheduled event: */
-			double nextFrameTime=Math::Constants<double>::max;
-			if(vruiState->nextFrameTime!=0.0&&nextFrameTime>vruiState->nextFrameTime)
-				nextFrameTime=vruiState->nextFrameTime;
-			double dtimeout=nextFrameTime-vruiState->appTime.peekTime();
-			struct timeval timeout;
-			if(dtimeout>0.0)
-				{
-				timeout.tv_sec=long(Math::floor(dtimeout));
-				timeout.tv_usec=long(Math::floor((dtimeout-double(timeout.tv_sec))*1000000.0+0.5));
-				}
-			else
-				{
-				timeout.tv_sec=0;
-				timeout.tv_usec=0;
-				}
-			
-			/* Block until the next scheduled timer event comes due: */
-			if(Misc::select(&readFdSet,0,0,&timeout)==0)
-				handledEvents=true; // Must stop waiting if a timer event is due
-			}
-		else
-			{
-			/* Block until kingdom come: */
-			Misc::select(&readFdSet,0,0);
-			}
-		}
-	else
-		{
-		/* Check for available data, but don't block: */
-		struct timeval timeout;
-		timeout.tv_sec=0;
-		timeout.tv_usec=0;
-		Misc::select(&readFdSet,0,0,&timeout);
-		}
-	
-	/* Process pending X11 events from all window groups: */
-	for(int windowGroupIndex=0;windowGroupIndex<vruiNumWindowGroups;++windowGroupIndex)
-		{
-		WindowGroup& windowGroup=vruiWindowGroups[windowGroupIndex];
-		
-		/* Mark the window group's display connection socket as ready if it has unread data: */
-		windowGroup.setSocketReady(readFdSet.isSet(windowGroup.getDisplayFd()));
-		
-		/* Dispatch all X11 events on the window group's display connection: */
-		handledEvents=vruiWindowGroups[windowGroupIndex].dispatchXEvents()||handledEvents;
-		}
-	
-	/* Read pending bytes from the event pipe: */
-	if(readFdSet.isSet(vruiEventPipe[0]))
-		{
-		char readBuffer[128]; // More than enough
-		if(read(vruiEventPipe[0],readBuffer,sizeof(readBuffer))>0)
-			handledEvents=true;
-		}
-	
-	/* Read and dispatch commands from stdin: */
-	if(readFdSet.isSet(fileno(stdin)))
-		{
-		/* Dispatch commands and check if there was an error: */
-		if(vruiState->commandDispatcher.dispatchCommands(fileno(stdin)))
-			{
-			/* Stop listening on stdin: */
-			vruiReadFdSet.remove(fileno(stdin));
-			}
-		handledEvents=true;
-		}
-	
-	/* Read and dispatch commands from the command pipe: */
-	if(vruiCommandPipe>=0&&readFdSet.isSet(vruiCommandPipe))
-		{
-		/* Dispatch commands and check if there was an error: */
-		if(vruiState->commandDispatcher.dispatchCommands(vruiCommandPipe))
-			{
-			/* Stop listening on the command pipe: */
-			vruiReadFdSet.remove(vruiCommandPipe);
-			}
-		handledEvents=true;
-		}
-	
-	/* Call any synchronous I/O callbacks whose file descriptors have pending data: */
-	for(SynchronousIOCallbackList::const_iterator siocbIt=vruiSynchronousIOCallbacks.begin();siocbIt!=vruiSynchronousIOCallbacks.end();++siocbIt)
-		handledEvents=siocbIt->callIfPending(readFdSet)||handledEvents;
-	
-	return handledEvents;
 	}
 
 #if VRUI_INSTRUMENT_MAINLOOP
@@ -1780,47 +1567,21 @@ void vruiInnerLoopMultiWindow(void)
 	std::cout<<"Frame,Render,PreSwap,PostSwap"<<std::endl;
 	#endif
 	
-	bool keepRunning=true;
-	bool firstFrame=true;
-	TimePoint nextFrameRate;
-	nextFrameRate+=TimeVector(1,0);
-	unsigned int numFrames=0;
-	while(keepRunning)
+	/* Print frame rates at regular intervals for window-less Vrui head nodes: */
+	Threads::EventTime nextFrameRateDisplayTime;
+	nextFrameRateDisplayTime+=Threads::EventInterval(1,0);
+	unsigned long frameRateBaseIndex=vruiState->frameIndex;
+	
+	/* Run the main loop until shut down: */
+	while(true)
 		{
 		#if VRUI_INSTRUMENT_MAINLOOP
 		vruiPrintTime(false);
 		#endif
 		
-		/* Handle all events, blocking if there are none unless in continuous mode: */
-		if(firstFrame||vruiState->updateContinuously)
-			{
-			/* Check for and handle events without blocking: */
-			vruiHandleAllEvents(false);
-			}
-		else
-			{
-			/* Wait for and process events until something actually happens: */
-			while(!vruiHandleAllEvents(true))
-				;
-			}
-		
-		/* Check for asynchronous shutdown: */
-		keepRunning=keepRunning&&!vruiAsynchronousShutdown;
-		
-		/* Run a single Vrui frame: */
-		if(vruiState->multiplexer!=0)
-			vruiState->pipe->broadcast(keepRunning);
-		if(!keepRunning)
-			{
-			if(vruiState->multiplexer!=0&&vruiMaster)
-				vruiState->pipe->flush();
-			
-			/* Bail out of the inner loop: */
+		/* Start a new Vrui frame and bail out if shutdown was requested: */
+		if(!vruiState->startFrame())
 			break;
-			}
-		
-		/* Update the Vrui state: */
-		vruiState->update();
 		
 		/* Reset the AL thing manager: */
 		ALContextData::resetThingManager();
@@ -1932,14 +1693,15 @@ void vruiInnerLoopMultiWindow(void)
 			/* Print current frame rate on head node's console for window-less Vrui processes: */
 			if(vruiMaster)
 				{
-				++numFrames;
-				TimePoint now;
-				if(now>=nextFrameRate)
+				Threads::EventTime now;
+				if(now>=nextFrameRateDisplayTime)
 					{
+					unsigned int numFrames=(unsigned int)(vruiState->frameIndex-frameRateBaseIndex);
 					printf("Current frame rate: %8u fps\r",numFrames);
 					fflush(stdout);
-					nextFrameRate+=TimeVector(1,0);
-					numFrames=0;
+					
+					nextFrameRateDisplayTime+=Threads::EventInterval(1,0);
+					frameRateBaseIndex=vruiState->frameIndex;
 					}
 				}
 			}
@@ -1949,9 +1711,9 @@ void vruiInnerLoopMultiWindow(void)
 		Misc::CallbackData cbData;
 		vruiState->postRenderingCallbacks.call(&cbData);
 		}
-		
-		firstFrame=false;
 		}
+	
+	/* If we were printing frame rates on a window-less head node, clean that up: */
 	if(vruiNumWindows==0&&vruiMaster)
 		{
 		printf("\n");
@@ -1965,44 +1727,15 @@ void vruiInnerLoopSingleWindow(void)
 	std::cout<<"Frame,Render,PreSwap,PostSwap"<<std::endl;
 	#endif
 	
-	bool keepRunning=true;
-	bool firstFrame=true;
 	while(true)
 		{
 		#if VRUI_INSTRUMENT_MAINLOOP
 		vruiPrintTime(false);
 		#endif
 		
-		/* Handle all events, blocking if there are none unless in continuous mode: */
-		if(firstFrame||vruiState->updateContinuously)
-			{
-			/* Check for and handle events without blocking: */
-			vruiHandleAllEvents(false);
-			}
-		else
-			{
-			/* Wait for and process events until something actually happens: */
-			while(!vruiHandleAllEvents(true))
-				;
-			}
-		
-		/* Check for asynchronous shutdown: */
-		keepRunning=keepRunning&&!vruiAsynchronousShutdown;
-		
-		/* Run a single Vrui frame: */
-		if(vruiState->multiplexer!=0)
-			vruiState->pipe->broadcast(keepRunning);
-		if(!keepRunning)
-			{
-			if(vruiState->multiplexer!=0&&vruiMaster)
-				vruiState->pipe->flush();
-			
-			/* Bail out of the inner loop: */
+		/* Start a new Vrui frame and bail out if shutdown was requested: */
+		if(!vruiState->startFrame())
 			break;
-			}
-		
-		/* Update the Vrui state: */
-		vruiState->update();
 		
 		/* Reset the AL thing manager: */
 		ALContextData::resetThingManager();
@@ -2046,15 +1779,13 @@ void vruiInnerLoopSingleWindow(void)
 		Misc::CallbackData cbData;
 		vruiState->postRenderingCallbacks.call(&cbData);
 		}
-		
-		firstFrame=false;
 		}
 	}
 
 void mainLoop(void)
 	{
 	/* Bail out if someone requested a shutdown during the initialization procedure: */
-	if(vruiAsynchronousShutdown)
+	if(false) // FIXME -- HOW DO WE MANAGE THIS?
 		{
 		if(vruiVerbose&&vruiMaster)
 			std::cout<<"Vrui: Shutting down due to shutdown request during initialization"<<std::flush;
@@ -2091,10 +1822,11 @@ void mainLoop(void)
 	if(vruiVerbose&&vruiMaster)
 		std::cout<<" Ok"<<std::endl;
 	
-	/* Construct the set of file descriptors to watch for events: */
-	vruiReadFdSet.add(vruiEventPipe[0]);
-	for(int i=0;i<vruiNumWindowGroups;++i)
-		vruiReadFdSet.add(vruiWindowGroups[i].getDisplayFd());
+	/* Listen for commands on stdin: */
+	Threads::IOWatcherEventHandler* commandDispatcherFunction=Threads::createFunctionCall(vruiState,&VruiState::dispatchCommandsCallback);
+	vruiStdinWatcher=new Threads::IOWatcher(vruiRunLoop,STDIN_FILENO,Threads::IOWatcher::Read,true,*commandDispatcherFunction);
+	
+	/* If there is a command pipe, listen for commands on that: */
 	std::string commandPipeName=vruiConfigFile->retrieveString("./commandPipeName",std::string());
 	if(!commandPipeName.empty())
 		{
@@ -2107,9 +1839,11 @@ void mainLoop(void)
 			}
 		if(vruiCommandPipeHolder>=0)
 			{
-			vruiReadFdSet.add(vruiCommandPipe);
 			if(vruiVerbose&&vruiMaster)
 				std::cout<<"Vrui: Listening for commands on pipe "<<commandPipeName<<std::endl;
+			
+			/* Listen for commands on the pipe: */
+			vruiCommandPipeWatcher=new Threads::IOWatcher(vruiRunLoop,vruiCommandPipe,Threads::IOWatcher::Read,true,*commandDispatcherFunction);
 			}
 		else
 			{
@@ -2121,9 +1855,7 @@ void mainLoop(void)
 			vruiCommandPipe=-1;
 			}
 		}
-	
-	/* Listen for pipe commands on stdin: */
-	vruiReadFdSet.add(fileno(stdin));
+	commandDispatcherFunction=0;
 	
 	/* Perform the main loop until the quit command is entered: */
 	if(vruiVerbose&&vruiMaster)
@@ -2138,6 +1870,8 @@ void mainLoop(void)
 	/* Perform first clean-up steps: */
 	if(vruiVerbose&&vruiMaster)
 		std::cout<<"Vrui: Exiting main loop..."<<std::flush;
+	vruiStdinWatcher=0;
+	vruiCommandPipeWatcher=0;
 	vruiState->finishMainLoop();
 	if(vruiVerbose&&vruiMaster)
 		std::cout<<" Ok"<<std::endl;
@@ -2254,20 +1988,18 @@ void deinit(void)
 		close(vruiCommandPipeHolder);
 		close(vruiCommandPipe);
 		}
-	
-	/* Close the vrui event pipe: */
-	close(vruiEventPipe[0]);
-	close(vruiEventPipe[1]);
 	}
 
 void shutdown(void)
 	{
 	/* Signal asynchronous shutdown if this node is the master node: */
 	if(vruiMaster)
-		{
-		vruiAsynchronousShutdown=true;
-		requestUpdate();
-		}
+		vruiRunLoop.stop();
+	}
+
+Threads::RunLoop& getRunLoop(void)
+	{
+	return vruiRunLoop;
 	}
 
 const char* getApplicationName(void)
@@ -2315,53 +2047,11 @@ SoundContext* getRecordingSoundContext(void)
 	return vruiRecordingSoundContext;
 	}
 
-void addSynchronousIOCallback(int fd,SynchronousIOCallback newIOCallback,void* newIOCallbackData)
-	{
-	if(vruiMaster)
-		{
-		/* Add the given file descriptor to Vrui's watch set: */
-		vruiReadFdSet.add(fd);
-		
-		/* Add a new callback slot to the list: */
-		vruiSynchronousIOCallbacks.push_back(SynchronousIOCallbackSlot(fd,newIOCallback,newIOCallbackData));
-		
-		/* Request an update to handle any already-pending data on the new file descriptor: */
-		requestUpdate();
-		}
-	}
-
-void removeSynchronousIOCallback(int fd)
-	{
-	if(vruiMaster)
-		{
-		/* Remove the given file descriptor from Vrui's watch set: */
-		vruiReadFdSet.remove(fd);
-		
-		/* Remove the callback slot for the given file descriptor from the list: */
-		for(SynchronousIOCallbackList::iterator siocbIt=vruiSynchronousIOCallbacks.begin();siocbIt!=vruiSynchronousIOCallbacks.end();++siocbIt)
-			if(siocbIt->fd==fd)
-				{
-				/* Remove the callback slot: */
-				*siocbIt=vruiSynchronousIOCallbacks.back();
-				vruiSynchronousIOCallbacks.pop_back();
-				
-				/* Stop looking: */
-				break;
-				}
-		}
-	}
-
 void requestUpdate(void)
 	{
+	/* Wake up the run loop, but only if this is the master node: */
 	if(vruiMaster)
-		{
-		/* Send a byte to the event pipe: */
-		char byte=1;
-		if(write(vruiEventPipe[1],&byte,sizeof(char))<0)
-			{
-			/* g++ expects me to check the return value, but there's nothing to do... */
-			}
-		}
+		vruiRunLoop.wakeUp();
 	}
 
 }

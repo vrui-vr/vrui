@@ -28,14 +28,16 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <deque>
 #include <Misc/Autopointer.h>
 #include <Misc/RingBuffer.h>
-#include <Misc/PriorityHeap.h>
 #include <Misc/StringHashFunctions.h>
 #include <Misc/HashTable.h>
 #include <Misc/Timer.h>
 #include <Misc/CommandDispatcher.h>
 #include <Misc/CallbackList.h>
 #include <Realtime/Time.h>
-#include <Threads/Mutex.h>
+#include <Threads/RunLoop.h>
+#include <Threads/IOWatcher.h>
+#include <Threads/UserSignal.h>
+#include <Threads/WorkerPool.h>
 #include <IO/Directory.h>
 #include <Geometry/Point.h>
 #include <Geometry/Vector.h>
@@ -64,6 +66,9 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 namespace Misc {
 class ConfigurationFileSection;
 class CallbackData;
+}
+namespace Misc {
+class RunLoop;
 }
 namespace Cluster {
 class Multiplexer;
@@ -139,37 +144,6 @@ struct VruiState
 		virtual void initContext(GLContextData& contextData) const;
 		};
 	
-	struct FrameCallbackSlot // Structure holding a frame callback
-		{
-		/* Elements: */
-		public:
-		FrameCallback callback; // The callback function
-		void* userData; // User-specified argument
-		};
-	
-	struct MessageDialog // Structure keeping track of a message dialog that was popped up by showErrorMessage
-		{
-		/* Elements: */
-		public:
-		GLMotif::PopupWindow* dialog; // Pointer to the dialog window
-		double timeout; // Application time at which the dialog should be closed automatically
-		
-		/* Constructors and destructors: */
-		MessageDialog(GLMotif::PopupWindow* sDialog,double sTimeout) // Elementwise constructor
-			:dialog(sDialog),timeout(sTimeout)
-			{
-			}
-		
-		/* Methods: */
-		static bool lessEqual(const MessageDialog& md1,const MessageDialog& md2) // Comparison function for priority heap
-			{
-			/* Sort message dialogs by time-out: */
-			return md1.timeout<=md2.timeout;
-			}
-		};
-	
-	typedef Misc::PriorityHeap<MessageDialog,MessageDialog> MessageDialogHeap; // Type for heaps of message dialogs, sorted by time-out
-	
 	class ApplicationDisplayFunctionNode:public SceneGraph::GraphNode // Custom scene graph node class to call the application's display function from inside the central scene graph
 		{
 		/* Elements: */
@@ -202,6 +176,22 @@ struct VruiState
 	
 	/* Random number management: */
 	unsigned int randomSeed; // Seed value for random number generator
+	
+	/* Time and frame sequence management: */
+	Threads::EventTime frameTimeBase; // Time point at which Vrui's main loop started, to calculate relative application time for each frame
+	unsigned long frameIndex; // The zero-based index of the current frame
+	double applicationTime; // The current application time, in seconds since Vrui's main loop started
+	double lastFrameDuration; // The precise duration of the previous frame in seconds; set to 0.0 during the first frame
+	int numRecentFrameDurations; // Number of recent frame durations from which to average
+	double* recentFrameDurations; // Array of recent times to complete a frame
+	int nextFrameDurationIndex; // Index at which the next frame time is stored in the array
+	double* sortedFrameDurations; // Helper array to calculate median of frame times
+	double medianFrameDuration; // Current median frame duration
+	bool updateContinuously; // Flag if the inner Vrui loop never blocks
+	double nextFrameTime; // Scheduled time to start next frame, or 0.0 if no frame scheduled
+	double synchFrameTime; // Precise time to be used for next frame
+	bool synchWait; // Flag whether to delay the next frame until wallclock time matches synch time
+	double animationFrameInterval; // Suggested frame interval to be used for animations
 	
 	/* Scene graph management: */
 	SceneGraphManager* sceneGraphManager;
@@ -312,7 +302,6 @@ struct VruiState
 	GLMotif::TextFieldSlider* frontplaneSlider;
 	
 	bool userMessagesToConsole; // Flag whether to route user messages, normally displayed as dialog boxes, to the console instead
-	MessageDialogHeap messageDialogs; // Heap containing currently-open message dialogs, sorted by time-out
 	
 	/* 3D picking management: */
 	Scalar pointPickDistance;
@@ -352,24 +341,11 @@ struct VruiState
 	FinishMainLoopFunctionType finishMainLoopFunction;
 	void* finishMainLoopFunctionData;
 	
-	/* Time management: */
-	Misc::Timer appTime; // Free-running application timer
-	double minimumFrameTime; // Lower limit on frame times; Vrui's main loop will block to pad frame times to this minimum
-	double lastFrame; // Application time at which the last frame was started
-	double lastFrameDelta; // Duration of last frame
-	double nextFrameTime; // Scheduled time to start next frame, or 0.0 if no frame scheduled
-	double synchFrameTime; // Precise time to be used for next frame
-	bool synchWait; // Flag whether to delay the next frame until wallclock time matches synch time
-	int numRecentFrameTimes; // Number of recent frame times to average from
-	double* recentFrameTimes; // Array of recent times to complete a frame
-	int nextFrameTimeIndex; // Index at which the next frame time is stored in the array
-	double* sortedFrameTimes; // Helper array to calculate median of frame times
-	double currentFrameTime; // Current frame time average
-	double animationFrameInterval; // Suggested frame interval to be used for animations
-	Threads::Mutex frameCallbacksMutex; // Mutex protecting the list of extra frame callbacks
-	std::vector<FrameCallbackSlot> frameCallbacks; // List of extra frame callbacks
+	/* Other frame-related callbacks: */
 	Misc::CallbackList preRenderingCallbacks; // List of callbacks called for each window group before anything is rendered
 	Misc::CallbackList postRenderingCallbacks; // List of callbacks called after all window groups have finished rendering
+	
+	/* Job and command management: */
 	Misc::CommandDispatcher commandDispatcher; // Dispatcher for pipe and console commands
 	
 	/* Transient dragging/moving/scaling state: */
@@ -380,7 +356,6 @@ struct VruiState
 	std::deque<InputDevice*> createdVirtualInputDevices;
 	
 	/* Rendering management state: */
-	bool updateContinuously; // Flag if the inner Vrui loop never blocks
 	bool synced; // Flag whether Vrui frames are synchronized to some display
 	TimePoint nextVsync; // Predicted time at which the current frame's vsync event will occur
 	TimeVector vsyncPeriod; // Current estimate of time interval between subsequent vsync events
@@ -396,6 +371,8 @@ struct VruiState
 	void updateNavigationTransformation(const NavTransform& newTransform); // Updates the working version of the navigation transformation
 	void loadViewpointFile(IO::Directory& directory,const char* viewpointFileName); // Overrides the navigation transformation with viewpoint data stored in the given viewpoint file
 	void saveViewpointFile(IO::Directory& directory,const char* viewpointFileName); // Saves the current viewpoint data to the given viewpoint file
+	static void jobCompleteCallback(Threads::UserSignalEvent& event,Misc::Autopointer<JobCompleteFunction> completeCallback); // Callback called in the main thread when a job submitted via submitJob() has finished
+	void dispatchCommandsCallback(Threads::IOWatcherEvent& event); // Dispatches commands from a file descriptor that has just become ready
 	
 	/* Constructors and destructors: */
 	VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* sPipe); // Initializes basic Vrui state
@@ -411,7 +388,7 @@ struct VruiState
 	void prepareMainLoop(void); // Performs last steps of initialization before main loop is run
 	
 	/* Frame processing methods: */
-	void update(void); // Update Vrui state for current frame
+	bool startFrame(void); // Closes out the current frame and starts a new one; returns false if the main loop must shut down
 	void display(DisplayState* displayState,GLContextData& contextData) const; // Vrui display function
 	void sound(SceneGraph::ALRenderState& renderState) const; // Vrui sound function
 	
@@ -484,14 +461,12 @@ std::ostream& operator<<(std::ostream& os,const VruiErrorHeader& veh);
 
 extern bool vruiVerbose; // Flag whether Vrui should be verbose about its operations
 extern bool vruiMaster; // Flag whether a Vrui instance is on a single host, or the head node of a cluster
+extern Threads::RunLoop vruiRunLoop; // Vrui's main-thread run loop
 extern VruiErrorHeader vruiErrorHeader; // Object to print error message headers
 
 /********************************
 Private Vrui function prototypes:
 ********************************/
-
-/* Forward declarations: */
-struct VruiWindowGroup;
 
 extern const char* getApplicationName(void); // Returns the name of the Vrui application
 extern void setRandomSeed(unsigned int newRandomSeed); // Sets Vrui's random seed; can only be called by InputDeviceAdapterPlayback during its initialization
@@ -502,8 +477,6 @@ extern void synchronize(double firstFrameTime); // Gives a precise time value to
 extern void synchronize(double nextFrameTime,bool wait); // Gives a precise time value to use for the next frame; delays frame until wall-clock time matches if wait is true; can only be called by InputDeviceAdapterPlayback during playback
 extern void resetNavigation(void); // Calls the application-provided function to reset the navigation transformation
 extern void setDisplayCenter(const Point& newDisplayCenter,Scalar newDisplaySize); // Sets the center and size of Vrui's display environment
-extern void resizeWindow(VruiWindowGroup* windowGroup,const VRWindow* window,const ISize& newViewportSize,const ISize& newFrameSize); // Notifies the run-time environment that a window has changed viewport and/or frame buffer size
-extern void getMaxWindowSizes(VruiWindowGroup* windowGroup,ISize& viewportSize,ISize& frameSize); // Returns the maximum viewport and frame buffer sizes for the given window group
 extern void vsync(const TimePoint& newNextVsync,const TimeVector& newVsyncPeriod,const TimeVector& newExposureDelay); // Updates the kernel's frame synchronization state for the next frame
 
 }

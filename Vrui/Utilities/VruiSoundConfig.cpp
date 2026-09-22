@@ -32,6 +32,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StdError.h>
 #include <Misc/ConfigurationFile.h>
 #include <Threads/FunctionCalls.h>
+#include <Threads/UserSignal.h>
 #include <Threads/WorkerPool.h>
 #include <IO/OpenFile.h>
 #include <GLMotif/PopupWindow.h>
@@ -149,6 +150,7 @@ class VruiSoundConfig:public Vrui::Application
 	GLMotif::Label* playbackDeviceNameLabel; // Label showing the name of the current output device
 	GLMotif::PopupWindow* playbackDialog; // Dialog to ask whether the user can hear sound
 	Sound::ALSAPCMDevice::PCMList::iterator currentOutputDevice; // Iterator to ALSA output device currently being tested
+	Threads::UserSignalOwner playbackCompleteSignal; // Signal to notify the main thread that sound playback on the current output device is done
 	SoundPlayer* currentPlayer; // The currently active sound player
 	Sound::ALSAPCMDevice* headsetDevice; // The ALSA output device connected to the headset
 	std::string headsetDeviceName; // Name of the found ALSA output device
@@ -170,7 +172,7 @@ class VruiSoundConfig:public Vrui::Application
 	#if SOUND_CONFIG_HAVE_ALSA
 	void playbackYesCallback(Misc::CallbackData* cbData); // Called when user can hear sound on the current output device
 	void playbackNoCallback(Misc::CallbackData* cbData); // Called when user can not hear sound on the current output device
-	void playbackCompleteCallback(Threads::FunctionCall<int>& job); // Callback called when the current output device is done playing the test sound
+	void playbackCompleteCallback(Threads::UserSignalEvent& event); // Callback called when the current output device is done playing the test sound
 	void tryNextOutputDevice(void); // Plays the test sound on the next ALSA output device
 	#endif
 	#if SOUND_CONFIG_HAVE_PULSEAUDIO
@@ -225,7 +227,7 @@ void VruiSoundConfig::playbackNoCallback(Misc::CallbackData* cbData)
 		}
 	}
 
-void VruiSoundConfig::playbackCompleteCallback(Threads::FunctionCall<int>& job)
+void VruiSoundConfig::playbackCompleteCallback(Threads::UserSignalEvent& event)
 	{
 	/* Check if the current ALSA output device is the headset's device, meaning playback testing is over: */
 	if(headsetDevice!=0)
@@ -268,7 +270,7 @@ void VruiSoundConfig::tryNextOutputDevice(void)
 	
 	/* Submit a background job to play on the next device: */
 	currentPlayer=new SoundPlayer(*this,currentOutputDevice);
-	Vrui::submitJob(*currentPlayer,*Threads::createFunctionCall(this,&VruiSoundConfig::playbackCompleteCallback));
+	Threads::WorkerPool::submitJob(*currentPlayer,*playbackCompleteSignal);
 	}
 
 #endif
@@ -552,6 +554,9 @@ VruiSoundConfig::VruiSoundConfig(int& argc,char**& argv)
 	
 	playback->manageChild();
 	}
+	
+	/* Register a user signal to be notified when playback on the current device is done: */
+	playbackCompleteSignal=new Threads::UserSignal(Vrui::getRunLoop(),true,*Threads::createFunctionCall(this,&VruiSoundConfig::playbackCompleteCallback));
 	
 	#endif
 	

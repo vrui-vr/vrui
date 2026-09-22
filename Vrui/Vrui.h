@@ -38,6 +38,7 @@ class ConfigurationFileSection;
 namespace Threads {
 template <class ParameterParam>
 class FunctionCall;
+class RunLoop;
 }
 namespace Cluster {
 class Multiplexer;
@@ -180,8 +181,8 @@ struct PreRenderingCallbackData:public Misc::CallbackData // Callback data passe
 		}
 	};
 
-typedef bool (*FrameCallback)(void* userData); // Function type for frame callbacks
-typedef void (*SynchronousIOCallback)(int fd,void* userData); // Function type for synchronous I/O callbacks
+typedef Threads::FunctionCall<int> Job; // Type for jobs that can be submitted to submitJob for background execution
+typedef Threads::FunctionCall<Job&> JobCompleteFunction; // Type for functions that are called from the main thread when a job submitted to submitJob finishes; the finished job is passed to the function as parameter
 
 /***********************************************************************
 Vrui functions called from inside an application's main function. These
@@ -380,25 +381,25 @@ VisletManager* getVisletManager(void); // Returns pointer to the vislet manager
 
 /* Time management: */
 Misc::Time getTimeOfDay(void); // Returns the system's wall clock time; requires a multicast data exchange in cluster environments
+unsigned long getFrameIndex(void); // Returns the index of the current Vrui frame; the first frame has index 0
 double getApplicationTime(void); // Returns the time since the application was started in seconds; is identical throughout a Vrui frame and across a cluster
 double getFrameTime(void); // Returns the duration of the last frame in seconds
 double getCurrentFrameTime(void); // Returns the current average time between frames (1/framerate) in seconds
 double getNextAnimationTime(void); // Returns the application time at which the next frame in a general animation should be scheduled
 
-/* Callback management: */
-void addFrameCallback(FrameCallback newFrameCallback,void* newFrameCallbackUserData); // Adds a callback that is called once on every frame; callback is removed again if it returns true; can be called from background threads
-Misc::CallbackList& getPreRenderingCallbacks(void); // Returns the list of callbacks called from a window group's rendering thread immediately before anything is rendered; callbacks must not change application state
-Misc::CallbackList& getPostRenderingCallbacks(void); // Returns the list of callbacks called from main thread immediately after all window groups have been rendered
-Misc::CommandDispatcher& getCommandDispatcher(void); // Returns a dispatcher for pipe and console commands
-void addSynchronousIOCallback(int fd,SynchronousIOCallback newIOCallback,void* newIOCallbackData); // Adds a callback that is called synchronously at the beginning of a Vrui frame if there is readable data on the given file descriptor
-void removeSynchronousIOCallback(int fd); // Removes a previously installed synchronous I/O callback for the given file descriptor
-void submitJob(Threads::FunctionCall<int>& job); // Submits a job for asynchronous execution by a background thread
-void submitJob(Threads::FunctionCall<int>& job,Threads::FunctionCall<Threads::FunctionCall<int>&>& completeCallback); // Submits a job for asynchronous execution by a background thread; given callback is called from main thread, synchronously before an application's frame method
-
-/* Rendering management: */
+/* Frame sequence management: */
 void updateContinuously(void); // Tells Vrui to continuously update its state (must be called before mainLoop)
 void requestUpdate(void); // Tells Vrui to update its internal state and redraw the VR windows; can be called from any thread
 void scheduleUpdate(double nextFrameTime); // Asks Vrui to update its internal state and redraw the VR windows at the given application time; must be called from main thread
+Misc::CallbackList& getPreRenderingCallbacks(void); // Returns the list of callbacks called from a window group's rendering thread immediately before anything is rendered; callbacks must not change application state
+Misc::CallbackList& getPostRenderingCallbacks(void); // Returns the list of callbacks called from main thread immediately after all window groups have been rendered
+
+/* Thread synchronization and job and command management: */
+Threads::RunLoop& getRunLoop(void); // Returns Vrui's main thread run loop
+void submitJob(Job& job,JobCompleteFunction& completeCallback); // Submits a job for asynchronous execution; the given callback is called from the main thread after the job finished, with the submitted job as parameter
+Misc::CommandDispatcher& getCommandDispatcher(void); // Returns a dispatcher for pipe and console commands
+
+/* Rendering management: */
 const DisplayState& getDisplayState(GLContextData& contextData); // Returns the Vrui display state valid for the current display method call
 void goToNavigationalSpace(GLContextData& contextData); // Pushes the current modelview matrix and sets it to render in navigational space
 void goToPhysicalSpace(GLContextData& contextData); // Pushes the current modelview matrix and sets it to render in physical space

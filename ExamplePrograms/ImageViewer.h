@@ -22,6 +22,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 
 #include <string>
 #include <vector>
+#include <Threads/UserSignal.h>
 #include <IO/Directory.h>
 #include <Geometry/Point.h>
 #include <Geometry/Vector.h>
@@ -193,6 +194,7 @@ class ImageViewer:public Vrui::Application,public GLObject
 	Images::BaseImage image; // The currently displayed image
 	int loaded; // Loading request counter of the currently displayed image
 	unsigned int imageVersion; // Version number of the currently displayed image
+	Threads::UserSignalOwner loadImageCompleteSignal; // A user signal to notify the main thread that an image loading request is finished
 	GLMotif::FileSelectionHelper imageHelper; // Helper object to load image files
 	bool smoothPixels; // Flag to enable bilinear interpolation when magnifying images
 	bool flipH; // Flag to flip images horizontally
@@ -215,7 +217,7 @@ class ImageViewer:public Vrui::Application,public GLObject
 	void addDirectory(IO::Directory& directory); // Adds all readable image files in the given directory to the image sources list
 	Color getPixel(unsigned int x,unsigned int y) const; // Returns an RGBA color for the given pixel position
 	void updateInfoDialog(void); // Updates the image information dialog after an image has been loaded
-	void loadImageCompleteCallback(Threads::FunctionCall<int>& job); // Callback called when a new image has been loaded
+	void loadImageCompleteCallback(Threads::UserSignalEvent& event); // Callback called when a new image has been loaded
 	void loadImageCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData); // Callback called when a new image is to be loaded
 	void showSelectorDialogButtonSelectedCallback(Misc::CallbackData* cbData); // Callback called when the image selector dialog is to be shown
 	void showInfoDialogButtonSelectedCallback(Misc::CallbackData* cbData); // Callback called when the image information dialog is to be shown

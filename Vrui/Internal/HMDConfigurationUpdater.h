@@ -1,7 +1,7 @@
 /***********************************************************************
 HMDConfigurationUpdater - Class to connect a rendering window for HMDs
 to HMD configuration updates.
-Copyright (c) 2024 Oliver Kreylos
+Copyright (c) 2024-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -25,6 +25,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #define VRUI_HMDCONFIGURATIONUPDATER_INCLUDED
 
 #include <Misc/Autopointer.h>
+#include <Threads/ProcessFunction.h>
 #include <Vrui/Types.h>
 
 /* Forward declarations: */
@@ -56,6 +57,7 @@ class HMDConfigurationUpdater
 	int hmdTrackerIndex; // Tracker index associated with the HMD
 	const HMDConfiguration* hmdConfiguration; // Pointer to the HMD configuration providing lens correction parameters
 	Misc::Autopointer<ConfigurationChangedCallback> configurationChangedCallback; // Callback function called from frame sequence when HMD configuration changed
+	Threads::ProcessFunctionOwner ipdDialogActive; // A process function that is called while an IPD dialog is being shown
 	double ipdDisplayDialogTimeout; // Time for which the IPD display dialog stays open in seconds
 	unsigned int eyePosVersion; // Version number to keep track of eye position changes
 	GLMotif::PopupWindow* ipdDisplayDialog; // A dialog window to notify the user of changed HMD configuration
@@ -63,8 +65,8 @@ class HMDConfigurationUpdater
 	double ipdDisplayDialogTakedownTime; // Time at which the dialog window will be closed
 	
 	/* Private methods: */
-	static bool hmdConfigurationUpdatedFrame(void* userData); // Callback called in frame sequence when HMD configuration changed
-	void hmdConfigurationUpdated(const HMDConfiguration& hmdConfiguration); // Callback called from background thread when HMD configuration changes
+	void ipdDialogActiveFunction(Threads::ProcessFunction& processFunction); // Function called during frame sequence while an IPD update dialog is being shown
+	void hmdConfigurationUpdated(const HMDConfiguration& hmdConfiguration); // Callback called from some background thread when HMD configuration changes
 	
 	/* Constructors and destructors: */
 	public:

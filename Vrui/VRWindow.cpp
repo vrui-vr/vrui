@@ -443,8 +443,8 @@ void VRWindow::render(void)
 		glPushAttrib(GL_ENABLE_BIT);
 		glDisable(GL_LIGHTING);
 		
-		/* Print the current frame time: */
-		unsigned int fps=(unsigned int)(10.0/vruiState->currentFrameTime+0.5);
+		/* Print the current median frame duration: */
+		unsigned int fps=(unsigned int)(10.0/vruiState->medianFrameDuration+0.5);
 		char buffer[20];
 		char* bufPtr=buffer+15;
 		*(--bufPtr)=char(fps%10+'0');
