@@ -1579,6 +1579,9 @@ void VruiState::prepareMainLoop(void)
 	if(prepareMainLoopFunction!=0)
 		prepareMainLoopFunction(prepareMainLoopFunctionData);
 	
+	/* Schedule the first frame for *right now* so that the run loop does not block on the first frame: */
+	nextFrameTime=0.0;
+	
 	/* Update the application time so that the first frame's frame time is exactly zero: */
 	if(master)
 		{
@@ -1586,10 +1589,6 @@ void VruiState::prepareMainLoop(void)
 		if(synchFrameTime>0.0)
 			{
 			// IMPLEMENT ME -- WE HAVE TO DO SOME STUFF HERE!!
-			}
-		else
-			{
-			// FIXME -- WE DON'T NEED THAT RIGHT NOW, BUT MAYBE LATER
 			}
 		}
 	}
@@ -1608,6 +1607,9 @@ bool VruiState::startFrame(void)
 		wakeUp=frameTimeBase+Threads::EventInterval(nextFrameTime);
 		wakeUpPtr=&wakeUp;
 		}
+	
+	/* Reset the next scheduled frame time: */
+	nextFrameTime=Math::Constants<double>::max;
 	
 	/* Wait for any events to happen and check if shutdown was requested: */
 	bool keepRunning=vruiRunLoop.waitForEvents(wakeUpPtr);
@@ -1670,9 +1672,6 @@ bool VruiState::startFrame(void)
 		sortedFrameDurations[j+1]=recentFrameDurations[i];
 		}
 	medianFrameDuration=sortedFrameDurations[numRecentFrameDurations/2];
-	
-	/* Reset the next scheduled frame time: */
-	nextFrameTime=Math::Constants<double>::max;
 	
 	/*********************************************************************
 	Dispatch pending events on the run loop and run all process functions:
