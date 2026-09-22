@@ -594,6 +594,9 @@ bool GLWindow::grabPointer(void)
 			}
 		}
 	
+	/* Flush the display connection to let the server know: */
+	XFlush(context->getDisplay());
+	
 	return result;
 	}
 
@@ -605,6 +608,9 @@ void GLWindow::releasePointer(void)
 	
 	XUngrabPointer(context->getDisplay(),CurrentTime);
 	XUngrabKeyboard(context->getDisplay(),CurrentTime);
+	
+	/* Flush the display connection to let the server know: */
+	XFlush(context->getDisplay());
 	}
 
 void GLWindow::setCursorPos(const GLWindow::Offset& newCursorPos)

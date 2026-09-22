@@ -9010,3 +9010,5 @@ Vrui-15.0-001:
   parameter.
   - Change meaning of VruiState::nextFrameTime: If no frames are
     requested, the value is DBL_MAX to simplify tracking.
+- Fixed issue with pointer grabs in GLWindow: must flush the X11 display
+  connection after grabbing/releasing the pointer and/or keyboard.
