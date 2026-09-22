@@ -565,16 +565,18 @@ bool RunLoop::waitForEvents(EventTime* wakeUp)
 			/* Don't block for I/O events; only poll: */
 			pollTimeout=0;
 			}
-		else if(!activeTimers.empty())
+		else if(wakeUp!=0||!activeTimers.empty())
 			{
 			/* Sample the current time: */
 			lastDispatchTime.set();
 			
-			/* Calculate the interval from now to the next timer to elapse, clamping to zero if the next timer already elapsed: */
+			/* Calculate the interval from now to the next timer to elapse or the wake-up time, clamping to zero if the next timer already elapsed: */
 			pollTimeout=0;
-			if(activeTimers[0].timeout>lastDispatchTime)
+			if(activeTimers[0].timeout<*wakeUp)
+				wakeUp=&activeTimers[0].timeout;
+			if(*wakeUp>lastDispatchTime)
 				{
-				EventInterval timeout=activeTimers[0].timeout-lastDispatchTime;
+				EventInterval timeout=*wakeUp-lastDispatchTime;
 				pollTimeout=int(timeout.tv_sec*1000L+(timeout.tv_nsec+999999L)/1000000L); // poll() takes timeouts in ms, which is a tad unfortunate
 				}
 			}
