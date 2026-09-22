@@ -188,7 +188,7 @@ struct VruiState
 	double* sortedFrameDurations; // Helper array to calculate median of frame times
 	double medianFrameDuration; // Current median frame duration
 	bool updateContinuously; // Flag if the inner Vrui loop never blocks
-	double nextFrameTime; // Scheduled time to start next frame, or 0.0 if no frame scheduled
+	double nextFrameTime; // Scheduled time to start next frame, or Math::Constants<double>::max if there is none
 	double synchFrameTime; // Precise time to be used for next frame
 	bool synchWait; // Flag whether to delay the next frame until wallclock time matches synch time
 	double animationFrameInterval; // Suggested frame interval to be used for animations

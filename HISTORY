@@ -9006,3 +9006,7 @@ Vrui-15.0-001:
 - Added optional wakeUp parameter to Threads::RunLoop::waitForEvents. If
   not null, the parameter is the latest time point at which the method
   will return from waiting.
+- Implemented frame scheduling in Vrui using the optional wakeUp
+  parameter.
+  - Change meaning of VruiState::nextFrameTime: If no frames are
+    requested, the value is DBL_MAX to simplify tracking.

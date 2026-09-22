@@ -598,7 +598,7 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 	 numRecentFrameDurations(5),recentFrameDurations(new double[numRecentFrameDurations]),nextFrameDurationIndex(0),
 	 sortedFrameDurations(new double[numRecentFrameDurations]),medianFrameDuration(1),
 	 updateContinuously(false),
-	 nextFrameTime(0),synchFrameTime(0),synchWait(false),
+	 nextFrameTime(Math::Constants<double>::max),synchFrameTime(0),synchWait(false),
 	 animationFrameInterval(1.0/125.0),
 	 sceneGraphManager(0),
 	 inputGraphManager(0),
@@ -1600,11 +1600,17 @@ bool VruiState::startFrame(void)
 	Close out the current frame:
 	*********************************************************************/
 	
-	/* Check if there is a scheduled time for the next frame: */
-	// IMPLEMENT ME!
+	Threads::EventTime wakeUp(0,0);
+	Threads::EventTime* wakeUpPtr=0;
+	if(nextFrameTime<Math::Constants<double>::max)
+		{
+		/* Convert the next frame time back from application time to an absolute time point: */
+		wakeUp=frameTimeBase+Threads::EventInterval(nextFrameTime);
+		wakeUpPtr=&wakeUp;
+		}
 	
 	/* Wait for any events to happen and check if shutdown was requested: */
-	bool keepRunning=vruiRunLoop.waitForEvents();
+	bool keepRunning=vruiRunLoop.waitForEvents(wakeUpPtr);
 	
 	/* Start a new Vrui frame: */
 	++frameIndex;
@@ -1666,7 +1672,7 @@ bool VruiState::startFrame(void)
 	medianFrameDuration=sortedFrameDurations[numRecentFrameDurations/2];
 	
 	/* Reset the next scheduled frame time: */
-	nextFrameTime=0.0;
+	nextFrameTime=Math::Constants<double>::max;
 	
 	/*********************************************************************
 	Dispatch pending events on the run loop and run all process functions:
@@ -3996,7 +4002,7 @@ void updateContinuously(void)
 
 void scheduleUpdate(double nextFrameTime)
 	{
-	if(vruiState->nextFrameTime==0.0||vruiState->nextFrameTime>nextFrameTime)
+	if(vruiState->nextFrameTime>nextFrameTime)
 		vruiState->nextFrameTime=nextFrameTime;
 	}
 
