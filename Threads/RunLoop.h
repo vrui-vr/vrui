@@ -104,7 +104,7 @@ class RunLoop
 	/* Event dispatching methods; must only be called from the thread to which the run loop is attached: */
 	void attachToThread(void); // Attaches the run loop to the calling thread; it is the caller's responsibility to prevent asynchronous use around this call
 	void restart(void); // Restarts a run loop that was previously stopped by calling stop() and/or shut down by subsequently calling shutdown()
-	bool waitForEvents(void); // Blocks until any event happens; does not block and returns false if the stop() method was called; updates dispatch time immediately before returning
+	bool waitForEvents(EventTime* wakeUp =0); // Blocks until any event happens; if wakeUp is not null, blocks at most until the wake-up time; does not block and returns false if the stop() method was called; updates dispatch time immediately before returning
 	const EventTime& getDispatchTime(void) const // Returns the most recent dispatch time sample
 		{
 		return lastDispatchTime;

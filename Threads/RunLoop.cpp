@@ -520,7 +520,7 @@ void RunLoop::restart(void)
 	shutdownRequested=false;
 	}
 
-bool RunLoop::waitForEvents(void)
+bool RunLoop::waitForEvents(EventTime* wakeUp)
 	{
 	/* Bail out and signal shutdown if a shutdown has been requested: */
 	if(shutdownRequested)
@@ -540,14 +540,16 @@ bool RunLoop::waitForEvents(void)
 			/* Don't block for I/O events; only poll: */
 			pt=&pollTimeout;
 			}
-		else if(!activeTimers.empty())
+		else if(wakeUp!=0||!activeTimers.empty())
 			{
 			/* Sample the current time: */
 			lastDispatchTime.set();
 			
-			/* Calculate the interval from now to the next timer to elapse, clamping to zero if the next timer already elapsed: */
-			if(activeTimers[0].timeout>lastDispatchTime)
-				pollTimeout=activeTimers[0].timeout-lastDispatchTime;
+			/* Calculate the interval from now to the next timer to elapse or the wake-up time, clamping to zero if that time-out already elapsed: */
+			if(activeTimers[0].timeout<*wakeUp)
+				wakeUp=&activeTimers[0].timeout;
+			if(*wakeUp>lastDispatchTime)
+				pollTimeout=*wakeUp-lastDispatchTime;
 			pt=&pollTimeout;
 			}
 		

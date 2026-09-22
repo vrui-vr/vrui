@@ -9003,3 +9003,6 @@ Vrui-15.0-001:
     and ExamplePrograms/ImageViewer to new run loop kernel.
 - Added Vrui::getFrameIndex() to Vrui kernel interface, returning the
   zero-based index of the current frame.
+- Added optional wakeUp parameter to Threads::RunLoop::waitForEvents. If
+  not null, the parameter is the latest time point at which the method
+  will return from waiting.
