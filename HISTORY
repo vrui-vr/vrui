@@ -9012,3 +9012,6 @@ Vrui-15.0-001:
     requested, the value is DBL_MAX to simplify tracking.
 - Fixed issue with pointer grabs in GLWindow: must flush the X11 display
   connection after grabbing/releasing the pointer and/or keyboard.
+- Improved management of the console dialog in Vrui::MessageLogger.
+  - Send console messages of level <Warn to the standard console instead
+    to the console dialog.

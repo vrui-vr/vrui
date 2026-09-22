@@ -69,8 +69,8 @@ void MessageLogger::logMessageInternal(Target target,int messageLevel,const char
 	if(target==User&&userToConsole)
 		target=Console;
 	
-	/* Handle user and console messages graphically; log messages go to stderr: */
-	if(target==User||target==Console)
+	/* Handle user and warning or higher console messages graphically; log messages go to stderr: */
+	if(target==User||(target==Console&&messageLevel>=Warning))
 		{
 		/* Send a user signal with the message to the main thread: */
 		logMessageSignal->signal(*new PendingMessage(target,messageLevel,message));
@@ -149,6 +149,7 @@ void MessageLogger::logMessageCallback(Threads::UserSignalEvent& event)
 			
 			/* Create the list box: */
 			GLMotif::ScrolledListBox* scrolledList=new GLMotif::ScrolledListBox("ScrolledList",body,GLMotif::ListBox::ATMOST_ONE,40,5);
+			scrolledList->showHorizontalScrollBar(true);
 			consoleMessageList=scrolledList->getListBox();
 			
 			body->setRowWeight(0,1.0f);
@@ -178,8 +179,9 @@ void MessageLogger::logMessageCallback(Threads::UserSignalEvent& event)
 		/* Add the full message string to the list of console messages: */
 		consoleMessageList->addItem(fullMessageString.c_str(),true);
 		
-		/* Show the console dialog: */
-		popupPrimaryWidget(consoleDialog);
+		/* Pop up the console dialog if it isn't already: */
+		if(!getWidgetManager()->isManaged(consoleDialog))
+			popupPrimaryWidget(consoleDialog);
 		}
 	}
 
