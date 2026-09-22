@@ -9001,3 +9001,5 @@ Vrui-15.0-001:
       standing problematic bug.
   - Adapted Vrui/Utilities/VruiSoundConfig, ExamplePrograms/GridEditor,
     and ExamplePrograms/ImageViewer to new run loop kernel.
+- Added Vrui::getFrameIndex() to Vrui kernel interface, returning the
+  zero-based index of the current frame.
