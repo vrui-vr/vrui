@@ -575,9 +575,6 @@ void VRWindow::renderComplete(void)
 			burnModeFirstFrameTime=getApplicationTime();
 			burnModeNumFrames=1U;
 			}
-		
-		/* Request another Vrui frame immediately: */
-		requestUpdate();
 		}
 	
 	/* Window is now up-to-date: */
@@ -1427,10 +1424,13 @@ bool VRWindow::processEvent(const XEvent& event)
 						else
 							Misc::logNote("Leaving burn mode during spin-up phase");
 						burnMode=false;
+						vruiState->updateContinuously=oldUpdateContinuously;
 						}
 					else
 						{
 						Misc::logNote("Entering burn mode");
+						oldUpdateContinuously=vruiState->updateContinuously;
+						vruiState->updateContinuously=true;
 						burnMode=true;
 						burnModeStartTime=Vrui::getApplicationTime()+2.0; // Allow two seconds of spin-up time
 						burnModeFirstFrameTime=burnModeStartTime; // Just an estimate that will be corrected later

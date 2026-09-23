@@ -136,6 +136,7 @@ class VRWindow:public GLWindow
 	bool movieSaverRecording; // Flag whether the movie saver is currently recording
 	bool showFps; // Flag whether this window displays an FPS counter in "burn mode"
 	bool burnMode; // Flag if the window is currently in burn mode, i.e., if it runs Vrui frames as quickly as possible and displays smoothed FPS
+	bool oldUpdateContinuously; // Value of Vrui's updateContinously flag before burn mode started
 	double burnModeStartTime; // Application time after which burn mode statistics will be collected to allow for spin-up
 	double burnModeFirstFrameTime; // Application time at which the window started collecting burn mode statistics
 	unsigned int burnModeNumFrames; // Number of frames rendered in burn mode
