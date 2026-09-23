@@ -546,10 +546,13 @@ bool RunLoop::waitForEvents(EventTime* wakeUp)
 			lastDispatchTime.set();
 			
 			/* Calculate the interval from now to the next timer to elapse or the wake-up time, clamping to zero if that time-out already elapsed: */
-			if(activeTimers[0].timeout<*wakeUp)
-				wakeUp=&activeTimers[0].timeout;
-			if(*wakeUp>lastDispatchTime)
-				pollTimeout=*wakeUp-lastDispatchTime;
+			EventTime timeoutPoint=EventTime::max;
+			if(!activeTimers.empty()&&timeoutPoint>activeTimers[0].timeout)
+				timeoutPoint=activeTimers[0].timeout;
+			if(wakeUp!=0&&timeoutPoint>*wakeUp)
+				timeoutPoint=*wakeUp;
+			if(timeoutPoint>lastDispatchTime)
+				pollTimeout=timeoutPoint-lastDispatchTime;
 			pt=&pollTimeout;
 			}
 		
@@ -572,9 +575,12 @@ bool RunLoop::waitForEvents(EventTime* wakeUp)
 			
 			/* Calculate the interval from now to the next timer to elapse or the wake-up time, clamping to zero if the next timer already elapsed: */
 			pollTimeout=0;
-			if(activeTimers[0].timeout<*wakeUp)
-				wakeUp=&activeTimers[0].timeout;
-			if(*wakeUp>lastDispatchTime)
+			EventTime timeoutPoint=EventTime::max;
+			if(!activeTimers.empty()&&timeoutPoint>activeTimers[0].timeout)
+				timeoutPoint=activeTimers[0].timeout;
+			if(wakeUp!=0&&timeoutPoint>*wakeUp)
+				timeoutPoint=*wakeUp;
+			if(timeoutPoint>lastDispatchTime)
 				{
 				EventInterval timeout=*wakeUp-lastDispatchTime;
 				pollTimeout=int(timeout.tv_sec*1000L+(timeout.tv_nsec+999999L)/1000000L); // poll() takes timeouts in ms, which is a tad unfortunate
