@@ -39,6 +39,8 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/VisletManager.h>
 #include <Vrui/DisplayState.h>
 
+#include <Vrui/Internal/Vrui.h>
+
 namespace Vrui {
 
 namespace Vislets {
@@ -230,8 +232,11 @@ void FrameRateViewer::display(GLContextData& contextData) const
 	if(bottom>top/10.0)
 		bottom=top/10.0;
 	
+	bottom=0.0;
+	top=1.0e9/60.0;
+	
 	/* Calculate graph offsets and scaling factors: */
-	double xs=double(ds.viewport.size[0])*0.8/double(historySize);
+	double xs=double(ds.viewport.size[0])*0.8/double(vruiState->numFrameTimings);
 	double x0=double(ds.viewport.size[0])*0.15;
 	double ys=double(ds.viewport.size[1])*0.2/(top-bottom);
 	double y0=double(ds.viewport.size[1])*0.05;
@@ -259,13 +264,45 @@ void FrameRateViewer::display(GLContextData& contextData) const
 	numberRenderer.drawNumber(GLNumberRenderer::Vector(x0-10.0,y0+(top-bottom)*ys,0.0),top*1000.0,2,contextData,1,0);
 	
 	/* Draw the frame rate graph: */
-	glBegin(GL_LINE_STRIP);
+	glBegin(GL_LINES);
 	glColor(fg);
-	int x=0;
-	for(const double* hPtr=historyHead;hPtr!=historyEnd;++hPtr,++x)
-		glVertex2d(x0+double(x)*xs,y0+(*hPtr-bottom)*ys);
-	for(const double* hPtr=history;hPtr!=historyHead;++hPtr,++x)
-		glVertex2d(x0+double(x)*xs,y0+(*hPtr-bottom)*ys);
+	double x=x0;
+	for(int i=vruiState->nextFrameTimingsIndex;i<vruiState->numFrameTimings;++i,x+=xs)
+		{
+		glColor3f(1.0f,0.0f,0.0f);
+		glVertex2d(x,y0);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].renderStart)*ys);
+		glColor3f(1.0f,1.0f,0.0f);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].renderStart)*ys);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].renderEnd)*ys);
+		glColor3f(0.0f,1.0f,0.0f);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].renderEnd)*ys);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].present)*ys);
+		glColor3f(0.0f,1.0f,1.0f);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].present)*ys);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].postRenderEnd)*ys);
+		glColor3f(0.0f,0.0f,1.0f);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].postRenderEnd)*ys);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].totalDuration)*ys);
+		}
+	for(int i=0;i<vruiState->nextFrameTimingsIndex;++i,x+=xs)
+		{
+		glColor3f(1.0f,0.0f,0.0f);
+		glVertex2d(x,y0);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].renderStart)*ys);
+		glColor3f(1.0f,1.0f,0.0f);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].renderStart)*ys);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].renderEnd)*ys);
+		glColor3f(0.0f,1.0f,0.0f);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].renderEnd)*ys);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].present)*ys);
+		glColor3f(0.0f,1.0f,1.0f);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].present)*ys);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].postRenderEnd)*ys);
+		glColor3f(0.0f,0.0f,1.0f);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].postRenderEnd)*ys);
+		glVertex2d(x,y0+double(vruiState->frameTimings[i].totalDuration)*ys);
+		}
 	glEnd();
 	
 	/* Restore OpenGL state: */
