@@ -9001,6 +9001,11 @@ Vrui-15.0-001:
       standing problematic bug.
   - Adapted Vrui/Utilities/VruiSoundConfig, ExamplePrograms/GridEditor,
     and ExamplePrograms/ImageViewer to new run loop kernel.
+  - Behavior change: Vrui::requestUpdate no longer request an immediate
+    new frame when called from within the main thread. It only causes a
+    new frame to start when called from another thread while the main
+    run loop is waiting for events. Call
+    Vrui::scheduleFrame(Vrui::getApplicationTime()) instead.
 - Added Vrui::getFrameIndex() to Vrui kernel interface, returning the
   zero-based index of the current frame.
 - Added optional wakeUp parameter to Threads::RunLoop::waitForEvents. If
@@ -9015,3 +9020,4 @@ Vrui-15.0-001:
 - Improved management of the console dialog in Vrui::MessageLogger.
   - Send console messages of level <Warn to the standard console instead
     to the console dialog.
+- Added proper main loop instrumentation to Vrui.

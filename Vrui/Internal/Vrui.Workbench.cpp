@@ -84,11 +84,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Internal/Config.h>
 #include <Vrui/Internal/WindowGroup.h>
 
-#define VRUI_INSTRUMENT_MAINLOOP 0
-#if VRUI_INSTRUMENT_MAINLOOP
-#include <Realtime/Time.h>
-#endif
-
 namespace Vrui {
 
 /*****************************
@@ -1539,34 +1534,8 @@ void vruiDispatchCommands(Threads::IOWatcherEvent& event)
 	
 	}
 
-#if VRUI_INSTRUMENT_MAINLOOP
-
-void vruiPrintTime(bool lastTime)
-	{
-	static TimePoint timeBase;
-	TimePoint now;
-	std::ios::fmtflags oldFlags=std::cout.setf(std::ios::fixed);
-	std::streamsize oldPrecision=std::cout.precision(3);
-	std::cout<<double(now.tv_sec-timeBase.tv_sec)*1000.0+double(now.tv_nsec-timeBase.tv_nsec)/1000000.0;
-	if(lastTime)
-		{
-		std::cout<<std::endl;
-		timeBase=now;
-		}
-	else
-		std::cout<<',';
-	std::cout.setf(oldFlags);
-	std::cout.precision(oldPrecision);
-	}
-
-#endif
-
 void vruiInnerLoopMultiWindow(void)
 	{
-	#if VRUI_INSTRUMENT_MAINLOOP
-	std::cout<<"Frame,Render,PreSwap,PostSwap"<<std::endl;
-	#endif
-	
 	/* Print frame rates at regular intervals for window-less Vrui head nodes: */
 	Threads::EventTime nextFrameRateDisplayTime;
 	nextFrameRateDisplayTime+=Threads::EventInterval(1,0);
@@ -1575,13 +1544,12 @@ void vruiInnerLoopMultiWindow(void)
 	/* Run the main loop until shut down: */
 	while(true)
 		{
-		#if VRUI_INSTRUMENT_MAINLOOP
-		vruiPrintTime(false);
-		#endif
-		
 		/* Start a new Vrui frame and bail out if shutdown was requested: */
 		if(!vruiState->startFrame())
 			break;
+		
+		/* Main loop instrumentation: */
+		vruiState->renderStart.set();
 		
 		/* Reset the AL thing manager: */
 		ALContextData::resetThingManager();
@@ -1590,10 +1558,6 @@ void vruiInnerLoopMultiWindow(void)
 		/* Update all sound contexts: */
 		for(int i=0;i<vruiNumSoundContexts;++i)
 			vruiSoundContexts[i]->draw();
-		#endif
-		
-		#if VRUI_INSTRUMENT_MAINLOOP
-		vruiPrintTime(false);
 		#endif
 		
 		/* Reset the GL thing manager: */
@@ -1614,9 +1578,8 @@ void vruiInnerLoopMultiWindow(void)
 					/* Synchronize with other nodes: */
 					vruiState->pipe->barrier();
 					
-					#if VRUI_INSTRUMENT_MAINLOOP
-					vruiPrintTime(false);
-					#endif
+					/* Main loop instrumentation: */
+					vruiState->renderEnd.set();
 					
 					/* Notify the render threads to swap buffers: */
 					vruiRenderingBarrier.synchronize();
@@ -1625,9 +1588,8 @@ void vruiInnerLoopMultiWindow(void)
 				/* Wait until all threads are done swapping buffers: */
 				vruiRenderingBarrier.synchronize();
 				
-				#if VRUI_INSTRUMENT_MAINLOOP
-				vruiPrintTime(true);
-				#endif
+				/* Main loop instrumentation: */
+				vruiState->present.set();
 				}
 			else
 				{
@@ -1642,18 +1604,16 @@ void vruiInnerLoopMultiWindow(void)
 				/* Wait until all other nodes in a cluster are finished rendering: */
 				if(vruiState->multiplexer!=0)
 					vruiState->pipe->barrier();
-				
-				#if VRUI_INSTRUMENT_MAINLOOP
-				vruiPrintTime(false);
-				#endif
+					
+					/* Main loop instrumentation: */
+					vruiState->renderEnd.set();
 				
 				/* Present the rendering results of all windows in all window groups at once: */
 				for(int i=0;i<vruiNumWindowGroups;++i)
 					vruiWindowGroups[i].present();
 				
-				#if VRUI_INSTRUMENT_MAINLOOP
-				vruiPrintTime(true);
-				#endif
+				/* Main loop instrumentation: */
+				vruiState->present.set();
 				}
 			}
 		else if(vruiNumWindows>0)
@@ -1668,16 +1628,14 @@ void vruiInnerLoopMultiWindow(void)
 			if(vruiState->multiplexer!=0)
 				vruiState->pipe->barrier();
 			
-			#if VRUI_INSTRUMENT_MAINLOOP
-			vruiPrintTime(false);
-			#endif
+			/* Main loop instrumentation: */
+			vruiState->renderEnd.set();
 			
 			/* Present the rendering results of all windows at once: */
 			vruiWindowGroups[0].present();
 			
-			#if VRUI_INSTRUMENT_MAINLOOP
-			vruiPrintTime(true);
-			#endif
+			/* Main loop instrumentation: */
+			vruiState->present.set();
 			}
 		else
 			{
@@ -1685,10 +1643,9 @@ void vruiInnerLoopMultiWindow(void)
 			if(vruiState->multiplexer!=0)
 				vruiState->pipe->barrier();
 			
-			#if VRUI_INSTRUMENT_MAINLOOP
-			vruiPrintTime(false);
-			vruiPrintTime(true);
-			#endif
+			/* Main loop instrumentation: */
+			vruiState->renderEnd.set();
+			vruiState->present=vruiState->renderEnd;
 			
 			/* Print current frame rate on head node's console for window-less Vrui processes: */
 			if(vruiMaster)
@@ -1711,6 +1668,9 @@ void vruiInnerLoopMultiWindow(void)
 		Misc::CallbackData cbData;
 		vruiState->postRenderingCallbacks.call(&cbData);
 		}
+		
+		/* Main loop instrumentation: */
+		vruiState->postRenderEnd.set();
 		}
 	
 	/* If we were printing frame rates on a window-less head node, clean that up: */
@@ -1723,19 +1683,14 @@ void vruiInnerLoopMultiWindow(void)
 
 void vruiInnerLoopSingleWindow(void)
 	{
-	#if VRUI_INSTRUMENT_MAINLOOP
-	std::cout<<"Frame,Render,PreSwap,PostSwap"<<std::endl;
-	#endif
-	
 	while(true)
 		{
-		#if VRUI_INSTRUMENT_MAINLOOP
-		vruiPrintTime(false);
-		#endif
-		
 		/* Start a new Vrui frame and bail out if shutdown was requested: */
 		if(!vruiState->startFrame())
 			break;
+		
+		/* Main loop instrumentation: */
+		vruiState->renderStart.set();
 		
 		/* Reset the AL thing manager: */
 		ALContextData::resetThingManager();
@@ -1744,10 +1699,6 @@ void vruiInnerLoopSingleWindow(void)
 		/* Update all sound contexts: */
 		for(int i=0;i<vruiNumSoundContexts;++i)
 			vruiSoundContexts[i]->draw();
-		#endif
-		
-		#if VRUI_INSTRUMENT_MAINLOOP
-		vruiPrintTime(false);
 		#endif
 		
 		/* Reset the GL thing manager: */
@@ -1763,22 +1714,23 @@ void vruiInnerLoopSingleWindow(void)
 		if(vruiState->multiplexer!=0)
 			vruiState->pipe->barrier();
 		
-		#if VRUI_INSTRUMENT_MAINLOOP
-		vruiPrintTime(false);
-		#endif
+		/* Main loop instrumentation: */
+		vruiState->renderEnd.set();
 		
 		/* Present the rendering results of the only window: */
 		vruiWindows[0]->present();
 		
-		#if VRUI_INSTRUMENT_MAINLOOP
-		vruiPrintTime(true);
-		#endif
+		/* Main loop instrumentation: */
+		vruiState->present.set();
 		
 		/* Call all post-rendering callbacks: */
 		{
 		Misc::CallbackData cbData;
 		vruiState->postRenderingCallbacks.call(&cbData);
 		}
+		
+		/* Main loop instrumentation: */
+		vruiState->postRenderEnd.set();
 		}
 	}
 

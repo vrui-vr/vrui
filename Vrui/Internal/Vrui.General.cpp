@@ -600,6 +600,7 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 	 updateContinuously(false),
 	 nextFrameTime(Math::Constants<double>::max),synchFrameTime(0),synchWait(false),
 	 animationFrameInterval(1.0/125.0),
+	 numFrameTimings(1024),frameTimings(new FrameTiming[numFrameTimings]),nextFrameTimingsIndex(0),
 	 sceneGraphManager(0),
 	 inputGraphManager(0),
 	 inputGraphSelectionHelper(0,"SavedInputGraph.inputgraph",".inputgraph",0),
@@ -744,6 +745,7 @@ VruiState::~VruiState(void)
 	delete sceneGraphManager;
 	
 	/* Delete time management: */
+	delete[] frameTimings;
 	delete[] recentFrameDurations;
 	delete[] sortedFrameDurations;
 	
@@ -1593,12 +1595,29 @@ void VruiState::prepareMainLoop(void)
 		}
 	}
 
+namespace {
+
+/****************
+Helper functions:
+****************/
+
+inline unsigned int clamp(long value)
+	{
+	if(value>=0x100000000L)
+		return (unsigned int)-1;
+	else
+		return (unsigned int)value;
+	}
+
+}
+
 bool VruiState::startFrame(void)
 	{
 	/*********************************************************************
 	Close out the current frame:
 	*********************************************************************/
 	
+	/* Check if the next frame has already been scheduled: */
 	Threads::EventTime wakeUp(0,0);
 	Threads::EventTime* wakeUpPtr=0;
 	if(nextFrameTime<Math::Constants<double>::max)
@@ -1609,7 +1628,7 @@ bool VruiState::startFrame(void)
 		}
 	
 	/* Reset the next scheduled frame time: */
-	nextFrameTime=Math::Constants<double>::max;
+	nextFrameTime=updateContinuously?0.0:Math::Constants<double>::max;
 	
 	/* Wait for any events to happen and check if shutdown was requested: */
 	bool keepRunning=vruiRunLoop.waitForEvents(wakeUpPtr);
@@ -1672,6 +1691,20 @@ bool VruiState::startFrame(void)
 		sortedFrameDurations[j+1]=recentFrameDurations[i];
 		}
 	medianFrameDuration=sortedFrameDurations[numRecentFrameDurations/2];
+	
+	/* Main loop instrumentation: */
+	const Threads::EventTime& nextFrameStart=vruiRunLoop.getDispatchTime();
+	
+	/* Calculate the previous frame's timings: */
+	FrameTiming& ft=frameTimings[nextFrameTimingsIndex];
+	ft.renderStart=clamp((renderStart.tv_sec-frameStart.tv_sec)*1000000000L+(renderStart.tv_nsec-frameStart.tv_nsec));
+	ft.renderEnd=clamp((renderEnd.tv_sec-frameStart.tv_sec)*1000000000L+(renderEnd.tv_nsec-frameStart.tv_nsec));
+	ft.present=clamp((present.tv_sec-frameStart.tv_sec)*1000000000L+(present.tv_nsec-frameStart.tv_nsec));
+	ft.postRenderEnd=clamp((postRenderEnd.tv_sec-frameStart.tv_sec)*1000000000L+(postRenderEnd.tv_nsec-frameStart.tv_nsec));
+	ft.totalDuration=clamp((nextFrameStart.tv_sec-frameStart.tv_sec)*1000000000L+(nextFrameStart.tv_nsec-frameStart.tv_nsec));
+	if((++nextFrameTimingsIndex)==numFrameTimings)
+		nextFrameTimingsIndex=0;
+	frameStart=nextFrameStart;
 	
 	/*********************************************************************
 	Dispatch pending events on the run loop and run all process functions:

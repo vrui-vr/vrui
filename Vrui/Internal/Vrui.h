@@ -107,6 +107,17 @@ struct VruiState
 	{
 	/* Embedded classes: */
 	public:
+	struct FrameTiming // Data structure to hold timing information from a completed Vrui frame
+		{
+		/* Elements: */
+		public:
+		unsigned int renderStart; // Time at which rendering started, in nanoseconds relative to beginning of frame
+		unsigned int renderEnd; // Time at which rendering ended, in nanoseconds relative to beginning of frame
+		unsigned int present; // Time at which rendering results were presented to the user, in nanoseconds relative to beginning of frame
+		unsigned int postRenderEnd; // Time at which post-rendering callbacks finished, in nanoseconds relative to beginning of frame
+		unsigned int totalDuration; // Total frame duration in nanoseconds
+		};
+	
 	struct ScreenProtectorDevice // Structure describing an input device that needs to be protected from bumping into a screen
 		{
 		/* Elements: */
@@ -192,6 +203,16 @@ struct VruiState
 	double synchFrameTime; // Precise time to be used for next frame
 	bool synchWait; // Flag whether to delay the next frame until wallclock time matches synch time
 	double animationFrameInterval; // Suggested frame interval to be used for animations
+	
+	/* Main loop instrumentation: */
+	Threads::EventTime frameStart; // Time point at which the current frame started, taken from run loop's getDispatchTime
+	Threads::EventTime renderStart; // Time point at which graphics and/or audio rendering started
+	Threads::EventTime renderEnd; // Time point at which graphics and/or audio rendering ended
+	Threads::EventTime present; // Time point at which all windows have presented their new content to the user
+	Threads::EventTime postRenderEnd; // Time point at which all post-rendering callbacks have completed
+	int numFrameTimings; // Number of recent frame timing samples in the buffer
+	FrameTiming* frameTimings; // Fixed-size circular buffer of recent frame timing samples
+	int nextFrameTimingsIndex; // Index in the frame timings buffer where the next sample will be stored
 	
 	/* Scene graph management: */
 	SceneGraphManager* sceneGraphManager;
