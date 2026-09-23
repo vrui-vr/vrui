@@ -172,7 +172,7 @@ dbus_bool_t Connection::addWatchFunction(DBusWatch* watch,void* data)
 	Threads::IOWatcher* ioWatcher=new Threads::IOWatcher(*runLoop,dbus_watch_get_unix_fd(watch),eventMask,dbus_watch_get_enabled(watch),*new WatchHandler(watch));
 	ioWatcher->own();
 	#if DEBUG_PROTOCOL
-	std::cout<<"Created I/O watcher "<<ioWatcher<<std::endl;
+	std::cout<<"Created run loop I/O watcher "<<ioWatcher<<std::endl;
 	#endif
 	
 	/* Store the I/O watcher pointer with the watch: */
@@ -186,8 +186,6 @@ void Connection::removeWatchFunction(DBusWatch* watch,void* data)
 	#if DEBUG_PROTOCOL
 	std::cout<<"Remove watch "<<watch<<" for file descriptor "<<dbus_watch_get_unix_fd(watch)<<std::endl;
 	#endif
-	
-	// WE NEED TO DISOWN THE I/O WATCHER HERE, RIGHT? RIGHT???
 	}
 
 void Connection::watchToggledFunction(DBusWatch* watch,void* data)
@@ -220,6 +218,9 @@ dbus_bool_t Connection::addTimeoutFunction(DBusTimeout* timeout,void* data)
 	firstTimeout+=interval;
 	Threads::Timer* timer=new Threads::Timer(*runLoop,firstTimeout,interval,dbus_timeout_get_enabled(timeout),*new TimeoutHandler(timeout));
 	timer->own();
+	#if DEBUG_PROTOCOL
+	std::cout<<"Created run loop timer "<<timer<<std::endl;
+	#endif
 	
 	/* Store the timer pointer with the timeout: */
 	dbus_timeout_set_data(timeout,timer,disown);
@@ -232,8 +233,6 @@ void Connection::removeTimeoutFunction(DBusTimeout* timeout,void* data)
 	#if DEBUG_PROTOCOL
 	std::cout<<"Remove timeout "<<timeout<<" with interval "<<dbus_timeout_get_interval(timeout)<<std::endl;
 	#endif
-	
-	// WE NEED TO DISOWN THE TIMER HERE, RIGHT? RIGHT???
 	}
 
 void Connection::timeoutToggledFunction(DBusTimeout* timeout,void* data)
