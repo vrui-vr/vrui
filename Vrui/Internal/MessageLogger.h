@@ -33,6 +33,9 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 namespace Misc {
 class CallbackData;
 }
+namespace Threads {
+class RunLoop;
+}
 namespace GLMotif {
 class PopupWindow;
 class ListBox;
@@ -62,7 +65,7 @@ class MessageLogger:public Misc::MessageLogger
 	
 	/* Constructors and destructors: */
 	public:
-	MessageLogger(void);
+	MessageLogger(Threads::RunLoop& runLoop);
 	virtual ~MessageLogger(void);
 	
 	/* New methods: */

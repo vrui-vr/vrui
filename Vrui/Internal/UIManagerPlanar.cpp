@@ -1,7 +1,7 @@
 /***********************************************************************
 UIManagerPlanar - UI manager class that aligns user interface components
 on a fixed plane.
-Copyright (c) 2015-2024 Oliver Kreylos
+Copyright (c) 2015-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -42,6 +42,62 @@ namespace Vrui {
 Methods of class UIManagerPlanar:
 ********************************/
 
+GLMotif::WidgetManager::Transformation UIManagerPlanar::calcTopLevelTransform(GLMotif::Widget* topLevelWidget)
+	{
+	/* Project the default hot spot onto the plane: */
+	Point planeHotSpot=plane.project(getHotSpot());
+	
+	/* Calculate the widget transformation: */
+	GLMotif::WidgetManager::Transformation result(planeHotSpot-Point::origin,orientation,Scalar(1));
+	
+	/* Align the widget's hot spot with the given hot spot: */
+	GLMotif::Vector widgetHotSpot=topLevelWidget->calcHotSpot();
+	result*=GLMotif::WidgetManager::Transformation::translate(-Transformation::Vector(widgetHotSpot.getXyzw()));
+	
+	result.renormalize();
+	return result;
+	}
+
+GLMotif::WidgetManager::Transformation UIManagerPlanar::calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotSpot)
+	{
+	/* Project the given hot spot onto the plane: */
+	Point planeHotSpot=plane.project(hotSpot);
+	
+	/* Calculate the widget transformation: */
+	GLMotif::WidgetManager::Transformation result(planeHotSpot-Point::origin,orientation,Scalar(1));
+	
+	/* Align the widget's hot spot with the given hot spot: */
+	GLMotif::Vector widgetHotSpot=topLevelWidget->calcHotSpot();
+	result*=GLMotif::WidgetManager::Transformation::translate(-GLMotif::WidgetManager::Transformation::Vector(widgetHotSpot.getXyzw()));
+	
+	result.renormalize();
+	return result;
+	}
+
+GLMotif::WidgetManager::Transformation UIManagerPlanar::calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::WidgetManager::Transformation& widgetToWorld)
+	{
+	if(constrainMovement)
+		{
+		/* Project the widget's hot spot onto the plane: */
+		GLMotif::Vector widgetHotSpot=topLevelWidget->calcHotSpot();
+		Point planeHotSpot=plane.project(widgetToWorld.transform(Point(widgetHotSpot.getXyzw())));
+		
+		/* Calculate the widget transformation: */
+		GLMotif::WidgetManager::Transformation result(planeHotSpot-Point::origin,orientation,Scalar(1));
+		
+		/* Align the widget's hot spot with the given hot spot: */
+		result*=GLMotif::WidgetManager::Transformation::translate(-GLMotif::WidgetManager::Transformation::Vector(widgetHotSpot.getXyzw()));
+		
+		result.renormalize();
+		return result;
+		}
+	else
+		{
+		/* Return the given transformation unchanged: */
+		return widgetToWorld;
+		}
+	}
+
 UIManagerPlanar::UIManagerPlanar(const Misc::ConfigurationFileSection& configFileSection)
 	:UIManager(configFileSection),
 	 constrainMovement(configFileSection.retrieveValue("./constrainMovement",true))
@@ -62,62 +118,6 @@ UIManagerPlanar::UIManagerPlanar(const Misc::ConfigurationFileSection& configFil
 	x=z^plane.getNormal();
 	z=plane.getNormal()^x;
 	orientation=Rotation::fromBaseVectors(x,z);
-	}
-
-GLMotif::WidgetArranger::Transformation UIManagerPlanar::calcTopLevelTransform(GLMotif::Widget* topLevelWidget)
-	{
-	/* Project the default hot spot onto the plane: */
-	Point planeHotSpot=plane.project(getHotSpot());
-	
-	/* Calculate the widget transformation: */
-	Transformation result(planeHotSpot-Point::origin,orientation,Scalar(1));
-	
-	/* Align the widget's hot spot with the given hot spot: */
-	GLMotif::Vector widgetHotSpot=topLevelWidget->calcHotSpot();
-	result*=Transformation::translate(-Transformation::Vector(widgetHotSpot.getXyzw()));
-	
-	result.renormalize();
-	return result;
-	}
-
-GLMotif::WidgetArranger::Transformation UIManagerPlanar::calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotSpot)
-	{
-	/* Project the given hot spot onto the plane: */
-	Point planeHotSpot=plane.project(hotSpot);
-	
-	/* Calculate the widget transformation: */
-	Transformation result(planeHotSpot-Point::origin,orientation,Scalar(1));
-	
-	/* Align the widget's hot spot with the given hot spot: */
-	GLMotif::Vector widgetHotSpot=topLevelWidget->calcHotSpot();
-	result*=Transformation::translate(-Transformation::Vector(widgetHotSpot.getXyzw()));
-	
-	result.renormalize();
-	return result;
-	}
-
-GLMotif::WidgetArranger::Transformation UIManagerPlanar::calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::WidgetArranger::Transformation& widgetToWorld)
-	{
-	if(constrainMovement)
-		{
-		/* Project the widget's hot spot onto the plane: */
-		GLMotif::Vector widgetHotSpot=topLevelWidget->calcHotSpot();
-		Point planeHotSpot=plane.project(widgetToWorld.transform(Point(widgetHotSpot.getXyzw())));
-		
-		/* Calculate the widget transformation: */
-		Transformation result(planeHotSpot-Point::origin,orientation,Scalar(1));
-		
-		/* Align the widget's hot spot with the given hot spot: */
-		result*=Transformation::translate(-Transformation::Vector(widgetHotSpot.getXyzw()));
-		
-		result.renormalize();
-		return result;
-		}
-	else
-		{
-		/* Return the given transformation unchanged: */
-		return widgetToWorld;
-		}
 	}
 
 Point UIManagerPlanar::projectRay(const Ray& ray) const

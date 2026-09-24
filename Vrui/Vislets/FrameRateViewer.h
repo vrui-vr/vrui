@@ -1,7 +1,7 @@
 /***********************************************************************
 FrameRateViewer - Vislet class to view a live graph of Vrui frame times
 for debugging and optimization purposes.
-Copyright (c) 2015-2022 Oliver Kreylos
+Copyright (c) 2015-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -38,9 +38,6 @@ class FrameRateViewerFactory:public Vrui::VisletFactory
 	{
 	friend class FrameRateViewer;
 	
-	/* Elements: */
-	size_t historySize; // Default size of history buffer
-	
 	/* Constructors and destructors: */
 	public:
 	FrameRateViewerFactory(Vrui::VisletManager& visletManager);
@@ -58,11 +55,10 @@ class FrameRateViewer:public Vrui::Vislet
 	/* Elements: */
 	private:
 	static FrameRateViewerFactory* factory; // Pointer to the factory object for this class
-	size_t historySize; // Number of frame rate measurements in the history buffer
-	double* history; // Frame rate history buffer
-	double* historyEnd; // Pointer to end of history buffer
-	double* historyHead; // Pointer to oldest entry in the history buffer
-	double min,max; // Minimum and maximum frame rates currently in the history buffer
+	double top; // Duration in nanoseconds mapped to the top of the frame rate graph
+	double target; // The target frame duration in nanoseconds, taken from Vrui's animation time
+	unsigned int min,max; // The minimum and maximum total frame durations in nanoseconds currently in the timing buffer
+	unsigned int oldestTotalDuration; // The oldest total frame duration in Vrui's frame timings array
 	GLNumberRenderer numberRenderer; // Helper object to draw numbers
 	
 	/* Constructors and destructors: */

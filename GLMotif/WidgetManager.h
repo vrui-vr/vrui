@@ -1,6 +1,6 @@
 /***********************************************************************
-WidgetManager - Class to manage top-level GLMotif UI components and user
-events.
+WidgetManager - Base class to manage top-level GLMotif UI components and
+user events.
 Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
@@ -38,9 +38,9 @@ class Event;
 class TextEvent;
 class TextControlEvent;
 struct StyleSheet;
-class WidgetArranger;
 class TextEntryMethod;
 class Widget;
+class ClickRepeatWidget;
 }
 
 namespace GLMotif {
@@ -108,7 +108,7 @@ class WidgetManager
 			}
 		};
 	
-	private:
+	protected:
 	struct PopupBinding // Structure to bind top level widgets
 		{
 		/* Elements: */
@@ -225,13 +225,12 @@ class WidgetManager
 			}
 		};
 	
-	private:
+	protected:
 	typedef Misc::HashTable<const Widget*,WidgetAttributeBase*> WidgetAttributeMap; // Type for hash tables mapping widgets to widget attributes
 	
 	/* Elements: */
-	private:
+	protected:
 	const StyleSheet* styleSheet; // The widget manager's style sheet
-	WidgetArranger* arranger; // Helper object to arrange top-level widgets in 3D display space
 	TextEntryMethod* textEntryMethod; // Helper object representing methods to generate text events or text control events
 	bool drawOverlayWidgets; // Flag whether widgets are drawn in an overlay layer on top of all other 3D imagery
 	WidgetAttributeMap widgetAttributeMap; // Map from widgets to widget attributes
@@ -250,15 +249,18 @@ class WidgetManager
 	Misc::CallbackList widgetShowHideCallbacks; // List of callbacks to be called when a primary or secondary widget is shown or hidden
 	Misc::CallbackList widgetMoveCallbacks; // List of callbacks to be called when a primary or secondary widget is moved
 	
-	/* Private methods: */
+	/* Protected methods: */
 	const PopupBinding* getRootBinding(const Widget* widget) const; // Returns the binding for a widget's root, or null if the widget's root is not bound
 	PopupBinding* getRootBinding(const Widget* widget); // Ditto
-	void popupPrimaryWidgetAt(Widget* topLevelWidget,const Transformation& widgetToWorld); // Pops up a primary top level widget using the given widget transformation
-	void moveSecondaryWidgets(PopupBinding* parent,const Transformation& parentTransform); // Calls move callbacks for all secondary widgets belonging to the given parent
-	void moveWidget(PopupBinding* binding,const Transformation& newTransform); // Sets the given binding's world transformation and calls move callbacks for the binding's widget and all of its secondary bindings
-	void removeFocusFromChild(Widget* widget); // Removes the text focus from the given widget or any of its children
-	void deleteWidgetImmediately(Widget* widget); // Immediately deletes the given widget and removes and locks or holds
-	void deleteQueuedWidgets(void); // Deletes all widgets in the deletion list
+	virtual Transformation calcTopLevelTransform(Widget* topLevelWidget) =0; // Returns a default transformation for the given top-level widget
+	virtual Transformation calcTopLevelTransform(Widget* topLevelWidget,const Point& hotspot) =0; // Returns a transformation to place the given top-level widget at the given hotspot position
+	virtual Transformation calcTopLevelTransform(Widget* topLevelWidget,const Transformation& widgetToWorld); // Adjusts the given transformation for the given top-level widget, for example during dragging
+	virtual bool popupPrimaryWidgetAt(Widget* topLevelWidget,const Transformation& widgetToWorld); // Pops up a primary top level widget using the given widget transformation; returns true if the widget was not previously popped up
+	virtual void moveSecondaryWidgets(PopupBinding* parent,const Transformation& parentTransform); // Calls move callbacks for all secondary widgets belonging to the given parent
+	virtual void moveWidget(PopupBinding* binding,const Transformation& newTransform); // Sets the given binding's world transformation and calls move callbacks for the binding's widget and all of its secondary bindings
+	virtual void removeFocusFromChild(Widget* widget); // Removes the text focus from the given widget or any of its children
+	virtual void deleteWidgetImmediately(Widget* widget); // Immediately deletes the given widget and removes and locks or holds
+	virtual void deleteQueuedWidgets(void); // Deletes all widgets in the deletion list
 	
 	/* Constructors and destructors: */
 	public:
@@ -271,12 +273,7 @@ class WidgetManager
 		{
 		return styleSheet;
 		}
-	void setArranger(WidgetArranger* newArranger); // Sets the widget manager's top-level widget arranger; manager inherits object
-	WidgetArranger* getArranger(void) const // Returns the widget manager's widget arranger
-		{
-		return arranger;
-		}
-	void setTextEntryMethod(TextEntryMethod* newTextEntryMethod); // Sets the widget manager's text entry method; manager inherits object
+	virtual void setTextEntryMethod(TextEntryMethod* newTextEntryMethod); // Sets the widget manager's text entry method; manager inherits object
 	TextEntryMethod* getTextEntryMethod(void) const // Returns the widget manager's text entry method
 		{
 		return textEntryMethod;
@@ -286,7 +283,7 @@ class WidgetManager
 		{
 		return drawOverlayWidgets;
 		}
-	void unmanageWidget(Widget* widget); // Tells the widget manager that the given widget is about to be destroyed; only called from Widget's destructor
+	virtual void unmanageWidget(Widget* widget); // Tells the widget manager that the given widget is about to be destroyed; only called from Widget's destructor
 	template <class AttributeParam>
 	void setWidgetAttribute(const Widget* widget,const AttributeParam& attribute) // Associates an attribute of arbitrary type with a widget; deletes previous attribute
 		{
@@ -307,11 +304,23 @@ class WidgetManager
 	const AttributeParam& getWidgetAttribute(const Widget* widget) const; // Returns a widget attribute of arbitrary type
 	template <class AttributeParam>
 	AttributeParam& getWidgetAttribute(const Widget* widget); // Ditto
-	void popupPrimaryWidget(Widget* topLevelWidget); // Pops up a primary top level widget at a default position/orientation
-	void popupPrimaryWidget(Widget* topLevelWidget,const Point& hotspot); // Pops up a primary top level widget so that the widget's hot spot coincides with the given position
-	void popupPrimaryWidget(Widget* topLevelWidget,const Transformation& widgetToWorld); // Pops up a primary top level widget close to the given transformation
-	void popupSecondaryWidget(const Widget* owner,Widget* topLevelWidget,const Vector& offset); // Pops up a secondary top level widget
-	void popdownWidget(Widget* widget); // Pops down the top level widget containing the given widget
+	bool popupPrimaryWidget(Widget* topLevelWidget) // Pops up a primary top level widget at a default position/orientation; returns true if the top-level widget wasn't popped up already
+		{
+		/* Delegate to the protected methods: */
+		return popupPrimaryWidgetAt(topLevelWidget,calcTopLevelTransform(topLevelWidget));
+		}
+	bool popupPrimaryWidget(Widget* topLevelWidget,const Point& hotspot) // Pops up a primary top level widget so that the widget's hot spot coincides with the given position; returns true if the top-level widget wasn't popped up already
+		{
+		/* Delegate to the protected methods: */
+		return popupPrimaryWidgetAt(topLevelWidget,calcTopLevelTransform(topLevelWidget,hotspot));
+		}
+	bool popupPrimaryWidget(Widget* topLevelWidget,const Transformation& widgetToWorld) // Pops up a primary top level widget close to the given transformation; returns true if the top-level widget wasn't popped up already
+		{
+		/* Delegate to the protected methods: */
+		return popupPrimaryWidgetAt(topLevelWidget,calcTopLevelTransform(topLevelWidget,widgetToWorld));
+		}
+	virtual void popupSecondaryWidget(const Widget* owner,Widget* topLevelWidget,const Vector& offset); // Pops up a secondary top level widget
+	virtual bool popdownWidget(Widget* widget); // Pops down the top level widget containing the given widget; returns true if the top-level widget was previously popped up
 	PoppedWidgetIterator beginPrimaryWidgets(void) // Returns iterator to first primary widget
 		{
 		return PoppedWidgetIterator(firstBinding);
@@ -320,20 +329,20 @@ class WidgetManager
 		{
 		return PoppedWidgetIterator(0);
 		}
-	void show(Widget* widget); // Shows the top level widget containing the given widget
-	void hide(Widget* widget); // Hides the top level widget containing the given widget
+	virtual void show(Widget* widget); // Shows the top level widget containing the given widget
+	virtual void hide(Widget* widget); // Hides the top level widget containing the given widget
 	bool isManaged(const Widget* widget) const; // Returns true if the top level widget containing the given widget is popped up
 	bool isVisible(const Widget* widget) const; // Returns true if the top level widget containing the given widget is popped up and visible
 	Widget* findPrimaryWidget(const Point& point); // Finds the primary top level widget whose descendants contain the given point
 	Widget* findPrimaryWidget(const Ray& ray,Scalar& lambda); // Finds the primary top level widget whose descendants are intersected by the given ray; sets lambda parameter to intersection or invalid value
-	Transformation calcWidgetTransformation(const Widget* widget) const; // Returns the transformation associated with a widget's root
-	void setPrimaryWidgetTransformation(Widget* widget,const Transformation& newWidgetToWorld); // Sets the transformation of a primary top level widget
+	virtual Transformation calcWidgetTransformation(const Widget* widget) const; // Returns the transformation associated with a widget's root
+	virtual void setPrimaryWidgetTransformation(Widget* widget,const Transformation& newWidgetToWorld); // Sets the transformation of a primary top level widget
 	void setWidgetTransformation(PoppedWidgetIterator poppedWidgetIt,const Transformation& newWidgetToWorld) // Sets the transformation of the given popped top-level widget
 		{
 		/* Call the private method: */
 		moveWidget(poppedWidgetIt.bPtr,newWidgetToWorld);
 		}
-	void deleteWidget(Widget* widget); // Method to delete a widget that is safe to call from within a callback belonging to the widget
+	virtual void deleteWidget(Widget* widget); // Method to delete a widget that is safe to call from within a callback belonging to the widget
 	void setTime(double newTime); // Sets the widget manager's time
 	double getTime(void) const // Returns the current time
 		{
@@ -341,7 +350,8 @@ class WidgetManager
 		}
 	virtual void draw(GLContextData& contextData) const;
 	virtual bool pointerButtonDown(Event& event); // Handles a button down event
-	virtual void requestClickRepeat(Widget* widget); // Lets a widget request click repeat events; widget must currently have a a pointer down on it, and be derived from ClickRepeatWidget
+	virtual void requestClickRepeat(ClickRepeatWidget* widget) =0; // Lets a widget request click repeat events
+	virtual void cancelClickRepeat(ClickRepeatWidget* widget) =0; // Notifies the widget manager that the given widget no longer wants to receive click repeat events
 	virtual bool pointerButtonUp(Event& event); // Handles a button up event
 	virtual bool pointerMotion(Event& event); // Handles a pointer motion event
 	virtual void grabPointer(Widget* widget); // Allows a widget to grab all pointer events

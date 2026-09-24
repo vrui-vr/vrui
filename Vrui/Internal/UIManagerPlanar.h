@@ -1,7 +1,7 @@
 /***********************************************************************
 UIManagerPlanar - UI manager class that aligns user interface components
 on a fixed plane.
-Copyright (c) 2015-2019 Oliver Kreylos
+Copyright (c) 2015-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -38,16 +38,16 @@ class UIManagerPlanar:public UIManager
 	Rotation orientation; // Orientation for plane-aligned transformations
 	bool constrainMovement; // Flag whether to restrict movement of UI components that are already popped up
 	
+	/* Protected methods from class GLMotif::WidgetManager: */
+	virtual GLMotif::WidgetManager::Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget);
+	virtual GLMotif::WidgetManager::Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotspot);
+	virtual GLMotif::WidgetManager::Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::WidgetManager::Transformation& widgetToWorld);
+	
 	/* Constructors and destructors: */
 	public:
 	UIManagerPlanar(const Misc::ConfigurationFileSection& configFileSection); // Initializes UI manager from the given configuration file section
 	
-	/* Methods from GLMotif::WidgetArranger: */
-	virtual Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget);
-	virtual Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotspot);
-	virtual Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const Transformation& widgetToWorld);
-	
-	/* Methods from UIManager: */
+	/* Methods from class UIManager: */
 	virtual Point projectRay(const Ray& ray) const;
 	virtual void projectDevice(InputDevice* device,const TrackerState& proposedTransform) const;
 	virtual ONTransform calcUITransform(const Point& point) const;

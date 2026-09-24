@@ -1,6 +1,6 @@
 /***********************************************************************
 Math - Genericized versions of standard C math functions.
-Copyright (c) 2001-2021 Oliver Kreylos
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the Templatized Math Library (Math).
 
@@ -646,6 +646,20 @@ inline float exp(float value)
 inline double exp(double value)
 	{
 	return ::exp(value);
+	}
+
+inline float exp10(float value)
+	{
+	#ifdef MATH_CONFIG_HAVE_FLOAT_CALLS
+	return exp10f(value);
+	#else
+	return float(::exp10(double(value)));
+	#endif
+	}
+
+inline double exp10(double value)
+	{
+	return ::exp10(value);
 	}
 
 inline float pow(float base,float exponent)

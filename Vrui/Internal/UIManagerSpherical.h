@@ -1,7 +1,7 @@
 /***********************************************************************
 UIManagerSpherical - UI manager class that aligns user interface
 components on a fixed sphere surrounding the viewer.
-Copyright (c) 2015-2019 Oliver Kreylos
+Copyright (c) 2015-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -42,6 +42,11 @@ class UIManagerSpherical:public UIManager
 	bool alignSecant; // Flag whether UI components are aligned secant or tangent to the sphere
 	bool constrainMovement; // Flag whether to restrict movement of UI components that are already popped up
 	
+	/* Protected methods from class GLMotif::WidgetManager: */
+	virtual GLMotif::WidgetManager::Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget);
+	virtual GLMotif::WidgetManager::Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotspot);
+	virtual GLMotif::WidgetManager::Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::WidgetManager::Transformation& widgetToWorld);
+	
 	/* Private methods: */
 	Transformation calcTopLevelTransformInternal(GLMotif::Widget* topLevelWidget,const Point& hotSpot) const; // Does the actual work for WidgetArranger's methods
 	
@@ -49,12 +54,7 @@ class UIManagerSpherical:public UIManager
 	public:
 	UIManagerSpherical(const Misc::ConfigurationFileSection& configFileSection); // Initializes UI manager from the given configuration file section
 	
-	/* Methods from GLMotif::WidgetArranger: */
-	virtual Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget);
-	virtual Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotspot);
-	virtual Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const Transformation& widgetToWorld);
-	
-	/* Methods from UIManager: */
+	/* Methods from class UIManager: */
 	virtual Point projectRay(const Ray& ray) const;
 	virtual void projectDevice(InputDevice* device,const TrackerState& proposedTransform) const;
 	virtual ONTransform calcUITransform(const Point& point) const;

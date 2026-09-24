@@ -9021,3 +9021,17 @@ Vrui-15.0-001:
   - Send console messages of level <Warn to the standard console instead
     to the console dialog.
 - Added proper main loop instrumentation to Vrui.
+  - Updated FrameRateViewer vislet to use Vrui's instrumentation instead
+    of its own for more detailed visualization.
+- Added Math::exp10 functions to Math/Math.h.
+- Change the architecture around GLMotif::WidgetManager:
+  - WidgetManager is now a base class, with environment embedding taken
+    care of by environment-specific derived classes such as
+    Vrui::UIManager.
+  - WidgetManager no longer has a WidgetArranger pointer; it has the
+    arranger class's virtual methods as protected virtual methods.
+  - Vrui::UIManager is now derived from GLMotif::WidgetManager instead
+    of GLMotif::WidgetArranger.
+- Moved handling of top-level widgets and the Dialogs sub-menu to
+  UIManager class.
+  - Implemented click-repeat for GLMotif widgets in Vrui::UIManager.

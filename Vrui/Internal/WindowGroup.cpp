@@ -36,7 +36,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 /* External global variables: */
 namespace Vrui {
 extern bool vruiVerbose;
-extern Threads::RunLoop vruiRunLoop;
 extern VruiErrorHeader vruiErrorHeader;
 }
 
@@ -255,14 +254,14 @@ bool WindowGroup::initialize(const WindowGroup::Creator& creator,const std::stri
 	if(allWindowsOk)
 		{
 		/* Create an I/O watcher for the display connection's socket: */
-		displayWatcher=new Threads::IOWatcher(vruiRunLoop,displayFd,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&WindowGroup::displayWatcherCallback));
+		displayWatcher=new Threads::IOWatcher(vruiState->runLoop,displayFd,Threads::IOWatcher::Read,true,*Threads::createFunctionCall(this,&WindowGroup::displayWatcherCallback));
 		
 		/* Check if there are unhandled events in the display connection's event queue: */
 		numEventsInQueue=XQLength(display);
 		socketReady=false;
 		
 		/* Create a process function to dispatch X11 events to windows when there are events: */
-		eventDispatcher=new Threads::ProcessFunction(vruiRunLoop,true,numEventsInQueue>0,*Threads::createFunctionCall(this,&WindowGroup::eventDispatcherCallback));
+		eventDispatcher=new Threads::ProcessFunction(vruiState->runLoop,true,numEventsInQueue>0,*Threads::createFunctionCall(this,&WindowGroup::eventDispatcherCallback));
 		}
 	
 	return allWindowsOk;

@@ -1,7 +1,7 @@
 /***********************************************************************
 UIManagerFree - UI manager class that allows arbitrary positions and
 orientations for UI components.
-Copyright (c) 2015-2019 Oliver Kreylos
+Copyright (c) 2015-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -34,6 +34,10 @@ class UIManagerFree:public UIManager
 	private:
 	bool alignUiWithPointer; // Flag to align UI elements with the current interactor's pointing direction in addition to the viewing direction
 	
+	/* Protected methods from class GLMotif::WidgetManager: */
+	virtual GLMotif::WidgetManager::Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget);
+	virtual GLMotif::WidgetManager::Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotspot);
+	
 	/* Private methods: */
 	ONTransform alignUITransform(const Point& point) const; // Calculates a UI transformation for the given point
 	
@@ -41,12 +45,7 @@ class UIManagerFree:public UIManager
 	public:
 	UIManagerFree(const Misc::ConfigurationFileSection& configFileSection); // Initializes UI manager from the given configuration file section
 	
-	/* Methods from GLMotif::WidgetArranger: */
-	virtual Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget);
-	virtual Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotspot);
-	virtual Transformation calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const Transformation& widgetToWorld);
-	
-	/* Methods from UIManager: */
+	/* Methods from class UIManager: */
 	virtual Point projectRay(const Ray& ray) const;
 	virtual void projectDevice(InputDevice* device,const TrackerState& proposedTransform) const;
 	virtual ONTransform calcUITransform(const Point& point) const;

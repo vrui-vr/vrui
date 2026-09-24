@@ -185,8 +185,8 @@ void MessageLogger::logMessageCallback(Threads::UserSignalEvent& event)
 		}
 	}
 
-MessageLogger::MessageLogger(void)
-	:logMessageSignal(new Threads::UserSignal(getRunLoop(),true,*Threads::createFunctionCall(this,&MessageLogger::logMessageCallback))),
+MessageLogger::MessageLogger(Threads::RunLoop& runLoop)
+	:logMessageSignal(new Threads::UserSignal(runLoop,true,*Threads::createFunctionCall(this,&MessageLogger::logMessageCallback))),
 	 consoleDialog(0),consoleMessageList(0),
 	 userToConsole(true)
 	{

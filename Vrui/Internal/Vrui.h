@@ -47,7 +47,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <GL/GLMaterial.h>
 #include <GL/GLObject.h>
 #include <GLMotif/StyleSheet.h>
-#include <GLMotif/WidgetManager.h>
 #include <GLMotif/ToggleButton.h>
 #include <GLMotif/TextField.h>
 #include <GLMotif/DropdownBox.h>
@@ -189,6 +188,7 @@ struct VruiState
 	unsigned int randomSeed; // Seed value for random number generator
 	
 	/* Time and frame sequence management: */
+	Threads::RunLoop runLoop; // The main thread's run loop
 	Threads::EventTime frameTimeBase; // Time point at which Vrui's main loop started, to calculate relative application time for each frame
 	unsigned long frameIndex; // The zero-based index of the current frame
 	double applicationTime; // The current application time, in seconds since Vrui's main loop started
@@ -297,14 +297,12 @@ struct VruiState
 	/* Widget management: */
 	GLMaterial widgetMaterial;
 	GLMotif::StyleSheet uiStyleSheet;
-	GLMotif::WidgetManager* widgetManager;
 	UIManager* uiManager;
 	GLMotif::PopupMenu* dialogsMenu;
 	std::vector<GLMotif::PopupWindow*> poppedDialogs;
 	GLMotif::PopupMenu* systemMenu; // Vrui system menu as top-level pop-up if the application does not define its own main menu
 	bool systemMenuTopLevel; // Flag whether the system menu is a top-level pop-up (and must be deleted)
 	GLMotif::Widget* quitSeparator; // Separator between system menu entries and the quit entry
-	GLMotif::CascadeButton* dialogsMenuCascade;
 	GLMotif::CascadeButton* visletsMenuCascade;
 	GLMotif::ToggleButton* fixOrientationToggle;
 	GLMotif::ToggleButton* fixVerticalToggle;
@@ -430,8 +428,6 @@ struct VruiState
 	static void quitCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
 	
 	/* System menu callback methods: */
-	void dialogsMenuCallback(GLMotif::Button::SelectCallbackData* cbData,GLMotif::PopupWindow* const& dialog);
-	void widgetPopCallback(GLMotif::WidgetManager::WidgetPopCallbackData* cbData);
 	void loadViewCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData);
 	void saveViewCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData);
 	void resetViewCallback(Misc::CallbackData* cbData);
@@ -482,7 +478,6 @@ std::ostream& operator<<(std::ostream& os,const VruiErrorHeader& veh);
 
 extern bool vruiVerbose; // Flag whether Vrui should be verbose about its operations
 extern bool vruiMaster; // Flag whether a Vrui instance is on a single host, or the head node of a cluster
-extern Threads::RunLoop vruiRunLoop; // Vrui's main-thread run loop
 extern VruiErrorHeader vruiErrorHeader; // Object to print error message headers
 
 /********************************

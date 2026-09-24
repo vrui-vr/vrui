@@ -444,7 +444,14 @@ void ScrollBar::pointerButtonUp(Event& event)
 	{
 	/* Stop dragging and potential repeat clicks: */
 	stopDragging(event);
-	isClicking=false;
+	if(isClicking)
+		{
+		isClicking=false;
+		
+		WidgetManager* manager=getManager();
+		if(manager!=0)
+			manager->cancelClickRepeat(this);
+		}
 	
 	/* Unarm the armed arrow button: */
 	if(armedArrowIndex>=0)

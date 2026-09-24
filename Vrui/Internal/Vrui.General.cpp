@@ -66,6 +66,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <GL/GLTransformationWrappers.h>
 #include <Images/BaseImage.h>
 #include <GLMotif/Event.h>
+#include <GLMotif/WidgetManager.h>
 #include <GLMotif/Widget.h>
 #include <GLMotif/Popup.h>
 #include <GLMotif/PopupMenu.h>
@@ -267,35 +268,6 @@ void VruiState::ApplicationDisplayFunctionNode::glRenderAction(SceneGraph::GLRen
 Private Vrui functions:
 **********************/
 
-GLMotif::PopupMenu* VruiState::buildDialogsMenu(void)
-	{
-	GLMotif::WidgetManager* wm=getWidgetManager();
-	
-	/* Create the dialogs submenu: */
-	dialogsMenu=new GLMotif::PopupMenu("DialogsMenu",wm);
-	
-	/* Add menu buttons for all popped-up dialog boxes: */
-	poppedDialogs.clear();
-	for(GLMotif::WidgetManager::PoppedWidgetIterator wIt=wm->beginPrimaryWidgets();wIt!=wm->endPrimaryWidgets();++wIt)
-		{
-		GLMotif::PopupWindow* dialog=dynamic_cast<GLMotif::PopupWindow*>(*wIt);
-		if(dialog!=0)
-			{
-			/* Add an entry to the dialogs submenu: */
-			GLMotif::Button* button=dialogsMenu->addEntry(dialog->getTitleString());
-			
-			/* Add a callback to the button: */
-			button->getSelectCallbacks().add(this,&VruiState::dialogsMenuCallback,dialog);
-			
-			/* Save a pointer to the dialog window: */
-			poppedDialogs.push_back(dialog);
-			}
-		}
-	
-	dialogsMenu->manageMenu();
-	return dialogsMenu;
-	}
-
 GLMotif::PopupMenu* VruiState::buildAlignViewMenu(void)
 	{
 	GLMotif::PopupMenu* alignViewMenu=new GLMotif::PopupMenu("AlignViewMenu",getWidgetManager());
@@ -434,9 +406,7 @@ GLMotif::PopupMenu* VruiState::buildDevicesMenu(void)
 void VruiState::buildSystemMenu(GLMotif::Container* parent)
 	{
 	/* Create the dialogs submenu: */
-	dialogsMenuCascade=new GLMotif::CascadeButton("DialogsMenuCascade",parent,"Dialogs");
-	dialogsMenuCascade->setPopup(buildDialogsMenu());
-	dialogsMenuCascade->setEnabled(dialogsMenu->getNumEntries()!=0);
+	uiManager->createDialogsMenu(parent);
 	
 	/* Create the view submenu: */
 	GLMotif::CascadeButton* viewMenuCascade=new GLMotif::CascadeButton("ViewMenuCascade",parent,"View");
@@ -629,9 +599,8 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 	 pixelFont(0),
 	 useSound(false),
 	 widgetMaterial(GLMaterial::Color(1.0f,1.0f,1.0f),GLMaterial::Color(0.5f,0.5f,0.5f),25.0f),
-	 widgetManager(0),uiManager(0),
-	 dialogsMenu(0),
-	 systemMenu(0),systemMenuTopLevel(false),dialogsMenuCascade(0),visletsMenuCascade(0),
+	 uiManager(0),
+	 systemMenu(0),systemMenuTopLevel(false),visletsMenuCascade(0),
 	 mainMenu(0),
 	 viewSelectionHelper(0,"SavedViewpoint.view",".view",0),
 	 settingsDialog(0),settingsPager(0),
@@ -661,9 +630,16 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 	/* Initialize the recent frame duration array: */
 	for(int i=0;i<numRecentFrameDurations;++i)
 		recentFrameDurations[i]=1.0;
-
+	
+	/* Initialize the frame timings array: */
+	for(int i=0;i<numFrameTimings;++i)
+		{
+		FrameTiming& ft=frameTimings[i];
+		ft.totalDuration=ft.postRenderEnd=ft.present=ft.renderEnd=ft.renderStart=0;
+		}
+	
 	/* Create a Vrui-specific message logger: */
-	Misc::MessageLogger::setMessageLogger(new Vrui::MessageLogger);
+	Misc::MessageLogger::setMessageLogger(new Vrui::MessageLogger(runLoop));
 	
 	/* Set the current directory of the IO sub-library: */
 	IO::Directory::setCurrent(IO::openDirectory("."));
@@ -674,9 +650,6 @@ VruiState::~VruiState(void)
 	#if SAVESHAREDVRUISTATE
 	delete vruiSharedStateFile;
 	#endif
-	
-	/* Deregister the popup callback: */
-	widgetManager->getWidgetPopCallbacks().remove(this,&VruiState::widgetPopCallback);
 	
 	/* Destroy the input graph: */
 	inputGraphManager->clear();
@@ -699,7 +672,7 @@ VruiState::~VruiState(void)
 	viewSelectionHelper.closeDialogs();
 	inputGraphSelectionHelper.closeDialogs();
 	delete uiStyleSheet.font;
-	delete widgetManager;
+	delete uiManager;
 	
 	/* Delete the pixel font: */
 	delete pixelFont;
@@ -934,12 +907,6 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 	/* Finish initializing the input graph manager: */
 	inputGraphManager->finalize(glyphRenderer,virtualInputDevice);
 	
-	/* Initialize widget management: */
-	widgetManager=new GLMotif::WidgetManager;
-	widgetManager->setStyleSheet(&uiStyleSheet);
-	widgetManager->setDrawOverlayWidgets(configFileSection.retrieveValue("drawOverlayWidgets",widgetManager->getDrawOverlayWidgets()));
-	widgetManager->getWidgetPopCallbacks().add(this,&VruiState::widgetPopCallback);
-	
 	/* Create a UI manager: */
 	Misc::ConfigurationFileSection uiManagerSection=configFileSection.getSection(configFileSection.retrieveString("uiManager").c_str());
 	std::string uiManagerType=uiManagerSection.retrieveString("type","Free");
@@ -951,13 +918,16 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 		uiManager=new UIManagerSpherical(uiManagerSection);
 	else
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unknown UI manager type \"%s\"",uiManagerType.c_str());
-	widgetManager->setArranger(uiManager); // Widget manager now owns uiManager object
+	
+	/* Initialize widget management: */
+	uiManager->setStyleSheet(&uiStyleSheet);
+	uiManager->setDrawOverlayWidgets(configFileSection.retrieveValue("drawOverlayWidgets",uiManager->getDrawOverlayWidgets()));
 	
 	/* Remember whether to route user messages to the console: */
 	configFileSection.updateValue("userMessagesToConsole",userMessagesToConsole);
 	
 	/* Dispatch any early text events: */
-	textEventDispatcher->dispatchEvents(*widgetManager);
+	textEventDispatcher->dispatchEvents(*uiManager);
 	
 	/* Initialize rendering parameters: */
 	configFileSection.updateValue("frontplaneDist",frontplaneDist);
@@ -1036,11 +1006,11 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 		{
 		case 0:
 			if(master)
-				widgetManager->setTextEntryMethod(new KeyboardTextEntryMethod(mouseAdapter));
+				uiManager->setTextEntryMethod(new KeyboardTextEntryMethod(mouseAdapter));
 			break;
 		
 		case 1:
-			widgetManager->setTextEntryMethod(new GLMotif::QuikwritingTextEntryMethod(widgetManager));
+			uiManager->setTextEntryMethod(new GLMotif::QuikwritingTextEntryMethod(uiManager));
 			break;
 		}
 	
@@ -1160,9 +1130,9 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 	mainListener=&listeners[0];
 	
 	/* Initialize the directories used to load files: */
-	viewSelectionHelper.setWidgetManager(widgetManager);
+	viewSelectionHelper.setWidgetManager(uiManager);
 	viewSelectionHelper.setCurrentDirectory(IO::Directory::getCurrent());
-	inputGraphSelectionHelper.setWidgetManager(widgetManager);
+	inputGraphSelectionHelper.setWidgetManager(uiManager);
 	inputGraphSelectionHelper.setCurrentDirectory(IO::Directory::getCurrent());
 	
 	/* Initialize 3D picking: */
@@ -1202,7 +1172,7 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 void VruiState::createSystemMenu(void)
 	{
 	/* Create the Vrui system menu and install it as the main menu: */
-	systemMenu=new GLMotif::PopupMenu("VruiSystemMenu",widgetManager);
+	systemMenu=new GLMotif::PopupMenu("VruiSystemMenu",uiManager);
 	systemMenu->setTitle("Vrui System");
 	buildSystemMenu(systemMenu);
 	systemMenu->manageMenu();
@@ -1631,7 +1601,7 @@ bool VruiState::startFrame(void)
 	nextFrameTime=updateContinuously?0.0:Math::Constants<double>::max;
 	
 	/* Wait for any events to happen and check if shutdown was requested: */
-	bool keepRunning=vruiRunLoop.waitForEvents(wakeUpPtr);
+	bool keepRunning=runLoop.waitForEvents(wakeUpPtr);
 	
 	/* Start a new Vrui frame: */
 	++frameIndex;
@@ -1656,10 +1626,10 @@ bool VruiState::startFrame(void)
 		/* Reset the application time base on the first frame -- ugh: */
 		// FIXME -- THERE MUST BE A BETTER WAY ONCE SYNCHRONIZATION IS BACK ON THE MENU!
 		if(frameIndex==0)
-			frameTimeBase=vruiRunLoop.getDispatchTime();
+			frameTimeBase=runLoop.getDispatchTime();
 		
 		/* Calculate the new application time from the run loop's dispatch time: */
-		newApplicationTime=double(vruiRunLoop.getDispatchTime()-frameTimeBase);
+		newApplicationTime=double(runLoop.getDispatchTime()-frameTimeBase);
 		
 		// IMPLEMENT ME -- DO SOME STUFF HERE IF SYNCHRONIZATION IS REQUESTED!
 		
@@ -1693,7 +1663,7 @@ bool VruiState::startFrame(void)
 	medianFrameDuration=sortedFrameDurations[numRecentFrameDurations/2];
 	
 	/* Main loop instrumentation: */
-	const Threads::EventTime& nextFrameStart=vruiRunLoop.getDispatchTime();
+	const Threads::EventTime& nextFrameStart=runLoop.getDispatchTime();
 	
 	/* Calculate the previous frame's timings: */
 	FrameTiming& ft=frameTimings[nextFrameTimingsIndex];
@@ -1710,7 +1680,7 @@ bool VruiState::startFrame(void)
 	Dispatch pending events on the run loop and run all process functions:
 	*********************************************************************/
 	
-	vruiRunLoop.dispatchPendingEvents();
+	runLoop.dispatchPendingEvents();
 	
 	/*********************************************************************
 	Update input device state and distribute all shared state:
@@ -1833,10 +1803,10 @@ bool VruiState::startFrame(void)
 	*********************************************************************/
 	
 	/* Set the widget manager's time: */
-	widgetManager->setTime(applicationTime);
+	uiManager->setTime(applicationTime);
 	
 	/* Dispatch all text events: */
-	textEventDispatcher->dispatchEvents(*widgetManager);
+	textEventDispatcher->dispatchEvents(*uiManager);
 	
 	/* Update the input graph: */
 	inputGraphManager->update();
@@ -1959,7 +1929,7 @@ void VruiState::display(DisplayState* displayState,GLContextData& contextData) c
 	glMaterial(GLMaterialEnums::FRONT,widgetMaterial);
 	glEnable(GL_COLOR_MATERIAL);
 	glColorMaterial(GL_FRONT,GL_AMBIENT_AND_DIFFUSE);
-	widgetManager->draw(contextData);
+	uiManager->draw(contextData);
 	glDisable(GL_COLOR_MATERIAL);
 	
 	/* Set and enable clipping planes: */
@@ -2084,8 +2054,8 @@ void VruiState::finishMainLoop(void)
 	/* Disable all vislets for the last time: */
 	visletManager->disable();
 	
-	/* Deregister the popup callback: */
-	widgetManager->getWidgetPopCallbacks().remove(this,&VruiState::widgetPopCallback);
+	/* Shut down UI management: */
+	uiManager->shutdown();
 	}
 
 void VruiState::showMessageCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData)
@@ -2298,75 +2268,6 @@ void VruiState::quitCommandCallback(const char* argumentBegin,const char* argume
 	{
 	/* Request Vrui to shut down cleanly: */
 	shutdown();
-	}
-
-void VruiState::dialogsMenuCallback(GLMotif::Button::SelectCallbackData* cbData,GLMotif::PopupWindow* const& dialog)
-	{
-	/* Check if the dialog is visible or hidden: */
-	GLMotif::WidgetManager* wm=getWidgetManager();
-	if(wm->isVisible(dialog))
-		{
-		/* Initialize the pop-up position: */
-		Point hotSpot=uiManager->getHotSpot();
-		
-		/* Move the dialog window to the hot spot position: */
-		ONTransform transform=uiManager->calcUITransform(hotSpot);
-		transform*=ONTransform::translate(-Vector(dialog->calcHotSpot().getXyzw()));
-		wm->setPrimaryWidgetTransformation(dialog,transform);
-		}
-	else
-		{
-		/* Show the hidden dialog window at its previous position: */
-		wm->show(dialog);
-		}
-	}
-
-void VruiState::widgetPopCallback(GLMotif::WidgetManager::WidgetPopCallbackData* cbData)
-	{
-	/* Don't do anything if there is no dialogs menu yet: */
-	if(dialogsMenu==0)
-		return;
-	
-	/* Check if the widget is a dialog: */
-	GLMotif::PopupWindow* dialog=dynamic_cast<GLMotif::PopupWindow*>(cbData->topLevelWidget);
-	if(dialog==0)
-		return;
-	
-	if(cbData->popup)
-		{
-		/* Append the newly popped-up dialog to the dialogs menu: */
-		GLMotif::Button* button=dialogsMenu->addEntry(dialog->getTitleString());
-		button->getSelectCallbacks().add(this,&VruiState::dialogsMenuCallback,dialog);
-		poppedDialogs.push_back(dialog);
-		
-		/* Enable the dialogs menu if it has become non-empty: */
-		if(dialogsMenu->getNumEntries()==1)
-			{
-			/* Enable the "Dialogs" cascade button: */
-			dialogsMenuCascade->setEnabled(true);
-			}
-		}
-	else
-		{
-		/* Find the popped-down dialog in the dialogs menu: */
-		int menuIndex=0;
-		std::vector<GLMotif::PopupWindow*>::iterator dIt;
-		for(dIt=poppedDialogs.begin();dIt!=poppedDialogs.end()&&*dIt!=dialog;++dIt,++menuIndex)
-			;
-		if(dIt!=poppedDialogs.end())
-			{
-			/* Remove the popped-down dialog from the dialogs menu and delete the button widget: */
-			poppedDialogs.erase(dIt);
-			delete dialogsMenu->removeEntry(menuIndex);
-			
-			/* Disable the dialogs menu if it has become empty: */
-			if(dialogsMenu->getNumEntries()==0)
-				{
-				/* Disable the "Dialogs" cascade button: */
-				dialogsMenuCascade->setEnabled(false);
-				}
-			}
-		}
 	}
 
 void VruiState::loadViewCallback(GLMotif::FileSelectionDialog::OKCallbackData* cbData)
@@ -3436,7 +3337,7 @@ void setMainMenu(GLMotif::PopupMenu* newMainMenu)
 	if(newMainMenu->getMenu()!=0)
 		{
 		/* Create the Vrui system menu as a dependent pop-up: */
-		vruiState->systemMenu=new GLMotif::PopupMenu("VruiSystemMenu",vruiState->widgetManager);
+		vruiState->systemMenu=new GLMotif::PopupMenu("VruiSystemMenu",vruiState->uiManager);
 		vruiState->buildSystemMenu(vruiState->systemMenu);
 		vruiState->systemMenu->manageMenu();
 		vruiState->systemMenuTopLevel=false;
@@ -3492,7 +3393,7 @@ TextEventDispatcher* getTextEventDispatcher(void)
 
 GLMotif::WidgetManager* getWidgetManager(void)
 	{
-	return vruiState->widgetManager;
+	return vruiState->uiManager;
 	}
 
 UIManager* getUiManager(void)
@@ -3503,7 +3404,7 @@ UIManager* getUiManager(void)
 void popupPrimaryWidget(GLMotif::Widget* topLevel)
 	{
 	/* Check if the widget is already popped up: */
-	GLMotif::WidgetManager* wm=vruiState->widgetManager;
+	GLMotif::WidgetManager* wm=vruiState->uiManager;
 	if(wm->isManaged(topLevel))
 		{
 		/* Check if the widget is visible or hidden: */
@@ -3538,7 +3439,7 @@ void popupPrimaryWidget(GLMotif::Widget* topLevel,const Point& hotSpot,bool navi
 		globalHotSpot=vruiState->inverseNavigationTransformation.transform(globalHotSpot);
 	
 	/* Forward call to widget manager: */
-	vruiState->widgetManager->popupPrimaryWidget(topLevel,globalHotSpot);
+	vruiState->uiManager->popupPrimaryWidget(topLevel,globalHotSpot);
 	}
 
 void popupPrimaryScreenWidget(GLMotif::Widget* topLevel,Scalar x,Scalar y)
@@ -3553,13 +3454,13 @@ void popupPrimaryScreenWidget(GLMotif::Widget* topLevel,Scalar x,Scalar y)
 	widgetTransformation*=WTransform::translate(WVector(screenX,screenY,vruiState->inchFactor));
 	
 	/* Pop up the widget: */
-	vruiState->widgetManager->popupPrimaryWidget(topLevel,widgetTransformation);
+	vruiState->uiManager->popupPrimaryWidget(topLevel,widgetTransformation);
 	}
 
 void popdownPrimaryWidget(GLMotif::Widget* topLevel)
 	{
 	/* Pop down the widget: */
-	vruiState->widgetManager->popdownWidget(topLevel);
+	vruiState->uiManager->popdownWidget(topLevel);
 	}
 
 namespace {
@@ -4048,6 +3949,11 @@ Misc::CallbackList& getPostRenderingCallbacks(void)
 	return vruiState->postRenderingCallbacks;
 	}
 
+Threads::RunLoop& getRunLoop(void)
+	{
+	return vruiState->runLoop;
+	}
+
 Misc::CommandDispatcher& getCommandDispatcher(void)
 	{
 	return vruiState->commandDispatcher;
@@ -4056,7 +3962,7 @@ Misc::CommandDispatcher& getCommandDispatcher(void)
 void submitJob(Job& job,JobCompleteFunction& completeCallback)
 	{
 	/* Create a new user signal with our complete callback as callback and the given complete callback as additional parameter: */
-	Threads::UserSignal* signal=new Threads::UserSignal(vruiRunLoop,true,*Threads::createFunctionCall(VruiState::jobCompleteCallback,Misc::Autopointer<JobCompleteFunction>(&completeCallback)));
+	Threads::UserSignal* signal=new Threads::UserSignal(vruiState->runLoop,true,*Threads::createFunctionCall(VruiState::jobCompleteCallback,Misc::Autopointer<JobCompleteFunction>(&completeCallback)));
 	
 	/* Submit the given job with the new user signal as completion signal: */
 	Threads::WorkerPool::submitJob(job,*signal);

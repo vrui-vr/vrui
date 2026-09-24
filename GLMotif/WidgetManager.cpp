@@ -1,6 +1,6 @@
 /***********************************************************************
-WidgetManager - Class to manage top-level GLMotif UI components and user
-events.
+WidgetManager - Base class to manage top-level GLMotif UI components and
+user events.
 Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
@@ -200,9 +200,15 @@ WidgetManager::PopupBinding* WidgetManager::getRootBinding(const Widget* widget)
 	return pbmIt.isFinished()?0:pbmIt->getDest();
 	}
 
-void WidgetManager::popupPrimaryWidgetAt(Widget* topLevelWidget,const WidgetManager::Transformation& widgetToWorld)
+WidgetManager::Transformation WidgetManager::calcTopLevelTransform(Widget* topLevelWidget,const WidgetManager::Transformation& widgetToWorld)
 	{
-	/* Check if the widget is already popped up: */
+	/* Pass the given transformation through unchanged: */
+	return widgetToWorld;
+	}
+
+bool WidgetManager::popupPrimaryWidgetAt(Widget* topLevelWidget,const WidgetManager::Transformation& widgetToWorld)
+	{
+	/* Check if the widget is not already popped up: */
 	if(!popupBindingMap.isEntry(topLevelWidget))
 		{
 		/* Pop up the widget: */
@@ -226,7 +232,11 @@ void WidgetManager::popupPrimaryWidgetAt(Widget* topLevelWidget,const WidgetMana
 		/* Recurse into the primary binding: */
 		moveSecondaryWidgets(newBinding,widgetToWorld);
 		}
+		
+		return true;
 		}
+	else
+		return false;
 	}
 
 void WidgetManager::moveSecondaryWidgets(WidgetManager::PopupBinding* parent,const WidgetManager::Transformation& parentTransform)
@@ -253,7 +263,7 @@ void WidgetManager::moveWidget(PopupBinding* binding,const Transformation& newTr
 	if(binding->parent==0)
 		{
 		/* Adjust and set the binding's widget transformation: */
-		binding->widgetToWorld=arranger->calcTopLevelTransform(binding->topLevelWidget,newTransform);
+		binding->widgetToWorld=calcTopLevelTransform(binding->topLevelWidget,newTransform);
 		}
 	else
 		{
@@ -323,7 +333,8 @@ void WidgetManager::deleteQueuedWidgets(void)
 	}
 
 WidgetManager::WidgetManager(void)
-	:styleSheet(0),arranger(0),textEntryMethod(0),
+	:styleSheet(0),
+	 textEntryMethod(0),
 	 drawOverlayWidgets(false),
 	 widgetAttributeMap(101),
 	 firstBinding(0),popupBindingMap(31),
@@ -356,19 +367,12 @@ WidgetManager::~WidgetManager(void)
 	delete[] textBuffer;
 	
 	/* Delete other helper objects: */
-	delete arranger;
 	delete textEntryMethod;
 	}
 
 void WidgetManager::setStyleSheet(const StyleSheet* newStyleSheet)
 	{
 	styleSheet=newStyleSheet;
-	}
-
-void WidgetManager::setArranger(WidgetArranger* newArranger)
-	{
-	delete arranger;
-	arranger=newArranger;
 	}
 
 void WidgetManager::setTextEntryMethod(TextEntryMethod* newTextEntryMethod)
@@ -392,24 +396,6 @@ void WidgetManager::unmanageWidget(Widget* widget)
 		delete waIt->getDest();
 		widgetAttributeMap.removeEntry(waIt);
 		}
-	}
-
-void WidgetManager::popupPrimaryWidget(Widget* topLevelWidget)
-	{
-	/* Pop up with a default widget transformation: */
-	popupPrimaryWidgetAt(topLevelWidget,arranger->calcTopLevelTransform(topLevelWidget));
-	}
-
-void WidgetManager::popupPrimaryWidget(Widget* topLevelWidget,const Point& hotspot)
-	{
-	/* Pop up with a hot spot widget transformation: */
-	popupPrimaryWidgetAt(topLevelWidget,arranger->calcTopLevelTransform(topLevelWidget,hotspot));
-	}
-
-void WidgetManager::popupPrimaryWidget(Widget* topLevelWidget,const WidgetManager::Transformation& widgetToWorld)
-	{
-	/* Pop up with a full widget transformation: */
-	popupPrimaryWidgetAt(topLevelWidget,arranger->calcTopLevelTransform(topLevelWidget,widgetToWorld));
 	}
 
 void WidgetManager::popupSecondaryWidget(const Widget* owner,Widget* topLevelWidget,const Vector& offset)
@@ -446,7 +432,7 @@ void WidgetManager::popupSecondaryWidget(const Widget* owner,Widget* topLevelWid
 		}
 	}
 
-void WidgetManager::popdownWidget(Widget* widget)
+bool WidgetManager::popdownWidget(Widget* widget)
 	{
 	/* Find the widget's binding: */
 	Widget* topLevelWidget=widget->getRoot();
@@ -477,7 +463,11 @@ void WidgetManager::popdownWidget(Widget* widget)
 			binding->succ->pred=binding->pred;
 		delete binding;
 		popupBindingMap.removeEntry(pbmIt);
+		
+		return true;
 		}
+	else
+		return false;
 	}
 
 void WidgetManager::show(Widget* widget)
@@ -681,15 +671,6 @@ bool WidgetManager::pointerButtonDown(Event& event)
 		}
 	
 	return result;
-	}
-
-void WidgetManager::requestClickRepeat(Widget* widget)
-	{
-	ClickRepeatWidget* crWidget=dynamic_cast<ClickRepeatWidget*>(widget);
-	
-	/* Check that the requesting widget currently has a button down event on it... */
-	
-	/* This is where we register a repeating timer on behalf of the requesting widget... */
 	}
 
 bool WidgetManager::pointerButtonUp(Event& event)

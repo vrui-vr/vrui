@@ -41,7 +41,33 @@ namespace Vrui {
 Methods of class UIManagerSpherical:
 ***********************************/
 
-GLMotif::WidgetArranger::Transformation UIManagerSpherical::calcTopLevelTransformInternal(GLMotif::Widget* topLevelWidget,const Point& hotSpot) const
+GLMotif::WidgetManager::Transformation UIManagerSpherical::calcTopLevelTransform(GLMotif::Widget* topLevelWidget)
+	{
+	/* Return a top-level transformation for the default hot spot: */
+	return calcTopLevelTransformInternal(topLevelWidget,getHotSpot());
+	}
+
+GLMotif::WidgetManager::Transformation UIManagerSpherical::calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotSpot)
+	{
+	/* Return a top-level transformation for the given hot spot: */
+	return calcTopLevelTransformInternal(topLevelWidget,hotSpot);
+	}
+
+GLMotif::WidgetManager::Transformation UIManagerSpherical::calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::WidgetManager::Transformation& widgetToWorld)
+	{
+	if(constrainMovement)
+		{
+		/* Return a top-level transformation for the widget's current hot spot: */
+		return calcTopLevelTransformInternal(topLevelWidget,widgetToWorld.transform(Point(topLevelWidget->calcHotSpot().getXyzw())));
+		}
+	else
+		{
+		/* Return the given transformation unchanged: */
+		return widgetToWorld;
+		}
+	}
+
+GLMotif::WidgetManager::Transformation UIManagerSpherical::calcTopLevelTransformInternal(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotSpot) const
 	{
 	/* Project the given hot spot onto the sphere: */
 	Vector d=hotSpot-sphere.getCenter();
@@ -66,11 +92,11 @@ GLMotif::WidgetArranger::Transformation UIManagerSpherical::calcTopLevelTransfor
 	if(x.mag()==Scalar(0))
 		x=getForwardDirection()^getUpDirection();
 	Vector y=x^d;
-	Transformation result(sphereHotSpot-Point::origin,Rotation::fromBaseVectors(x,y),Scalar(1));
+	GLMotif::WidgetManager::Transformation result(sphereHotSpot-Point::origin,Rotation::fromBaseVectors(x,y),Scalar(1));
 	
 	/* Align the widget's hot spot with the given hot spot: */
 	GLMotif::Vector widgetHotSpot=topLevelWidget->calcHotSpot();
-	result*=Transformation::translate(-Transformation::Vector(widgetHotSpot.getXyzw()));
+	result*=GLMotif::WidgetManager::Transformation::translate(-GLMotif::WidgetManager::Transformation::Vector(widgetHotSpot.getXyzw()));
 	
 	result.renormalize();
 	return result;
@@ -85,32 +111,6 @@ UIManagerSpherical::UIManagerSpherical(const Misc::ConfigurationFileSection& con
 	/* Configure the UI sphere: */
 	sphere.setCenter(configFileSection.retrieveValue<Point>("./sphereCenter"));
 	sphere.setRadius(configFileSection.retrieveValue("./sphereRadius",Geometry::dist(sphere.getCenter(),getDisplayCenter())));
-	}
-
-GLMotif::WidgetArranger::Transformation UIManagerSpherical::calcTopLevelTransform(GLMotif::Widget* topLevelWidget)
-	{
-	/* Return a top-level transformation for the default hot spot: */
-	return calcTopLevelTransformInternal(topLevelWidget,getHotSpot());
-	}
-
-GLMotif::WidgetArranger::Transformation UIManagerSpherical::calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotSpot)
-	{
-	/* Return a top-level transformation for the given hot spot: */
-	return calcTopLevelTransformInternal(topLevelWidget,hotSpot);
-	}
-
-GLMotif::WidgetArranger::Transformation UIManagerSpherical::calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::WidgetArranger::Transformation& widgetToWorld)
-	{
-	if(constrainMovement)
-		{
-		/* Return a top-level transformation for the widget's current hot spot: */
-		return calcTopLevelTransformInternal(topLevelWidget,widgetToWorld.transform(Point(topLevelWidget->calcHotSpot().getXyzw())));
-		}
-	else
-		{
-		/* Return the given transformation unchanged: */
-		return widgetToWorld;
-		}
 	}
 
 Point UIManagerSpherical::projectRay(const Ray& ray) const

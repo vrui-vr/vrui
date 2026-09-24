@@ -92,7 +92,6 @@ Private Vrui global variables:
 
 bool vruiVerbose=false;
 bool vruiMaster=true;
-Threads::RunLoop vruiRunLoop;
 
 std::ostream& operator<<(std::ostream& os,const VruiErrorHeader& veh)
 	{
@@ -1776,7 +1775,7 @@ void mainLoop(void)
 	
 	/* Listen for commands on stdin: */
 	Threads::IOWatcherEventHandler* commandDispatcherFunction=Threads::createFunctionCall(vruiState,&VruiState::dispatchCommandsCallback);
-	vruiStdinWatcher=new Threads::IOWatcher(vruiRunLoop,STDIN_FILENO,Threads::IOWatcher::Read,true,*commandDispatcherFunction);
+	vruiStdinWatcher=new Threads::IOWatcher(vruiState->runLoop,STDIN_FILENO,Threads::IOWatcher::Read,true,*commandDispatcherFunction);
 	
 	/* If there is a command pipe, listen for commands on that: */
 	std::string commandPipeName=vruiConfigFile->retrieveString("./commandPipeName",std::string());
@@ -1795,7 +1794,7 @@ void mainLoop(void)
 				std::cout<<"Vrui: Listening for commands on pipe "<<commandPipeName<<std::endl;
 			
 			/* Listen for commands on the pipe: */
-			vruiCommandPipeWatcher=new Threads::IOWatcher(vruiRunLoop,vruiCommandPipe,Threads::IOWatcher::Read,true,*commandDispatcherFunction);
+			vruiCommandPipeWatcher=new Threads::IOWatcher(vruiState->runLoop,vruiCommandPipe,Threads::IOWatcher::Read,true,*commandDispatcherFunction);
 			}
 		else
 			{
@@ -1946,12 +1945,7 @@ void shutdown(void)
 	{
 	/* Signal asynchronous shutdown if this node is the master node: */
 	if(vruiMaster)
-		vruiRunLoop.stop();
-	}
-
-Threads::RunLoop& getRunLoop(void)
-	{
-	return vruiRunLoop;
+		vruiState->runLoop.stop();
 	}
 
 const char* getApplicationName(void)
@@ -2003,7 +1997,7 @@ void requestUpdate(void)
 	{
 	/* Wake up the run loop, but only if this is the master node: */
 	if(vruiMaster)
-		vruiRunLoop.wakeUp();
+		vruiState->runLoop.wakeUp();
 	}
 
 }

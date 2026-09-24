@@ -859,7 +859,14 @@ void Slider::pointerButtonUp(Event& event)
 	{
 	/* Stop dragging and repeated clicks: */
 	stopDragging(event);
-	isClicking=0;
+	if(isClicking!=0)
+		{
+		isClicking=0;
+		
+		WidgetManager* manager=getManager();
+		if(manager!=0)
+			manager->cancelClickRepeat(this);
+		}
 	}
 
 void Slider::pointerMotion(Event& event)

@@ -1,7 +1,7 @@
 /***********************************************************************
-WidgetManager - Class to manage top-level GLMotif UI components and user
-events.
-Copyright (c) 2001-2024 Oliver Kreylos
+WidgetManager - Base class to manage top-level GLMotif UI components and
+user events.
+Copyright (c) 2001-2026 Oliver Kreylos
 
 This file is part of the GLMotif Widget Library (GLMotif).
 

@@ -37,6 +37,32 @@ namespace Vrui {
 Methods of class UIManagerFree:
 ******************************/
 
+GLMotif::WidgetManager::Transformation UIManagerFree::calcTopLevelTransform(GLMotif::Widget* topLevelWidget)
+	{
+	/* Calculate the UI transformation for the current default hot spot: */
+	ONTransform result=alignUITransform(getHotSpot());
+	
+	/* Align the widget's hot spot with the transformation center: */
+	GLMotif::Vector widgetHotSpot=topLevelWidget->calcHotSpot();
+	result*=ONTransform::translate(-ONTransform::Vector(widgetHotSpot.getXyzw()));
+	
+	result.renormalize();
+	return GLMotif::WidgetManager::Transformation(result);
+	}
+
+GLMotif::WidgetManager::Transformation UIManagerFree::calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotSpot)
+	{
+	/* Calculate the UI transformation for the given hot spot: */
+	ONTransform result=alignUITransform(hotSpot);
+	
+	/* Align the widget's hot spot with the transformation center: */
+	GLMotif::Vector widgetHotSpot=topLevelWidget->calcHotSpot();
+	result*=ONTransform::translate(-ONTransform::Vector(widgetHotSpot.getXyzw()));
+	
+	result.renormalize();
+	return GLMotif::WidgetManager::Transformation(result);
+	}
+
 ONTransform UIManagerFree::alignUITransform(const Point& point) const
 	{
 	ONTransform result=ONTransform::translateFromOriginTo(point);
@@ -73,38 +99,6 @@ UIManagerFree::UIManagerFree(const Misc::ConfigurationFileSection& configFileSec
 	{
 	/* Read configuration settings: */
 	configFileSection.updateValue("./alignUiWithPointer",alignUiWithPointer);
-	}
-
-GLMotif::WidgetArranger::Transformation UIManagerFree::calcTopLevelTransform(GLMotif::Widget* topLevelWidget)
-	{
-	/* Calculate the UI transformation for the current default hot spot: */
-	ONTransform result=alignUITransform(getHotSpot());
-	
-	/* Align the widget's hot spot with the transformation center: */
-	GLMotif::Vector widgetHotSpot=topLevelWidget->calcHotSpot();
-	result*=ONTransform::translate(-ONTransform::Vector(widgetHotSpot.getXyzw()));
-	
-	result.renormalize();
-	return GLMotif::WidgetArranger::Transformation(result);
-	}
-
-GLMotif::WidgetArranger::Transformation UIManagerFree::calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::Point& hotSpot)
-	{
-	/* Calculate the UI transformation for the given hot spot: */
-	ONTransform result=alignUITransform(hotSpot);
-	
-	/* Align the widget's hot spot with the transformation center: */
-	GLMotif::Vector widgetHotSpot=topLevelWidget->calcHotSpot();
-	result*=ONTransform::translate(-ONTransform::Vector(widgetHotSpot.getXyzw()));
-	
-	result.renormalize();
-	return GLMotif::WidgetArranger::Transformation(result);
-	}
-
-GLMotif::WidgetArranger::Transformation UIManagerFree::calcTopLevelTransform(GLMotif::Widget* topLevelWidget,const GLMotif::WidgetArranger::Transformation& widgetToWorld)
-	{
-	/* Return the transformation unchanged: */
-	return widgetToWorld;
 	}
 
 Point UIManagerFree::projectRay(const Ray& ray) const
