@@ -9063,3 +9063,5 @@ Vrui-15.0-001:
   - Replaced all direct uses of XFlush() in all Vrui code.
   - Call forceDelayedDisplayFlush from Vrui::WindowGroup at the start of
     the draw() method to ensure that all application processing is done.
+- In Vrui.Workbench.cpp, do rendering through the window group even in
+  single-window mode to ensure that X11 event handling works correctly.

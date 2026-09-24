@@ -1598,9 +1598,9 @@ void vruiInnerLoopMultiWindow(void)
 				/* Wait until all other nodes in a cluster are finished rendering: */
 				if(vruiState->multiplexer!=0)
 					vruiState->pipe->barrier();
-					
-					/* Main loop instrumentation: */
-					vruiState->renderEnd.set();
+				
+				/* Main loop instrumentation: */
+				vruiState->renderEnd.set();
 				
 				/* Present the rendering results of all windows in all window groups at once: */
 				for(int i=0;i<vruiNumWindowGroups;++i)
@@ -1702,7 +1702,7 @@ void vruiInnerLoopSingleWindow(void)
 		vruiWindowGroups[0].draw();
 		
 		/* Wait for the only window to finish rendering: */
-		vruiWindows[0]->waitComplete();
+		vruiWindowGroups[0].wait();
 		
 		/* Wait until all other nodes in a cluster are finished rendering: */
 		if(vruiState->multiplexer!=0)
@@ -1712,7 +1712,7 @@ void vruiInnerLoopSingleWindow(void)
 		vruiState->renderEnd.set();
 		
 		/* Present the rendering results of the only window: */
-		vruiWindows[0]->present();
+		vruiWindowGroups[0].present();
 		
 		/* Main loop instrumentation: */
 		vruiState->present.set();

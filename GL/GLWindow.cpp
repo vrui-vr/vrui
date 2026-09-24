@@ -23,7 +23,6 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <GL/GLWindow.h>
 
 #include <string.h>
-#include <stdio.h>
 #include <unistd.h>
 #include <stdexcept>
 #include <X11/cursorfont.h>
@@ -377,7 +376,7 @@ void GLWindow::setRect(const GLWindow::Rect& newRect)
 	
 	/* As this request will go to the redirected parent window, calculate its intended position by taking this window's parent offset into account: */
 	XMoveResizeWindow(context->getDisplay(),window,newRect.offset[0]-parentOffset[0],newRect.offset[1]-parentOffset[1],newRect.size[0],newRect.size[1]);
-	context->flushDisplay(true);
+	context->flushDisplay();
 	
 	#endif
 	
