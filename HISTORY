@@ -9053,3 +9053,7 @@ Vrui-15.0-001:
   switch statement.
 - Added type conversions to USB device methods' request parameters to
   avoid compiler warnings.
+  - Actually, nevermind. See following.
+- API change: Split requestType parameter in USB::Device::readControl
+  and USB::Device::writeControl into requestType and requestRecipient to
+  simplify API use.

@@ -1,7 +1,7 @@
 /***********************************************************************
 Device - Class representing a USB device and optionally a handle
 resulting from opening the device.
-Copyright (c) 2010-2015 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the USB Support Library (USB).
 
@@ -99,8 +99,8 @@ class Device
 	void setConfiguration(int newConfiguration); // Sets the device's current configuration; pass -1 to set device to unconfigured state
 	void claimInterface(int interfaceNumber,bool detachKernelDriver =false); // Claims the interface of the given number; tries detaching kernel drivers from interface first if flag is true
 	void setAlternateSetting(int interfaceNumber,int alternateSettingNumber); // Sets an alternate setting for the given interface
-	void writeControl(unsigned int requestType,unsigned int request,unsigned int value,unsigned int index,const unsigned char* data,size_t dataSize,unsigned int timeOut =0); // Writes a control message to the device
-	size_t readControl(unsigned int requestType,unsigned int request,unsigned int value,unsigned int index,unsigned char* data,size_t maxDataSize,unsigned int timeOut =0); // Reads a control message from the device; returns amount of data actually read
+	void writeControl(unsigned int requestType,unsigned int requestRecipient,unsigned int request,unsigned int value,unsigned int index,const unsigned char* data,size_t dataSize,unsigned int timeOut =0); // Writes a control message to the device
+	size_t readControl(unsigned int requestType,unsigned int requestRecipient,unsigned int request,unsigned int value,unsigned int index,unsigned char* data,size_t maxDataSize,unsigned int timeOut =0); // Reads a control message from the device; returns amount of data actually read
 	size_t interruptTransfer(unsigned char endpoint,unsigned char* data,size_t dataSize,unsigned int timeOut =0); // Reads or writes data from/to the device over an interrupt endpoint (direction inferred from endpoint direction); returns amount of data actually transferred (partial reads and writes are possible)
 	size_t bulkTransfer(unsigned char endpoint,unsigned char* data,size_t dataSize,unsigned int timeOut =0); // Reads or writes data from/to the device over a bulk endpoint (direction inferred from endpoint direction); returns amount of data actually transferred (partial reads and writes are possible)
 	size_t getMaxIsoPacketSize(unsigned char endpoint); // Returns the maximum isochronous packet size on the given endpoint

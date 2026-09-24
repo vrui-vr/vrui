@@ -98,7 +98,7 @@ struct DisplayInfo
 		buf[0]=0x09U;
 		
 		/* Read the display info feature report: */
-		size_t readResult=device.readControl((unsigned int)LIBUSB_REQUEST_TYPE_CLASS|(unsigned int)LIBUSB_RECIPIENT_INTERFACE,
+		size_t readResult=device.readControl(LIBUSB_REQUEST_TYPE_CLASS,LIBUSB_RECIPIENT_INTERFACE,
 		                                     0x01U, // HID_GET_REPORT
 		                                     (0x03U<<8)|buf[0], // HID_REPORT_TYPE_FEATURE
 		                                     0x00U, // interface number
@@ -174,7 +174,7 @@ struct SensorRange
 		buf[0]=0x04U;
 		
 		/* Read the sensor range feature report: */
-		size_t readResult=device.readControl((unsigned int)LIBUSB_REQUEST_TYPE_CLASS|(unsigned int)LIBUSB_RECIPIENT_INTERFACE,
+		size_t readResult=device.readControl(LIBUSB_REQUEST_TYPE_CLASS,LIBUSB_RECIPIENT_INTERFACE,
 		                                     0x01U, // HID_GET_REPORT
 		                                     (0x03U<<8)|buf[0], // HID_REPORT_TYPE_FEATURE
 		                                     0x00U, // interface number
@@ -205,7 +205,7 @@ struct SensorRange
 		
 		/* Write the sensor range feature report: */
 		Misc::UInt8* buf=static_cast<Misc::UInt8*>(pktBuffer.getMemory());
-		device.writeControl((unsigned int)LIBUSB_REQUEST_TYPE_CLASS|(unsigned int)LIBUSB_RECIPIENT_INTERFACE,
+		device.writeControl(LIBUSB_REQUEST_TYPE_CLASS,LIBUSB_RECIPIENT_INTERFACE,
 		                    0x09U, // HID_SET_REPORT
 		                    (0x03U<<8)|buf[0], // HID_REPORT_TYPE_FEATURE
 		                    0x00U, // interface number
@@ -241,7 +241,7 @@ struct KeepAlive
 		buf[0]=0x08U;
 		
 		/* Read the keep-alive interval feature report: */
-		size_t readResult=device.readControl((unsigned int)LIBUSB_REQUEST_TYPE_CLASS|(unsigned int)LIBUSB_RECIPIENT_INTERFACE,
+		size_t readResult=device.readControl(LIBUSB_REQUEST_TYPE_CLASS,LIBUSB_RECIPIENT_INTERFACE,
 		                                     0x01U, // HID_GET_REPORT
 		                                     (0x03U<<8)|buf[0], // HID_REPORT_TYPE_FEATURE
 		                                     0x00U, // interface number
@@ -268,7 +268,7 @@ struct KeepAlive
 		
 		/* Write the keep-alive interval feature report: */
 		Misc::UInt8* buf=static_cast<Misc::UInt8*>(pktBuffer.getMemory());
-		device.writeControl((unsigned int)LIBUSB_REQUEST_TYPE_CLASS|(unsigned int)LIBUSB_RECIPIENT_INTERFACE,
+		device.writeControl(LIBUSB_REQUEST_TYPE_CLASS,LIBUSB_RECIPIENT_INTERFACE,
 		                    0x09U, // HID_SET_REPORT
 		                    (0x03U<<8)|buf[0], // HID_REPORT_TYPE_FEATURE
 		                    0x00U, // interface number

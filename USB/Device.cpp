@@ -1,7 +1,7 @@
 /***********************************************************************
 Device - Class representing a USB device and optionally a handle
 resulting from opening the device.
-Copyright (c) 2010-2024 Oliver Kreylos
+Copyright (c) 2010-2026 Oliver Kreylos
 
 This file is part of the USB Support Library (USB).
 
@@ -407,10 +407,12 @@ void Device::setAlternateSetting(int interfaceNumber,int alternateSettingNumber)
 		}
 	}
 
-void Device::writeControl(unsigned int requestType,unsigned int request,unsigned int value,unsigned int index,const unsigned char* data,size_t dataSize,unsigned int timeOut)
+void Device::writeControl(unsigned int requestType,unsigned int requestRecipient,unsigned int request,unsigned int value,unsigned int index,const unsigned char* data,size_t dataSize,unsigned int timeOut)
 	{
 	/* Issue the request: */
-	int transferResult=libusb_control_transfer(handle,requestType&~0x80U,request,value,index,const_cast<unsigned char*>(data),dataSize,timeOut);
+	uint8_t bmRequestType=uint8_t(requestType)|uint8_t(requestRecipient);
+	bmRequestType&=~0x80U;
+	int transferResult=libusb_control_transfer(handle,bmRequestType,request,value,index,const_cast<unsigned char*>(data),dataSize,timeOut);
 	if(transferResult<0)
 		{
 		switch(transferResult)
@@ -432,10 +434,12 @@ void Device::writeControl(unsigned int requestType,unsigned int request,unsigned
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Overflow during write; sent %d bytes instead of %d",transferResult,int(dataSize));
 	}
 
-size_t Device::readControl(unsigned int requestType,unsigned int request,unsigned int value,unsigned int index,unsigned char* data,size_t maxDataSize,unsigned int timeOut)
+size_t Device::readControl(unsigned int requestType,unsigned int requestRecipient,unsigned int request,unsigned int value,unsigned int index,unsigned char* data,size_t maxDataSize,unsigned int timeOut)
 	{
 	/* Issue the request: */
-	int transferResult=libusb_control_transfer(handle,requestType|0x80U,request,value,index,data,maxDataSize,timeOut);
+	uint8_t bmRequestType=uint8_t(requestType)|uint8_t(requestRecipient);
+	bmRequestType|=0x80U;
+	int transferResult=libusb_control_transfer(handle,bmRequestType,request,value,index,data,maxDataSize,timeOut);
 	if(transferResult<0)
 		{
 		switch(transferResult)
