@@ -45,7 +45,7 @@ bool isInMotionTrackingMode(USB::Device& device)
 	memset(controlPacket,0x00U,sizeof(controlPacket));
 	
 	/* Read the feature request via a control transfer: */
-	device.readControl(LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE,0x01U,0x0300U,0x0001U,controlPacket,sizeof(controlPacket));
+	device.readControl((unsigned int)LIBUSB_REQUEST_TYPE_CLASS|(unsigned int)LIBUSB_RECIPIENT_INTERFACE,0x01U,0x0300U,0x0001U,controlPacket,sizeof(controlPacket));
 	
 	/* Check for the motion tracking mode pattern: */
 	bool result=true;
@@ -79,7 +79,7 @@ void goToMotionTrackingMode(USB::Device& device)
 	controlPacket[88]=0x06U;
 	
 	/* Send the feature request via a control transfer: */
-	device.writeControl(LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE,0x09U,0x0300U,0x0001U,controlPacket,sizeof(controlPacket));
+	device.writeControl((unsigned int)LIBUSB_REQUEST_TYPE_CLASS|(unsigned int)LIBUSB_RECIPIENT_INTERFACE,0x09U,0x0300U,0x0001U,controlPacket,sizeof(controlPacket));
 	}
 
 void goToGamepadMode(USB::Device& device)
@@ -93,7 +93,7 @@ void goToGamepadMode(USB::Device& device)
 	controlPacket[88]=0x05U;
 	
 	/* Send the feature request via a control transfer: */
-	device.writeControl(LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE,0x09U,0x0300U,0x0001U,controlPacket,sizeof(controlPacket));
+	device.writeControl((unsigned int)LIBUSB_REQUEST_TYPE_CLASS|(unsigned int)LIBUSB_RECIPIENT_INTERFACE,0x09U,0x0300U,0x0001U,controlPacket,sizeof(controlPacket));
 	}
 
 }
@@ -273,12 +273,12 @@ RazerHydra::RazerHydra(unsigned int index)
 	unsigned char replyBuffer[256];
 	for(unsigned int interface=0;interface<2;++interface)
 		{
-		device.writeControl(LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE,0x0aU,0x0000U,interface,0,0);
-		device.readControl(LIBUSB_REQUEST_TYPE_STANDARD|LIBUSB_RECIPIENT_INTERFACE,0x06U,0x2200U,interface,replyBuffer,sizeof(replyBuffer));
+		device.writeControl((unsigned int)LIBUSB_REQUEST_TYPE_CLASS|(unsigned int)LIBUSB_RECIPIENT_INTERFACE,0x0aU,0x0000U,interface,0,0);
+		device.readControl((unsigned int)LIBUSB_REQUEST_TYPE_STANDARD|(unsigned int)LIBUSB_RECIPIENT_INTERFACE,0x06U,0x2200U,interface,replyBuffer,sizeof(replyBuffer));
 		try
 			{
 			/* This request always fails, but seems to be necessary: */
-			device.readControl(LIBUSB_REQUEST_TYPE_CLASS|LIBUSB_RECIPIENT_INTERFACE,0x01U,0x0100U,interface,replyBuffer,sizeof(replyBuffer));
+			device.readControl((unsigned int)LIBUSB_REQUEST_TYPE_CLASS|(unsigned int)LIBUSB_RECIPIENT_INTERFACE,0x01U,0x0100U,interface,replyBuffer,sizeof(replyBuffer));
 			}
 		catch(const std::runtime_error&)
 			{

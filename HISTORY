@@ -9051,3 +9051,5 @@ Vrui-15.0-001:
   GLContext class.
 - Replaced if ladder in Vrui::VRDeviceClient::handlePipeMessage to a
   switch statement.
+- Added type conversions to USB device methods' request parameters to
+  avoid compiler warnings.
