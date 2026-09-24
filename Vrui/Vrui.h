@@ -184,45 +184,6 @@ struct PreRenderingCallbackData:public Misc::CallbackData // Callback data passe
 typedef Threads::FunctionCall<int> Job; // Type for jobs that can be submitted to submitJob for background execution
 typedef Threads::FunctionCall<Job&> JobCompleteFunction; // Type for functions that are called from the main thread when a job submitted to submitJob finishes; the finished job is passed to the function as parameter
 
-/***********************************************************************
-Vrui functions called from inside an application's main function. These
-functions are deprecated; applications should use the Vrui::Application
-class instead.
-***********************************************************************/
-
-/* Initializes the Vrui toolkit; must be called first: */
-void init(int& argc,char**& argv,char**& appdefaults);
-
-/* Sets the function that is called before the main loop starts: */
-typedef void (*PrepareMainLoopFunctionType)(void* userData);
-void setPrepareMainLoopFunction(PrepareMainLoopFunctionType prepareMainLoopFunction,void* userData);
-
-/* Sets the function that is called exactly once for each frame: */
-typedef void (*FrameFunctionType)(void* userData);
-void setFrameFunction(FrameFunctionType frameFunction,void* userData);
-
-/* Sets the function that renders the application's current state: */
-typedef void (*DisplayFunctionType)(GLContextData& contextData,void* userData);
-void setDisplayFunction(DisplayFunctionType displayFunction,void* userData);
-
-/* Sets the function that renders the application's current sound state: */
-typedef void (*SoundFunctionType)(ALContextData& contextData,void* userData);
-void setSoundFunction(SoundFunctionType soundFunction,void* userData);
-
-/* Sets the function that resets the navigation transformation to the default: */
-typedef void (*ResetNavigationFunctionType)(void* userData);
-void setResetNavigationFunction(ResetNavigationFunctionType resetNavigationFunction,void* userData);
-
-/* Sets the function that is called immediately after the main loop finishes: */
-typedef void (*FinishMainLoopFunctionType)(void* userData);
-void setFinishMainLoopFunction(FinishMainLoopFunctionType finishMainLoopFunction,void* userData);
-
-/* Initializes the graphics and sound subsystems and starts the toolkit's main loop: */
-void mainLoop(void);
-
-/* Deinitializes the Vrui toolkit, must be called last: */
-void deinit(void);
-
 /**********************
 Vrui control functions:
 **********************/

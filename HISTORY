@@ -9037,3 +9037,9 @@ Vrui-15.0-001:
   - Implemented click-repeat for GLMotif widgets in Vrui::UIManager.
 - Flush each window's X display connection after changing its mouse
   cursor shape in Vrui::InputDeviceAdapterMouse.
+- Removed the deprecated application callbacks from Vrui's kernel
+  interface and made using the Vrui::Application class the only option.
+- Added a displayTransparent method to Vrui::Application that will be
+  called during Vrui's navigational-space transparent OpenGL rendering
+  pass, makeing Vrui::TransparentObject obsolete for application
+  objects.

@@ -1,6 +1,6 @@
 /***********************************************************************
 Application - Base class for Vrui application objects.
-Copyright (c) 2004-2023 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -28,41 +28,13 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Types.h>
 #include <Vrui/Vrui.h>
 
+#include <Vrui/Internal/Vrui.h>
+
 namespace Vrui {
 
 /****************************
 Methods of class Application:
 ****************************/
-
-void Application::prepareMainLoopWrapper(void* userData)
-	{
-	static_cast<Application*>(userData)->prepareMainLoop();
-	}
-
-void Application::frameWrapper(void* userData)
-	{
-	static_cast<Application*>(userData)->frame();
-	}
-
-void Application::displayWrapper(GLContextData& contextData,void* userData)
-	{
-	static_cast<Application*>(userData)->display(contextData);
-	}
-
-void Application::soundWrapper(ALContextData& contextData,void* userData)
-	{
-	static_cast<Application*>(userData)->sound(contextData);
-	}
-
-void Application::resetNavigationWrapper(void* userData)
-	{
-	static_cast<Application*>(userData)->resetNavigation();
-	}
-
-void Application::finishMainLoopWrapper(void* userData)
-	{
-	static_cast<Application*>(userData)->finishMainLoop();
-	}
 
 char* Application::createEventToolClassName(void)
 	{
@@ -75,6 +47,12 @@ char* Application::createEventToolClassName(void)
 	strcpy(result,etcnPrefix);
 	strcpy(result+etcnpLen,number);
 	return result;
+	}
+
+void Application::setTransparentPass(bool enable)
+	{
+	/* Delegate to the application's display function node: */
+	vruiState->applicationDisplayFunction->setTransparentPass(enable);
 	}
 
 void Application::addEventTool(const char* toolName,ToolFactory* parentClass,Application::EventID eventId)
@@ -134,16 +112,8 @@ Application::~Application(void)
 
 void Application::run(void)
 	{
-	/* Install Vrui callbacks: */
-	setPrepareMainLoopFunction(prepareMainLoopWrapper,this);
-	setFrameFunction(frameWrapper,this);
-	setDisplayFunction(displayWrapper,this);
-	setSoundFunction(soundWrapper,this);
-	setResetNavigationFunction(resetNavigationWrapper,this);
-	setFinishMainLoopFunction(finishMainLoopWrapper,this);
-	
-	/* Run the Vrui main loop: */
-	mainLoop();
+	/* Run the Vrui main loop for this application: */
+	mainLoop(this);
 	}
 
 void Application::prepareMainLoop(void)
@@ -187,6 +157,10 @@ void Application::frame(void)
 	}
 
 void Application::display(GLContextData&) const
+	{
+	}
+
+void Application::displayTransparent(GLContextData&) const
 	{
 	}
 

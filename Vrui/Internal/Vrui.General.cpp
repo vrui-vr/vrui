@@ -119,6 +119,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/ToolManager.h>
 #include <Vrui/Internal/ToolKillZone.h>
 #include <Vrui/VisletManager.h>
+#include <Vrui/Application.h>
 #include <Vrui/Internal/InputDeviceDataSaver.h>
 #include <Vrui/Internal/ScaleBar.h>
 
@@ -243,11 +244,11 @@ const char* VruiState::ApplicationDisplayFunctionNode::className="VruiState::App
 Methods of class VruiState::ApplicationDisplayFunctionNode:
 **********************************************************/
 
-VruiState::ApplicationDisplayFunctionNode::ApplicationDisplayFunctionNode(DisplayFunctionType sDisplayFunction,void* sDisplayFunctionData)
-	:displayFunction(sDisplayFunction),displayFunctionData(sDisplayFunctionData)
+VruiState::ApplicationDisplayFunctionNode::ApplicationDisplayFunctionNode(Application* sApplication)
+	:application(sApplication)
 	{
-	/* Only traverse this node during the opaque OpenGL rendering pass: */
-	passMask=SceneGraph::GraphNode::GLRenderPass;
+	/* Traverse this node during the opaque OpenGL rendering and the OpenAL rendering passes: */
+	passMask=SceneGraph::GraphNode::GLRenderPass|SceneGraph::GraphNode::ALRenderPass;
 	}
 
 const char* VruiState::ApplicationDisplayFunctionNode::getClassName(void) const
@@ -260,8 +261,25 @@ void VruiState::ApplicationDisplayFunctionNode::glRenderAction(SceneGraph::GLRen
 	/* Reset the current OpenGL state for application rendering: */
 	renderState.resetState();
 	
-	/* Call the application's display function: */
-	displayFunction(renderState.contextData,displayFunctionData);
+	/* Call the application's opaque or transparent display function: */
+	if(renderState.getRenderPass()==SceneGraph::GraphNode::GLRenderPass)
+		application->display(renderState.contextData);
+	else
+		application->displayTransparent(renderState.contextData);
+	}
+
+void VruiState::ApplicationDisplayFunctionNode::alRenderAction(SceneGraph::ALRenderState& renderState) const
+	{
+	/* Call the application's sound function: */
+	application->sound(renderState.contextData);
+	}
+
+void VruiState::ApplicationDisplayFunctionNode::setTransparentPass(bool enable)
+	{
+	if(enable)
+		setPassMask(passMask|SceneGraph::GraphNode::GLTransparentRenderPass);
+	else
+		setPassMask(passMask&~SceneGraph::GraphNode::GLTransparentRenderPass);
 	}
 
 /**********************
@@ -604,6 +622,7 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 	 mainMenu(0),
 	 viewSelectionHelper(0,"SavedViewpoint.view",".view",0),
 	 settingsDialog(0),settingsPager(0),
+	 originalMessageLogger(Misc::MessageLogger::getMessageLogger()),
 	 userMessagesToConsole(false),
 	 fixOrientation(false),fixVertical(false),
 	 delayNavigationTransformation(false),
@@ -614,11 +633,7 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 	 coordinateManager(0),scaleBar(0),
 	 toolManager(0),
 	 visletManager(0),
-	 prepareMainLoopFunction(0),prepareMainLoopFunctionData(0),
-	 frameFunction(0),frameFunctionData(0),
-	 soundFunction(0),soundFunctionData(0),
-	 resetNavigationFunction(0),resetNavigationFunctionData(0),
-	 finishMainLoopFunction(0),finishMainLoopFunctionData(0),
+	 application(0),
 	 activeNavigationTool(0),
 	 synced(false)
 	{
@@ -663,6 +678,9 @@ VruiState::~VruiState(void)
 	/* Delete coordinate manager: */
 	delete scaleBar;
 	delete coordinateManager;
+	
+	/* Re-install the original message logger: */
+	Misc::MessageLogger::setMessageLogger(originalMessageLogger);
 	
 	/* Delete widget management: */
 	if(systemMenuTopLevel)
@@ -1548,8 +1566,7 @@ void VruiState::prepareMainLoop(void)
 		}
 	
 	/* Call main loop preparation function: */
-	if(prepareMainLoopFunction!=0)
-		prepareMainLoopFunction(prepareMainLoopFunctionData);
+	application->prepareMainLoop();
 	
 	/* Schedule the first frame for *right now* so that the run loop does not block on the first frame: */
 	nextFrameTime=0.0;
@@ -1888,8 +1905,8 @@ bool VruiState::startFrame(void)
 	if(visletManager!=0)
 		visletManager->frame();
 	
-	/* Call the main frame function: */
-	frameFunction(frameFunctionData);
+	/* Call the application's frame function: */
+	application->frame();
 	
 	/* Finish any pending messages on the main pipe, in case an application didn't clean up: */
 	if(multiplexer!=0)
@@ -2020,20 +2037,6 @@ void VruiState::sound(SceneGraph::ALRenderState& renderState) const
 	if(visletManager!=0)
 		visletManager->sound(renderState.contextData);
 	
-	/* Call the user sound function: */
-	if(soundFunction!=0)
-		{
-		/* Go to navigational coordinates: */
-		renderState.contextData.pushMatrix();
-		renderState.contextData.multMatrix(navigationTransformation);
-		
-		/* Call the user sound function: */
-		soundFunction(renderState.contextData,soundFunctionData);
-		
-		/* Go back to physical coordinates: */
-		renderState.contextData.popMatrix();
-		}
-	
 	/* Render the central scene graph: */
 	renderState.startTraversal(mainViewer->getEyePosition(Viewer::MONO),getUpDirection());
 	sceneGraphManager->alRenderAction(renderState);
@@ -2044,9 +2047,8 @@ void VruiState::sound(SceneGraph::ALRenderState& renderState) const
 
 void VruiState::finishMainLoop(void)
 	{
-	/* Call main loop shutdown function: */
-	if(finishMainLoopFunction!=0)
-		finishMainLoopFunction(finishMainLoopFunctionData);
+	/* Call the application's main loop shutdown function: */
+	application->finishMainLoop();
 	
 	/* Destroy all tools: */
 	toolManager->destroyTools();
@@ -2069,8 +2071,8 @@ void VruiState::resetViewCommandCallback(const char* argumentBegin,const char* a
 	VruiState* thisPtr=static_cast<VruiState*>(userData);
 	
 	/* Call the application-supplied navigation reset function if no navigation tools are active: */
-	if(thisPtr->activeNavigationTool==0&&thisPtr->resetNavigationFunction!=0)
-		(*thisPtr->resetNavigationFunction)(thisPtr->resetNavigationFunctionData);
+	if(thisPtr->activeNavigationTool==0)
+		thisPtr->application->resetNavigation();
 	else
 		{
 		/* Print an error message: */
@@ -2288,9 +2290,9 @@ void VruiState::saveViewCallback(GLMotif::FileSelectionDialog::OKCallbackData* c
 
 void VruiState::resetViewCallback(Misc::CallbackData* cbData)
 	{
-	/* Call the application-supplied navigation reset function if no navigation tools are active: */
-	if(activeNavigationTool==0&&resetNavigationFunction!=0)
-		(*resetNavigationFunction)(resetNavigationFunctionData);
+	/* Call the application's reset navigation function if no navigation tools are active: */
+	if(activeNavigationTool==0)
+		application->resetNavigation();
 	}
 
 void VruiState::alignViewCallback(Misc::CallbackData* cbData)
@@ -2792,11 +2794,8 @@ void synchronize(double nextFrameTime,bool wait)
 
 void resetNavigation(void)
 	{
-	/* Call the application-provided reset function: */
-	if(vruiState->resetNavigationFunction!=0)
-		{
-		(*vruiState->resetNavigationFunction)(vruiState->resetNavigationFunctionData);
-		}
+	/* Call the application's reset navigation function: */
+	vruiState->application->resetNavigation();
 	}
 
 void setDisplayCenter(const Point& newDisplayCenter,Scalar newDisplaySize)
@@ -2824,49 +2823,6 @@ void vsync(const TimePoint& newNextVsync,const TimeVector& newVsyncPeriod,const 
 /**********************************
 Call-in functions for user program:
 **********************************/
-
-void setPrepareMainLoopFunction(PrepareMainLoopFunctionType prepareMainLoopFunction,void* userData)
-	{
-	vruiState->prepareMainLoopFunction=prepareMainLoopFunction;
-	vruiState->prepareMainLoopFunctionData=userData;
-	}
-
-void setFrameFunction(FrameFunctionType frameFunction,void* userData)
-	{
-	vruiState->frameFunction=frameFunction;
-	vruiState->frameFunctionData=userData;
-	}
-
-void setDisplayFunction(DisplayFunctionType displayFunction,void* userData)
-	{
-	/* Remove a currently existing application display function node from the navigational-space scene graph: */
-	if(vruiState->applicationDisplayFunction!=0)
-		vruiState->sceneGraphManager->removeNavigationalNode(*vruiState->applicationDisplayFunction);
-	
-	/* Create a new application display function node: */
-	vruiState->applicationDisplayFunction=new VruiState::ApplicationDisplayFunctionNode(displayFunction,userData);
-	
-	/* Add the node to the navigational-space scene graph: */
-	vruiState->sceneGraphManager->addNavigationalNode(*vruiState->applicationDisplayFunction);
-	}
-
-void setSoundFunction(SoundFunctionType soundFunction,void* userData)
-	{
-	vruiState->soundFunction=soundFunction;
-	vruiState->soundFunctionData=userData;
-	}
-
-void setResetNavigationFunction(ResetNavigationFunctionType resetNavigationFunction,void* userData)
-	{
-	vruiState->resetNavigationFunction=resetNavigationFunction;
-	vruiState->resetNavigationFunctionData=userData;
-	}
-
-void setFinishMainLoopFunction(FinishMainLoopFunctionType finishMainLoopFunction,void* userData)
-	{
-	vruiState->finishMainLoopFunction=finishMainLoopFunction;
-	vruiState->finishMainLoopFunctionData=userData;
-	}
 
 Cluster::Multiplexer* getClusterMultiplexer(void)
 	{

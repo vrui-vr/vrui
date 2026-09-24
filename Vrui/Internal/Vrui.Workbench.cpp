@@ -76,9 +76,11 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/CoordinateManager.h>
 #include <Vrui/VRWindow.h>
 #include <Vrui/SoundContext.h>
+#include <Vrui/SceneGraphManager.h>
 #include <Vrui/ToolManager.h>
 #include <Vrui/VisletManager.h>
 #include <Vrui/ViewSpecification.h>
+#include <Vrui/Application.h>
 
 #include <Vrui/Internal/Vrui.h>
 #include <Vrui/Internal/Config.h>
@@ -1527,12 +1529,6 @@ void startSound(void)
 	#endif
 	}
 
-void vruiDispatchCommands(Threads::IOWatcherEvent& event)
-	{
-	/* Dispatch commands from the file descriptor in this event: */
-	
-	}
-
 void vruiInnerLoopMultiWindow(void)
 	{
 	/* Print frame rates at regular intervals for window-less Vrui head nodes: */
@@ -1733,7 +1729,7 @@ void vruiInnerLoopSingleWindow(void)
 		}
 	}
 
-void mainLoop(void)
+void mainLoop(Application* application)
 	{
 	/* Bail out if someone requested a shutdown during the initialization procedure: */
 	if(false) // FIXME -- HOW DO WE MANAGE THIS?
@@ -1742,6 +1738,13 @@ void mainLoop(void)
 			std::cout<<"Vrui: Shutting down due to shutdown request during initialization"<<std::flush;
 		return;
 		}
+	
+	/* Set the Vrui kernel's application pointer: */
+	vruiState->application=application;
+	
+	/* Install a display node for the application in the central scene graph: */
+	vruiState->applicationDisplayFunction=new VruiState::ApplicationDisplayFunctionNode(application);
+	vruiState->sceneGraphManager->addNavigationalNode(*vruiState->applicationDisplayFunction);
 	
 	/* Start the display subsystem: */
 	startDisplay();
@@ -1753,8 +1756,7 @@ void mainLoop(void)
 		}
 	
 	/* Initialize the navigation transformation: */
-	if(vruiState->resetNavigationFunction!=0)
-		(*vruiState->resetNavigationFunction)(vruiState->resetNavigationFunctionData);
+	vruiState->application->resetNavigation();
 	
 	/* Wait for all nodes in the multicast group to reach this point: */
 	if(vruiState->multiplexer!=0)

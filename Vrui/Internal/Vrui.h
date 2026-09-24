@@ -65,6 +65,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 namespace Misc {
 class ConfigurationFileSection;
 class CallbackData;
+class MessageLogger;
 }
 namespace Misc {
 class RunLoop;
@@ -94,6 +95,7 @@ class VisletManager;
 class GUIInteractor;
 class ScreenSaverInhibitor;
 class ScreenProtectorArea;
+class Application;
 }
 
 namespace Vrui {
@@ -154,24 +156,27 @@ struct VruiState
 		virtual void initContext(GLContextData& contextData) const;
 		};
 	
-	class ApplicationDisplayFunctionNode:public SceneGraph::GraphNode // Custom scene graph node class to call the application's display function from inside the central scene graph
+	class ApplicationDisplayFunctionNode:public SceneGraph::GraphNode // Custom scene graph node class to call the application's display and/or sound functions from inside the central scene graph
 		{
 		/* Elements: */
 		public:
 		static const char* className;
 		private:
-		DisplayFunctionType displayFunction; // The display function
-		void* displayFunctionData; // An opaque parameter passes to the display function
+		Application* application; // The application object
 		
 		/* Constructors and destructors: */
 		public:
-		ApplicationDisplayFunctionNode(DisplayFunctionType sDisplayFunction,void* sDisplayFunctionData);
+		ApplicationDisplayFunctionNode(Application* sApplication);
 		
 		/* Methods from class SceneGraph::Node: */
 		virtual const char* getClassName(void) const;
 		
 		/* Methods from class SceneGraph::GraphNode: */
 		virtual void glRenderAction(SceneGraph::GLRenderState& renderState) const;
+		virtual void alRenderAction(SceneGraph::ALRenderState& renderState) const;
+		
+		/* New methods: */
+		void setTransparentPass(bool enable); // Adds or removes this node from the scene graph's transparent OpenGL rendering pass
 		};
 	
 	/* Elements: */
@@ -320,6 +325,7 @@ struct VruiState
 	GLMotif::TextFieldSlider* backplaneSlider;
 	GLMotif::TextFieldSlider* frontplaneSlider;
 	
+	Misc::Autopointer<Misc::MessageLogger> originalMessageLogger; // The original message logger that was installed before Vrui installed its own
 	bool userMessagesToConsole; // Flag whether to route user messages, normally displayed as dialog boxes, to the console instead
 	
 	/* 3D picking management: */
@@ -347,18 +353,9 @@ struct VruiState
 	/* Vislet management: */
 	VisletManager* visletManager;
 	
-	/* Application function callbacks: */
-	PrepareMainLoopFunctionType prepareMainLoopFunction;
-	void* prepareMainLoopFunctionData;
-	FrameFunctionType frameFunction;
-	void* frameFunctionData;
-	Misc::Autopointer<ApplicationDisplayFunctionNode> applicationDisplayFunction;
-	SoundFunctionType soundFunction;
-	void* soundFunctionData;
-	ResetNavigationFunctionType resetNavigationFunction;
-	void* resetNavigationFunctionData;
-	FinishMainLoopFunctionType finishMainLoopFunction;
-	void* finishMainLoopFunctionData;
+	/* Application interaction: */
+	Application* application; // Pointer to the currently running Vrui application
+	Misc::Autopointer<ApplicationDisplayFunctionNode> applicationDisplayFunction; // A scene graph node calling the current application's display function
 	
 	/* Other frame-related callbacks: */
 	Misc::CallbackList preRenderingCallbacks; // List of callbacks called for each window group before anything is rendered
@@ -483,6 +480,10 @@ extern VruiErrorHeader vruiErrorHeader; // Object to print error message headers
 /********************************
 Private Vrui function prototypes:
 ********************************/
+
+extern void init(int& argc,char**& argv,char**& appdefaults);
+extern void mainLoop(Application* application);
+extern void deinit(void);
 
 extern const char* getApplicationName(void); // Returns the name of the Vrui application
 extern void setRandomSeed(unsigned int newRandomSeed); // Sets Vrui's random seed; can only be called by InputDeviceAdapterPlayback during its initialization

@@ -1,6 +1,6 @@
 /***********************************************************************
 Application - Base class for Vrui application objects.
-Copyright (c) 2004-2019 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -186,6 +186,7 @@ class Application
 	
 	/* Protected methods: */
 	protected:
+	void setTransparentPass(bool enable); // Enables or disables rendering in the transparent OpenGL rendering pass, which will call the displayTransparent method
 	template <class DerivedApplicationParam>
 	void addEventTool(const char* toolName,ToolFactory* parentClass,DerivedApplicationParam* application,typename EventToolFactory<DerivedApplicationParam>::EventCallbackMethod eventCallbackMethod,EventID eventId); // Generates a new simple event tool class
 	void addEventTool(const char* toolName,ToolFactory* parentClass,EventID eventId); // Ditto, using the eventCallback virtual method
@@ -205,6 +206,7 @@ class Application
 	virtual void toolDestructionCallback(ToolManager::ToolDestructionCallbackData* cbData); // Called when the tool manager destroys a tool
 	virtual void frame(void); // Synchronization method called exactly once per frame
 	virtual void display(GLContextData& contextData) const; // Rendering method called at least once per window per frame, potentially concurrently from background thread(s)
+	virtual void displayTransparent(GLContextData& contextData) const; // Transparent rendering method called at least once per window per frame, potentially concurrently from background thread(s)
 	virtual void sound(ALContextData& contextData) const; // Sound rendering method called at least once per sound context per frame, potentially concurrently from background thread(s)
 	virtual void resetNavigation(void); // Called when the system menu's "Reset View" button is pressed
 	virtual void finishMainLoop(void); // Called immediately after Vrui's main application loop stops running
