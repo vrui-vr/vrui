@@ -398,6 +398,7 @@ struct VruiState
 	
 	/* Initialization methods: */
 	void initialize(const Misc::ConfigurationFileSection& configFileSection); // Initializes complete Vrui state
+	void setApplication(Application* application); // Sets the application that will be running
 	void createSystemMenu(void); // Creates Vrui's system menu
 	void createSettingsDialog(void); // Creates Vrui's settings dialog window
 	DisplayState* registerContext(GLContext& context) const; // Registers a newly-created OpenGL context with the Vrui state object
@@ -482,7 +483,8 @@ Private Vrui function prototypes:
 ********************************/
 
 extern void init(int& argc,char**& argv,char**& appdefaults);
-extern void mainLoop(Application* application);
+extern void setApplication(Application* application);
+extern void mainLoop(void);
 extern void deinit(void);
 
 extern const char* getApplicationName(void); // Returns the name of the Vrui application

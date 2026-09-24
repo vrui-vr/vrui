@@ -74,6 +74,9 @@ Application::Application(int& argc,char**& argv,char**& appDefaults)
 	/* Initialize Vrui: */
 	init(argc,argv,appDefaults);
 	
+	/* Register this application with the Vrui kernel: */
+	vruiState->setApplication(this);
+	
 	/* Install callbacks with the tool manager: */
 	ToolManager* toolManager=getToolManager();
 	toolManager->getToolCreationCallbacks().add(this,&Application::toolCreationCallback);
@@ -89,6 +92,9 @@ Application::Application(int& argc,char**& argv)
 	/* Initialize Vrui: */
 	char** appDefaults=0;
 	init(argc,argv,appDefaults);
+	
+	/* Register this application with the Vrui kernel: */
+	vruiState->setApplication(this);
 	
 	/* Install callbacks with the tool manager: */
 	ToolManager* toolManager=getToolManager();
@@ -112,8 +118,8 @@ Application::~Application(void)
 
 void Application::run(void)
 	{
-	/* Run the Vrui main loop for this application: */
-	mainLoop(this);
+	/* Run the Vrui main loop: */
+	mainLoop();
 	}
 
 void Application::prepareMainLoop(void)

@@ -1187,6 +1187,20 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 		}
 	}
 
+void VruiState::setApplication(Application* newApplication)
+	{
+	/* Set the application pointer: */
+	application=newApplication;
+	
+	/* If there already is a display node in the scene graph, remove it: */
+	if(applicationDisplayFunction!=0)
+		sceneGraphManager->removeNavigationalNode(*applicationDisplayFunction);
+	
+	/* Install a display node for the application in the central scene graph: */
+	applicationDisplayFunction=new ApplicationDisplayFunctionNode(application);
+	sceneGraphManager->addNavigationalNode(*applicationDisplayFunction);
+	}
+
 void VruiState::createSystemMenu(void)
 	{
 	/* Create the Vrui system menu and install it as the main menu: */
