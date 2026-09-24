@@ -9043,3 +9043,7 @@ Vrui-15.0-001:
   called during Vrui's navigational-space transparent OpenGL rendering
   pass, makeing Vrui::TransparentObject obsolete for application
   objects.
+- Added Threads::RunLoop::wasStopped method to check if a run loop was
+  stopped without having to call waitForEvents.
+  - Fixed check for early shutdown in Vrui::mainLoop in
+    Vrui/Internal/Vrui.Workbench.cpp.

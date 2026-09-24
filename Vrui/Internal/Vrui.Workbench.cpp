@@ -1731,10 +1731,10 @@ void vruiInnerLoopSingleWindow(void)
 void mainLoop(void)
 	{
 	/* Bail out if someone requested a shutdown during the initialization procedure: */
-	if(false) // FIXME -- HOW DO WE MANAGE THIS?
+	if(vruiState->runLoop.wasStopped())
 		{
 		if(vruiVerbose&&vruiMaster)
-			std::cout<<"Vrui: Shutting down due to shutdown request during initialization"<<std::flush;
+			std::cout<<"Vrui: Shutting down due to shutdown request during initialization"<<std::endl;
 		return;
 		}
 	
