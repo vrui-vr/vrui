@@ -9065,3 +9065,5 @@ Vrui-15.0-001:
     the draw() method to ensure that all application processing is done.
 - In Vrui.Workbench.cpp, do rendering through the window group even in
   single-window mode to ensure that X11 event handling works correctly.
+- Fixed handling of OpenAL matrix stack in sound method of application
+  scene graph node in Vrui.General.cpp.

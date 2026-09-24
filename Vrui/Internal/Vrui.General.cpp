@@ -270,8 +270,15 @@ void VruiState::ApplicationDisplayFunctionNode::glRenderAction(SceneGraph::GLRen
 
 void VruiState::ApplicationDisplayFunctionNode::alRenderAction(SceneGraph::ALRenderState& renderState) const
 	{
+	/* Push the render state's current transformation onto the AL context data's modelview stack: */
+	renderState.contextData.pushMatrix();
+	renderState.contextData.loadMatrix(renderState.getTransform());
+	
 	/* Call the application's sound function: */
 	application->sound(renderState.contextData);
+	
+	/* Reset the AL context data's modelview stack: */
+	renderState.contextData.popMatrix();
 	}
 
 void VruiState::ApplicationDisplayFunctionNode::setTransparentPass(bool enable)
