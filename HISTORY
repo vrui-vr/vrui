@@ -9035,3 +9035,5 @@ Vrui-15.0-001:
 - Moved handling of top-level widgets and the Dialogs sub-menu to
   UIManager class.
   - Implemented click-repeat for GLMotif widgets in Vrui::UIManager.
+- Flush each window's X display connection after changing its mouse
+  cursor shape in Vrui::InputDeviceAdapterMouse.

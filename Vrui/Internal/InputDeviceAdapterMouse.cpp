@@ -644,6 +644,7 @@ void InputDeviceAdapterMouse::setKeyboardMode(bool newKeyboardMode)
 				Cursor cursor=XCreateFontCursor(win->getContext().getDisplay(),XC_xterm);
 				XDefineCursor(win->getContext().getDisplay(),win->getWindow(),cursor);
 				XFreeCursor(win->getContext().getDisplay(),cursor);
+				XFlush(win->getContext().getDisplay());
 				}
 			}
 		}
@@ -654,7 +655,10 @@ void InputDeviceAdapterMouse::setKeyboardMode(bool newKeyboardMode)
 			{
 			VRWindow* win=Vrui::getWindow(i);
 			if(win!=0)
+				{
 				XUndefineCursor(win->getContext().getDisplay(),win->getWindow());
+				XFlush(win->getContext().getDisplay());
+				}
 			}
 		}
 	}
