@@ -160,7 +160,7 @@ void GLWindow::initWindow(const char* windowName,bool decorate)
 			bypassCompositorEvent.xclient.format=32;
 			bypassCompositorEvent.xclient.data.l[0]=1; // Bypass compositor
 			XSendEvent(context->getDisplay(),RootWindow(context->getDisplay(),screen),False,SubstructureRedirectMask|SubstructureNotifyMask,&bypassCompositorEvent);
-			XFlush(context->getDisplay());
+			context->flushDisplay(true);
 			}
 		else
 			Misc::sourcedUserError(__PRETTY_FUNCTION__,"Cannot bypass desktop compositor");
@@ -175,7 +175,7 @@ void GLWindow::initWindow(const char* windowName,bool decorate)
 	XMapWindow(context->getDisplay(),window);
 	
 	/* Flush the X queue in case there are events in the receive queue from opening a previous window: */
-	XFlush(context->getDisplay());
+	context->flushDisplay(true);
 	
 	/* Process events up until the first Expose event to determine the initial window position and size: */
 	while(true)
@@ -368,7 +368,7 @@ void GLWindow::setRect(const GLWindow::Rect& newRect)
 	
 	/* Move the window's interior's top-left corner to the requested position: */
 	XMoveResizeWindow(context->getDisplay(),window,newRect.offset[0]-delta[0],newRect.offset[1]-delta[1],newRect.size[0],newRect.size[1]);
-	XFlush(context->getDisplay());
+	context->flushDisplay();
 	
 	/* Clean up: */
 	XFree(win_children);
@@ -377,7 +377,7 @@ void GLWindow::setRect(const GLWindow::Rect& newRect)
 	
 	/* As this request will go to the redirected parent window, calculate its intended position by taking this window's parent offset into account: */
 	XMoveResizeWindow(context->getDisplay(),window,newRect.offset[0]-parentOffset[0],newRect.offset[1]-parentOffset[1],newRect.size[0],newRect.size[1]);
-	XFlush(context->getDisplay());
+	context->flushDisplay(true);
 	
 	#endif
 	
@@ -402,7 +402,7 @@ bool GLWindow::bypassCompositor(void)
 		bypassCompositorEvent.xclient.format=32;
 		bypassCompositorEvent.xclient.data.l[0]=1; // Bypass compositor
 		XSendEvent(context->getDisplay(),RootWindow(context->getDisplay(),screen),False,SubstructureRedirectMask|SubstructureNotifyMask,&bypassCompositorEvent);
-		XFlush(context->getDisplay());
+		context->flushDisplay(true);
 		
 		return true;
 		}
@@ -437,7 +437,7 @@ bool GLWindow::makeFullscreen(void)
 		fullscreenEvent.xclient.data.l[2]=0;
 		fullscreenEvent.xclient.data.l[3]=1; // Request source is application
 		XSendEvent(context->getDisplay(),RootWindow(context->getDisplay(),screen),False,SubstructureRedirectMask|SubstructureNotifyMask,&fullscreenEvent);
-		XFlush(context->getDisplay());
+		context->flushDisplay(true);
 		}
 	else
 		{
@@ -483,7 +483,7 @@ bool GLWindow::toggleFullscreen(void)
 		fullscreenEvent.xclient.data.l[2]=0;
 		fullscreenEvent.xclient.data.l[3]=1; // Request source is application
 		XSendEvent(context->getDisplay(),RootWindow(context->getDisplay(),screen),False,SubstructureRedirectMask|SubstructureNotifyMask,&fullscreenEvent);
-		XFlush(context->getDisplay());
+		context->flushDisplay(true);
 		
 		return true;
 		}
@@ -556,13 +556,13 @@ void GLWindow::hideCursor(void)
 	XDefineCursor(context->getDisplay(),window,emptyCursor);
 	XFreeCursor(context->getDisplay(),emptyCursor);
 	XFreePixmap(context->getDisplay(),emptyCursorPixmap);
-	XFlush(context->getDisplay());
+	context->flushDisplay();
 	}
 
 void GLWindow::showCursor(void)
 	{
 	XUndefineCursor(context->getDisplay(),window);
-	XFlush(context->getDisplay());
+	context->flushDisplay();
 	}
 
 bool GLWindow::grabPointer(void)
@@ -589,7 +589,7 @@ bool GLWindow::grabPointer(void)
 		}
 	
 	/* Flush the display connection to let the server know: */
-	XFlush(context->getDisplay());
+	context->flushDisplay();
 	
 	return result;
 	}
@@ -604,12 +604,13 @@ void GLWindow::releasePointer(void)
 	XUngrabKeyboard(context->getDisplay(),CurrentTime);
 	
 	/* Flush the display connection to let the server know: */
-	XFlush(context->getDisplay());
+	context->flushDisplay();
 	}
 
 void GLWindow::setCursorPos(const GLWindow::Offset& newCursorPos)
 	{
 	XWarpPointer(context->getDisplay(),None,window,0,0,0,0,newCursorPos[0],newCursorPos[1]);
+	context->flushDisplay();
 	}
 
 void GLWindow::redraw(void)
@@ -626,7 +627,7 @@ void GLWindow::redraw(void)
 	event.xexpose.height=rect.size[1];
 	event.xexpose.count=0;
 	XSendEvent(context->getDisplay(),window,False,0x0,&event);
-	XFlush(context->getDisplay());
+	context->flushDisplay();
 	}
 
 void GLWindow::waitForVsync(void)

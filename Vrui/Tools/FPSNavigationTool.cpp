@@ -479,11 +479,12 @@ void FPSNavigationTool::frame(void)
 	/* Act depending on this tool's current state: */
 	if(isActive())
 		{
-		/* Get the device's linear velocity and calculate its left/right and up/down components: */
+		/* Get the device's left/right and up/down position components relative to the center point: */
 		Vector right=getForwardDirection()^getUpDirection();
 		right.normalize();
-		Scalar x=(right*device->getLinearVelocity())*getFrameTime();
-		Scalar y=(getUpDirection()*device->getLinearVelocity())*getFrameTime();
+		Vector vel=device->getLinearVelocity()/125.0; // Divide velocity by nominal mouse update rate to get displacement again
+		Scalar x=(vel*right);
+		Scalar y=(vel*getUpDirection());
 		if(x!=Scalar(0)||y!=Scalar(0))
 			{
 			/* Update the azimuth angle: */

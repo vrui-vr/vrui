@@ -87,7 +87,7 @@ Methods of class GLContext:
 **************************/
 
 GLContext::GLContext(const char* sDisplayName)
-	:displayName(sDisplayName!=0?sDisplayName:"default"),display(0),screen(-1),
+	:displayName(sDisplayName!=0?sDisplayName:"default"),display(0),flushRequested(false),screen(-1),
 	 visual(0),context(None),
 	 depth(-1),nonlinear(false),
 	 extensionManager(0),contextData(0)
@@ -330,6 +330,27 @@ void GLContext::deinit(void)
 	GLExtensionManager::makeCurrent(0);
 	delete extensionManager;
 	extensionManager=0;
+	}
+
+void GLContext::flushDisplay(bool force)
+	{
+	if(force)
+		{
+		XFlush(display);
+		flushRequested=false;
+		}
+	else
+		flushRequested=true;
+	}
+
+void GLContext::forceDelayedDisplayFlush(void)
+	{
+	/* Flush the display connection if a non-forced flush was requested: */
+	if(flushRequested)
+		{
+		XFlush(display);
+		flushRequested=false;
+		}
 	}
 
 void GLContext::makeCurrent(GLXDrawable drawable)

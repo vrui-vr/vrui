@@ -369,6 +369,9 @@ bool WindowGroup::dispatchXEvents(void)
 
 void WindowGroup::draw(void)
 	{
+	/* Force a flush on the context's display connection: */
+	context->forceDelayedDisplayFlush();
+	
 	/* Initialize the display state object: */
 	displayState->maxViewportSize=maxViewportSize;
 	displayState->maxFrameSize=maxFrameSize;

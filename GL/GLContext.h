@@ -110,6 +110,7 @@ class GLContext:public Threads::RefCounted
 	private:
 	std::string displayName; // The name of the display connection for this context
 	Display* display; // Display connection for this context
+	bool flushRequested; // A non-forced flush of the display connection has been requested
 	int screen; // Screen for which the GLX context was created
 	Visual* visual; // Pointer to the visual for which the GLX context was created
 	GLXContext context; // GLX context handle
@@ -201,6 +202,8 @@ class GLContext:public Threads::RefCounted
 		{
 		return *contextData;
 		}
+	void flushDisplay(bool force =false); // Flushes the context's display connection; if flag is true, flushes the display connection immediately
+	void forceDelayedDisplayFlush(void); // Forces a previously delayed flush of the context's display connection
 	void makeCurrent(GLXDrawable drawable); // Makes this OpenGL context current in the current thread and the given drawable (window or off-screen buffer)
 	void swapBuffers(GLXDrawable drawable); // Swaps front and back buffers in the given drawable
 	void release(void); // Detaches the OpenGL context from the current thread and drawable if it is the current context

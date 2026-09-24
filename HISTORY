@@ -9057,3 +9057,9 @@ Vrui-15.0-001:
 - API change: Split requestType parameter in USB::Device::readControl
   and USB::Device::writeControl into requestType and requestRecipient to
   simplify API use.
+- Added flushDisplay method to GLContext class to flush the context's
+  X11 display connection. In default non-forced mode, flushes will be
+  held back until the forceDelayedDisplayFlush method is called.
+  - Replaced all direct uses of XFlush() in all Vrui code.
+  - Call forceDelayedDisplayFlush from Vrui::WindowGroup at the start of
+    the draw() method to ensure that all application processing is done.
