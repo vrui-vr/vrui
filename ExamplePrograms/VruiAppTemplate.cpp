@@ -2,7 +2,7 @@
 VruiAppTemplate - Template to write a very simple Vrui application
 displaying an OpenGL scene in immediate mode, with a basic menu system
 to control the application and set rendering parameters.
-Copyright (c) 2011-2015 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -19,11 +19,15 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ***********************************************************************/
 
+#include <iostream>
+#include <Misc/CommandLineParser.h>
 #include <GL/gl.h>
+#include <GL/GLColorTemplates.h>
 #include <GL/GLMaterial.h>
 #include <GLMotif/PopupMenu.h>
 #include <GLMotif/RadioBox.h>
 #include <GLMotif/Button.h>
+#include <GLMotif/ToggleButton.h>
 #include <GLMotif/CascadeButton.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/Application.h>
@@ -34,12 +38,14 @@ class VruiAppTemplate:public Vrui::Application
 	private:
 	int renderingMode; // Current OpenGL rendering mode (0: points, 1: lines, 2: polygons)
 	GLMaterial material; // OpenGL material properties
+	GLMaterial transparentMaterial; // OpenGL material properties for transparent rendering
 	GLMotif::PopupMenu* mainMenu; // The program's main menu
 	
 	/* Private methods: */
 	GLMotif::PopupMenu* createRenderingModesMenu(void); // Creates the rendering modes submenu
 	GLMotif::PopupMenu* createMainMenu(void); // Creates the program's main menu
 	void renderingModesMenuCallback(GLMotif::RadioBox::ValueChangedCallbackData* cbData); // Method called when the user makes a selection from the rendering modes submenu
+	void transparencyToggleCallback(GLMotif::ToggleButton::ValueChangedCallbackData* cbData); // Method called when the user toggles the "Transparency" button
 	
 	/* Constructors and destructors: */
 	public:
@@ -47,9 +53,13 @@ class VruiAppTemplate:public Vrui::Application
 	virtual ~VruiAppTemplate(void); // Shuts down the Vrui toolkit
 	
 	/* Methods: */
+	virtual void prepareMainLoop(void); // Called once immediately before Vrui's main loop starts
 	virtual void frame(void); // Called exactly once per frame
 	virtual void display(GLContextData& contextData) const; // Called for every eye and every window on every frame
-	virtual void resetNavigation(void);
+	virtual void displayTransparent(GLContextData& contextData) const; // Called for every eye and every window on every frame during the transparent OpenGL rendering pass; only if setTransparentPass(true) has been called
+	virtual void sound(ALContextData& contextData) const; // Called for every sound context on every frame; only if Vrui::requestSound has been called from inside the application constructor
+	virtual void resetNavigation(void); // Called whenever the user requests to reset the navigation transformation via Vrui's View menu or the reset navigation hotkey
+	virtual void finishMainLoop(void); // Called once immediately after Vrui's main loop stops
 	};
 
 /********************************
@@ -106,6 +116,11 @@ GLMotif::PopupMenu* VruiAppTemplate::createMainMenu(void)
 	
 	#endif
 	
+	/* Add a toggle to request transparent rendering: */
+	GLMotif::ToggleButton* transparencyToggle=new GLMotif::ToggleButton("TransparencyToggle",mainMenu,"Transparency");
+	transparencyToggle->setToggle(false);
+	transparencyToggle->getValueChangedCallbacks().add(this,&VruiAppTemplate::transparencyToggleCallback);
+	
 	/* Finish building the main menu: */
 	mainMenu->manageMenu();
 	return mainMenu;
@@ -117,44 +132,73 @@ void VruiAppTemplate::renderingModesMenuCallback(GLMotif::RadioBox::ValueChanged
 	renderingMode=cbData->radioBox->getToggleIndex(cbData->newSelectedToggle);
 	}
 
+void VruiAppTemplate::transparencyToggleCallback(GLMotif::ToggleButton::ValueChangedCallbackData* cbData)
+	{
+	/* Enable or disable the transparency pass: */
+	setTransparentPass(cbData->set);
+	}
+
 VruiAppTemplate::VruiAppTemplate(int& argc,char**& argv)
 	:Vrui::Application(argc,argv),
 	 renderingMode(2), // Render polygons initially
-	 material(GLMaterial::Color(0.0f,0.5f,1.0f),GLMaterial::Color(1.0f,1.0f,1.0f),25.0f), // Use a bluish specular material
+	 material(GLMaterial::Color(0.0f,0.5f,1.0f),GLMaterial::Color(0.5f,0.5f,0.5f),25.0f), // Use a bluish specular material
+	 transparentMaterial(GLMaterial::Color(1.0f,0.5f,0.0f,0.667f),GLMaterial::Color(0.5f,0.5f,0.5f),25.0f), // Use an orangish specular material with high opacity
 	 mainMenu(0)
 	{
+	/* Parse the command line: */
+	Misc::CommandLineParser cmd;
+	cmd.setDescription("A template to demonstrate the basic structure of a Vrui application.");
+	bool useSound=false;
+	cmd.addEnableOption("useSound","s",useSound,"Enables sound processing in Vrui's main loop");
+	cmd.parse(argv,argv+argc);
+	if(cmd.hadHelp())
+		Vrui::shutdown();
+	
 	/* Create the user interface: */
 	mainMenu=createMainMenu();
-	
-	/* Install the main menu: */
 	Vrui::setMainMenu(mainMenu);
+	
+	/* Request sound processing if asked to do so: */
+	if(useSound)
+		Vrui::requestSound();
 	}
 
 VruiAppTemplate::~VruiAppTemplate(void)
 	{
+	/* Destroy UI components: */
 	delete mainMenu;
+	}
+
+void VruiAppTemplate::prepareMainLoop(void)
+	{
+	/*********************************************************************
+	This function is called exactly once, immediately before Vrui's main
+	loop start. Vrui's state will be fully initialized at this time.
+	*********************************************************************/
+	
+	std::cout<<"prepareMainLoop called"<<std::endl;
 	}
 
 void VruiAppTemplate::frame(void)
 	{
 	/*********************************************************************
-	This function is called exactly once per frame, no matter how many
-	eyes or windows exist. It is the appropriate place to change
-	application or Vrui state (run simulations, animate models,
-	synchronize with background threads, change the navigation
-	transformation, etc.).
+	This method is called exactly once per frame, no matter how many eyes
+	or windows exist. It is the appropriate place to change application or
+	Vrui state (run simulations, animate models, synchronize with
+	background threads, change the navigation transformation, etc.).
 	*********************************************************************/
 	
-	/*********************************************************************
-	Insert application state update code here.
-	*********************************************************************/
+	if(Vrui::getFrameIndex()%100==0)
+		std::cout<<"This is frame "<<Vrui::getFrameIndex()<<" at time "<<Vrui::getApplicationTime()<<" s"<<std::endl;
 	}
 
 void VruiAppTemplate::display(GLContextData& contextData) const
 	{
 	/*********************************************************************
 	This method is called once for every eye in every window on every
-	frame. It must not change application or Vrui state, as it is called
+	frame.
+	
+	This method must not change application or Vrui state, as it is called
 	an unspecified number of times, and might be called from parallel
 	background threads. It also must not clear the screen or initialize
 	the OpenGL transformation matrices. When this method is called, Vrui
@@ -172,11 +216,13 @@ void VruiAppTemplate::display(GLContextData& contextData) const
 		case 0: // Points
 			glPolygonMode(GL_FRONT_AND_BACK,GL_POINT);
 			glDisable(GL_LIGHTING);
+			glColor(material.ambient);
 			break;
 		
 		case 1: // Lines
 			glPolygonMode(GL_FRONT_AND_BACK,GL_LINE);
 			glDisable(GL_LIGHTING);
+			glColor(material.ambient);
 			break;
 		
 		case 2: // Polygons
@@ -213,6 +259,55 @@ void VruiAppTemplate::display(GLContextData& contextData) const
 	glPopAttrib();
 	}
 
+void VruiAppTemplate::displayTransparent(GLContextData& contextData) const
+	{
+	/*********************************************************************
+	This method is called once for every eye in every window on every
+	frame during Vrui's transparent OpenGL rendering pass.
+	
+	This method must not change application or Vrui state, as it is called
+	an unspecified number of times, and might be called from parallel
+	background threads. It also must not clear the screen or initialize
+	the OpenGL transformation matrices. When this method is called, Vrui
+	will already have rendered its own state (menus etc.) and have set up
+	the transformation matrices so that all rendering in this method
+	happens in navigation (i.e., model) coordinates.
+	*********************************************************************/
+	
+	/* Save OpenGL state changed by the following rendering code: */
+	glPushAttrib(GL_ENABLE_BIT|GL_POLYGON_BIT);
+	glPolygonMode(GL_FRONT_AND_BACK,GL_FILL);
+	glEnable(GL_LIGHTING);
+	
+	/* Draw a two-sided square in front of the opaque model: */
+	glMaterial(GLMaterialEnums::FRONT_AND_BACK,transparentMaterial);
+	
+	glBegin(GL_QUADS);
+	glNormal3f(0.0f,0.0f,1.0f);
+	glVertex3f(-0.5f,-0.5f,0.1f);
+	glVertex3f( 0.5f,-0.5f,0.1f);
+	glVertex3f( 0.5f, 0.5f,0.1f);
+	glVertex3f(-0.5f, 0.5f,0.1f);
+	glEnd();
+	
+	/* Restore OpenGL state: */
+	glPopAttrib();
+	}
+
+void VruiAppTemplate::sound(ALContextData& contextData) const
+	{
+	/*********************************************************************
+	This method is called once for every active sound context on every
+	frame.
+	
+	This method must not change application or Vrui state, as it is called
+	an unspecified number of times, and might be called from parallel
+	background threads. When this method is called, Vrui will have set up
+	the transformation matrices so that all sound rendering in this method
+	happens in navigation (i.e., model) coordinates.
+	*********************************************************************/
+	}
+
 void VruiAppTemplate::resetNavigation(void)
 	{
 	/*********************************************************************
@@ -225,14 +320,27 @@ void VruiAppTemplate::resetNavigation(void)
 	/* Center point is the origin: */
 	Vrui::Point center(0,0,0);
 	
-	/* Scene size is one model coordinate unit: */
+	/* Scene size is two model coordinate units: */
 	Vrui::Scalar size=2;
+	
+	/* X axis points to the right: */
+	Vrui::Vector right(1,0,0);
 	
 	/* Y axis points up: */
 	Vrui::Vector up(0,1,0);
 	
 	/* Reset the Vrui navigation transformation: */
-	Vrui::setNavigationTransformation(center,size,up);
+	Vrui::setNavigationTransformation(center,size,up,right);
+	}
+
+void VruiAppTemplate::finishMainLoop(void)
+	{
+	/*********************************************************************
+	This function is called exactly once, immediately after Vrui's main
+	loop ends. Vrui's state will still be fully initialized at this time.
+	*********************************************************************/
+	
+	std::cout<<"finishMainLoop called"<<std::endl;
 	}
 
 /* Create and execute an application object: */
