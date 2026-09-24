@@ -9047,3 +9047,5 @@ Vrui-15.0-001:
   stopped without having to call waitForEvents.
   - Fixed check for early shutdown in Vrui::mainLoop in
     Vrui/Internal/Vrui.Workbench.cpp.
+- Moved initialization of vsync-related GLX functions from GLWindow to
+  GLContext class.

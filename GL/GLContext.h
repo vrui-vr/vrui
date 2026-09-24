@@ -30,6 +30,48 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <X11/Xlib.h>
 #include <GL/glx.h>
 
+/***************************************
+Extension declarations from GL/glxext.h:
+***************************************/
+
+#ifndef GLX_SGI_video_sync
+#define GLX_SGI_video_sync 1
+typedef int (*PFNGLXGETVIDEOSYNCSGIPROC)(unsigned int* count);
+typedef int (*PFNGLXWAITVIDEOSYNCSGIPROC)(int divisor,int remainder,unsigned int* count);
+#ifdef GLX_GLXEXT_PROTOTYPES
+int glXGetVideoSyncSGI(unsigned int* count);
+int glXWaitVideoSyncSGI(int divisor,int remainder,unsigned int* count);
+#endif
+#endif
+
+#ifndef GLX_EXT_swap_control
+#define GLX_EXT_swap_control 1
+#define GLX_SWAP_INTERVAL_EXT 0x20F1
+#define GLX_MAX_SWAP_INTERVAL_EXT 0x20F2
+typedef void (*PFNGLXSWAPINTERVALEXTPROC)(Display* dpy,GLXDrawable drawable,int interval);
+#ifdef GLX_GLXEXT_PROTOTYPES
+void glXSwapIntervalEXT(Display* dpy,GLXDrawable drawable,int interval);
+#endif
+#endif
+
+#ifndef GLX_MESA_swap_control
+#define GLX_MESA_swap_control 1
+typedef int (*PFNGLXSWAPINTERVALMESAPROC)(unsigned int interval);
+typedef int (*PFNGLXGETSWAPINTERVALMESAPROC)(void);
+#ifdef GLX_GLXEXT_PROTOTYPES
+int glXSwapIntervalMESA(unsigned int interval);
+int glXGetSwapIntervalMESA(void);
+#endif
+#endif
+
+#ifndef GLX_NV_delay_before_swap
+#define GLX_NV_delay_before_swap 1
+typedef Bool (*PFNGLXDELAYBEFORESWAPNVPROC)(Display* dpy,GLXDrawable drawable,GLfloat seconds);
+#ifdef GLX_GLXEXT_PROTOTYPES
+Bool glXDelayBeforeSwapNV(Display* dpy,GLXDrawable drawable,GLfloat seconds);
+#endif
+#endif
+
 /* Forward declarations: */
 class GLExtensionManager;
 class GLContextData;
@@ -74,6 +116,15 @@ class GLContext:public Threads::RefCounted
 	unsigned int version[2]; // Major and minor version number of local OpenGL
 	int depth; // Bit depth of the visual associated with the GLX context
 	bool nonlinear; // Flag if the context is set up for non-linear compressed color components in the main color buffer
+	
+	/* Entry points for required/optional GLX extensions: */
+	public:
+	PFNGLXSWAPINTERVALEXTPROC glXSwapIntervalEXTProc; // Selects vertical retrace synchronization interval
+	PFNGLXSWAPINTERVALMESAPROC glXSwapIntervalMESAProc; // Ditto, for Mesa-derived OpenGL implementations
+	PFNGLXWAITVIDEOSYNCSGIPROC glXWaitVideoSyncSGIProc; // Waits for next vertical retrace synchronization pulse
+	PFNGLXDELAYBEFORESWAPNVPROC glXDelayBeforeSwapNVProc; // Waits for a specified time *before* next vertical retrace synchronization pulse
+	
+	private:
 	GLExtensionManager* extensionManager; // Pointer to an extension manager for this GLX context
 	GLContextData* contextData; // Pointer to an object associating per-context application state with this GLX context
 	

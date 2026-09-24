@@ -104,6 +104,12 @@ GLContext::GLContext(const char* sDisplayName)
 	
 	/* Initialize the version number: */
 	version[1]=version[0]=0;
+	
+	/* Query GLX extension entry points related to frame synchronization: */
+	glXSwapIntervalEXTProc=GLExtensionManager::getFunction<PFNGLXSWAPINTERVALEXTPROC>("glXSwapIntervalEXT");
+	glXSwapIntervalMESAProc=GLExtensionManager::getFunction<PFNGLXSWAPINTERVALMESAPROC>("glXSwapIntervalMESA");
+	glXWaitVideoSyncSGIProc=GLExtensionManager::getFunction<PFNGLXWAITVIDEOSYNCSGIPROC>("glXWaitVideoSyncSGI");
+	glXDelayBeforeSwapNVProc=GLExtensionManager::getFunction<PFNGLXDELAYBEFORESWAPNVPROC>("glXDelayBeforeSwapNV");
 	}
 
 GLContext::~GLContext(void)

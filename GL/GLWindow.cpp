@@ -260,12 +260,6 @@ void GLWindow::initWindow(const char* windowName,bool decorate)
 	
 	/* Initialize the OpenGL context: */
 	context->init(window);
-	
-	/* Query needed GLX extension entry points: */
-	glXSwapIntervalEXTProc=GLExtensionManager::getFunction<PFNGLXSWAPINTERVALEXTPROC>("glXSwapIntervalEXT");
-	glXSwapIntervalMESAProc=GLExtensionManager::getFunction<PFNGLXSWAPINTERVALMESAPROC>("glXSwapIntervalMESA");
-	glXWaitVideoSyncSGIProc=GLExtensionManager::getFunction<PFNGLXWAITVIDEOSYNCSGIPROC>("glXWaitVideoSyncSGI");
-	glXDelayBeforeSwapNVProc=GLExtensionManager::getFunction<PFNGLXDELAYBEFORESWAPNVPROC>("glXDelayBeforeSwapNV");
 	}
 
 GLWindow::GLWindow(GLContext* sContext,int sScreen,const char* windowName,const GLWindow::Rect& sRect,bool decorate)
@@ -500,30 +494,30 @@ bool GLWindow::toggleFullscreen(void)
 bool GLWindow::canVsync(bool frontBufferRendering) const
 	{
 	if(frontBufferRendering)
-		return glXWaitVideoSyncSGIProc!=0&&context->isDirect();
+		return context->glXWaitVideoSyncSGIProc!=0&&context->isDirect();
 	else
-		return glXSwapIntervalEXTProc!=0||glXSwapIntervalMESAProc!=0;
+		return context->glXSwapIntervalEXTProc!=0||context->glXSwapIntervalMESAProc!=0;
 	}
 
 bool GLWindow::canPreVsync(void) const
 	{
-	return glXDelayBeforeSwapNVProc!=0;
+	return context->glXDelayBeforeSwapNVProc!=0;
 	}
 
 bool GLWindow::setVsyncInterval(int newInterval)
 	{
 	/* Check if the GLX_EXT_swap_control or GLX_MESA_swap_control extensions are supported: */
-	if(glXSwapIntervalEXTProc!=0)
+	if(context->glXSwapIntervalEXTProc!=0)
 		{
 		/* Set the vsync interval: */
-		glXSwapIntervalEXTProc(context->getDisplay(),window,newInterval);
+		context->glXSwapIntervalEXTProc(context->getDisplay(),window,newInterval);
 		
 		return true;
 		}
-	else if(glXSwapIntervalMESAProc!=0)
+	else if(context->glXSwapIntervalMESAProc!=0)
 		{
 		/* Set the vsync interval: */
-		int result=glXSwapIntervalMESAProc(newInterval);
+		int result=context->glXSwapIntervalMESAProc(newInterval);
 		if(result!=0)
 			{
 			Misc::sourcedUserError(__PRETTY_FUNCTION__,"Cannot set synch interval to %d due to GL error %d",newInterval,result);
@@ -638,21 +632,21 @@ void GLWindow::redraw(void)
 void GLWindow::waitForVsync(void)
 	{
 	/* Check if the GLX_SGI_video_sync extension is supported: */
-	if(glXWaitVideoSyncSGIProc!=0)
+	if(context->glXWaitVideoSyncSGIProc!=0)
 		{
 		/* Wait for the next vertical retrace synchronization pulse: */
 		unsigned int count;
-		glXWaitVideoSyncSGIProc(1,0,&count);
+		context->glXWaitVideoSyncSGIProc(1,0,&count);
 		}
 	}
 
 bool GLWindow::waitForPreVsync(GLfloat delta)
 	{
 	/* Check if the GLX_NV_delay_before_swap extension is supported: */
-	if(glXDelayBeforeSwapNVProc!=0)
+	if(context->glXDelayBeforeSwapNVProc!=0)
 		{
 		/* Wait for a time delta before the next vertical retrace synchronization pulse: */
-		return glXDelayBeforeSwapNVProc(context->getDisplay(),window,delta);
+		return context->glXDelayBeforeSwapNVProc(context->getDisplay(),window,delta);
 		}
 	else
 		return false;
