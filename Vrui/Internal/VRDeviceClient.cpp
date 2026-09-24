@@ -206,257 +206,290 @@ void VRDeviceClient::handlePipeMessage(Threads::IOWatcherEvent& event)
 	try
 		{
 		MessageIdType message=pipe->read<MessageIdType>();
-		if(message==PACKET_REPLY)
+		switch(message)
 			{
-			#if DEBUG_PROTOCOL
-			std::cout<<"Received PACKET_REPLY"<<std::endl;
-			#endif
-			
-			/* Read server's state: */
-			{
-			Threads::Mutex::Lock stateLock(stateMutex);
-			state.read(*pipe,serverHasTimeStamps,serverHasValidFlags);
-			if(!serverHasTimeStamps)
+			case PACKET_REPLY:
+				#if DEBUG_PROTOCOL
+				std::cout<<"Received PACKET_REPLY"<<std::endl;
+				#endif
+				
+				/* Read server's state: */
 				{
-				/* Set all tracker time stamps to the current local time: */
-				setTrackerStateTimeStamps(state);
+				Threads::Mutex::Lock stateLock(stateMutex);
+				state.read(*pipe,serverHasTimeStamps,serverHasValidFlags);
+				if(!serverHasTimeStamps)
+					{
+					/* Set all tracker time stamps to the current local time: */
+					setTrackerStateTimeStamps(state);
+					}
+				else if(!local)
+					{
+					/* Adjust all received time stamps by the client/server clock difference: */
+					adjustTrackerStateTimeStamps(state,timeStampDelta);
+					}
 				}
-			else if(!local)
+				
+				/* Signal packet reception: */
+				packetSignalCond.broadcast();
+				
+				/* Invoke packet notification callback: */
 				{
-				/* Adjust all received time stamps by the client/server clock difference: */
-				adjustTrackerStateTimeStamps(state,timeStampDelta);
+				Threads::Mutex::Lock callbacksLock(callbacksMutex);
+				if(packetNotificationCallback!=0)
+					(*packetNotificationCallback)(this);
 				}
-			}
+				
+				break;
 			
-			/* Signal packet reception: */
-			packetSignalCond.broadcast();
-			
-			/* Invoke packet notification callback: */
-			{
-			Threads::Mutex::Lock callbacksLock(callbacksMutex);
-			if(packetNotificationCallback!=0)
-				(*packetNotificationCallback)(this);
-			}
-			}
-		else if(message==TRACKER_UPDATE)
-			{
-			/* Read a tracker update packet: */
-			{
-			Threads::Mutex::Lock stateLock(stateMutex);
-			
-			unsigned int trackerIndex=pipe->read<Misc::UInt16>();
-			VRDeviceState::TrackerState trackerState=Misc::Marshaller<VRDeviceState::TrackerState>::read(*pipe);
-			state.setTrackerState(trackerIndex,trackerState);
-			VRDeviceState::TimeStamp trackerTimeStamp=pipe->read<VRDeviceState::TimeStamp>();
-			if(!local)
-				trackerTimeStamp+=timeStampDelta;
-			state.setTrackerTimeStamp(trackerIndex,trackerTimeStamp);
-			#if TRACK_LATENCY
-			{
-			/* Get a timestamp for the current time: */
-			TimePoint now;
-			VRDeviceState::TimeStamp ts=VRDeviceState::TimeStamp(now.tv_sec*1000000+(now.tv_nsec+500)/1000);
-			
-			/* Calculate the tracker update latency in us: */
-			int latency=int(ts-trackerTimeStamp);
-			if(trackerLatencyMin>latency)
-				trackerLatencyMin=latency;
-			if(trackerLatencyMax<latency)
-				trackerLatencyMax=latency;
-			trackerLatencySum+=latency;
-			++trackerLatencyNumSamples;
-			}
-			#endif
-			bool trackerValid=pipe->read<Misc::UInt8>()!=0U;
-			state.setTrackerValid(trackerIndex,trackerValid);
-			
-			#if DEBUG_PROTOCOL
-			std::cout<<"Received TRACKER_UPDATE for tracker "<<trackerIndex<<", time "<<trackerTimeStamp<<", now "<<(trackerValid?"valid":"invalid")<<std::endl;
-			#endif
-			}
-			
-			/* Signal packet reception: */
-			packetSignalCond.broadcast();
-			
-			/* Invoke packet notification callback: */
-			{
-			Threads::Mutex::Lock callbacksLock(callbacksMutex);
-			if(packetNotificationCallback!=0)
-				(*packetNotificationCallback)(this);
-			}
-			}
-		else if(message==BUTTON_UPDATE)
-			{
-			/* Read a button update packet: */
-			{
-			Threads::Mutex::Lock stateLock(stateMutex);
-			
-			unsigned int buttonIndex=pipe->read<Misc::UInt16>();
-			VRDeviceState::ButtonState buttonState=pipe->read<Misc::UInt8>()!=0U;
-			state.setButtonState(buttonIndex,buttonState);
-			
-			#if DEBUG_PROTOCOL
-			std::cout<<"Received BUTTON_UPDATE for button "<<buttonIndex<<", state "<<(buttonState?"pressed":"released")<<std::endl;
-			#endif
-			}
-			
-			/* Signal packet reception: */
-			packetSignalCond.broadcast();
-			
-			/* Invoke packet notification callback: */
-			{
-			Threads::Mutex::Lock callbacksLock(callbacksMutex);
-			if(packetNotificationCallback!=0)
-				(*packetNotificationCallback)(this);
-			}
-			}
-		else if(message==VALUATOR_UPDATE)
-			{
-			/* Read a valuator update packet: */
-			{
-			Threads::Mutex::Lock stateLock(stateMutex);
-			
-			unsigned int valuatorIndex=pipe->read<Misc::UInt16>();
-			VRDeviceState::ValuatorState valuatorState=pipe->read<VRDeviceState::ValuatorState>();
-			state.setValuatorState(valuatorIndex,valuatorState);
-			
-			#if DEBUG_PROTOCOL
-			std::cout<<"Received VALUATOR_UPDATE for valuator "<<valuatorIndex<<", state "<<valuatorState<<std::endl;
-			#endif
-			}
-			
-			/* Signal packet reception: */
-			packetSignalCond.broadcast();
-			
-			/* Invoke packet notification callback: */
-			{
-			Threads::Mutex::Lock callbacksLock(callbacksMutex);
-			if(packetNotificationCallback!=0)
-				(*packetNotificationCallback)(this);
-			}
-			}
-		else if(message==BATTERYSTATE_UPDATE)
-			{
-			Threads::Mutex::Lock batteryStatesLock(batteryStatesMutex);
-			
-			/* Read the index of the device whose battery state changed and the new battery state: */
-			unsigned int deviceIndex=pipe->read<Misc::UInt16>();
-			batteryStates[deviceIndex].read(*pipe);
-			
-			/* Call the battery state change callback: */
-			{
-			Threads::Mutex::Lock callbacksLock(callbacksMutex);
-			if(batteryStateUpdatedCallback!=0)
-				(*batteryStateUpdatedCallback)(deviceIndex);
-			}
-			}
-		else if((message&~0x7U)==HMDCONFIG_UPDATE)
-			{
-			/* Read the tracker index of the updated HMD configuration: */
-			Misc::UInt16 updatedTrackerIndex=pipe->read<Misc::UInt16>();
-			
-			/* Find the to-be-updated HMD configuration in the list: */
-			unsigned index;
-			for(index=0;index<numHmdConfigurations&&updatedTrackerIndex!=hmdConfigurations[index].getTrackerIndex();++index)
-				;
-			if(index>=numHmdConfigurations)
-				throw std::runtime_error("Invalid HMD tracker index");
-			
-			{
-			Threads::Mutex::Lock hmdConfigurationLock(hmdConfigurationMutex);
-			
-			/* Read updated HMD configuration from server: */
-			hmdConfigurations[index].read(message,updatedTrackerIndex,*pipe);
-			
-			/* Call the update callback: */
-			{
-			Threads::Mutex::Lock callbacksLock(callbacksMutex);
-			if(hmdConfigurationUpdatedCallbacks[index]!=0)
-				(*hmdConfigurationUpdatedCallbacks[index])(hmdConfigurations[index]);
-			}
-			}
-			}
-		else if(message==HMDCONFIG_EYEROTATION_UPDATE)
-			{
-			/* Read the tracker index of the updated HMD configuration: */
-			Misc::UInt16 updatedTrackerIndex=pipe->read<Misc::UInt16>();
-			
-			/* Find the to-be-updated HMD configuration in the list: */
-			unsigned index;
-			for(index=0;index<numHmdConfigurations&&updatedTrackerIndex!=hmdConfigurations[index].getTrackerIndex();++index)
-				;
-			if(index>=numHmdConfigurations)
-				throw std::runtime_error("Invalid HMD tracker index");
-			
-			{
-			Threads::Mutex::Lock hmdConfigurationLock(hmdConfigurationMutex);
-			
-			/* Read updated HMD configuration from server: */
-			hmdConfigurations[index].readEyeRotation(*pipe);
-			
-			/* Call the update callback: */
-			{
-			Threads::Mutex::Lock callbacksLock(callbacksMutex);
-			if(hmdConfigurationUpdatedCallbacks[index]!=0)
-				(*hmdConfigurationUpdatedCallbacks[index])(hmdConfigurations[index]);
-			}
-			}
-			}
-		else if(message==BASESTATIONS_REPLY)
-			{
-			Threads::MutexCond::Lock getBaseStationsLock(getBaseStationsCond);
-			
-			/* Check if there is a pending getBaseStations request: */
-			if(getBaseStationsRequest==0)
-				throw std::runtime_error("No pending getBaseStations request");
-			
-			/* Read the list of base stations: */
-			unsigned int numBaseStations=pipe->read<Misc::UInt8>();
-			getBaseStationsRequest->reserve(numBaseStations);
-			for(unsigned int i=0;i<numBaseStations;++i)
+			case TRACKER_UPDATE:
+				/* Read a tracker update packet: */
 				{
-				VRBaseStation bs;
-				bs.read(*pipe);
-				getBaseStationsRequest->push_back(bs);
+				Threads::Mutex::Lock stateLock(stateMutex);
+				
+				unsigned int trackerIndex=pipe->read<Misc::UInt16>();
+				VRDeviceState::TrackerState trackerState=Misc::Marshaller<VRDeviceState::TrackerState>::read(*pipe);
+				state.setTrackerState(trackerIndex,trackerState);
+				VRDeviceState::TimeStamp trackerTimeStamp=pipe->read<VRDeviceState::TimeStamp>();
+				if(!local)
+					trackerTimeStamp+=timeStampDelta;
+				state.setTrackerTimeStamp(trackerIndex,trackerTimeStamp);
+				#if TRACK_LATENCY
+				{
+				/* Get a timestamp for the current time: */
+				TimePoint now;
+				VRDeviceState::TimeStamp ts=VRDeviceState::TimeStamp(now.tv_sec*1000000+(now.tv_nsec+500)/1000);
+				
+				/* Calculate the tracker update latency in us: */
+				int latency=int(ts-trackerTimeStamp);
+				if(trackerLatencyMin>latency)
+					trackerLatencyMin=latency;
+				if(trackerLatencyMax<latency)
+					trackerLatencyMax=latency;
+				trackerLatencySum+=latency;
+				++trackerLatencyNumSamples;
+				}
+				#endif
+				bool trackerValid=pipe->read<Misc::UInt8>()!=0U;
+				state.setTrackerValid(trackerIndex,trackerValid);
+				
+				#if DEBUG_PROTOCOL
+				std::cout<<"Received TRACKER_UPDATE for tracker "<<trackerIndex<<", time "<<trackerTimeStamp<<", now "<<(trackerValid?"valid":"invalid")<<std::endl;
+				#endif
+				}
+				
+				/* Signal packet reception: */
+				packetSignalCond.broadcast();
+				
+				/* Invoke packet notification callback: */
+				{
+				Threads::Mutex::Lock callbacksLock(callbacksMutex);
+				if(packetNotificationCallback!=0)
+					(*packetNotificationCallback)(this);
+				}
+				
+				break;
+			
+			case BUTTON_UPDATE:
+				/* Read a button update packet: */
+				{
+				Threads::Mutex::Lock stateLock(stateMutex);
+				
+				unsigned int buttonIndex=pipe->read<Misc::UInt16>();
+				VRDeviceState::ButtonState buttonState=pipe->read<Misc::UInt8>()!=0U;
+				state.setButtonState(buttonIndex,buttonState);
+				
+				#if DEBUG_PROTOCOL
+				std::cout<<"Received BUTTON_UPDATE for button "<<buttonIndex<<", state "<<(buttonState?"pressed":"released")<<std::endl;
+				#endif
+				}
+				
+				/* Signal packet reception: */
+				packetSignalCond.broadcast();
+				
+				/* Invoke packet notification callback: */
+				{
+				Threads::Mutex::Lock callbacksLock(callbacksMutex);
+				if(packetNotificationCallback!=0)
+					(*packetNotificationCallback)(this);
+				}
+				
+				break;
+			
+			case VALUATOR_UPDATE:
+				/* Read a valuator update packet: */
+				{
+				Threads::Mutex::Lock stateLock(stateMutex);
+				
+				unsigned int valuatorIndex=pipe->read<Misc::UInt16>();
+				VRDeviceState::ValuatorState valuatorState=pipe->read<VRDeviceState::ValuatorState>();
+				state.setValuatorState(valuatorIndex,valuatorState);
+				
+				#if DEBUG_PROTOCOL
+				std::cout<<"Received VALUATOR_UPDATE for valuator "<<valuatorIndex<<", state "<<valuatorState<<std::endl;
+				#endif
+				}
+				
+				/* Signal packet reception: */
+				packetSignalCond.broadcast();
+				
+				/* Invoke packet notification callback: */
+				{
+				Threads::Mutex::Lock callbacksLock(callbacksMutex);
+				if(packetNotificationCallback!=0)
+					(*packetNotificationCallback)(this);
+				}
+				
+				break;
+			
+			case BATTERYSTATE_UPDATE:
+				{
+				Threads::Mutex::Lock batteryStatesLock(batteryStatesMutex);
+				
+				/* Read the index of the device whose battery state changed and the new battery state: */
+				unsigned int deviceIndex=pipe->read<Misc::UInt16>();
+				batteryStates[deviceIndex].read(*pipe);
+				
+				/* Call the battery state change callback: */
+				{
+				Threads::Mutex::Lock callbacksLock(callbacksMutex);
+				if(batteryStateUpdatedCallback!=0)
+					(*batteryStateUpdatedCallback)(deviceIndex);
+				}
+				
+				break;
 				}
 			
-			/* Signal the getBaseStations request as complete: */
-			getBaseStationsCond.signal();
-			}
-		else if(message==ENVIRONMENTDEFINITION_REPLY)
-			{
-			Threads::MutexCond::Lock getEnvironmentDefinitionLock(getEnvironmentDefinitionCond);
+			case HMDCONFIG_UPDATE+0x0:
+			case HMDCONFIG_UPDATE+0x1:
+			case HMDCONFIG_UPDATE+0x2:
+			case HMDCONFIG_UPDATE+0x3:
+			case HMDCONFIG_UPDATE+0x4:
+			case HMDCONFIG_UPDATE+0x5:
+			case HMDCONFIG_UPDATE+0x6:
+			case HMDCONFIG_UPDATE+0x7:
+				{
+				/* Read the tracker index of the updated HMD configuration: */
+				Misc::UInt16 updatedTrackerIndex=pipe->read<Misc::UInt16>();
+				
+				/* Find the to-be-updated HMD configuration in the list: */
+				unsigned index;
+				for(index=0;index<numHmdConfigurations&&updatedTrackerIndex!=hmdConfigurations[index].getTrackerIndex();++index)
+					;
+				if(index>=numHmdConfigurations)
+					throw std::runtime_error("Invalid HMD tracker index");
+				
+				{
+				Threads::Mutex::Lock hmdConfigurationLock(hmdConfigurationMutex);
+				
+				/* Read updated HMD configuration from server: */
+				hmdConfigurations[index].read(message,updatedTrackerIndex,*pipe);
+				
+				/* Call the update callback: */
+				{
+				Threads::Mutex::Lock callbacksLock(callbacksMutex);
+				if(hmdConfigurationUpdatedCallbacks[index]!=0)
+					(*hmdConfigurationUpdatedCallbacks[index])(hmdConfigurations[index]);
+				}
+				}
+				
+				break;
+				}
 			
-			/* Check if there is a pending getEnvironmentDefinition request: */
-			if(getEnvironmentDefinitionRequest==0)
-				throw std::runtime_error("No pending getEnvironmentDefinition request");
+			case HMDCONFIG_EYEROTATION_UPDATE:
+				{
+				/* Read the tracker index of the updated HMD configuration: */
+				Misc::UInt16 updatedTrackerIndex=pipe->read<Misc::UInt16>();
+				
+				/* Find the to-be-updated HMD configuration in the list: */
+				unsigned index;
+				for(index=0;index<numHmdConfigurations&&updatedTrackerIndex!=hmdConfigurations[index].getTrackerIndex();++index)
+					;
+				if(index>=numHmdConfigurations)
+					throw std::runtime_error("Invalid HMD tracker index");
+				
+				{
+				Threads::Mutex::Lock hmdConfigurationLock(hmdConfigurationMutex);
+				
+				/* Read updated HMD configuration from server: */
+				hmdConfigurations[index].readEyeRotation(*pipe);
+				
+				/* Call the update callback: */
+				{
+				Threads::Mutex::Lock callbacksLock(callbacksMutex);
+				if(hmdConfigurationUpdatedCallbacks[index]!=0)
+					(*hmdConfigurationUpdatedCallbacks[index])(hmdConfigurations[index]);
+				}
+				}
+				
+				break;
+				}
 			
-			/* Read the environment definition: */
-			getEnvironmentDefinitionRequest->read(*pipe);
+			case BASESTATIONS_REPLY:
+				{
+				Threads::MutexCond::Lock getBaseStationsLock(getBaseStationsCond);
+				
+				/* Check if there is a pending getBaseStations request: */
+				if(getBaseStationsRequest==0)
+					throw std::runtime_error("No pending getBaseStations request");
+				
+				/* Read the list of base stations: */
+				unsigned int numBaseStations=pipe->read<Misc::UInt8>();
+				getBaseStationsRequest->reserve(numBaseStations);
+				for(unsigned int i=0;i<numBaseStations;++i)
+					{
+					VRBaseStation bs;
+					bs.read(*pipe);
+					getBaseStationsRequest->push_back(bs);
+					}
+				
+				/* Signal the getBaseStations request as complete: */
+				getBaseStationsCond.signal();
+				
+				break;
+				}
 			
-			/* Signal the getEnvironmentDefinition request as complete: */
-			getEnvironmentDefinitionCond.signal();
-			}
-		else if(message==ENVIRONMENTDEFINITION_UPDATE_NOTIFICATION)
-			{
-			/* Read the environment definition: */
-			EnvironmentDefinition environmentDefinition;
-			environmentDefinition.read(*pipe);
+			case ENVIRONMENTDEFINITION_REPLY:
+				{
+				Threads::MutexCond::Lock getEnvironmentDefinitionLock(getEnvironmentDefinitionCond);
+				
+				/* Check if there is a pending getEnvironmentDefinition request: */
+				if(getEnvironmentDefinitionRequest==0)
+					throw std::runtime_error("No pending getEnvironmentDefinition request");
+				
+				/* Read the environment definition: */
+				getEnvironmentDefinitionRequest->read(*pipe);
+				
+				/* Signal the getEnvironmentDefinition request as complete: */
+				getEnvironmentDefinitionCond.signal();
+				
+				break;
+				}
 			
-			/* Call the environment definition update callback: */
-			{
-			Threads::Mutex::Lock callbacksLock(callbacksMutex);
-			if(environmentDefinitionUpdatedCallback!=0)
-				(*environmentDefinitionUpdatedCallback)(environmentDefinition);
+			case ENVIRONMENTDEFINITION_UPDATE_NOTIFICATION:
+				{
+				/* Read the environment definition: */
+				EnvironmentDefinition environmentDefinition;
+				environmentDefinition.read(*pipe);
+				
+				/* Call the environment definition update callback: */
+				{
+				Threads::Mutex::Lock callbacksLock(callbacksMutex);
+				if(environmentDefinitionUpdatedCallback!=0)
+					(*environmentDefinitionUpdatedCallback)(environmentDefinition);
+				}
+				
+				break;
+				}
+			
+			case STOPSTREAM_REPLY:
+				/* Disable this I/O watcher: */
+				event.getSource().disable();
+				
+				break;
+			
+			default:
+				throw std::runtime_error("Unexpected message");
 			}
-			}
-		else if(message==STOPSTREAM_REPLY)
-			{
-			/* Disable this I/O watcher: */
-			event.getSource().disable();
-			}
-		else
-			throw std::runtime_error("Unexpected message");
 		}
 	catch(const std::runtime_error& err)
 		{

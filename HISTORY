@@ -9049,3 +9049,5 @@ Vrui-15.0-001:
     Vrui/Internal/Vrui.Workbench.cpp.
 - Moved initialization of vsync-related GLX functions from GLWindow to
   GLContext class.
+- Replaced if ladder in Vrui::VRDeviceClient::handlePipeMessage to a
+  switch statement.
