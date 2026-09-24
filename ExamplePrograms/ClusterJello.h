@@ -4,7 +4,7 @@ simplified force interaction model based on the Nanotech Construction
 Kit. This version of Virtual Jell-O uses multithreading and explicit
 cluster communication to split the computation work and rendering work
 between the CPUs and nodes of a distributed rendering cluster.
-Copyright (c) 2007-2018 Oliver Kreylos
+Copyright (c) 2007-2026 Oliver Kreylos
 
 This file is part of the Virtual Jell-O interactive VR demonstration.
 
@@ -30,7 +30,6 @@ Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Threads/Thread.h>
 #include <Threads/TripleBuffer.h>
 #include <GL/gl.h>
-#include <GLMotif/ToggleButton.h>
 #include <GLMotif/TextFieldSlider.h>
 #include <Vrui/ToolManager.h>
 #include <Vrui/DraggingToolAdapter.h>
@@ -156,7 +155,6 @@ class ClusterJello:public Vrui::Application
 	SimulationParameters currentSimulationParameters; // Current simulation parameters
 	JelloRenderer* renderer; // Jell-O crystal renderer that can be associated with any of the proxy Jell-O crystals in the triple buffer
 	GLMotif::PopupMenu* mainMenu; // The program's main menu
-	GLMotif::ToggleButton* showSettingsDialogToggle;
 	GLMotif::PopupWindow* settingsDialog; // The settings dialog
 	GLMotif::TextFieldSlider* jigglinessSlider;
 	GLMotif::TextFieldSlider* viscositySlider;
@@ -184,11 +182,10 @@ class ClusterJello:public Vrui::Application
 	virtual void resetNavigation(void);
 	
 	/* New methods: */
-	void showSettingsDialogCallback(GLMotif::ToggleButton::ValueChangedCallbackData* cbData);
+	void showSettingsDialogCallback(Misc::CallbackData* cbData);
 	void jigglinessSliderCallback(GLMotif::TextFieldSlider::ValueChangedCallbackData* cbData);
 	void viscositySliderCallback(GLMotif::TextFieldSlider::ValueChangedCallbackData* cbData);
 	void gravitySliderCallback(GLMotif::TextFieldSlider::ValueChangedCallbackData* cbData);
-	void settingsDialogCloseCallback(Misc::CallbackData* cbData);
 	};
 
 #endif

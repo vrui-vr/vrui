@@ -4,7 +4,7 @@ simplified force interaction model based on the Nanotech Construction
 Kit. This version of Virtual Jell-O uses multithreading and explicit
 cluster communication to split the computation work and rendering work
 between the CPUs and nodes of a distributed rendering cluster.
-Copyright (c) 2007-2023 Oliver Kreylos
+Copyright (c) 2007-2026 Oliver Kreylos
 
 This file is part of the Virtual Jell-O interactive VR demonstration.
 
@@ -119,8 +119,8 @@ GLMotif::PopupMenu* ClusterJello::createMainMenu(void)
 	GLMotif::PopupMenu* mainMenu=new GLMotif::PopupMenu("MainMenu",Vrui::getWidgetManager());
 	mainMenu->setTitle("Virtual Jell-O");
 	
-	showSettingsDialogToggle=new GLMotif::ToggleButton("ShowSettingsDialogToggle",mainMenu,"Show Settings Dialog");
-	showSettingsDialogToggle->getValueChangedCallbacks().add(this,&ClusterJello::showSettingsDialogCallback);
+	GLMotif::Button* showSettingsDialogButton=new GLMotif::Button("ShowSettingsDialogButton",mainMenu,"Show Settings Dialog");
+	showSettingsDialogButton->getSelectCallbacks().add(this,&ClusterJello::showSettingsDialogCallback);
 	
 	mainMenu->manageMenu();
 	return mainMenu;
@@ -133,7 +133,6 @@ GLMotif::PopupWindow* ClusterJello::createSettingsDialog(void)
 	settingsDialog=new GLMotif::PopupWindow("SettingsDialog",Vrui::getWidgetManager(),"Settings Dialog");
 	settingsDialog->setCloseButton(true);
 	settingsDialog->setResizableFlags(true,false);
-	settingsDialog->getCloseCallbacks().add(this,&ClusterJello::settingsDialogCloseCallback);
 	
 	GLMotif::RowColumn* settings=new GLMotif::RowColumn("Settings",settingsDialog,false);
 	settings->setNumMinorWidgets(2);
@@ -273,7 +272,6 @@ void* ClusterJello::simulationThreadMethodMaster(void)
 			JelloCrystal& pc=proxyCrystal.startNewValue();
 			pc.copyAtomStates(*crystal);
 			proxyCrystal.postNewValue();
-			Vrui::requestUpdate();
 			
 			/* Start the next update interval: */
 			nextUpdateTime+=updateTime;
@@ -296,7 +294,6 @@ void* ClusterJello::simulationThreadMethodSlave(void)
 		JelloCrystal& pc=proxyCrystal.startNewValue();
 		pc.readAtomStates(*clusterPipe);
 		proxyCrystal.postNewValue();
-		Vrui::requestUpdate();
 		}
 	
 	return 0;
@@ -307,7 +304,7 @@ ClusterJello::ClusterJello(int& argc,char**& argv)
 	 clusterPipe(Vrui::openPipe()),
 	 crystal(0),
 	 atomLocks(17),
-	 updateTime(0.02),
+	 updateTime(0.01),
 	 renderer(0),
 	 mainMenu(0),settingsDialog(0),
 	 nextDraggerID(0)
@@ -442,6 +439,9 @@ void ClusterJello::frame(void)
 		renderer->setCrystal(&proxyCrystal.getLockedValue());
 		renderer->update();
 		}
+	
+	/* Schedule another frame: */
+	Vrui::scheduleUpdate(Vrui::getNextAnimationTime());
 	}
 
 void ClusterJello::display(GLContextData& contextData) const
@@ -460,16 +460,10 @@ void ClusterJello::resetNavigation(void)
 	Vrui::setNavigationTransformation(Vrui::NavTransform(floorDisplayCenter-Vrui::Point::origin,rot,Vrui::getInchFactor()));
 	}
 
-void ClusterJello::showSettingsDialogCallback(GLMotif::ToggleButton::ValueChangedCallbackData* cbData)
+void ClusterJello::showSettingsDialogCallback(Misc::CallbackData* cbData)
 	{
-	/* Hide or show settings dialog based on toggle button state: */
-	if(cbData->set)
-		{
-		/* Pop up the settings dialog at the same position as the main menu: */
-		Vrui::popupPrimaryWidget(settingsDialog);
-		}
-	else
-		Vrui::popdownPrimaryWidget(settingsDialog);
+	/* Pop up the settings dialog at the same position as the main menu: */
+	Vrui::popupPrimaryWidget(settingsDialog);
 	}
 
 void ClusterJello::jigglinessSliderCallback(GLMotif::TextFieldSlider::ValueChangedCallbackData* cbData)
@@ -497,11 +491,6 @@ void ClusterJello::gravitySliderCallback(GLMotif::TextFieldSlider::ValueChangedC
 	
 	/* Update the simulation parameters (only relevant on the master node): */
 	simulationParameters.postNewValue(currentSimulationParameters);
-	}
-
-void ClusterJello::settingsDialogCloseCallback(Misc::CallbackData* cbData)
-	{
-	showSettingsDialogToggle->setToggle(false);
 	}
 
 /* Create and execute an application object: */
