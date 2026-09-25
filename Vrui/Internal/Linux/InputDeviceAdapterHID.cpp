@@ -85,15 +85,6 @@ void InputDeviceAdapterHID::Device::relAxisFeatureEventCallback(RawHID::EventDev
 		}
 	}
 
-void InputDeviceAdapterHID::Device::errorCallback(RawHID::EventDevice::ErrorCallbackData* cbData)
-	{
-	/* Log an error message: */
-	Misc::formattedUserError("InputDeviceAdapterHID: Disabling input device %s due to exception %s",device->getDeviceName(),cbData->exception.what());
-	
-	/* Disable the HID's associated Vrui input device: */
-	getInputGraphManager()->disable(device);
-	}
-
 InputDeviceAdapterHID::Device::Device(RawHID::EventDeviceMatcher& deviceMatcher,InputDeviceAdapterHID& sAdapter)
 	:RawHID::EventDevice(deviceMatcher),
 	 adapter(sAdapter),grabbed(false),device(0),
@@ -394,10 +385,33 @@ void InputDeviceAdapterHID::initializeInputDevice(int deviceIndex,const Misc::Co
 	newDevice->getKeyFeatureEventCallbacks().add(newDevice.getTarget(),&Device::keyFeatureEventCallback);
 	newDevice->getAbsAxisFeatureEventCallbacks().add(newDevice.getTarget(),&Device::absAxisFeatureEventCallback);
 	newDevice->getRelAxisFeatureEventCallbacks().add(newDevice.getTarget(),&Device::relAxisFeatureEventCallback);
-	newDevice->getErrorCallbacks().add(newDevice.getTarget(),&Device::errorCallback);
+	
+	/* Register the error callback with the input device adapter instead, since it will destroy the device entirely: */
+	newDevice->getErrorCallbacks().add(this,&InputDeviceAdapterHID::errorCallback,newDevice.getTarget());
 	
 	/* Store the new device structure: */
 	devices.push_back(newDevice.releaseTarget());
+	}
+	
+void InputDeviceAdapterHID::errorCallback(RawHID::EventDevice::ErrorCallbackData* cbData,InputDeviceAdapterHID::Device* const& device)
+	{
+	/* Log an error message: */
+	Misc::sourcedUserError(__PRETTY_FUNCTION__,"Removing input device %s due to exception %s",device->device->getDeviceName(),cbData->exception.what());
+
+	/* Destroy the HID's associated Vrui input device: */
+	getInputDeviceManager()->destroyInputDevice(device->device);
+	
+	/* Find the HID structure for the given input device: */
+	std::vector<Device*>::const_iterator dIt;
+	for(dIt=devices.begin();dIt!=devices.end();++dIt)
+		if(*dIt==device)
+			{
+			/* Delete the HID, then remove its entry from the devices list: */
+			delete *dIt;
+			devices.erase(dIt);
+			
+			break;
+			}
 	}
 
 InputDeviceAdapterHID::InputDeviceAdapterHID(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection)

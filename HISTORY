@@ -9080,3 +9080,6 @@ Vrui-15.0-001:
   call error callbacks when processEvents() throws an exception.
 - Add error handling to Vrui::InputDeviceAdapterHID to disable Vrui
   devices when their underlying HID throws an error.
+  - Even better: Underlying Vrui devices are permanently removed from
+    Vrui on HID errors, destroying all tools and cleaning up dangling
+    state like active navigation. Duh.
