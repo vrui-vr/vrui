@@ -660,9 +660,6 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 		ft.totalDuration=ft.postRenderEnd=ft.present=ft.renderEnd=ft.renderStart=0;
 		}
 	
-	/* Create a Vrui-specific message logger: */
-	Misc::MessageLogger::setMessageLogger(new Vrui::MessageLogger(runLoop));
-	
 	/* Set the current directory of the IO sub-library: */
 	IO::Directory::setCurrent(IO::openDirectory("."));
 	}
@@ -950,6 +947,9 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 	
 	/* Remember whether to route user messages to the console: */
 	configFileSection.updateValue("userMessagesToConsole",userMessagesToConsole);
+	
+	/* Create a Vrui-specific message logger: */
+	Misc::MessageLogger::setMessageLogger(new Vrui::MessageLogger(runLoop));
 	
 	/* Dispatch any early text events: */
 	textEventDispatcher->dispatchEvents(*uiManager);

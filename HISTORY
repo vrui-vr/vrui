@@ -9067,3 +9067,5 @@ Vrui-15.0-001:
   single-window mode to ensure that X11 event handling works correctly.
 - Fixed handling of OpenAL matrix stack in sound method of application
   scene graph node in Vrui.General.cpp.
+- Moved installation of Vrui message logger behind creation of UI
+  manager in Vrui state initialization.
