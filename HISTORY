@@ -9074,3 +9074,5 @@ Vrui-15.0-001:
 - Rewrote Vrui::InputDeviceAdapterHID to use new change tracking
   capabilities of Vrui::InputDevice; now uses Vrui's main run loop
   instead of a background thread.
+- Fixed bug in Vrui::MultiShiftButtonTool that caused crashes when
+  source devices deliver events early.

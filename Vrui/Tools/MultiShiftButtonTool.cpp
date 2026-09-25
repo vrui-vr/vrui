@@ -2,7 +2,7 @@
 MultiShiftButtonTool - Class to switch between mulitple planes of
 buttons and/or valuators by pressing one from an array of "radio
 buttons."
-Copyright (c) 2012-2024 Oliver Kreylos
+Copyright (c) 2012-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -147,9 +147,63 @@ MultiShiftButtonToolFactory* MultiShiftButtonTool::factory=0;
 Methods of class MultiShiftButtonTool:
 *************************************/
 
+void MultiShiftButtonTool::changePlane(int nextPlane)
+	{
+	/* Bail out if the plane won't actually change: */
+	if(currentPlane==nextPlane)
+		return;
+	
+	/* Deactivate the currently mapped plane if it is valid: */
+	if(currentPlane>=0)
+		{
+		/* Disable all features on the currently mapped plane: */
+		int buttonBase=currentPlane*numForwardedButtons;
+		int valuatorBase=currentPlane*input.getNumValuatorSlots();
+		
+		if(config.forwardRadioButtons)
+			{
+			/* Disable the forwarded radio button on the currently mapped plane: */
+			transformedDevice->setButtonState(buttonBase,false);
+			}
+		
+		if(config.resetFeatures)
+			{
+			/* Reset all buttons and valuators in the currently mapped plane: */
+			for(int i=firstForwardedButton;i<numForwardedButtons;++i)
+				transformedDevice->setButtonState(buttonBase+i,false);
+			for(int i=0;i<input.getNumValuatorSlots();++i)
+				transformedDevice->setValuator(valuatorBase+i,0.0);
+			}
+		}
+	
+	/* Activate the next plane if it is valid: */
+	if(nextPlane>=0)
+		{
+		/* Copy all forwarded source features to the next mapped plane: */
+		int buttonBase=nextPlane*numForwardedButtons;
+		int valuatorBase=nextPlane*input.getNumValuatorSlots();
+		
+		if(config.forwardRadioButtons)
+			{
+			/* Enable the forwarded radio button on the next mapped plane: */
+			transformedDevice->setButtonState(buttonBase,true);
+			}
+		
+		/* Copy all source buttons and valuators to the next mapped plane: */
+		for(int i=firstForwardedButton;i<numForwardedButtons;++i)
+			transformedDevice->setButtonState(buttonBase+i,getButtonState(config.numPlanes+i-firstForwardedButton));
+		for(int i=0;i<input.getNumValuatorSlots();++i)
+			transformedDevice->setValuator(valuatorBase+i,getValuatorState(i));
+		}
+	
+	/* Change the currently active plane: */
+	currentPlane=nextPlane;
+	}
+
 MultiShiftButtonTool::MultiShiftButtonTool(const ToolFactory* sFactory,const ToolInputAssignment& inputAssignment)
 	:TransformTool(sFactory,inputAssignment),
-	 config(factory->config)
+	 config(factory->config),
+	 numForwardedButtons(0),firstForwardedButton(0),currentPlane(-1)
 	{
 	}
 
@@ -181,9 +235,12 @@ void MultiShiftButtonTool::initialize(void)
 	
 	/* Create a virtual input device to shadow the source input device: */
 	numForwardedButtons=input.getNumButtonSlots()-config.numPlanes;
+	firstForwardedButton=0;
 	if(config.forwardRadioButtons)
+		{
 		++numForwardedButtons;
-	firstForwardedButton=config.forwardRadioButtons?1:0;
+		++firstForwardedButton;
+		}
 	transformedDevice=addVirtualInputDevice("MultiShiftButtonToolTransformedDevice",config.numPlanes*numForwardedButtons,config.numPlanes*input.getNumValuatorSlots());
 	
 	/* Copy the source device's tracking type: */
@@ -198,9 +255,8 @@ void MultiShiftButtonTool::initialize(void)
 	/* Initialize the virtual input device's position: */
 	resetDevice();
 	
-	/* Activate the requested button/valuator plane on the next frame: */
-	requestedPlane=nextPlane=config.initialPlane;
-	currentPlane=-1;
+	/* Activate the initial button/valuator plane: */
+	changePlane(config.initialPlane);
 	}
 
 void MultiShiftButtonTool::deinitialize(void)
@@ -222,77 +278,32 @@ void MultiShiftButtonTool::buttonCallback(int buttonSlotIndex,InputDevice::Butto
 	{
 	if(buttonSlotIndex<config.numPlanes)
 		{
-		/* Start the plane changing process: */
-		requestedPlane=buttonSlotIndex;
+		/* Change the currently mapped plane if the button was pressed: */
+		if(cbData->newButtonState)
+			changePlane(buttonSlotIndex);
 		}
-	else
+	else if(currentPlane>=0)
 		{
 		/* Pass the button event through to the virtual input device: */
 		int buttonBase=currentPlane*numForwardedButtons;
-		transformedDevice->setButtonState(buttonBase-config.numPlanes+firstForwardedButton+buttonSlotIndex,cbData->newButtonState);
+		transformedDevice->setButtonState(buttonBase+firstForwardedButton+buttonSlotIndex-config.numPlanes,cbData->newButtonState);
 		}
 	}
 
 void MultiShiftButtonTool::valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData)
 	{
-	/* Pass the valuator event through to the virtual input device: */
-	int valuatorBase=currentPlane*input.getNumValuatorSlots();
-	transformedDevice->setValuator(valuatorSlotIndex+valuatorBase,cbData->newValuatorValue);
+	if(currentPlane>=0)
+		{
+		/* Pass the valuator event through to the virtual input device: */
+		int valuatorBase=currentPlane*input.getNumValuatorSlots();
+		transformedDevice->setValuator(valuatorBase+valuatorSlotIndex,cbData->newValuatorValue);
+		}
 	}
 
 void MultiShiftButtonTool::frame(void)
 	{
 	/* Set the forwarded device's position and orientation: */
 	resetDevice();
-	
-	/* Check for the second step in changing button/valuator planes: */
-	if(currentPlane!=nextPlane)
-		{
-		int buttonBase=nextPlane*numForwardedButtons;
-		
-		if(config.forwardRadioButtons)
-			{
-			/* Enable the forwarded radio button on the newly mapped plane: */
-			transformedDevice->setButtonState(buttonBase,true);
-			}
-		
-		/* Set the newly mapped plane's state to the input device's button and valuator states: */
-		for(int i=config.numPlanes;i<input.getNumButtonSlots();++i)
-			transformedDevice->setButtonState(buttonBase-config.numPlanes+firstForwardedButton+i,getButtonState(i));
-		int valuatorBase=nextPlane*input.getNumValuatorSlots();
-		for(int i=0;i<input.getNumValuatorSlots();++i)
-			transformedDevice->setValuator(valuatorBase+i,getValuatorState(i));
-		
-		/* Finish changing planes: */
-		currentPlane=nextPlane;
-		}
-	
-	/* Check for the first step in changing button/valuator planes: */
-	if(nextPlane!=requestedPlane)
-		{
-		/* Disable all features on the current plane: */
-		int buttonBase=currentPlane*numForwardedButtons;
-		
-		if(config.forwardRadioButtons)
-			{
-			/* Disable the forwarded radio button on the currently mapped plane: */
-			transformedDevice->setButtonState(buttonBase,false);
-			}
-		
-		if(config.resetFeatures)
-			{
-			/* Reset all buttons and valuators in the currently mapped plane: */
-			for(int i=config.numPlanes;i<input.getNumButtonSlots();++i)
-				transformedDevice->setButtonState(buttonBase-config.numPlanes+firstForwardedButton+i,false);
-			int valuatorBase=currentPlane*input.getNumValuatorSlots();
-			for(int i=0;i<input.getNumValuatorSlots();++i)
-				transformedDevice->setValuator(valuatorBase+i,0.0);
-			}
-		
-		/* Prepare for the next step: */
-		nextPlane=requestedPlane;
-		requestUpdate();
-		}
 	}
 
 InputDeviceFeatureSet MultiShiftButtonTool::getSourceFeatures(const InputDeviceFeature& forwardedFeature)
