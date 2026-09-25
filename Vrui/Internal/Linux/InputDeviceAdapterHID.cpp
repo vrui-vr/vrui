@@ -397,9 +397,15 @@ void InputDeviceAdapterHID::errorCallback(RawHID::EventDevice::ErrorCallbackData
 	{
 	/* Log an error message: */
 	Misc::sourcedUserError(__PRETTY_FUNCTION__,"Removing input device %s due to exception %s",device->device->getDeviceName(),cbData->exception.what());
-
-	/* Destroy the HID's associated Vrui input device: */
-	getInputDeviceManager()->destroyInputDevice(device->device);
+	
+	/* Remove the HID's associated Vrui input device from this input adapter's state arrays, then destroy it: */
+	for(int i=0;i<numInputDevices;++i)
+		if(inputDevices[i]==device->device)
+			{
+			inputDevices[i]=0;
+			break;
+			}
+	inputDeviceManager->destroyInputDevice(device->device);
 	
 	/* Find the HID structure for the given input device: */
 	std::vector<Device*>::const_iterator dIt;
