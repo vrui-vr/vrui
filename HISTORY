@@ -9071,3 +9071,6 @@ Vrui-15.0-001:
   manager in Vrui state initialization.
 - Direct errors from creating input graphs to the console to avoid tons
   of error dialogs.
+- Rewrote Vrui::InputDeviceAdapterHID to use new change tracking
+  capabilities of Vrui::InputDevice; now uses Vrui's main run loop
+  instead of a background thread.

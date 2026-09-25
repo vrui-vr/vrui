@@ -52,45 +52,44 @@ Methods of class InputDeviceAdapterHID::Device:
 
 void InputDeviceAdapterHID::Device::keyFeatureEventCallback(RawHID::EventDevice::KeyFeatureEventCallbackData* cbData)
 	{
-	/* There is nothing to do but lock the device state mutex: */
-	Threads::Mutex::Lock deviceStateLock(adapter.deviceStateMutex);
-	
-	Vrui::requestUpdate();
+	/* Check if the changed key feature is represented by a Vrui input device button: */
+	int buttonIndex=keyFeatureMap[cbData->featureIndex];
+	if(buttonIndex>=0)
+		{
+		/* Set the state of the Vrui input device button: */
+		device->setButtonState(buttonIndex,cbData->newValue);
+		}
 	}
 
 void InputDeviceAdapterHID::Device::absAxisFeatureEventCallback(RawHID::EventDevice::AbsAxisFeatureEventCallbackData* cbData)
 	{
-	/* There is nothing to do but lock the device state mutex: */
-	Threads::Mutex::Lock deviceStateLock(adapter.deviceStateMutex);
-	
-	Vrui::requestUpdate();
+	/* Check if the changed absolue axis feature is represented by a Vrui input device valuator: */
+	int valuatorIndex=absAxisFeatureMap[cbData->featureIndex];
+	if(valuatorIndex>=0)
+		{
+		/* Set the value of the Vrui input device valuator: */
+		device->setValuator(valuatorIndex,absAxisValueMappers[valuatorIndex].map(double(cbData->newValue)));
+		}
 	}
 
 void InputDeviceAdapterHID::Device::relAxisFeatureEventCallback(RawHID::EventDevice::RelAxisFeatureEventCallbackData* cbData)
 	{
-	/* Accumulate the new relative axis value into the relative axis value array: */
-	Threads::Mutex::Lock deviceStateLock(adapter.deviceStateMutex);
-	if(relAxisFeatureMap[cbData->featureIndex]!=~0U)
-		relAxisValues[relAxisFeatureMap[cbData->featureIndex]]+=cbData->value;
-	
-	Vrui::requestUpdate();
-	}
-
-void InputDeviceAdapterHID::Device::synReportEventCallback(RawHID::EventDevice::CallbackData* cbData)
-	{
-	/* There is nothing to do but lock the device state mutex: */
-	Threads::Mutex::Lock deviceStateLock(adapter.deviceStateMutex);
-	
-	Vrui::requestUpdate();
+	/* Check if the changed absolue axis feature is represented by a Vrui input device valuator: */
+	int valuatorIndex=relAxisFeatureMap[cbData->featureIndex];
+	if(valuatorIndex>=0)
+		{
+		/* Accumulate the new relative axis value into the relative axis value array: */
+		relAxisValues[valuatorIndex]+=cbData->value;
+		}
 	}
 
 InputDeviceAdapterHID::Device::Device(RawHID::EventDeviceMatcher& deviceMatcher,InputDeviceAdapterHID& sAdapter)
 	:RawHID::EventDevice(deviceMatcher),
 	 adapter(sAdapter),grabbed(false),device(0),
 	 positioner(0),positionerReady(false),
-	 numKeys(0),keyFeatureIndices(0),
-	 numAbsAxes(0),absAxisFeatureIndices(0),absAxisValueMappers(0),
-	 numRelAxes(0),relAxisFeatureMap(0),relAxisValues(0),relAxisValueMappers(0)
+	 numMappedKeys(0),keyFeatureMap(0),
+	 numMappedAbsAxes(0),absAxisFeatureMap(0),absAxisValueMappers(0),
+	 numMappedRelAxes(0),relAxisFeatureMap(0),relAxisValues(0),relAxisValueMappers(0)
 	{
 	/* Attempt to grab the HID: */
 	grabbed=grabDevice();
@@ -104,8 +103,8 @@ InputDeviceAdapterHID::Device::~Device(void)
 	
 	/* Release allocated resources: */
 	delete positioner;
-	delete[] keyFeatureIndices;
-	delete[] absAxisFeatureIndices;
+	delete[] keyFeatureMap;
+	delete[] absAxisFeatureMap;
 	delete[] absAxisValueMappers;
 	delete[] relAxisFeatureMap;
 	delete[] relAxisValues;
@@ -124,18 +123,10 @@ void InputDeviceAdapterHID::Device::prepareMainLoop(void)
 
 void InputDeviceAdapterHID::Device::update(void)
 	{
-	/* Update the device's button states: */
-	for(unsigned int i=0;i<numKeys;++i)
-		device->setButtonState(i,getKeyFeatureValue(keyFeatureIndices[i]));
-	
-	/* Update the device's absolute axes: */
-	for(unsigned int i=0;i<numAbsAxes;++i)
-		device->setValuator(i,absAxisValueMappers[i].map(double(getAbsAxisFeatureValue(absAxisFeatureIndices[i]))));
-	
 	/* Update the device's relative axes and reset the accumulated axis values: */
-	for(unsigned int i=0;i<numRelAxes;++i)
+	for(int i=0;i<numMappedRelAxes;++i)
 		{
-		device->setValuator(numAbsAxes+i,relAxisValueMappers[i].map(double(relAxisValues[i])));
+		device->setValuator(numMappedAbsAxes+i,relAxisValueMappers[i].map(double(relAxisValues[i])));
 		relAxisValues[i]=0;
 		}
 	
@@ -254,105 +245,127 @@ void InputDeviceAdapterHID::initializeInputDevice(int deviceIndex,const Misc::Co
 	********************************************************/
 	
 	/* Count the number of unignored key features: */
+	newDevice->numMappedKeys=0;
 	for(unsigned int i=0;i<newDevice->getNumKeyFeatures();++i)
 		if(!ignoredKeys[i])
-			++newDevice->numKeys;
+			++newDevice->numMappedKeys;
 	
-	/* Create the key feature index array: */
-	newDevice->keyFeatureIndices=new unsigned int[newDevice->numKeys];
-	unsigned int keyIndex=0;
+	/* Create the key feature map: */
+	newDevice->keyFeatureMap=new int[newDevice->getNumKeyFeatures()];
+	int keyIndex=0;
 	for(unsigned int i=0;i<newDevice->getNumKeyFeatures();++i)
 		if(!ignoredKeys[i])
-			newDevice->keyFeatureIndices[keyIndex++]=i;
+			{
+			/* Assign the next Vrui device button index to the key feature: */
+			newDevice->keyFeatureMap[i]=keyIndex++;
+			}
+		else
+			{
+			/* Mark the key feature as ignored: */
+			newDevice->keyFeatureMap[i]=-1;
+			}
 	
 	/********************************************************************
 	Represent the HID's absolute axis features as input device valuators:
 	********************************************************************/
 	
 	/* Count the number of unignored absolute axes: */
+	newDevice->numMappedAbsAxes=0;
 	for(unsigned int i=0;i<newDevice->getNumAbsAxisFeatures();++i)
 		if(!ignoredAbsAxes[i])
-			++newDevice->numAbsAxes;
+			++newDevice->numMappedAbsAxes;
 	
-	/* Create the absolute axis feature index array: */
-	newDevice->absAxisFeatureIndices=new unsigned int[newDevice->numAbsAxes];
-	unsigned int absAxisIndex=0;
+	/* Create the absolute axis feature map and axis value mappers: */
+	newDevice->absAxisFeatureMap=new int[newDevice->getNumAbsAxisFeatures()];
+	newDevice->absAxisValueMappers=new Device::AxisValueMapper[newDevice->numMappedAbsAxes];
+	int absAxisIndex=0;
 	for(unsigned int i=0;i<newDevice->getNumAbsAxisFeatures();++i)
 		if(!ignoredAbsAxes[i])
-			newDevice->absAxisFeatureIndices[absAxisIndex++]=i;
-	
-	/* Create the absolute axis value mapper array: */
-	newDevice->absAxisValueMappers=new Device::AxisValueMapper[newDevice->numAbsAxes];
-	for(unsigned int i=0;i<newDevice->numAbsAxes;++i)
-		{
-		/* Retrieve the HID axis feature's default axis mapping: */
-		const RawHID::EventDevice::AbsAxisConfig& absAxisConfig=newDevice->getAbsAxisFeatureConfig(newDevice->absAxisFeatureIndices[i]);
-		
-		/* Create an axis value mapper in normalized axis space: */
-		Device::AxisValueMapper avm;
-		double s=double(absAxisConfig.max)-double(absAxisConfig.min);
-		double o=double(absAxisConfig.min);
-		avm.min=(double(absAxisConfig.min)-o)/s;
-		double mid=Math::mid(double(absAxisConfig.min),double(absAxisConfig.max));
-		double flat=Math::div2(double(absAxisConfig.flat));
-		avm.deadMin=(mid-flat-o)/s;
-		avm.deadMax=(mid+flat-o)/s;
-		avm.max=(double(absAxisConfig.max)-o)/s;
-		
-		/* Override the axis value mapper from the configuration file section: */
-		configFileSection.updateValue((std::string("./valuatorMapping")+Misc::printString(i)).c_str(),avm);
-		
-		/* Store the axis value mapper in raw axis space: */
-		avm.min=avm.min*s+o;
-		avm.deadMin=avm.deadMin*s+o;
-		avm.deadMax=avm.deadMax*s+o;
-		avm.max=avm.max*s+o;
-		newDevice->absAxisValueMappers[i]=avm;
-		}
+			{
+			/* Assign the next Vrui device valuator index to the absolute axis feature: */
+			newDevice->absAxisFeatureMap[i]=absAxisIndex;
+			
+			/* Retrieve the absolute axis feature's default axis mapping: */
+			const RawHID::EventDevice::AbsAxisConfig& absAxisConfig=newDevice->getAbsAxisFeatureConfig(i);
+			
+			/* Create an axis value mapper in normalized axis space: */
+			Device::AxisValueMapper avm;
+			double s=double(absAxisConfig.max)-double(absAxisConfig.min);
+			double o=double(absAxisConfig.min);
+			avm.min=(double(absAxisConfig.min)-o)/s;
+			double mid=Math::mid(double(absAxisConfig.min),double(absAxisConfig.max));
+			double flat=Math::div2(double(absAxisConfig.flat));
+			avm.deadMin=(mid-flat-o)/s;
+			avm.deadMax=(mid+flat-o)/s;
+			avm.max=(double(absAxisConfig.max)-o)/s;
+			
+			/* Override the axis value mapper from the configuration file section: */
+			configFileSection.updateValue((std::string("./valuatorMapping")+Misc::printString(absAxisIndex)).c_str(),avm);
+			
+			/* Store the axis value mapper in raw axis space: */
+			avm.min=avm.min*s+o;
+			avm.deadMin=avm.deadMin*s+o;
+			avm.deadMax=avm.deadMax*s+o;
+			avm.max=avm.max*s+o;
+			newDevice->absAxisValueMappers[absAxisIndex]=avm;
+			
+			/* Go to the next valuator index: */
+			++absAxisIndex;
+			}
+		else
+			{
+			/* Mark the absolute axis feature as ignored: */
+			newDevice->absAxisFeatureMap[i]=-1;
+			}
 	
 	/********************************************************************
 	Represent the HID's relative axis features as input device valuators:
 	********************************************************************/
 	
 	/* Count the number of unignored relative axes: */
+	newDevice->numMappedRelAxes=0;
 	for(unsigned int i=0;i<newDevice->getNumRelAxisFeatures();++i)
 		if(!ignoredRelAxes[i])
-			++newDevice->numRelAxes;
+			++newDevice->numMappedRelAxes;
 	
-	/* Create the relative axis feature map: */
-	newDevice->relAxisFeatureMap=new unsigned int[newDevice->getNumRelAxisFeatures()];
-	unsigned int relAxisIndex=0;
+	/* Create the relative axis feature map, value array, and axis value mappers: */
+	newDevice->relAxisFeatureMap=new int[newDevice->getNumRelAxisFeatures()];
+	newDevice->relAxisValues=new int[newDevice->numMappedRelAxes];
+	newDevice->relAxisValueMappers=new Device::AxisValueMapper[newDevice->numMappedRelAxes];
+	int relAxisIndex=0;
 	for(unsigned int i=0;i<newDevice->getNumRelAxisFeatures();++i)
 		if(!ignoredRelAxes[i])
-			newDevice->relAxisFeatureMap[i]=relAxisIndex++;
+			{
+			/* Assign the next Vrui device valuator index to the relative axis feature: */
+			newDevice->relAxisFeatureMap[i]=newDevice->numMappedAbsAxes+relAxisIndex;
+			
+			/* Initialize the relative axis' value accumulator: */
+			newDevice->relAxisValues[relAxisIndex]=0;
+			
+			/* Create a default axis value mapper: */
+			Device::AxisValueMapper avm(-1.0,0.0,0.0,1.0);
+			
+			/* Override the axis value mapper from the configuration file section: */
+			configFileSection.updateValue((std::string("./valuatorMapping")+Misc::printString(newDevice->numMappedAbsAxes+relAxisIndex)).c_str(),avm);
+			
+			/* Store the axis value mapper: */
+			newDevice->relAxisValueMappers[relAxisIndex]=avm;
+			
+			/* Go to the next valuator index: */
+			++relAxisIndex;
+			}
 		else
-			newDevice->relAxisFeatureMap[i]=~0U;
-	
-	/* Create the relative axis value array: */
-	newDevice->relAxisValues=new int[newDevice->numRelAxes];
-	for(unsigned int i=0;i<newDevice->numRelAxes;++i)
-		newDevice->relAxisValues[i]=0;
-	
-	/* Create the relative axis value mapper array: */
-	newDevice->relAxisValueMappers=new Device::AxisValueMapper[newDevice->numRelAxes];
-	for(unsigned int i=0;i<newDevice->numRelAxes;++i)
-		{
-		/* Create a default axis value mapper: */
-		Device::AxisValueMapper avm(-1.0,0.0,0.0,1.0);
-		
-		/* Override the axis value mapper from the configuration file section: */
-		configFileSection.updateValue((std::string("./valuatorMapping")+Misc::printString(newDevice->numAbsAxes+i)).c_str(),avm);
-		
-		/* Store the axis value mapper: */
-		newDevice->relAxisValueMappers[i]=avm;
-		}
+			{
+			/* Mark the relative axis feature as ignored: */
+			newDevice->relAxisFeatureMap[i]=-1;
+			}
 	
 	/**************************************************
 	Create the Vrui input device representing this HID:
 	**************************************************/
 	
 	/* Create the Vrui input device representing this HID as a physical input device: */
-	inputDevices[deviceIndex]=newDevice->device=createInputDevice(name.c_str(),trackType,newDevice->numKeys,newDevice->numAbsAxes+newDevice->numRelAxes,configFileSection,newDevice->buttonNames,newDevice->valuatorNames);
+	inputDevices[deviceIndex]=newDevice->device=createInputDevice(name.c_str(),trackType,newDevice->numMappedKeys,newDevice->numMappedAbsAxes+newDevice->numMappedRelAxes,configFileSection,newDevice->buttonNames,newDevice->valuatorNames);
 	
 	#if 0
 	
@@ -367,17 +380,8 @@ void InputDeviceAdapterHID::initializeInputDevice(int deviceIndex,const Misc::Co
 	*****************************/
 	
 	/* Register callbacks with the HID: */
-	if(newDevice->hasSynReport())
-		{
-		/* Register a synchronization callback: */
-		newDevice->getSynReportEventCallbacks().add(newDevice.getTarget(),&Device::synReportEventCallback);
-		}
-	else
-		{
-		/* Register key and absolute axis feature callbacks: */
-		newDevice->getKeyFeatureEventCallbacks().add(newDevice.getTarget(),&Device::keyFeatureEventCallback);
-		newDevice->getAbsAxisFeatureEventCallbacks().add(newDevice.getTarget(),&Device::absAxisFeatureEventCallback);
-		}
+	newDevice->getKeyFeatureEventCallbacks().add(newDevice.getTarget(),&Device::keyFeatureEventCallback);
+	newDevice->getAbsAxisFeatureEventCallbacks().add(newDevice.getTarget(),&Device::absAxisFeatureEventCallback);
 	newDevice->getRelAxisFeatureEventCallbacks().add(newDevice.getTarget(),&Device::relAxisFeatureEventCallback);
 	
 	/* Store the new device structure: */
@@ -390,10 +394,9 @@ InputDeviceAdapterHID::InputDeviceAdapterHID(InputDeviceManager* sInputDeviceMan
 	/* Initialize input device adapter: */
 	InputDeviceAdapter::initializeAdapter(configFileSection);
 	
-	/* Register all HIDs with the shared run loop: */
-	Threads::RunLoop& runLoop=inputDeviceManager->acquireRunLoop();
+	/* Register all HIDs with Vrui's main run loop: */
 	for(std::vector<Device*>::iterator dIt=devices.begin();dIt!=devices.end();++dIt)
-		(*dIt)->watch(runLoop);
+		(*dIt)->watch(getRunLoop());
 	}
 
 InputDeviceAdapterHID::~InputDeviceAdapterHID(void)
@@ -438,11 +441,11 @@ int InputDeviceAdapterHID::getFeatureIndex(InputDevice* device,const char* featu
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Unknown device %s",device->getDeviceName());
 	
 	/* Check if the feature names a button or a valuator: */
-	int numButtons((*dIt)->numKeys);
+	int numButtons=(*dIt)->numMappedKeys;
 	for(int buttonIndex=0;buttonIndex<numButtons;++buttonIndex)
 		if((*dIt)->buttonNames[buttonIndex]==featureName)
 			return device->getButtonFeatureIndex(buttonIndex);
-	int numValuators((*dIt)->numAbsAxes+(*dIt)->numRelAxes);
+	int numValuators=(*dIt)->numMappedAbsAxes+(*dIt)->numMappedRelAxes;
 	for(int valuatorIndex=0;valuatorIndex<numValuators;++valuatorIndex)
 		if((*dIt)->valuatorNames[valuatorIndex]==featureName)
 			return device->getValuatorFeatureIndex(valuatorIndex);

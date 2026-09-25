@@ -59,25 +59,27 @@ class InputDeviceAdapterHID:public InputDeviceAdapter
 		bool positionerReady; // Flag if the device has a positioner, and it is ready to position
 		
 		/* State to deal with HID key features: */
-		unsigned int numKeys; // Number of HID's key features that are represented as buttons on the Vrui input device
-		unsigned int* keyFeatureIndices; // Array of HID key feature indices assigned to buttons on the Vrui input device
+		int numMappedKeys; // Number of HID key features mapped to button features on the Vrui input device
+		int* keyFeatureMap; // Array mapping HID key feature indices to button indices on the Vrui input device
 		std::vector<std::string> buttonNames; // Array of Vrui input device button names
 		
-		/* State to deal with HID absolute and relative axis features: */
-		unsigned int numAbsAxes; // Number of HID's absolute axis features that are represented as valuators on the Vrui input device
-		unsigned int* absAxisFeatureIndices; // Array of HID absolute axis feature indices assigned to valuators on the Vrui input device
-		AxisValueMapper* absAxisValueMappers; // Array of value mappers for the HID's absolute axes
-		unsigned int numRelAxes; // Number of HID's relative axis features that are represented as valuators on the Vrui input device
-		unsigned int* relAxisFeatureMap; // Array mapping HID relative axis feature indices to valuators on the Vrui input device
-		int* relAxisValues; // Array of current relative axis values
-		AxisValueMapper* relAxisValueMappers; // Array of value mappers for the HID's relative axes
+		/* State to deal with HID absolute axis features: */
+		int numMappedAbsAxes; // Number of HID absolute axis features mapped to valuator features on the Vrui input device
+		int* absAxisFeatureMap; // Array mapping HID absolute axis feature indices to valuator indices on the Vrui input device
+		AxisValueMapper* absAxisValueMappers; // Array of value mappers for HID absolute axis features, indexed by Vrui input device valuator index
+		
+		/* State to deal with HID relative axis features: */
+		int numMappedRelAxes; // Number of HID relative axis features mapped to valuator features on the Vrui input device
+		int* relAxisFeatureMap; // Array mapping HID relative axis feature indices to valuator indices on the Vrui input device
+		int* relAxisValues; // Array of accumulated HID relative axis feature values since the last input device update, indexed by Vrui input device valuator index
+		AxisValueMapper* relAxisValueMappers; // Array of value mappers for HID relative axis features, indexed by Vrui input device valuator index
+		
 		std::vector<std::string> valuatorNames; // Array of Vrui input device valuator names
 		
 		/* Private methods: */
 		void keyFeatureEventCallback(RawHID::EventDevice::KeyFeatureEventCallbackData* cbData); // Callback for HID key feature events
 		void absAxisFeatureEventCallback(RawHID::EventDevice::AbsAxisFeatureEventCallbackData* cbData); // Callback for HID absolute axis feature events
 		void relAxisFeatureEventCallback(RawHID::EventDevice::RelAxisFeatureEventCallbackData* cbData); // Callback for HID relative axis feature events
-		void synReportEventCallback(RawHID::EventDevice::CallbackData* cbData); // Callback for synchronization report events
 		
 		/* Constructors and destructors: */
 		Device(RawHID::EventDeviceMatcher& deviceMatcher,InputDeviceAdapterHID& sAdapter); // Creates a device matching the given device matcher for the given input device adapter
