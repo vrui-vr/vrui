@@ -9069,3 +9069,5 @@ Vrui-15.0-001:
   scene graph node in Vrui.General.cpp.
 - Moved installation of Vrui message logger behind creation of UI
   manager in Vrui state initialization.
+- Direct errors from creating input graphs to the console to avoid tons
+  of error dialogs.

@@ -1076,7 +1076,7 @@ void InputGraphManager::loadInputGraph(const Misc::ConfigurationFileSection& bas
 			catch(const std::runtime_error& err)
 				{
 				/* Log error message and carry on: */
-				Misc::sourcedUserError(__PRETTY_FUNCTION__,"Ignoring tool binding section %s due to exception %s",sIt.getName().c_str(),err.what());
+				Misc::sourcedConsoleError(__PRETTY_FUNCTION__,"Ignoring tool binding section %s due to exception %s",sIt.getName().c_str(),err.what());
 				}
 			}
 		else
