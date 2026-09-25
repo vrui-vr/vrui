@@ -9083,3 +9083,4 @@ Vrui-15.0-001:
   - Even better: Underlying Vrui devices are permanently removed from
     Vrui on HID errors, destroying all tools and cleaning up dangling
     state like active navigation. Duh.
+- Fixed thumb gesture detection in Vrui::IndexHandTool.

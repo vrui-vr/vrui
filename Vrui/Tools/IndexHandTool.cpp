@@ -287,10 +287,10 @@ void IndexHandTool::updateGesture(unsigned int newGestureMask)
 
 void IndexHandTool::updateThumb(void)
 	{
-	/* Determine the highest-priority touched button: */
+	/* Determine the highest-priority (lowest slot index) touched button: */
 	thumbButton=5;
-	for(int i=0;i<5&&thumbButton==5;++i)
-		if(getButtonState(i))
+	for(int i=4;i>=0;--i)
+		if((thumbButtonMask&(0x1<<i))!=0x0)
 			thumbButton=i;
 	
 	/* Set the thumb's position according to the currently touched button: */
@@ -348,7 +348,7 @@ void IndexHandTool::updateFinger(int fingerIndex,SceneGraph::Scalar fingerBend)
 IndexHandTool::IndexHandTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
 	:TransformTool(factory,inputAssignment),
 	 configuration(IndexHandTool::factory->configuration),
-	 thumbButton(5),gestureMask(0x0U),
+	 thumbButtonMask(0x0),thumbButton(5),gestureMask(0x0U),
 	 palmDevice(0)
 	{
 	}
@@ -529,6 +529,9 @@ void IndexHandTool::initialize(void)
 	getInputGraphManager()->grabInputDevice(palmDevice,this);
 	
 	/* Initialize the position of the thumb and the other fingers: */
+	for(int i=0;i<5;++i)
+		if(getButtonState(i))
+			thumbButtonMask|=0x1<<i;
 	updateThumb();
 	for(int finger=0;finger<4;++finger)
 		updateFinger(finger,getValuatorState(finger));
@@ -558,6 +561,13 @@ const ToolFactory* IndexHandTool::getFactory(void) const
 
 void IndexHandTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData)
 	{
+	/* Update the thumb button mask: */
+	if(cbData->newButtonState)
+		thumbButtonMask|=0x1<<buttonSlotIndex;
+	else
+		thumbButtonMask&=~(0x1<<buttonSlotIndex);
+	
+	/* Update the thumb position: */
 	updateThumb();
 	}
 

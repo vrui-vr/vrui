@@ -104,6 +104,7 @@ class IndexHandTool:public TransformTool
 	SceneGraph::TransformNodePointer hand; // Pointer to the hand scene graph's root node
 	SceneGraph::TransformNodePointer thumbTransforms[3]; // Pointers to the thumb's three joint nodes
 	SceneGraph::TransformNodePointer fingerTransforms[4][3]; // Pointers to the other fingers' three joint nodes
+	int thumbButtonMask; // Bit mask of controller buttons currently touched by the thumb
 	int thumbButton; // Index of the controller button currently touched by the thumb, or 5 if no button is touched
 	unsigned int gestureMask; // Bit mask of fingers currently in the "grabbed" or "touched" state
 	TrackerState deviceT; // Current relative transformation from source device to index finger device
