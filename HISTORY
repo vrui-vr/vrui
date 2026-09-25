@@ -9076,3 +9076,5 @@ Vrui-15.0-001:
   instead of a background thread.
 - Fixed bug in Vrui::MultiShiftButtonTool that caused crashes when
   source devices deliver events early.
+- Add error callbacks to RawHID::EventDevice and catch exceptions and
+  call error callbacks when processEvents() throws an exception.

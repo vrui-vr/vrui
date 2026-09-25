@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #include <string>
 #include <vector>
+#include <stdexcept>
 #include <Misc/CallbackData.h>
 #include <Misc/CallbackList.h>
 #include <Threads/IOWatcher.h>
@@ -197,6 +198,20 @@ class EventDevice
 			}
 		};
 	
+	class ErrorCallbackData:public CallbackData // Class for errors while accessing the device
+		{
+		/* Elements: */
+		public:
+		const std::runtime_error& exception; // The exception that (hopefully) describes the error
+		
+		/* Constructors and destructors: */
+		ErrorCallbackData(EventDevice* sDevice,const std::runtime_error& sException)
+			:CallbackData(sDevice),
+			 exception(sException)
+			{
+			}
+		};
+	
 	/* Elements: */
 	private:
 	int fd; // The event device file's file descriptor
@@ -216,6 +231,7 @@ class EventDevice
 	Misc::CallbackList absAxisFeatureEventCallbacks;
 	Misc::CallbackList relAxisFeatureEventCallbacks;
 	Misc::CallbackList synReportEventCallbacks;
+	Misc::CallbackList errorCallbacks;
 	Threads::IOWatcherOwner deviceWatcher; // Watcher for the event device's file
 	
 	/* Private methods: */
@@ -299,6 +315,10 @@ class EventDevice
 	Misc::CallbackList& getSynReportEventCallbacks(void)
 		{
 		return synReportEventCallbacks;
+		}
+	Misc::CallbackList& getErrorCallbacks(void)
+		{
+		return errorCallbacks;
 		}
 	int addFFEffect(unsigned int direction,float strength); // Uploads a new constant force feedback effect to the device; returns the effect's per-device ID
 	void updateFFEffect(int effectId,unsigned int direction,float strength); // Updates the constant force feedback effect with the given ID

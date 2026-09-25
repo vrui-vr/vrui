@@ -292,8 +292,22 @@ void EventDevice::initFeatureMaps(void)
 
 void EventDevice::ioEventCallback(Threads::IOWatcherEvent& event)
 	{
-	/* Process pending events: */
-	processEvents();
+	try
+		{
+		/* Process pending events: */
+		processEvents();
+		}
+	catch(const std::runtime_error& err)
+		{
+		/* Call the error callbacks: */
+		{
+		ErrorCallbackData cbData(this,err);
+		errorCallbacks.call(&cbData);
+		}
+		
+		/* Drop the I/O watcher for this device immediately: */
+		deviceWatcher=0;
+		}
 	}
 
 std::vector<std::string> EventDevice::getEventDeviceFileNames(void)
