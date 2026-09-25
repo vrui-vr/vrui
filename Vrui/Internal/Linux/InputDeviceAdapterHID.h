@@ -80,6 +80,7 @@ class InputDeviceAdapterHID:public InputDeviceAdapter
 		void keyFeatureEventCallback(RawHID::EventDevice::KeyFeatureEventCallbackData* cbData); // Callback for HID key feature events
 		void absAxisFeatureEventCallback(RawHID::EventDevice::AbsAxisFeatureEventCallbackData* cbData); // Callback for HID absolute axis feature events
 		void relAxisFeatureEventCallback(RawHID::EventDevice::RelAxisFeatureEventCallbackData* cbData); // Callback for HID relative axis feature events
+		void errorCallback(RawHID::EventDevice::ErrorCallbackData* cbData); // Callback for HID errors such as disconnects
 		
 		/* Constructors and destructors: */
 		Device(RawHID::EventDeviceMatcher& deviceMatcher,InputDeviceAdapterHID& sAdapter); // Creates a device matching the given device matcher for the given input device adapter

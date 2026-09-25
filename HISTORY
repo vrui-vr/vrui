@@ -9078,3 +9078,5 @@ Vrui-15.0-001:
   source devices deliver events early.
 - Add error callbacks to RawHID::EventDevice and catch exceptions and
   call error callbacks when processEvents() throws an exception.
+- Add error handling to Vrui::InputDeviceAdapterHID to disable Vrui
+  devices when their underlying HID throws an error.

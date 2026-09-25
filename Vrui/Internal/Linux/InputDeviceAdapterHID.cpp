@@ -30,6 +30,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StandardValueCoders.h>
 #include <Misc/CompoundValueCoders.h>
 #include <Misc/ConfigurationFile.h>
+#include <Misc/MessageLogger.h>
 #include <Threads/RunLoop.h>
 #include <RawHID/EventDeviceMatcher.h>
 #include <Math/MathValueCoders.h>
@@ -39,6 +40,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/InputDevice.h>
 #include <Vrui/InputDeviceFeature.h>
 #include <Vrui/InputDeviceManager.h>
+#include <Vrui/InputGraphManager.h>
 #include <Vrui/Viewer.h>
 #include <Vrui/UIManager.h>
 #include <Vrui/Internal/Config.h>
@@ -81,6 +83,15 @@ void InputDeviceAdapterHID::Device::relAxisFeatureEventCallback(RawHID::EventDev
 		/* Accumulate the new relative axis value into the relative axis value array: */
 		relAxisValues[valuatorIndex]+=cbData->value;
 		}
+	}
+
+void InputDeviceAdapterHID::Device::errorCallback(RawHID::EventDevice::ErrorCallbackData* cbData)
+	{
+	/* Log an error message: */
+	Misc::formattedUserError("InputDeviceAdapterHID: Disabling input device %s due to exception %s",device->getDeviceName(),cbData->exception.what());
+	
+	/* Disable the HID's associated Vrui input device: */
+	getInputGraphManager()->disable(device);
 	}
 
 InputDeviceAdapterHID::Device::Device(RawHID::EventDeviceMatcher& deviceMatcher,InputDeviceAdapterHID& sAdapter)
@@ -383,6 +394,7 @@ void InputDeviceAdapterHID::initializeInputDevice(int deviceIndex,const Misc::Co
 	newDevice->getKeyFeatureEventCallbacks().add(newDevice.getTarget(),&Device::keyFeatureEventCallback);
 	newDevice->getAbsAxisFeatureEventCallbacks().add(newDevice.getTarget(),&Device::absAxisFeatureEventCallback);
 	newDevice->getRelAxisFeatureEventCallbacks().add(newDevice.getTarget(),&Device::relAxisFeatureEventCallback);
+	newDevice->getErrorCallbacks().add(newDevice.getTarget(),&Device::errorCallback);
 	
 	/* Store the new device structure: */
 	devices.push_back(newDevice.releaseTarget());
