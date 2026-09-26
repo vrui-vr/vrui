@@ -9092,3 +9092,6 @@ Vrui-15.0-001:
   semantics.
   - Fixed dependent button forwarding so tool deletion works.
   - Named virtual buttons device after source input device.
+- Added calcCircleTessellation, calcCircleAdjustedRadius, and
+  addTessellatedCircle methods to SceneGraph::LineSetNode to improve
+  integration with client code.

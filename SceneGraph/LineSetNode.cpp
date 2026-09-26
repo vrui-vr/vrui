@@ -1,7 +1,7 @@
 /***********************************************************************
 LineSetNode - Class for sets of lines as renderable geometry, with a
 creation interface mimicking OpenGL immediate mode rendering.
-Copyright (c) 2025 Oliver Kreylos
+Copyright (c) 2025-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -327,28 +327,34 @@ void LineSetNode::addLine(const Point& p0,const Point& p1)
 	++numLines;
 	}
 
-void LineSetNode::addCircle(const Point& center,const Rotation& frame,Scalar radius,Scalar tolerance)
+unsigned int LineSetNode::calcCircleTessellation(Scalar radius,Scalar tolerance)
 	{
 	/* Do all calculations in double precision: */
 	double r(radius);
 	double eps(tolerance);
 	
-	/* Calculate an appropriate tesselation for the given tolerance: */
-	int tesselation=int(Math::ceil(Math::clamp(Math::Constants<double>::pi/Math::acos((r-eps)/(r+eps)),3.0,8192.0)));
-	
+	/* Calculate and return an appropriate tessellation for the given radius and tolerance: */
+	return (unsigned int)(Math::ceil(Math::clamp(Math::Constants<double>::pi/Math::acos((r-eps)/(r+eps)),3.0,8192.0)));
+	}
+
+double LineSetNode::calcCircleAdjustedRadius(Scalar radius,unsigned int tessellation)
+	{
 	/* Adjust the radius for minimal deviation for the given tesselation: */
-	double rp=2.0*r/(1.0+Math::cos(Math::Constants<double>::pi/double(tesselation)));
-	
+	return 2.0*double(radius)/(1.0+Math::cos(Math::Constants<double>::pi/double(tessellation)));
+	}
+
+void LineSetNode::addTessellatedCircle(const Point& center,const Rotation& frame,double adjustedRadius,unsigned int tessellation)
+	{
 	/* Add the circle's vertices and line segments: */
 	VertexIndex base=numVertices;
-	for(int i=0;i<tesselation;++i)
+	for(unsigned int i=0;i<tessellation;++i)
 		{
-		double angle=(2.0*Math::Constants<double>::pi*double(i))/double(tesselation);
-		vertices.push_back(Vertex(color,center+frame.transform(Vector(Scalar(Math::cos(angle)*rp),Scalar(Math::sin(angle)*rp),0))));
-		lines.push_back(Line(base+VertexIndex(i),base+VertexIndex((i+1)%tesselation)));
+		double angle=(2.0*Math::Constants<double>::pi*double(i))/double(tessellation);
+		vertices.push_back(Vertex(color,center+frame.transform(Vector(Scalar(Math::cos(angle)*adjustedRadius),Scalar(Math::sin(angle)*adjustedRadius),0))));
+		lines.push_back(Line(base+VertexIndex(i),base+VertexIndex((i+1)%tessellation)));
 		}
-	numVertices+=tesselation;
-	numLines+=tesselation;
+	numVertices+=tessellation;
+	numLines+=tessellation;
 	}
 
 void LineSetNode::addCircleArc(const Point& center,const Rotation& frame,Scalar radius,Scalar angle0,Scalar angle1,Scalar tolerance)
@@ -359,7 +365,7 @@ void LineSetNode::addCircleArc(const Point& center,const Rotation& frame,Scalar 
 	double a1(angle1);
 	double eps(tolerance);
 	
-	/* Calculate an appropriate tesselation for the given tolerance: */
+	/* Calculate an appropriate tessellation for the given tolerance: */
 	double alpha=2.0*Math::acos((r-eps)/(r+eps));
 	double beta=Math::acos((r-eps)/r);
 	int n=int(Math::ceil(Math::clamp(((a1-a0)-2.0*beta)/alpha,0.0,8190.0)));

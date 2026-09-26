@@ -1,7 +1,7 @@
 /***********************************************************************
 LineSetNode - Class for sets of lines as renderable geometry, with a
 creation interface mimicking OpenGL immediate mode rendering.
-Copyright (c) 2025 Oliver Kreylos
+Copyright (c) 2025-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -94,7 +94,18 @@ class LineSetNode:public GeometryNode,public GLObject
 	VertexIndex addVertex(const Point& position); // Adds a new vertex with the current color and the given position; returns vertex's index
 	void addLine(VertexIndex v0,VertexIndex v1); // Adds a new line using the vertices of the given indices
 	void addLine(const Point& p0,const Point& p1); // Adds a new line using the given vertices and the current color
-	void addCircle(const Point& center,const Rotation& frame,Scalar radius,Scalar tolerance); // Adds a circle
+	static unsigned int calcCircleTessellation(Scalar radius,Scalar tolerance); // Returns the minimum number of vertices required to render a circle of the given radius within the given tolerance
+	static double calcCircleAdjustedRadius(Scalar radius,unsigned int numVertices); // Returns an adjusted radius to render a circle of the given radius and number of vertices with optimal approximation
+	void addTessellatedCircle(const Point& center,const Rotation& frame,double adjustedRadius,unsigned int tessellation); // Adds a circle with the given tessellation and adjusted radius
+	void addCircle(const Point& center,const Rotation& frame,Scalar radius,Scalar tolerance) // Adds a circle with the given radius and approximation tolerance
+		{
+		/* Calculate a tessellation and adjusted radius to render the circle: */
+		unsigned int tessellation=calcCircleTessellation(radius,tolerance);
+		double adjustedRadius=calcCircleAdjustedRadius(radius,tessellation);
+		
+		/* Add the circle: */
+		addTessellatedCircle(center,frame,adjustedRadius,tessellation);
+		}
 	void addCircleArc(const Point& center,const Rotation& frame,Scalar radius,Scalar angle0,Scalar angle1,Scalar tolerance); // Adds a circular arc between the given two angles in radians, angle0<angle1
 	void addNumber(const Point& anchor,const Rotation& frame,Scalar size,int hAlign,int vAlign,const char* number);
 	void clear(void); // Deletes all vertices and lines from the line set
