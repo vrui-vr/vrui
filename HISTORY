@@ -9091,3 +9091,4 @@ Vrui-15.0-001:
 - Adjusted Vrui::ThumbstickButtonsTool to new input device callback
   semantics.
   - Fixed dependent button forwarding so tool deletion works.
+  - Named virtual buttons device after source input device.

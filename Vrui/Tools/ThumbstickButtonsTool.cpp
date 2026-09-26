@@ -23,6 +23,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/Tools/ThumbstickButtonsTool.h>
 
+#include <string>
 #include <Misc/StdError.h>
 #include <Misc/FixedArray.h>
 #include <Misc/StandardValueCoders.h>
@@ -189,7 +190,9 @@ void ThumbstickButtonsTool::storeState(Misc::ConfigurationFileSection& configFil
 void ThumbstickButtonsTool::initialize(void)
 	{
 	/* Create a virtual input device to shadow the source input device: */
-	transformedDevice=addVirtualInputDevice("ThumbstickButtonsToolTransformedDevice",configuration.numButtons,0);
+	std::string buttonsDeviceName=sourceDevice->getDeviceName();
+	buttonsDeviceName.append("ThumbstickButtons");
+	transformedDevice=addVirtualInputDevice(buttonsDeviceName.c_str(),configuration.numButtons,0);
 	
 	/* Copy the source device's tracking type: */
 	transformedDevice->setTrackType(sourceDevice->getTrackType());
