@@ -1,6 +1,6 @@
 /***********************************************************************
 GroupNode - Base class for nodes that contain child nodes.
-Copyright (c) 2009-2025 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -517,7 +517,9 @@ void GroupNode::update(void)
 		}
 	
 	/* Create the acceleration kd-tree: */
+	#if GROUP_USE_KDTREE
 	createKdTree();
+	#endif
 	}
 
 void GroupNode::read(SceneGraphReader& reader)
@@ -557,7 +559,9 @@ void GroupNode::read(SceneGraphReader& reader)
 		}
 	
 	/* Create the acceleration kd-tree: */
+	#if GROUP_USE_KDTREE
 	createKdTree();
+	#endif
 	}
 
 void GroupNode::write(SceneGraphWriter& writer) const
@@ -673,7 +677,9 @@ void GroupNode::addChild(GraphNode& child)
 	setPassMask(passMask|child.getPassMask());
 	
 	/* Create the acceleration kd-tree: */
+	#if GROUP_USE_KDTREE
 	createKdTree();
+	#endif
 	}
 
 void GroupNode::removeChild(GraphNode& child)
@@ -689,7 +695,9 @@ void GroupNode::removeChild(GraphNode& child)
 	setPassMask(newPassMask);
 	
 	/* Create the acceleration kd-tree: */
+	#if GROUP_USE_KDTREE
 	createKdTree();
+	#endif
 	}
 
 void GroupNode::removeAllChildren(void)
@@ -705,7 +713,9 @@ void GroupNode::removeAllChildren(void)
 	setPassMask(0x0U);
 	
 	/* Create the acceleration kd-tree: */
+	#if GROUP_USE_KDTREE
 	createKdTree();
+	#endif
 	}
 
 }
