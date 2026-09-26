@@ -9084,3 +9084,4 @@ Vrui-15.0-001:
     Vrui on HID errors, destroying all tools and cleaning up dangling
     state like active navigation. Duh.
 - Fixed thumb gesture detection in Vrui::IndexHandTool.
+- Improved state change tracking in Vrui::InputDevice.

@@ -120,6 +120,7 @@ class InputDevice // Class for input devices
 	
 	/* State for disabling callbacks: */
 	bool callbacksEnabled; // Flag if callbacks are enabled
+	unsigned int trackingUpdatedMask; // Bit mask indicating which parts of the device's tracking state have been updated since callbacks were disabled
 	ChangeList changes; // Input device state changes accumulated since the time callbacks were disabled
 	
 	/* Constructors and destructors: */

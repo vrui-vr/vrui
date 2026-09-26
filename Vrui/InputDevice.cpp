@@ -37,7 +37,7 @@ struct InputDevice::ChangeListItem
 	/* Embedded classes: */
 	enum ChangeTypes // Enumerated type for types of state changes
 		{
-		DeviceRayChanged,TrackingChanged,ButtonChanged,ValuatorChanged,
+		ButtonChanged,ValuatorChanged,
 		Invalid // Type to invalidate events that have already been handled
 		};
 	
@@ -59,10 +59,6 @@ struct InputDevice::ChangeListItem
 		};
 	
 	/* Constructors and destructors: */
-	ChangeListItem(int sChangeType) // Constructor for device ray or tracking changes
-		:changeType(sChangeType)
-		{
-		}
 	ChangeListItem(int sButtonIndex,bool sNewButtonState) // Constructor for button state changes
 		:changeType(ButtonChanged)
 		{
@@ -88,7 +84,7 @@ InputDevice::InputDevice(void)
 	 deviceRayDirection(0,1,0),deviceRayStart(0),
 	 transformation(TrackerState::identity),linearVelocity(Vector::zero),angularVelocity(Vector::zero),
 	 buttonStates(0),valuatorValues(0),
-	 callbacksEnabled(true)
+	 callbacksEnabled(true),trackingUpdatedMask(0x0U)
 	{
 	deviceName[0]='\0';
 	}
@@ -102,7 +98,7 @@ InputDevice::InputDevice(const char* sDeviceName,int sTrackType,int sNumButtons,
 	 transformation(TrackerState::identity),linearVelocity(Vector::zero),angularVelocity(Vector::zero),
 	 buttonStates(numButtons>0?new bool[numButtons]:0),
 	 valuatorValues(numValuators>0?new double[numValuators]:0),
-	 callbacksEnabled(true)
+	 callbacksEnabled(true),trackingUpdatedMask(0x0U)
 	{
 	/* Copy device name: */
 	strcpy(deviceName,sDeviceName);
@@ -121,7 +117,7 @@ InputDevice::InputDevice(const InputDevice& source)
 	 deviceRayDirection(0,1,0),deviceRayStart(0),
 	 transformation(TrackerState::identity),linearVelocity(Vector::zero),angularVelocity(Vector::zero),
 	 buttonStates(0),valuatorValues(0),
-	 callbacksEnabled(true)
+	 callbacksEnabled(true),trackingUpdatedMask(0x0U)
 	{
 	deviceName[0]='\0';
 	
@@ -199,8 +195,8 @@ void InputDevice::setDeviceRay(const Vector& newDeviceRayDirection,Scalar newDev
 		}
 	else
 		{
-		/* Keep track of a device ray change: */
-		changes.push_back(ChangeListItem(ChangeListItem::DeviceRayChanged));
+		/* Mark the device ray as updated: */
+		trackingUpdatedMask|=0x1U;
 		}
 	}
 
@@ -218,8 +214,8 @@ void InputDevice::setTransformation(const TrackerState& newTransformation)
 		}
 	else
 		{
-		/* Keep track of a tracking change: */
-		changes.push_back(ChangeListItem(ChangeListItem::TrackingChanged));
+		/* Mark the transformation as updated: */
+		trackingUpdatedMask|=0x2U;
 		}
 	}
 
@@ -237,8 +233,8 @@ void InputDevice::setLinearVelocity(const Vector& newLinearVelocity)
 		}
 	else
 		{
-		/* Keep track of a tracking change: */
-		changes.push_back(ChangeListItem(ChangeListItem::TrackingChanged));
+		/* Mark the linear velocity as updated: */
+		trackingUpdatedMask|=0x4U;
 		}
 	}
 
@@ -256,8 +252,8 @@ void InputDevice::setAngularVelocity(const Vector& newAngularVelocity)
 		}
 	else
 		{
-		/* Keep track of a tracking change: */
-		changes.push_back(ChangeListItem(ChangeListItem::TrackingChanged));
+		/* Mark the angular velocity as updated: */
+		trackingUpdatedMask|=0x8U;
 		}
 	}
 
@@ -277,8 +273,8 @@ void InputDevice::setTrackingState(const TrackerState& newTransformation,const V
 		}
 	else
 		{
-		/* Keep track of a tracking change: */
-		changes.push_back(ChangeListItem(ChangeListItem::TrackingChanged));
+		/* Mark the transformation and linear and angular velocities as updated: */
+		trackingUpdatedMask|=0xeU;
 		}
 	}
 
@@ -303,9 +299,8 @@ void InputDevice::copyTrackingState(const InputDevice* source)
 		}
 	else
 		{
-		/* Keep track of a tracking change: */
-		changes.push_back(ChangeListItem(ChangeListItem::DeviceRayChanged));
-		changes.push_back(ChangeListItem(ChangeListItem::TrackingChanged));
+		/* Mark the entire tracking state as updated: */
+		trackingUpdatedMask|=0xfU;
 		}
 	}
 
@@ -467,36 +462,25 @@ void InputDevice::enableCallbacks(void)
 	/* We have to enable callbacks here so that any changes made to the device while we're processing changes don't get added to the list: */
 	callbacksEnabled=true;
 	
+	/* Call device ray and tracking state callbacks first: */
+	if((trackingUpdatedMask&0x1U)!=0x0U)
+		{
+		CallbackData cbData(this);
+		deviceRayCallbacks.call(&cbData);
+		}
+	if((trackingUpdatedMask&0xeU)!=0x0U)
+		{
+		CallbackData cbData(this);
+		trackingCallbacks.call(&cbData);
+		}
+	
 	/* Call the appropriate callbacks for every change in the change list: */
-	bool deviceRayChangeCalled=false; // Flag to ensure that this type of callback gets called at most once
-	bool trackingChangeCalled=false; // Flag to ensure that this type of callback gets called at most once
 	for(ChangeList::iterator clIt=changes.begin();clIt!=changes.end();++clIt)
 		{
 		switch(clIt->changeType)
 			{
-			case ChangeListItem::DeviceRayChanged:
-				if(!deviceRayChangeCalled)
-					{
-					CallbackData cbData(this);
-					deviceRayCallbacks.call(&cbData);
-					
-					deviceRayChangeCalled=true;
-					}
-				
-				break;
-			
-			case ChangeListItem::TrackingChanged:
-				if(!trackingChangeCalled)
-					{
-					CallbackData cbData(this);
-					trackingCallbacks.call(&cbData);
-					
-					trackingChangeCalled=true;
-					}
-				
-				break;
-			
 			case ChangeListItem::ButtonChanged:
+				/* Only call the callback if the button state actually changed: */
 				if(buttonStates[clIt->button.index]!=clIt->button.newState)
 					{
 					ButtonCallbackData cbData(this,clIt->button.index,clIt->button.newState);
@@ -508,6 +492,7 @@ void InputDevice::enableCallbacks(void)
 				break;
 			
 			case ChangeListItem::ValuatorChanged:
+				/* Only call the callback if the valuator state actually changed: */
 				if(valuatorValues[clIt->valuator.index]!=clIt->valuator.newValue)
 					{
 					ValuatorCallbackData cbData(this,clIt->valuator.index,clIt->valuator.newValue);
@@ -524,6 +509,7 @@ void InputDevice::enableCallbacks(void)
 		}
 	
 	/* Clear the change list: */
+	trackingUpdatedMask=0x0U;
 	changes.clear();
 	}
 
