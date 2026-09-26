@@ -1,7 +1,7 @@
 /***********************************************************************
 WalkNavigationTool - Class to navigate in a VR environment by walking
 around a fixed center position.
-Copyright (c) 2007-2025 Oliver Kreylos
+Copyright (c) 2007-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -220,8 +220,8 @@ void WalkNavigationTool::initialize(void)
 
 void WalkNavigationTool::deinitialize(void)
 	{
-	/* Remove fixed movement circles from Vrui's physical-space scene graph: */
-	if(factory->drawMovementCircles&&!factory->centerOnActivation)
+	/* Remove the movement circles from Vrui's physical-space scene graph just in case: */
+	if(factory->drawMovementCircles)
 		getSceneGraphManager()->removePhysicalNode(*circleRoot);
 	}
 
@@ -244,29 +244,25 @@ void WalkNavigationTool::buttonCallback(int,InputDevice::ButtonCallbackData* cbD
 			if(factory->centerOnActivation&&factory->drawMovementCircles)
 				getSceneGraphManager()->removePhysicalNode(*circleRoot);
 			}
-		else
+		else if(activate())
 			{
-			/* Try activating this tool: */
-			if(activate())
+			if(factory->centerOnActivation)
 				{
-				if(factory->centerOnActivation)
-					{
-					/* Store the center point and center viewing direction for this navigation sequence: */
-					const EnvironmentDefinition& ed=getEnvironmentDefinition();
-					centerPoint=ed.calcFloorPoint(getMainViewer()->getHeadPosition());
-					centerViewDirection=getMainViewer()->getViewDirection();
-					centerViewDirection.orthogonalize(ed.up).normalize();
-					
-					/* Add dynamic movement circles to Vrui's physical-space scene graph: */
-					if(factory->drawMovementCircles)
-						showMovementCircles();
-					}
+				/* Store the center point and center viewing direction for this navigation sequence: */
+				const EnvironmentDefinition& ed=getEnvironmentDefinition();
+				centerPoint=ed.calcFloorPoint(getMainViewer()->getHeadPosition());
+				centerViewDirection=getMainViewer()->getViewDirection();
+				centerViewDirection.orthogonalize(ed.up).normalize();
 				
-				/* Initialize the navigation transformation: */
-				preScale=Vrui::getNavigationTransformation();
-				translation=Vector::zero;
-				azimuth=Scalar(0);
+				/* Add dynamic movement circles to Vrui's physical-space scene graph: */
+				if(factory->drawMovementCircles)
+					showMovementCircles();
 				}
+			
+			/* Initialize the navigation transformation: */
+			preScale=Vrui::getNavigationTransformation();
+			translation=Vector::zero;
+			azimuth=Scalar(0);
 			}
 		}
 	}

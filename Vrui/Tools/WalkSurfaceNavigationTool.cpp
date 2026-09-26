@@ -1,7 +1,7 @@
 /***********************************************************************
 WalkSurfaceNavigationTool - Version of the WalkNavigationTool that lets
 a user navigate along an application-defined surface.
-Copyright (c) 2009-2025 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -389,9 +389,11 @@ void WalkSurfaceNavigationTool::initialize(void)
 
 void WalkSurfaceNavigationTool::deinitialize(void)
 	{
-	/* Remove fixed movement circles from Vrui's physical-space scene graph: */
-	if(configuration.drawMovementCircles&&!configuration.centerOnActivation)
+	/* Remove the movement circles and HUD from Vrui's physical-space scene graph just in case: */
+	if(configuration.drawMovementCircles)
 		getSceneGraphManager()->removePhysicalNode(*circleRoot);
+	if(configuration.drawHud)
+		getSceneGraphManager()->removePhysicalNode(*hudRoot);
 	}
 
 const ToolFactory* WalkSurfaceNavigationTool::getFactory(void) const

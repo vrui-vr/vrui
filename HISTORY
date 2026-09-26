@@ -9086,3 +9086,5 @@ Vrui-15.0-001:
 - Fixed thumb gesture detection in Vrui::IndexHandTool.
 - Improved state change tracking in Vrui::InputDevice.
 - Fixed thumb positioning for Valve Index controllers.
+- Fixed management of movement circle and HUD displays in
+  Vrui::WalkNavigationTool and Vrui::WalkSurfaceNavigationTool.
