@@ -1,7 +1,7 @@
 /***********************************************************************
 ThumbstickButtonsTool - Transform an analog stick to multiple buttons
 arranged around a circle.
-Copyright (c) 2021 Oliver Kreylos
+Copyright (c) 2021-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -75,6 +75,10 @@ class ThumbstickButtonsTool:public TransformTool
 	ThumbstickButtonsToolFactory::Configuration configuration; // Private configuration of this tool
 	double anglePerButton; // Angle allocated for each perimeter button in radians
 	int pressedButton; // Index of currently pressed button, or -1
+	double pos[2]; // The current thumbstick (x, y) position in [-1, 1]
+	
+	/* Private methods: */
+	int calcButtonIndex(double x,double y,double threshold) const; // Returns the index of the button that will be selected based on the given thumbstick positions, or -1 if the thumbstick is in the center area
 	
 	/* Constructors and destructors: */
 	public:

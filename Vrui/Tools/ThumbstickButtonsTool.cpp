@@ -1,7 +1,7 @@
 /***********************************************************************
 ThumbstickButtonsTool - Transform an analog stick to multiple buttons
 arranged around a circle.
-Copyright (c) 2021-2024 Oliver Kreylos
+Copyright (c) 2021-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -147,11 +147,27 @@ ThumbstickButtonsToolFactory* ThumbstickButtonsTool::factory=0;
 Methods of class ThumbstickButtonsTool:
 **************************************/
 
+int ThumbstickButtonsTool::calcButtonIndex(double x,double y,double threshold) const
+	{
+	/* Check if the thumbstick is in the activation area: */
+	if(x*x+y*y>Math::sqr(threshold))
+		{
+		/* Calculate and return the index of the selected button: */
+		double angle=Math::atan2(-x,y);
+		if(angle<0.0)
+			angle+=2.0*Math::Constants<double>::pi;
+		return int(Math::floor(angle/anglePerButton+0.5))%configuration.numButtons;
+		}
+	else
+		return -1;
+	}
+
 ThumbstickButtonsTool::ThumbstickButtonsTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
 	:TransformTool(factory,inputAssignment),
 	 configuration(ThumbstickButtonsTool::factory->configuration),
 	 anglePerButton(0),pressedButton(-1)
 	{
+	pos[1]=pos[0]=0.0;
 	}
 
 ThumbstickButtonsTool::~ThumbstickButtonsTool(void)
@@ -196,16 +212,16 @@ const ToolFactory* ThumbstickButtonsTool::getFactory(void) const
 	return factory;
 	}
 
-void ThumbstickButtonsTool::valuatorCallback(int buttonSlotIndex,InputDevice::ValuatorCallbackData* cbData)
+void ThumbstickButtonsTool::valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData)
 	{
+	/* Update the thumbstick position: */
+	pos[valuatorSlotIndex]=cbData->newValuatorValue;
+	
 	/* Check if one of the buttons is currently pressed: */
-	double x=getValuatorState(0);
-	double y=getValuatorState(1);
-	double r2=x*x+y*y;
 	if(pressedButton>=0)
 		{
 		/* Release the button if the thumbstick returned to the center position: */
-		if(r2<Math::sqr(configuration.activationThresholds[0]))
+		if(Math::sqr(pos[0])+Math::sqr(pos[1])<Math::sqr(configuration.activationThresholds[0]))
 			{
 			transformedDevice->setButtonState(pressedButton,false);
 			pressedButton=-1;
@@ -213,18 +229,12 @@ void ThumbstickButtonsTool::valuatorCallback(int buttonSlotIndex,InputDevice::Va
 		}
 	else
 		{
-		/* Press a button if the thumbstick left the center position: */
-		if(r2>Math::sqr(configuration.activationThresholds[1]))
-			{
-			/* Calculate the index of the selected button: */
-			double angle=Math::atan2(-x,y);
-			if(angle<0.0)
-				angle+=2.0*Math::Constants<double>::pi;
-			pressedButton=int(Math::floor(angle/anglePerButton+0.5))%configuration.numButtons;
-			
-			/* Press the selected button: */
+		/* Calculate the index of the button that will be pressed: */
+		pressedButton=calcButtonIndex(pos[0],pos[1],configuration.activationThresholds[1]);
+		
+		/* Press the button if it is valid: */
+		if(pressedButton>=0)
 			transformedDevice->setButtonState(pressedButton,true);
-			}
 		}
 	}
 
@@ -251,10 +261,11 @@ InputDeviceFeatureSet ThumbstickButtonsTool::getForwardedFeatures(const InputDev
 	if(slotIndex<0)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Source feature is not part of tool's input assignment");
 	
-	/* Return the currently pressed button: */
+	/* Return the index of the button that would be pressed: */
 	InputDeviceFeatureSet result;
-	if(pressedButton>=0)
-		result.push_back(InputDeviceFeature(transformedDevice,InputDevice::BUTTON,pressedButton));
+	int button=calcButtonIndex(getValuatorState(0),getValuatorState(1),0.0);
+	if(button>=0)
+		result.push_back(InputDeviceFeature(transformedDevice,InputDevice::BUTTON,button));
 	
 	return result;
 	}
