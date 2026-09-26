@@ -108,7 +108,10 @@ class RunLoop
 		{
 		return shutdownRequested;
 		}
-	bool waitForEvents(EventTime* wakeUp =0); // Blocks until any event happens; if wakeUp is not null, blocks at most until the wake-up time; does not block and returns false if the stop() method was called; updates dispatch time immediately before returning
+	bool pollForEvents(void); // Polls for pending events but does not block; returns false if the stop() method was called
+	bool waitForEvents(EventTime* wakeUp =0); // Blocks until any event happens; if wakeUp is not null, blocks at most until the wake-up time; does not block and returns false if the stop() method was called
+	void updateDispatchTime(void); // Samples the run loop's internal timer; should be called immediately before dispatchPendingEvents is called for timers to trigger correctly
+	void setDispatchTime(const EventTime& newDispatchTime); // Overrides the run loop's internal timer; only used in specific circumstances; should be called immediately before dispatchPendingEvents for timers to trigger correctly
 	const EventTime& getDispatchTime(void) const // Returns the most recent dispatch time sample
 		{
 		return lastDispatchTime;

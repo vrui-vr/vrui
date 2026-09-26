@@ -46,7 +46,7 @@ namespace Threads {
 Static elements of class RunLoop:
 ********************************/
 
-const size_t RunLoop::messageBufferSize=PIPE_BUF/sizeof(RunLoop::PipeMessage); // Reserve for the number of messages that fits into the guaranteed atomic write size
+const size_t RunLoop::messageBufferSize=PIPE_BUF*2/sizeof(RunLoop::PipeMessage); // Reserve for twice the number of messages that fit into the guaranteed atomic write size
 
 /************************
 Methods of class RunLoop:
@@ -520,6 +520,54 @@ void RunLoop::restart(void)
 	shutdownRequested=false;
 	}
 
+bool RunLoop::pollForEvents(void)
+	{
+	/* Bail out and signal shutdown if a shutdown has been requested: */
+	if(shutdownRequested)
+		return false;
+	
+	#ifdef __linux__ // On Linux, we have ppoll()
+	
+	/* Poll for I/O events: */
+	EventInterval pollTimeout(0,0);
+	int pollResult=ppoll(pollFds.data(),numActiveIOWatchers+1,&pollTimeout,0); // Account for the extra watcher for the self-pipe's read end
+	
+	#else
+	
+	/* Poll for I/O events: */
+	int pollResult=poll(pollFds.data(),numActiveIOWatchers+1,0); // Account for the extra watcher for the self-pipe's read end
+	
+	#endif
+	
+	/* Check the result of polling: */
+	if(pollResult>0)
+		{
+		/* Read all messages available on the self-pipe, but leave handling them to the dispatchPendingEvents method: */
+		if((pollFds[0].revents&POLLIN)!=0x0)
+			{
+			/* Read a batch of messages from the self-pipe: */
+			ssize_t readResult=read(pipeFds[0],messageBuffer,messageBufferSize*sizeof(PipeMessage));
+			if(readResult<0)
+				throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot read from event pipe");
+			
+			/* Set up the message handling buffer: */
+			size_t numMessages=size_t(readResult)/sizeof(PipeMessage);
+			if(numMessages*sizeof(PipeMessage)!=size_t(readResult))
+				throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Partial read on event pipe");
+			messageEnd=messageBuffer+numMessages;
+			messagePtr=messageBuffer;
+			}
+		}
+	else if(pollResult<0)
+		{
+		/* Handle errors from poll/ppoll: */
+		if(errno!=EINTR&&errno!=EAGAIN)
+			throw Misc::makeLibcErr(__PRETTY_FUNCTION__,errno,"Cannot poll for I/O events");
+		}
+	
+	return true;
+	}
+
 bool RunLoop::waitForEvents(EventTime* wakeUp)
 	{
 	/* Bail out and signal shutdown if a shutdown has been requested: */
@@ -641,10 +689,19 @@ bool RunLoop::waitForEvents(EventTime* wakeUp)
 		}
 	while(keepPolling);
 	
+	return true;
+	}
+
+void RunLoop::updateDispatchTime(void)
+	{
 	/* Sample the current time: */
 	lastDispatchTime.set();
-	
-	return true;
+	}
+
+void RunLoop::setDispatchTime(const EventTime& newDispatchTime)
+	{
+	/* Override the dispatch time: */
+	lastDispatchTime=newDispatchTime;
 	}
 
 void RunLoop::dispatchPendingEvents(void)
@@ -725,7 +782,10 @@ void RunLoop::run(void)
 	
 	/* Dispatch events until stopped: */
 	while(waitForEvents())
+		{
+		updateDispatchTime();
 		dispatchPendingEvents();
+		}
 	}
 
 void RunLoop::shutdown(void)

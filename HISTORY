@@ -9095,3 +9095,14 @@ Vrui-15.0-001:
 - Added calcCircleTessellation, calcCircleAdjustedRadius, and
   addTessellatedCircle methods to SceneGraph::LineSetNode to improve
   integration with client code.
+- Changed behavior of Threads::RunLoop to support special use cases
+  like the Vrui main loop:
+  - Added pollForEvents method.
+  - Removed automatic sampling of dispatch time at the end of
+    waitForEvents.
+  - Added updateDispatchTime method to explicitly sample the timer.
+  - Added setDispatchTime method to override the dispatch time with a
+    custom value; this does not play well with waitForEvents and should
+    therefore only be used with pollForEvents.
+  - Updated run method to call updateDispatchTime before calling
+    dispatchPendingEvents.
