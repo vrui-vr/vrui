@@ -579,8 +579,12 @@ void VruiState::jobCompleteCallback(Threads::UserSignalEvent& event,Misc::Autopo
 
 void VruiState::dispatchCommandsCallback(Threads::IOWatcherEvent& event)
 	{
-	/* Dispatch commands from the file descriptor in the event: */
-	commandDispatcher.dispatchCommands(event.getFd());
+	/* Dispatch commands from the file descriptor in the event and check for errors: */
+	if(commandDispatcher.dispatchCommands(event.getFd()))
+		{
+		/* Disable this I/O watcher to avoid further errors: */
+		event.getSource().disable();
+		}
 	}
 
 VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* sPipe)
