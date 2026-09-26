@@ -287,9 +287,9 @@ void IndexHandTool::updateGesture(unsigned int newGestureMask)
 
 void IndexHandTool::updateThumb(void)
 	{
-	/* Determine the highest-priority (lowest slot index) touched button: */
+	/* Determine the highest-priority (highest slot index) touched button: */
 	thumbButton=5;
-	for(int i=4;i>=0;--i)
+	for(int i=0;i<5;++i)
 		if((thumbButtonMask&(0x1<<i))!=0x0)
 			thumbButton=i;
 	

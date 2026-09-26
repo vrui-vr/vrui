@@ -54,7 +54,7 @@ Transform
 		DEF Thumb0 Transform
 			{
 			translation -0.3125 0.25 0.875
-rotation 0.83152578907 -0.315965138744 0.456870762043 0.987895859197
+			rotation 0.963644517367 -0.233683096915 0.129543252873 0.919937613885
 			children
 				[
 				Shape
@@ -94,7 +94,7 @@ rotation 0.83152578907 -0.315965138744 0.456870762043 0.987895859197
 				DEF Thumb1 Transform
 					{
 					translation 0.0 2.5 0.0
-rotation -1 0 0 0.436332312999
+					rotation -1 0 0 0.453785605519
 					children
 						[
 						Shape
@@ -134,7 +134,7 @@ rotation -1 0 0 0.436332312999
 						DEF Thumb2 Transform
 							{
 							translation 0.0 1.5 0.0
-rotation -1 0 0 1.2217304764
+							rotation -1 0 0 0.767944870878
 							children
 								[
 								Shape

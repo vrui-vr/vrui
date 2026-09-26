@@ -9085,3 +9085,4 @@ Vrui-15.0-001:
     state like active navigation. Duh.
 - Fixed thumb gesture detection in Vrui::IndexHandTool.
 - Improved state change tracking in Vrui::InputDevice.
+- Fixed thumb positioning for Valve Index controllers.
