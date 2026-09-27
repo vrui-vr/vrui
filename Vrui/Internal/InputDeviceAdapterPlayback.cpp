@@ -366,7 +366,7 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 	catch(const IO::File::ReadError&)
 		{
 		done=true;
-		nextTimeStamp=Math::Constants<double>::max;
+		nextTimeStamp=1.0; // We'll simply be kicking the can down the road if the application doesn't quit when we're out of data
 		
 		if(quitWhenDone)
 			{
@@ -487,32 +487,33 @@ void InputDeviceAdapterPlayback::prepareMainLoop(void)
 
 void InputDeviceAdapterPlayback::updateInputDevices(void)
 	{
-	/* Do nothing if at end of file: */
-	if(done)
-		return;
-	
 	/* Enter the next frame: */
 	timeStamp=nextTimeStamp;
 	
-	/* Read new device states: */
-	readDeviceStates();
-	
-	/* Read time stamp of next data frame: */
-	try
+	if(!done)
 		{
-		nextTimeStamp=inputDeviceDataFile->read<double>();
-		}
-	catch(const IO::File::ReadError&)
-		{
-		done=true;
-		nextTimeStamp=Math::Constants<double>::max;
+		/* Read new device states: */
+		readDeviceStates();
 		
-		if(quitWhenDone)
+		/* Read time stamp of next data frame: */
+		try
 			{
-			/* Request exiting the program: */
-			shutdown();
+			nextTimeStamp=inputDeviceDataFile->read<double>();
+			}
+		catch(const IO::File::ReadError&)
+			{
+			done=true;
+			nextTimeStamp=timeStamp+1.0; // We'll simply be kicking the can down the road if the application doesn't quit when we're out of data
+			
+			if(quitWhenDone)
+				{
+				/* Request exiting the program: */
+				shutdown();
+				}
 			}
 		}
+	else
+		nextTimeStamp=timeStamp+1.0; // We'll simply be kicking the can down the road if the application doesn't quit when we're out of data
 	
 	if(movieWindow!=0)
 		{

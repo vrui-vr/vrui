@@ -689,9 +689,6 @@ VruiState::~VruiState(void)
 	delete scaleBar;
 	delete coordinateManager;
 	
-	/* Re-install the original message logger: */
-	Misc::MessageLogger::setMessageLogger(originalMessageLogger);
-	
 	/* Delete widget management: */
 	if(systemMenuTopLevel)
 		delete systemMenu;
@@ -1696,7 +1693,10 @@ bool VruiState::startFrame(void)
 		/* Reset the application time base on the first frame -- ugh: */
 		// FIXME -- THERE MUST BE A BETTER WAY ONCE SYNCHRONIZATION IS BACK ON THE MENU!
 		if(frameIndex==0)
+			{
 			frameTimeBase=runLoop.getDispatchTime();
+			newApplicationTime=0.0;
+			}
 		
 		/* Share the new application time with a cluster: */
 		if(multiplexer!=0)
@@ -1782,10 +1782,6 @@ bool VruiState::startFrame(void)
 			multipipeDispatcher->updateInputDevices();
 			textEventDispatcher->writeEventQueues(*pipe);
 			}
-		
-		/* Save input device states to data file if requested: */
-		if(inputDeviceDataSaver!=0)
-			inputDeviceDataSaver->saveCurrentState(applicationTime);
 		
 		if(delayNavigationTransformation&&(navigationTransformationChangedMask&0x1))
 			{
@@ -1878,6 +1874,10 @@ bool VruiState::startFrame(void)
 	
 	/* Update the input graph: */
 	inputGraphManager->update();
+	
+	/* Save input device states to data file if requested: */
+	if(master&&inputDeviceDataSaver!=0)
+		inputDeviceDataSaver->saveCurrentState(applicationTime);
 	
 	/* Update the tool manager: */
 	toolManager->update();
@@ -2100,6 +2100,9 @@ void VruiState::finishMainLoop(void)
 	{
 	/* Call the application's main loop shutdown function: */
 	application->finishMainLoop();
+	
+	/* Re-install the original message logger: */
+	Misc::MessageLogger::setMessageLogger(originalMessageLogger);
 	
 	/* Destroy all tools: */
 	toolManager->destroyTools();
