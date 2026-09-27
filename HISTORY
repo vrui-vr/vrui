@@ -9126,3 +9126,5 @@ Vrui-15.0-001:
   adapters. That's no longer an issue.
   - Vrui::InputDeviceAdapterMultitouch was the only one using it.
 - Included missing stdexcept in Vrui/InputGraphManager.cpp.
+- Fixed typo in Vrui::MouseNavigationTool that caused those tools to
+  crash if not bound to an actual mouse device.

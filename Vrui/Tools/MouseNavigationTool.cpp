@@ -345,7 +345,7 @@ void MouseNavigationTool::initialize(void)
 		InputDevice* device=getInputGraphManager()->getRootDevice(getButtonDevice(buttonIndex));
 		mouseAdapter=dynamic_cast<InputDeviceAdapterMouse*>(getInputDeviceManager()->findInputDeviceAdapter(device));
 		}
-	for(int valuatorIndex=0;valuatorIndex<layout.getNumButtons()&&mouseAdapter==0;++valuatorIndex)
+	for(int valuatorIndex=0;valuatorIndex<layout.getNumValuators()&&mouseAdapter==0;++valuatorIndex)
 		{
 		/* Get the valuator device's root device and check whether it's controller by a mouse adapter: */
 		InputDevice* device=getInputGraphManager()->getRootDevice(getValuatorDevice(valuatorIndex));
