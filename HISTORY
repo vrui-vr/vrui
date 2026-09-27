@@ -9125,3 +9125,4 @@ Vrui-15.0-001:
   time until after updateInputDevices was called on all input device
   adapters. That's no longer an issue.
   - Vrui::InputDeviceAdapterMultitouch was the only one using it.
+- Included missing stdexcept in Vrui/InputGraphManager.cpp.

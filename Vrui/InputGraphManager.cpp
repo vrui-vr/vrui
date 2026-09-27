@@ -29,6 +29,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <iostream>
 #endif
 
+#include <stdexcept>
 #include <Misc/SizedTypes.h>
 #include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
