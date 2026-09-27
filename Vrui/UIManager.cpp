@@ -137,7 +137,7 @@ bool UIManager::popdownWidget(GLMotif::Widget* widget)
 void UIManager::requestClickRepeat(GLMotif::ClickRepeatWidget* widget)
 	{
 	/* Create an active click repeat structure for the widget with a new timer: */
-	Threads::EventTime first=vruiState->runLoop.getDispatchTime()+Threads::EventInterval(styleSheet->clickRepeatDelay);
+	Threads::EventTime first=applicationTimeToTimePoint(getApplicationTime()+styleSheet->clickRepeatDelay);
 	Threads::EventInterval repeat(styleSheet->clickRepeatInterval);
 	activeClickRepeats.push_back(ActiveClickRepeat(widget,*new Threads::Timer(vruiState->runLoop,first,repeat,true,*Threads::createFunctionCall(this,&UIManager::clickRepeatEvent,widget))));
 	}

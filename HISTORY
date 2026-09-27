@@ -9106,3 +9106,6 @@ Vrui-15.0-001:
     therefore only be used with pollForEvents.
   - Updated run method to call updateDispatchTime before calling
     dispatchPendingEvents.
+- Added Vrui::applicationTimeToTimePoint and
+  Vrui::timePointToApplicationTime methods to Vrui kernel interface to
+  simplify use of Threads::RunLoop in Vrui applications.

@@ -347,6 +347,8 @@ double getApplicationTime(void); // Returns the time since the application was s
 double getFrameTime(void); // Returns the duration of the last frame in seconds
 double getCurrentFrameTime(void); // Returns the current average time between frames (1/framerate) in seconds
 double getNextAnimationTime(void); // Returns the application time at which the next frame in a general animation should be scheduled
+TimePoint applicationTimeToTimePoint(double applicationTime); // Converts an application time (in seconds since Vrui's main loop started) to an absolute time point compatible with Threads::RunLoop
+double timePointToApplicationTime(const TimePoint& timePoint); // Converts an absolute time point compatible with Threads::RunLoop to an application time (in seconds since Vrui's main loop started)
 
 /* Frame sequence management: */
 void updateContinuously(void); // Tells Vrui to continuously update its state (must be called before mainLoop)
