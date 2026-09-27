@@ -9128,3 +9128,5 @@ Vrui-15.0-001:
 - Included missing stdexcept in Vrui/InputGraphManager.cpp.
 - Fixed typo in Vrui::MouseNavigationTool that caused those tools to
   crash if not bound to an actual mouse device.
+- Simplify frame rate display for headless cluster head nodes in
+  Vrui.Workbench.cpp.

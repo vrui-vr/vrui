@@ -1531,8 +1531,7 @@ void startSound(void)
 void vruiInnerLoopMultiWindow(void)
 	{
 	/* Print frame rates at regular intervals for window-less Vrui head nodes: */
-	Threads::EventTime nextFrameRateDisplayTime;
-	nextFrameRateDisplayTime+=Threads::EventInterval(1,0);
+	double nextFrameRateDisplayTime=vruiState->applicationTime+1.0;
 	unsigned long frameRateBaseIndex=vruiState->frameIndex;
 	
 	/* Run the main loop until shut down: */
@@ -1644,14 +1643,13 @@ void vruiInnerLoopMultiWindow(void)
 			/* Print current frame rate on head node's console for window-less Vrui processes: */
 			if(vruiMaster)
 				{
-				Threads::EventTime now;
-				if(now>=nextFrameRateDisplayTime)
+				if(vruiState->applicationTime>=nextFrameRateDisplayTime)
 					{
 					unsigned int numFrames=(unsigned int)(vruiState->frameIndex-frameRateBaseIndex);
-					printf("Current frame rate: %8u fps\r",numFrames);
+					printf("\rCurrent frame rate: %8u fps",numFrames);
 					fflush(stdout);
 					
-					nextFrameRateDisplayTime+=Threads::EventInterval(1,0);
+					nextFrameRateDisplayTime+=1.0;
 					frameRateBaseIndex=vruiState->frameIndex;
 					}
 				}
@@ -1670,7 +1668,7 @@ void vruiInnerLoopMultiWindow(void)
 	/* If we were printing frame rates on a window-less head node, clean that up: */
 	if(vruiNumWindows==0&&vruiMaster)
 		{
-		printf("\n");
+		printf("\rAverage frame rate: %8.0f fps\n",double(vruiState->frameIndex)/vruiState->applicationTime);
 		fflush(stdout);
 		}
 	}
