@@ -9130,3 +9130,10 @@ Vrui-15.0-001:
   crash if not bound to an actual mouse device.
 - Simplify frame rate display for headless cluster head nodes in
   Vrui.Workbench.cpp.
+- Added methods to read and write unapplied state changes to
+  Vrui::InputDevice, which makes cluster systems work again with new
+  input device update scheme, and also vastly improves performance,
+  especially if the head node has a mouse input device with many
+  features.
+  - Rewrote Vrui::MultipipeDispatcher to use new read/write methods,
+    vastly simplifying code and improving performance.

@@ -21,10 +21,12 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 02111-1307 USA
 ***********************************************************************/
 
-#include <string.h>
-#include <Misc/StdError.h>
-
 #include <Vrui/InputDevice.h>
+
+#include <string.h>
+#include <Misc/SizedTypes.h>
+#include <Misc/StdError.h>
+#include <IO/File.h>
 
 namespace Vrui {
 
@@ -84,7 +86,7 @@ InputDevice::InputDevice(void)
 	 deviceRayDirection(0,1,0),deviceRayStart(0),
 	 transformation(TrackerState::identity),linearVelocity(Vector::zero),angularVelocity(Vector::zero),
 	 buttonStates(0),valuatorValues(0),
-	 callbacksEnabled(true),trackingUpdatedMask(0x0U)
+	 callbacksEnabled(true),changeMask(0x0U)
 	{
 	deviceName[0]='\0';
 	}
@@ -98,7 +100,7 @@ InputDevice::InputDevice(const char* sDeviceName,int sTrackType,int sNumButtons,
 	 transformation(TrackerState::identity),linearVelocity(Vector::zero),angularVelocity(Vector::zero),
 	 buttonStates(numButtons>0?new bool[numButtons]:0),
 	 valuatorValues(numValuators>0?new double[numValuators]:0),
-	 callbacksEnabled(true),trackingUpdatedMask(0x0U)
+	 callbacksEnabled(true),changeMask(0x0U)
 	{
 	/* Copy device name: */
 	strcpy(deviceName,sDeviceName);
@@ -117,7 +119,7 @@ InputDevice::InputDevice(const InputDevice& source)
 	 deviceRayDirection(0,1,0),deviceRayStart(0),
 	 transformation(TrackerState::identity),linearVelocity(Vector::zero),angularVelocity(Vector::zero),
 	 buttonStates(0),valuatorValues(0),
-	 callbacksEnabled(true),trackingUpdatedMask(0x0U)
+	 callbacksEnabled(true),changeMask(0x0U)
 	{
 	deviceName[0]='\0';
 	
@@ -196,7 +198,7 @@ void InputDevice::setDeviceRay(const Vector& newDeviceRayDirection,Scalar newDev
 	else
 		{
 		/* Mark the device ray as updated: */
-		trackingUpdatedMask|=0x1U;
+		changeMask|=0x1U;
 		}
 	}
 
@@ -215,7 +217,7 @@ void InputDevice::setTransformation(const TrackerState& newTransformation)
 	else
 		{
 		/* Mark the transformation as updated: */
-		trackingUpdatedMask|=0x2U;
+		changeMask|=0x2U;
 		}
 	}
 
@@ -234,7 +236,7 @@ void InputDevice::setLinearVelocity(const Vector& newLinearVelocity)
 	else
 		{
 		/* Mark the linear velocity as updated: */
-		trackingUpdatedMask|=0x4U;
+		changeMask|=0x4U;
 		}
 	}
 
@@ -253,7 +255,7 @@ void InputDevice::setAngularVelocity(const Vector& newAngularVelocity)
 	else
 		{
 		/* Mark the angular velocity as updated: */
-		trackingUpdatedMask|=0x8U;
+		changeMask|=0x8U;
 		}
 	}
 
@@ -274,7 +276,7 @@ void InputDevice::setTrackingState(const TrackerState& newTransformation,const V
 	else
 		{
 		/* Mark the transformation and linear and angular velocities as updated: */
-		trackingUpdatedMask|=0xeU;
+		changeMask|=0xeU;
 		}
 	}
 
@@ -300,7 +302,7 @@ void InputDevice::copyTrackingState(const InputDevice* source)
 	else
 		{
 		/* Mark the entire tracking state as updated: */
-		trackingUpdatedMask|=0xfU;
+		changeMask|=0xfU;
 		}
 	}
 
@@ -328,6 +330,8 @@ void InputDevice::clearButtonStates(void)
 		Fortunately, this method is never called. :)
 		*******************************************************************/
 		
+		/* Mark any feature as being updated and enqueue all new button states: */
+		changeMask|=0x10U;
 		for(int i=0;i<numButtons;++i)
 			changes.push_back(ChangeListItem(i,false));
 		}
@@ -348,6 +352,7 @@ void InputDevice::setButtonState(int index,bool newButtonState)
 	else
 		{
 		/* Keep track of a potential button state change: */
+		changeMask|=0x10U;
 		changes.push_back(ChangeListItem(index,newButtonState));
 		}
 	}
@@ -379,6 +384,8 @@ void InputDevice::setSingleButtonPressed(int index)
 		Fortunately, this method is never called. :)
 		*******************************************************************/
 		
+		/* Mark any feature as being updated and enqueue all new button states: */
+		changeMask|=0x10U;
 		for(int i=0;i<numButtons;++i)
 			changes.push_back(ChangeListItem(i,i==index));
 		}
@@ -400,6 +407,7 @@ void InputDevice::setValuator(int index,double newValuatorValue)
 	else
 		{
 		/* Keep track of a potential valuator value change: */
+		changeMask|=0x10U;
 		changes.push_back(ChangeListItem(index,newValuatorValue));
 		}
 	}
@@ -408,6 +416,136 @@ void InputDevice::disableCallbacks(void)
 	{
 	/* Disable callbacks: */
 	callbacksEnabled=false;
+	}
+
+void InputDevice::writeChanges(IO::File& file) const
+	{
+	/* Write the change mask to the file: */
+	file.write(Misc::UInt8(changeMask));
+	
+	if((changeMask&0x1U)!=0x0U)
+		{
+		/* Write the new device ray and ray start to the file: */
+		file.write(deviceRayDirection.getComponents(),3);
+		file.write(deviceRayStart);
+		}
+	if((changeMask&0x2U)!=0x0U)
+		{
+		/* Write the new device transformation to the file: */
+		file.write(transformation.getTranslation().getComponents(),3);
+		file.write(transformation.getRotation().getQuaternion(),4);
+		}
+	if((changeMask&0x4U)!=0x0U)
+		{
+		/* Write the new linear velocity to the file: */
+		file.write(linearVelocity.getComponents(),3);
+		}
+	if((changeMask&0x8U)!=0x0U)
+		{
+		/* Write the new angular velocity to the file: */
+		file.write(angularVelocity.getComponents(),3);
+		}
+	if((changeMask&0x10U)!=0x0U)
+		{
+		/* Write the length of the feature change list to the file: */
+		file.write(Misc::UInt16(changes.size()));
+		
+		/* Write the change list to the file: */
+		for(ChangeList::const_iterator clIt=changes.begin();clIt!=changes.end();++clIt)
+			{
+			/* Write the change list item type to the file: */
+			file.write(Misc::UInt8(clIt->changeType));
+			
+			switch(clIt->changeType)
+				{
+				case ChangeListItem::ButtonChanged:
+					/* Write a button state change to the file: */
+					file.write(Misc::UInt16(clIt->button.index));
+					file.write(Misc::UInt8(clIt->button.newState?1:0));
+					
+					break;
+				
+				case ChangeListItem::ValuatorChanged:
+					/* Write a valuator state change to the file: */
+					file.write(Misc::UInt16(clIt->valuator.index));
+					file.write(clIt->valuator.newValue);
+					
+					break;
+				
+				default:
+					; // Nothing to do
+				}
+			}
+		}
+	}
+
+void InputDevice::readChanges(IO::File& file)
+	{
+	/* Read the change mask from the file: */
+	changeMask=file.read<Misc::UInt8>();
+	
+	if((changeMask&0x1U)!=0x0U)
+		{
+		/* Read the new device ray and ray start from the file: */
+		file.read(deviceRayDirection.getComponents(),3);
+		file.read(deviceRayStart);
+		}
+	if((changeMask&0x2U)!=0x0U)
+		{
+		/* Read the new device transformation from the file: */
+		TrackerState::Vector t;
+		file.read(t.getComponents(),3);
+		TrackerState::Scalar q[4];
+		file.read(q,4);
+		transformation=TrackerState(t,TrackerState::Rotation(q));
+		}
+	if((changeMask&0x4U)!=0x0U)
+		{
+		/* Read the new linear velocity from the file: */
+		file.read(linearVelocity.getComponents(),3);
+		}
+	if((changeMask&0x8U)!=0x0U)
+		{
+		/* Read the new angular velocity from the file: */
+		file.read(angularVelocity.getComponents(),3);
+		}
+	if((changeMask&0x10U)!=0x0U)
+		{
+		/* Read the length of the feature change list from the file: */
+		unsigned int numChanges=file.read<Misc::UInt16>();
+		
+		/* Read the change list from the file: */
+		changes.reserve(numChanges);
+		for(unsigned int i=0;i<numChanges;++i)
+			{
+			/* Read the change list item type from the file: */
+			switch(file.read<Misc::UInt8>())
+				{
+				case ChangeListItem::ButtonChanged:
+					{
+					/* Read a button state change from the file: */
+					int index=file.read<Misc::UInt16>();
+					bool newState=file.read<Misc::UInt8>()!=0U;
+					changes.push_back(ChangeListItem(index,newState));
+					
+					break;
+					}
+				
+				case ChangeListItem::ValuatorChanged:
+					{
+					/* Read a valuator state change from the file: */
+					int index=file.read<Misc::UInt16>();
+					double newValue=file.read<double>();
+					changes.push_back(ChangeListItem(index,newValue));
+					
+					break;
+					}
+				
+				default:
+					; // Nothing to do
+				}
+			}
+		}
 	}
 
 void InputDevice::triggerFeatureCallback(int featureIndex)
@@ -463,53 +601,55 @@ void InputDevice::enableCallbacks(void)
 	callbacksEnabled=true;
 	
 	/* Call device ray and tracking state callbacks first: */
-	if((trackingUpdatedMask&0x1U)!=0x0U)
+	if((changeMask&0x1U)!=0x0U)
 		{
 		CallbackData cbData(this);
 		deviceRayCallbacks.call(&cbData);
 		}
-	if((trackingUpdatedMask&0xeU)!=0x0U)
+	if((changeMask&0xeU)!=0x0U)
 		{
 		CallbackData cbData(this);
 		trackingCallbacks.call(&cbData);
 		}
-	
-	/* Call the appropriate callbacks for every change in the change list: */
-	for(ChangeList::iterator clIt=changes.begin();clIt!=changes.end();++clIt)
+	if((changeMask&0x10U)!=0x0U)
 		{
-		switch(clIt->changeType)
+		/* Call the appropriate callbacks for every change in the change list: */
+		for(ChangeList::iterator clIt=changes.begin();clIt!=changes.end();++clIt)
 			{
-			case ChangeListItem::ButtonChanged:
-				/* Only call the callback if the button state actually changed: */
-				if(buttonStates[clIt->button.index]!=clIt->button.newState)
-					{
-					ButtonCallbackData cbData(this,clIt->button.index,clIt->button.newState);
-					buttonCallbacks[clIt->button.index].call(&cbData);
+			switch(clIt->changeType)
+				{
+				case ChangeListItem::ButtonChanged:
+					/* Only call the callback if the button state actually changed: */
+					if(buttonStates[clIt->button.index]!=clIt->button.newState)
+						{
+						ButtonCallbackData cbData(this,clIt->button.index,clIt->button.newState);
+						buttonCallbacks[clIt->button.index].call(&cbData);
+						
+						buttonStates[clIt->button.index]=clIt->button.newState;
+						}
 					
-					buttonStates[clIt->button.index]=clIt->button.newState;
-					}
+					break;
 				
-				break;
-			
-			case ChangeListItem::ValuatorChanged:
-				/* Only call the callback if the valuator state actually changed: */
-				if(valuatorValues[clIt->valuator.index]!=clIt->valuator.newValue)
-					{
-					ValuatorCallbackData cbData(this,clIt->valuator.index,clIt->valuator.newValue);
-					valuatorCallbacks[clIt->valuator.index].call(&cbData);
+				case ChangeListItem::ValuatorChanged:
+					/* Only call the callback if the valuator state actually changed: */
+					if(valuatorValues[clIt->valuator.index]!=clIt->valuator.newValue)
+						{
+						ValuatorCallbackData cbData(this,clIt->valuator.index,clIt->valuator.newValue);
+						valuatorCallbacks[clIt->valuator.index].call(&cbData);
+						
+						valuatorValues[clIt->valuator.index]=clIt->valuator.newValue;
+						}
 					
-					valuatorValues[clIt->valuator.index]=clIt->valuator.newValue;
-					}
+					break;
 				
-				break;
-			
-			default:
-				; // Nothing to do
+				default:
+					; // Nothing to do
+				}
 			}
 		}
 	
 	/* Clear the change list: */
-	trackingUpdatedMask=0x0U;
+	changeMask=0x0U;
 	changes.clear();
 	}
 

@@ -42,16 +42,14 @@ Methods of class MultipipeDispatcher:
 
 MultipipeDispatcher::MultipipeDispatcher(InputDeviceManager* sInputDeviceManager,Cluster::MulticastPipe* sPipe)
 	:InputDeviceAdapter(sInputDeviceManager),
-	 pipe(sPipe),
-	 totalNumButtons(0),
-	 totalNumValuators(0),
-	 trackingStates(0),
-	 buttonStates(0),
-	 valuatorStates(0)
+	 pipe(sPipe)
 	{
 	if(pipe->isMaster())
 		{
-		/* Distribute the input device configuration from the input device manager to all slave nodes: */
+		/*******************************************************************
+		Distribute the input device configuration from the input device
+		manager to all slave nodes:
+		*******************************************************************/
 		
 		/* Send number of input devices: */
 		numInputDevices=inputDeviceManager->getNumInputDevices();
@@ -72,11 +70,9 @@ MultipipeDispatcher::MultipipeDispatcher(InputDeviceManager* sInputDeviceManager
 			
 			/* Send number of buttons: */
 			pipe->write<int>(device->getNumButtons());
-			totalNumButtons+=device->getNumButtons();
 			
 			/* Send number of valuators: */
 			pipe->write<int>(device->getNumValuators());
-			totalNumValuators+=device->getNumValuators();
 			
 			/* Send device glyph: */
 			Glyph& glyph=inputDeviceManager->getInputGraphManager()->getInputDeviceGlyph(device);
@@ -100,7 +96,9 @@ MultipipeDispatcher::MultipipeDispatcher(InputDeviceManager* sInputDeviceManager
 		/* Add the dispatcher as an input device adapter to the input device manager: */
 		inputDeviceManager->addAdapter(this);
 		
-		/* Receive the input device configuration from the master node: */
+		/*******************************************************************
+		Receive the input device configuration from the master node:
+		*******************************************************************/
 		
 		/* Read number of input devices: */
 		numInputDevices=pipe->read<int>();
@@ -117,11 +115,9 @@ MultipipeDispatcher::MultipipeDispatcher(InputDeviceManager* sInputDeviceManager
 			
 			/* Read number of buttons: */
 			int numButtons=pipe->read<int>();
-			totalNumButtons+=numButtons;
 			
 			/* Read number of valuators: */
 			int numValuators=pipe->read<int>();
-			totalNumValuators+=numValuators;
 			
 			/* Read device glyph: */
 			Glyph deviceGlyph;
@@ -147,11 +143,6 @@ MultipipeDispatcher::MultipipeDispatcher(InputDeviceManager* sInputDeviceManager
 				valuatorNames.push_back(Misc::readCppString(*pipe));
 			}
 		}
-	
-	/* Create the input device state marshalling structures: */
-	trackingStates=new InputDeviceTrackingState[numInputDevices];
-	buttonStates=new bool[totalNumButtons];
-	valuatorStates=new double[totalNumValuators];
 	}
 
 MultipipeDispatcher::~MultipipeDispatcher(void)
@@ -162,10 +153,6 @@ MultipipeDispatcher::~MultipipeDispatcher(void)
 		for(int i=0;i<numInputDevices;++i)
 			inputDevices[i]=0;
 		}
-	
-	delete[] trackingStates;
-	delete[] buttonStates;
-	delete[] valuatorStates;
 	}
 
 std::string MultipipeDispatcher::getFeatureName(const InputDeviceFeature& feature) const
@@ -241,47 +228,30 @@ void MultipipeDispatcher::updateInputDevices(void)
 	{
 	if(pipe->isMaster())
 		{
-		/* Gather the current state of all input devices: */
-		bool* bsPtr=buttonStates;
-		double* vsPtr=valuatorStates;
+		/* Write the change lists of all input devices to the pipe: */
 		for(int i=0;i<numInputDevices;++i)
-			{
-			trackingStates[i].deviceRayDirection=inputDevices[i]->getDeviceRayDirection();
-			trackingStates[i].deviceRayStart=inputDevices[i]->getDeviceRayStart();
-			trackingStates[i].transformation=inputDevices[i]->getTransformation();
-			trackingStates[i].linearVelocity=inputDevices[i]->getLinearVelocity();
-			trackingStates[i].angularVelocity=inputDevices[i]->getAngularVelocity();
-			for(int j=0;j<inputDevices[i]->getNumButtons();++j,++bsPtr)
-				*bsPtr=inputDevices[i]->getButtonState(j);
-			for(int j=0;j<inputDevices[i]->getNumValuators();++j,++vsPtr)
-				*vsPtr=inputDevices[i]->getValuator(j);
-			}
+			if(inputDevices[i]->hasChanges())
+				{
+				/* Write the input device's index followed by its change list: */
+				pipe->write(Misc::UInt8(i));
+				inputDevices[i]->writeChanges(*pipe);
+				}
 		
-		/* Send the input device states to the slave nodes: */
-		pipe->write(trackingStates,numInputDevices);
-		pipe->write(buttonStates,totalNumButtons);
-		pipe->write(valuatorStates,totalNumValuators);
+		/* Terminate the list of changes with an invalid input device index: */
+		pipe->write(Misc::UInt8(-1));
 		}
 	else
 		{
-		/* Receive the input device states from the master node: */
-		pipe->read(trackingStates,numInputDevices);
-		pipe->read(buttonStates,totalNumButtons);
-		pipe->read(valuatorStates,totalNumValuators);
-		
-		/* Set the state of all input devices: */
-		bool* bsPtr=buttonStates;
-		double* vsPtr=valuatorStates;
-		for(int i=0;i<numInputDevices;++i)
+		/* Read a sequence of input device change lists from the pipe: */
+		while(true)
 			{
-			inputDevices[i]->setDeviceRay(trackingStates[i].deviceRayDirection,trackingStates[i].deviceRayStart);
-			inputDevices[i]->setTransformation(trackingStates[i].transformation);
-			inputDevices[i]->setLinearVelocity(trackingStates[i].linearVelocity);
-			inputDevices[i]->setAngularVelocity(trackingStates[i].angularVelocity);
-			for(int j=0;j<inputDevices[i]->getNumButtons();++j,++bsPtr)
-				inputDevices[i]->setButtonState(j,*bsPtr);
-			for(int j=0;j<inputDevices[i]->getNumValuators();++j,++vsPtr)
-				inputDevices[i]->setValuator(j,*vsPtr);
+			/* Read the index of the next input device and bail out if it's the end-of-list marker: */
+			Misc::UInt8 index=pipe->read<Misc::UInt8>();
+			if(index==Misc::UInt8(-1))
+				break;
+			
+			/* Read the input device's change list: */
+			inputDevices[index]->readChanges(*pipe);
 			}
 		}
 	}

@@ -32,6 +32,11 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Geometry/OrthonormalTransformation.h>
 #include <Vrui/Types.h>
 
+/* Forward declarations: */
+namespace IO {
+class File;
+}
+
 namespace Vrui {
 
 class InputDevice // Class for input devices
@@ -120,7 +125,7 @@ class InputDevice // Class for input devices
 	
 	/* State for disabling callbacks: */
 	bool callbacksEnabled; // Flag if callbacks are enabled
-	unsigned int trackingUpdatedMask; // Bit mask indicating which parts of the device's tracking state have been updated since callbacks were disabled
+	unsigned int changeMask; // Bit mask indicating which parts of the device's tracking and/or feature state have been updated since callbacks were disabled
 	ChangeList changes; // Input device state changes accumulated since the time callbacks were disabled
 	
 	/* Constructors and destructors: */
@@ -310,6 +315,12 @@ class InputDevice // Class for input devices
 	
 	/* Callback enable/disable methods: */
 	void disableCallbacks(void); // Disables tracking and feature callbacks
+	bool hasChanges(void) const // Returns true if the input devices has unapplied changes to its state
+		{
+		return changeMask!=0x0U;
+		}
+	void writeChanges(IO::File& file) const; // Writes the input device's unapplied changes to the given file
+	void readChanges(IO::File& file); // Replaces the input device's unapplied changes with those read from the given file
 	void triggerFeatureCallback(int featureIndex); // Triggers the callbacks for the feature of the given index if its state has changed since calling disableCallbacks
 	void enableCallbacks(void); // Enables tracking and feature callbacks and calls callbacks for all features whose states have changed since calling disableCallbacks
 	};

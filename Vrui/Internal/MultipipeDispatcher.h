@@ -1,7 +1,7 @@
 /***********************************************************************
 MultipipeDispatcher - Class to distribute input device and ancillary
 data between the nodes in a multipipe VR environment.
-Copyright (c) 2004-2023 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -43,33 +43,13 @@ namespace Vrui {
 
 class MultipipeDispatcher:public InputDeviceAdapter
 	{
-	/* Embedded classes: */
-	private:
-	struct InputDeviceTrackingState // Structure for current input device tracking states
-		{
-		/* Elements: */
-		public:
-		Vector deviceRayDirection;
-		Scalar deviceRayStart;
-		TrackerState transformation;
-		Vector linearVelocity;
-		Vector angularVelocity;
-		};
-	
 	/* Elements: */
 	private:
 	Cluster::MulticastPipe* pipe; // Multicast pipe connecting the master node to all slave nodes
-	int totalNumButtons; // Total number of buttons on all dispatched input devices
-	int totalNumValuators; // Total number of valuators on all dispatched input devices
 	
 	/* Slave state: */
 	std::vector<std::string> buttonNames; // Array of button names for all dispatched input devices
 	std::vector<std::string> valuatorNames; // Array of button names for all dispatched input devices
-	
-	/* Transient state to marshall input device states over a multicast pipe: */
-	InputDeviceTrackingState* trackingStates; // Array of input device tracking states
-	bool* buttonStates; // Array of input device button states
-	double* valuatorStates; // Array of input device valuator states
 	
 	/* Constructors and destructors: */
 	public:
