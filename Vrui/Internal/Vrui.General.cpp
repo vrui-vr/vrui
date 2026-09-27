@@ -1082,7 +1082,7 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 		}
 	mainScreen=&screens[0];
 	
-	/* Initialize screen protection areas from the environment definition's bounary polygons: */
+	/* Initialize screen protection areas from the environment definition's boundary polygons: */
 	numProtectorAreas=0;
 	protectorAreas=new ScreenProtectorArea[environmentDefinition.boundary.size()+numScreens]; // Leave room in case any actual screens are protected
 	for(EnvironmentDefinition::PolygonList::iterator bIt=environmentDefinition.boundary.begin();bIt!=environmentDefinition.boundary.end();++bIt)
