@@ -1,7 +1,7 @@
 /***********************************************************************
 InputDeviceAdapterPlayback - Class to read input device states from a
 pre-recorded file for playback and/or movie generation.
-Copyright (c) 2004-2025 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -70,7 +70,6 @@ class InputDeviceAdapterPlayback:public InputDeviceAdapter
 	int movieFrameStart; // Number of movie frames to skip at the beginning of playback. First frame will always be written with index 0
 	int movieFrameOffset; // Index to assign to the first saved movie frame (after initial frames have been skipped)
 	double timeStamp; // Current time stamp of input device data
-	double timeStampOffset; // Offset from system's wall clock time to input data's time stamp sequence
 	double nextTimeStamp; // Time stamp of next frame of input device data
 	bool* validFlags; // Array of valid flags for all loaded input devices
 	double nextMovieFrameTime; // Time at which to save the next movie frame
@@ -92,6 +91,10 @@ class InputDeviceAdapterPlayback:public InputDeviceAdapter
 	virtual void updateInputDevices(void);
 	
 	/* New methods: */
+	bool wantsSynchronization(void) const // Returns true if the playback adapter is configured for wall clock time-synchronized playback
+		{
+		return synchronizePlayback;
+		}
 	bool isDone(void) const // Returns true if file has been entirely read
 		{
 		return done;

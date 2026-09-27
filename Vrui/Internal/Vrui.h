@@ -88,6 +88,7 @@ class GLRenderState;
 }
 namespace Vrui {
 class InputDeviceDataSaver;
+class InputDeviceAdapterPlayback;
 class MultipipeDispatcher;
 class Lightsource;
 class ScaleBar;
@@ -205,9 +206,8 @@ struct VruiState
 	double medianFrameDuration; // Current median frame duration
 	bool updateContinuously; // Flag if the inner Vrui loop never blocks
 	double nextFrameTime; // Scheduled time to start next frame, or Math::Constants<double>::max if there is none
-	double synchFrameTime; // Precise time to be used for next frame
-	bool synchWait; // Flag whether to delay the next frame until wallclock time matches synch time
 	double animationFrameInterval; // Suggested frame interval to be used for animations
+	InputDeviceAdapterPlayback* playbackAdapter; // Pointer to an active playback input device adapter; will take over frame timing and synchronization
 	
 	/* Main loop instrumentation: */
 	Threads::EventTime frameStart; // Time point at which the current frame started, taken from run loop's getDispatchTime
@@ -491,9 +491,7 @@ extern const char* getApplicationName(void); // Returns the name of the Vrui app
 extern void setRandomSeed(unsigned int newRandomSeed); // Sets Vrui's random seed; can only be called by InputDeviceAdapterPlayback during its initialization
 extern EnvironmentDefinition& modifyEnvironmentDefinition(void); // Allows caller to modify Vrui's environment definition; can only be called by InputDeviceAdapterDeviceDaemon during its initialization
 extern void vruiDelay(double interval);
-extern double peekApplicationTime(void); // Returns the (approximate) application time that will be used by the next Vrui frame; can only be called by input device adapters during event handling
-extern void synchronize(double firstFrameTime); // Gives a precise time value to use for the initial frame time; can only be called by InputDeviceAdapterPlayback during initialization
-extern void synchronize(double nextFrameTime,bool wait); // Gives a precise time value to use for the next frame; delays frame until wall-clock time matches if wait is true; can only be called by InputDeviceAdapterPlayback during playback
+extern void synchronize(InputDeviceAdapterPlayback* playbackAdapter); // Notifies the Vrui kernel that a playback input device adapter will be active
 extern void resetNavigation(void); // Calls the application-provided function to reset the navigation transformation
 extern void setDisplayCenter(const Point& newDisplayCenter,Scalar newDisplaySize); // Sets the center and size of Vrui's display environment
 extern void vsync(const TimePoint& newNextVsync,const TimeVector& newVsyncPeriod,const TimeVector& newExposureDelay); // Updates the kernel's frame synchronization state for the next frame

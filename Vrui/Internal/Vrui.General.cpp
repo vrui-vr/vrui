@@ -121,6 +121,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/VisletManager.h>
 #include <Vrui/Application.h>
 #include <Vrui/Internal/InputDeviceDataSaver.h>
+#include <Vrui/Internal/InputDeviceAdapterPlayback.h>
 #include <Vrui/Internal/ScaleBar.h>
 
 namespace Misc {
@@ -597,8 +598,9 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 	 numRecentFrameDurations(5),recentFrameDurations(new double[numRecentFrameDurations]),nextFrameDurationIndex(0),
 	 sortedFrameDurations(new double[numRecentFrameDurations]),medianFrameDuration(1),
 	 updateContinuously(false),
-	 nextFrameTime(Math::Constants<double>::max),synchFrameTime(0),synchWait(false),
+	 nextFrameTime(Math::Constants<double>::max),
 	 animationFrameInterval(1.0/125.0),
+	 playbackAdapter(0),
 	 numFrameTimings(1024),frameTimings(new FrameTiming[numFrameTimings]),nextFrameTimingsIndex(0),
 	 sceneGraphManager(0),
 	 inputGraphManager(0),
@@ -788,6 +790,12 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 	/* Initialize random number and time management, but don't distribute it in a cluster yet because input device adapters may change it: */
 	frameTimeBase.set();
 	randomSeed=(unsigned int)(frameTimeBase.tv_sec*1000UL+frameTimeBase.tv_nsec/1000000UL);
+	
+	/* Initialize the update regime, this might be changed by input device adapters et al. during their initialization: */
+	if(master)
+		configFileSection.updateValue("./updateContinuously",updateContinuously);
+	else
+		updateContinuously=true; // Slave nodes always run in continuous mode; they will block on updates from the master
 	
 	/* Initialize the suggested animation frame interval: */
 	configFileSection.updateValue("./animationFrameInterval",animationFrameInterval);
@@ -1042,12 +1050,6 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 			uiManager->setTextEntryMethod(new GLMotif::QuikwritingTextEntryMethod(uiManager));
 			break;
 		}
-	
-	/* Initialize the update regime: */
-	if(master)
-		configFileSection.updateValue("./updateContinuously",updateContinuously);
-	else
-		updateContinuously=true; // Slave nodes always run in continuous mode; they will block on updates from the master
 	
 	/* Initialize the light source manager: */
 	lightsourceManager=new LightsourceManager;
@@ -1595,16 +1597,6 @@ void VruiState::prepareMainLoop(void)
 	
 	/* Schedule the first frame for *right now* so that the run loop does not block on the first frame: */
 	nextFrameTime=0.0;
-	
-	/* Update the application time so that the first frame's frame time is exactly zero: */
-	if(master)
-		{
-		/* Check if there is a synchronization request for the first frame: */
-		if(synchFrameTime>0.0)
-			{
-			// IMPLEMENT ME -- WE HAVE TO DO SOME STUFF HERE!!
-			}
-		}
 	}
 
 namespace {
@@ -1613,7 +1605,7 @@ namespace {
 Helper functions:
 ****************/
 
-inline unsigned int clamp(long value)
+inline unsigned int clamp(long value) // Clamps a long to unsigned int's value range to simplify main loop instrumentation
 	{
 	if(value>=0x100000000L)
 		return (unsigned int)-1;
@@ -1629,23 +1621,63 @@ bool VruiState::startFrame(void)
 	Close out the current frame:
 	*********************************************************************/
 	
-	/* Check if the next frame has already been scheduled: */
-	Threads::EventTime wakeUp(0,0);
-	Threads::EventTime* wakeUpPtr=0;
-	if(nextFrameTime<Math::Constants<double>::max)
+	/* Poll or wait for events with or without a wake-up time depending on the current update regime: */
+	bool keepRunning;
+	double newApplicationTime;
+	if(updateContinuously) // Remember that updateContinuously is always true on slave nodes!
 		{
-		/* Convert the next frame time back from application time to an absolute time point: */
-		wakeUp=frameTimeBase+Threads::EventInterval(nextFrameTime);
-		wakeUpPtr=&wakeUp;
+		/* Poll for events and check if shutdown was requested: */
+		keepRunning=runLoop.pollForEvents();
+		
+		/* Check if we need to synchronize with a playback input device adapter, or are on the master node: */
+		if(playbackAdapter!=0) // Remember that this is only true on the master node!
+			{
+			/* Retrieve the application time for this frame from the playback adapter: */
+			newApplicationTime=playbackAdapter->getNextTime();
+			
+			/* Calculate the absolute time point associated with the new application time: */
+			Threads::EventTime newTimePoint=frameTimeBase+Threads::EventInterval(newApplicationTime);
+			
+			/* If the playback adapter wants to run in wall clock-time synchronized mode, sleep here until the new application time point actually arrives: */
+			if(playbackAdapter->wantsSynchronization())
+				Threads::EventTime::sleep(newTimePoint);
+			
+			/* Override the run loop's dispatch time to let timers trigger exactly when they did when the session was recorded: */
+			runLoop.setDispatchTime(newTimePoint);
+			}
+		else if(master)
+			{
+			/* Update the run loop's dispatch time as usual: */
+			runLoop.updateDispatchTime();
+			newApplicationTime=double(runLoop.getDispatchTime()-frameTimeBase);
+			}
+		}
+	else if(nextFrameTime<Math::Constants<double>::max)
+		{
+		/* Convert the next frame time from application time to an absolute time point: */
+		Threads::EventTime wakeUp=frameTimeBase+Threads::EventInterval(nextFrameTime);
+		
+		/* Wait at most until the wake-up time point for any events to happen and check if shutdown was requested: */
+		keepRunning=runLoop.waitForEvents(&wakeUp);
+		runLoop.updateDispatchTime();
+		newApplicationTime=double(runLoop.getDispatchTime()-frameTimeBase);
+		
+		/* Reset the next scheduled frame time for this frame: */
+		nextFrameTime=Math::Constants<double>::max;
+		}
+	else
+		{
+		/* Wait forever for any events to happen and check if shutdown was requested: */
+		keepRunning=runLoop.waitForEvents();
+		runLoop.updateDispatchTime();
+		newApplicationTime=double(runLoop.getDispatchTime()-frameTimeBase);
 		}
 	
-	/* Reset the next scheduled frame time: */
-	nextFrameTime=updateContinuously?0.0:Math::Constants<double>::max;
+	/*********************************************************************
+	Start a new Vrui frame:
+	*********************************************************************/
 	
-	/* Wait for any events to happen and check if shutdown was requested: */
-	bool keepRunning=runLoop.waitForEvents(wakeUpPtr);
-	
-	/* Start a new Vrui frame: */
+	/* Increment the frame counter and start synchronization with the slaves: */
 	++frameIndex;
 	if(multiplexer!=0)
 		pipe->broadcast(keepRunning);
@@ -1658,22 +1690,13 @@ bool VruiState::startFrame(void)
 		return false;
 		}
 	
-	/*********************************************************************
-	Update the application time and all related state:
-	*********************************************************************/
-	
-	double newApplicationTime;
+	/* Determine this frame's application time: */
 	if(master)
 		{
 		/* Reset the application time base on the first frame -- ugh: */
 		// FIXME -- THERE MUST BE A BETTER WAY ONCE SYNCHRONIZATION IS BACK ON THE MENU!
 		if(frameIndex==0)
 			frameTimeBase=runLoop.getDispatchTime();
-		
-		/* Calculate the new application time from the run loop's dispatch time: */
-		newApplicationTime=double(runLoop.getDispatchTime()-frameTimeBase);
-		
-		// IMPLEMENT ME -- DO SOME STUFF HERE IF SYNCHRONIZATION IS REQUESTED!
 		
 		/* Share the new application time with a cluster: */
 		if(multiplexer!=0)
@@ -1683,6 +1706,9 @@ bool VruiState::startFrame(void)
 		{
 		/* Receive the new application time: */
 		pipe->read(newApplicationTime);
+		
+		/* Override the run loop's dispatch time to let timers trigger exactly as on the master: */
+		runLoop.setDispatchTime(frameTimeBase+Threads::EventInterval(newApplicationTime));
 		}
 	
 	/* Calculate the duration of the previous frame: */
@@ -2793,28 +2819,13 @@ void vruiDelay(double interval)
 	#endif
 	}
 
-double peekApplicationTime(void)
+void synchronize(InputDeviceAdapterPlayback* playbackAdapter)
 	{
-	/* Take an application timer snapshot: */
-	Threads::EventTime now;
-	double result(now-vruiState->frameTimeBase);
+	/* Remember the playback adapter: */
+	vruiState->playbackAdapter=playbackAdapter;
 	
-	/* Check if the next frame will be delayed due to playback synchronization: */
-	if(result<vruiState->synchFrameTime)
-		result=vruiState->synchFrameTime;
-	
-	return result;
-	}
-
-void synchronize(double firstFrameTime)
-	{
-	vruiState->applicationTime=firstFrameTime;
-	}
-
-void synchronize(double nextFrameTime,bool wait)
-	{
-	vruiState->synchFrameTime=nextFrameTime;
-	vruiState->synchWait=wait;
+	/* Force continuous updates, wall-clock time synchronization will be handled elsewhere: */
+	vruiState->updateContinuously=true;
 	}
 
 void resetNavigation(void)
@@ -3907,6 +3918,16 @@ double getCurrentFrameTime(void)
 double getNextAnimationTime(void)
 	{
 	return vruiState->applicationTime+vruiState->animationFrameInterval;
+	}
+
+TimePoint applicationTimeToTimePoint(double applicationTime)
+	{
+	return vruiState->frameTimeBase+TimeVector(applicationTime);
+	}
+
+double timePointToApplicationTime(const TimePoint& timePoint)
+	{
+	return double(timePoint-vruiState->frameTimeBase);
 	}
 
 void updateContinuously(void)

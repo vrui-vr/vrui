@@ -185,8 +185,7 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 	 saveMovie(configFileSection.retrieveValue("./saveMovie",false)),
 	 movieWindowIndex(0),movieWindow(0),movieFrameTimeInterval(1.0/30.0),
 	 movieFrameStart(0),movieFrameOffset(0),
-	 timeStamp(0.0),timeStampOffset(0.0),
-	 nextTimeStamp(0.0),
+	 timeStamp(0.0),nextTimeStamp(0.0),
 	 validFlags(0),
 	 nextMovieFrameTime(0.0),nextMovieFrameCounter(0),
 	 done(false)
@@ -361,8 +360,8 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 	/* Read the initial application time stamp: */
 	try
 		{
-		timeStamp=inputDeviceDataFile->read<double>();
-		synchronize(timeStamp);
+		nextTimeStamp=inputDeviceDataFile->read<double>();
+		synchronize(this);
 		}
 	catch(const IO::File::ReadError&)
 		{
@@ -468,14 +467,6 @@ int InputDeviceAdapterPlayback::getFeatureIndex(InputDevice* device,const char* 
 
 void InputDeviceAdapterPlayback::prepareMainLoop(void)
 	{
-	if(synchronizePlayback)
-		{
-		/* Calculate the offset between the saved timestamps and the system's wall clock time: */
-		Misc::Time rt=Misc::Time::now();
-		double realTime=double(rt.tv_sec)+double(rt.tv_nsec)/1000000000.0;
-		timeStampOffset=nextTimeStamp-realTime;
-		}
-	
 	/* Start the sound player, if there is one: */
 	if(soundPlayer!=0)
 		soundPlayer->start();
@@ -500,20 +491,8 @@ void InputDeviceAdapterPlayback::updateInputDevices(void)
 	if(done)
 		return;
 	
+	/* Enter the next frame: */
 	timeStamp=nextTimeStamp;
-	
-	if(synchronizePlayback)
-		{
-		/* Check if there is positive drift between the system's offset wall clock time and the next time stamp: */
-		Misc::Time rt=Misc::Time::now();
-		double realTime=double(rt.tv_sec)+double(rt.tv_nsec)/1000000000.0;
-		double delta=nextTimeStamp-(realTime+timeStampOffset);
-		if(delta>0.0)
-			{
-			/* Block to correct the drift: */
-			vruiDelay(delta);
-			}
-		}
 	
 	/* Read new device states: */
 	readDeviceStates();
@@ -522,10 +501,6 @@ void InputDeviceAdapterPlayback::updateInputDevices(void)
 	try
 		{
 		nextTimeStamp=inputDeviceDataFile->read<double>();
-		
-		/* Request a synchronized update for the next frame: */
-		synchronize(nextTimeStamp,false);
-		requestUpdate();
 		}
 	catch(const IO::File::ReadError&)
 		{

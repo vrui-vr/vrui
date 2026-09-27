@@ -9109,3 +9109,19 @@ Vrui-15.0-001:
 - Added Vrui::applicationTimeToTimePoint and
   Vrui::timePointToApplicationTime methods to Vrui kernel interface to
   simplify use of Threads::RunLoop in Vrui applications.
+  - Replace conversion code in Vrui::UIManager::requestClickRepeat with
+    Vrui::applicationTimeToTimePoint.
+- Reworked interaction between Vrui's main loop and playback input
+  device adapters in the new run loop-based main loop.
+  - Spoiler alert: things got much, much simpler
+  - Integrated application time synchronization and optional waiting
+    into Vrui's main loop in VruiState::startFrame.
+  - Override run loop's internal timer to make timers trigger at the
+    right times.
+  - Removed a lot of obsolete state and code from
+    Vrui::InputDeviceAdapterPlayback.
+- Retired internal Vrui::peekApplicationTime function; it was a kludge
+  to paper over the issue that the main loop wouldn't update application
+  time until after updateInputDevices was called on all input device
+  adapters. That's no longer an issue.
+  - Vrui::InputDeviceAdapterMultitouch was the only one using it.

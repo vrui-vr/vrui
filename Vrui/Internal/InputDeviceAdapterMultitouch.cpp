@@ -465,7 +465,7 @@ void InputDeviceAdapterMultitouch::touchBegin(VRWindow* newWindow,const InputDev
 				else
 					{
 					/* Start a new primary contact: */
-					newDm->activationTimeout=peekApplicationTime()+activationInterval;
+					newDm->activationTimeout=getApplicationTime()+activationInterval;
 					newDm->pred=0;
 					newDm->succ=0;
 					newDm->buttonIndex=0;
@@ -543,7 +543,7 @@ void InputDeviceAdapterMultitouch::touchEnd(VRWindow* newWindow,const InputDevic
 				
 				/* Finish the current modifier touch: */
 				modifierTouchId=-1;
-				modifierPanelTimeout=peekApplicationTime()+1.0;
+				modifierPanelTimeout=getApplicationTime()+1.0;
 				
 				/* Deactivate the device mapping: */
 				dm.state=DeviceMapper::Inactive;
