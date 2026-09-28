@@ -398,6 +398,8 @@ void InputDeviceAdapterHID::errorCallback(RawHID::EventDevice::ErrorCallbackData
 	/* Log an error message: */
 	Misc::sourcedUserError(__PRETTY_FUNCTION__,"Removing input device %s due to exception %s",device->device->getDeviceName(),cbData->exception.what());
 	
+	#if 0 // We can't do this yet because erasing input devices at run-time, while possible, breaks cluster mode
+	
 	/* Remove the HID's associated Vrui input device from this input adapter's state arrays, then destroy it: */
 	for(int i=0;i<numInputDevices;++i)
 		if(inputDevices[i]==device->device)
@@ -406,6 +408,18 @@ void InputDeviceAdapterHID::errorCallback(RawHID::EventDevice::ErrorCallbackData
 			break;
 			}
 	inputDeviceManager->destroyInputDevice(device->device);
+	
+	#else
+	
+	/* Disable the HID's associated Vrui input device: */
+	for(int i=0;i<numInputDevices;++i)
+		if(inputDevices[i]==device->device)
+			{
+			inputDeviceManager->getInputGraphManager()->disable(device->device);
+			break;
+			}
+	
+	#endif
 	
 	/* Find the HID structure for the given input device: */
 	std::vector<Device*>::const_iterator dIt;
