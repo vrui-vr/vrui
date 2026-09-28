@@ -608,7 +608,6 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 	 loadInputGraph(false),
 	 textEventDispatcher(0),
 	 inputDeviceManager(0),
-	 multipipeDispatcher(0),
 	 inputDeviceDataSaver(0),
 	 inchFactor(1),meterFactor(Scalar(1000)/Scalar(25.4)),
 	 glyphRenderer(0),
@@ -732,7 +731,6 @@ VruiState::~VruiState(void)
 	
 	/* Delete input device management: */
 	delete inputDeviceDataSaver;
-	delete multipipeDispatcher;
 	delete inputDeviceManager;
 	delete textEventDispatcher;
 	
@@ -814,32 +812,20 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 	/* If in cluster mode, create a dispatcher to send input device states to the slaves: */
 	if(pipe!=0)
 		{
-		multipipeDispatcher=new MultipipeDispatcher(inputDeviceManager,pipe);
-		
-		/* On slaves, the multipipe dispatcher registered itself as an input device adapter with the input device manager, so we need to forget about it: */
-		if(!master)
-			multipipeDispatcher=0;
+		/* Create a multipipe dispatcher, which will register itself with the input device manager, so we can immediately forget about it: */
+		new MultipipeDispatcher(inputDeviceManager,pipe);
 		}
 	
-	/* Update all physical input devices to get initial positions and orientations: */
-	if(master)
-		{
-		/* Get newest device states: */
-		inputDeviceManager->updateInputDevices();
-		
-		if(pipe!=0)
-			{
-			/* Send the newest device states to the cluster: */
-			multipipeDispatcher->updateInputDevices();
-			textEventDispatcher->writeEventQueues(*pipe);
-			pipe->flush();
-			}
-		}
-	else
-		{
-		inputDeviceManager->updateInputDevices();
-		textEventDispatcher->readEventQueues(*pipe);
-		}
+	/*********************************************************************
+	Update all physical input devices to get initial positions and
+	orientations. This will automatically synchronize input device states
+	across a cluster, but we will have to flush the main cluster pipe to
+	send things on their way.
+	*********************************************************************/
+	
+	inputDeviceManager->updateInputDevices();
+	if(pipe!=0&&master)
+		pipe->flush();
 	
 	/* Update input devices in the scene graph: */
 	sceneGraphManager->updateInputDevices();
@@ -1773,15 +1759,8 @@ bool VruiState::startFrame(void)
 			inputDeviceManager->setPredictionTimeNow();
 			}
 		
-		/* Update all physical input devices: */
+		/* Update all physical input devices, which will automatically synchronize in a cluster environment: */
 		inputDeviceManager->updateInputDevices();
-		
-		if(multiplexer!=0)
-			{
-			/* Write input device states and text events to all slaves: */
-			multipipeDispatcher->updateInputDevices();
-			textEventDispatcher->writeEventQueues(*pipe);
-			}
 		
 		if(delayNavigationTransformation&&(navigationTransformationChangedMask&0x1))
 			{
@@ -1794,7 +1773,6 @@ bool VruiState::startFrame(void)
 		{
 		/* Receive input device states and text events from the master: */
 		inputDeviceManager->updateInputDevices();
-		textEventDispatcher->readEventQueues(*pipe);
 		}
 	
 	if(multiplexer!=0)

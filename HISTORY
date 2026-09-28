@@ -9136,3 +9136,6 @@ Vrui-15.0-001:
     vastly simplifying code and improving performance.
 - In Vrui::InputDeviceAdapterDeviceDaemon, don't update disabled
   devices' features. It would blow up those device's change lists.
+- Rework Vrui::MultipipeDispatcher such that it can be added to the
+  input device managers both master- and slave-side to simplify Vrui's
+  main loop. Also integrate text event distribution.

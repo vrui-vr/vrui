@@ -29,6 +29,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Geometry/Vector.h>
 #include <Geometry/OrthonormalTransformation.h>
 #include <Vrui/Types.h>
+#include <Vrui/InputGraphManager.h>
 #include <Vrui/Internal/InputDeviceAdapter.h>
 
 /* Forward declarations: */
@@ -37,6 +38,7 @@ class MulticastPipe;
 }
 namespace Vrui {
 class InputDevice;
+class InputGraphManager;
 }
 
 namespace Vrui {
@@ -45,11 +47,21 @@ class MultipipeDispatcher:public InputDeviceAdapter
 	{
 	/* Elements: */
 	private:
+	InputGraphManager* inputGraphManager; // Pointer to the input graph manager
 	Cluster::MulticastPipe* pipe; // Multicast pipe connecting the master node to all slave nodes
+	bool* inputDeviceEnableds; // Array of enabled flags for all dispatched input devices as seen on the slaves
+	bool* newInputDeviceEnableds; // Array of new enabled flags not yet shared with the slaves
+	
+	/* Master state: */
+	int numDispatchedInputDevices; // Number of input devices whose states will be dispatched to the slaves
+	InputDevice** dispatchedInputDevices; // Array of pointers to input devices whose states will be dispatched to the slaves
 	
 	/* Slave state: */
 	std::vector<std::string> buttonNames; // Array of button names for all dispatched input devices
 	std::vector<std::string> valuatorNames; // Array of button names for all dispatched input devices
+	
+	/* Private methods: */
+	void inputDeviceStateChangedCallback(InputGraphManager::InputDeviceStateChangeCallbackData* cbData); // Callback called when a dispatched input device changes enabled state
 	
 	/* Constructors and destructors: */
 	public:

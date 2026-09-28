@@ -1,7 +1,7 @@
 /***********************************************************************
 MultipipeDispatcher - Class to distribute input device and ancillary
 data between the nodes in a multipipe VR environment.
-Copyright (c) 2004-2024 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -27,11 +27,12 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/Marshaller.h>
 #include <Misc/StringMarshaller.h>
 #include <Cluster/MulticastPipe.h>
+#include <Geometry/GeometryMarshallers.h>
 #include <GL/GLMarshallers.h>
 #include <Vrui/InputDevice.h>
 #include <Vrui/InputDeviceFeature.h>
 #include <Vrui/GlyphRenderer.h>
-#include <Vrui/InputGraphManager.h>
+#include <Vrui/TextEventDispatcher.h>
 #include <Vrui/InputDeviceManager.h>
 
 namespace Vrui {
@@ -40,27 +41,59 @@ namespace Vrui {
 Methods of class MultipipeDispatcher:
 ************************************/
 
+void MultipipeDispatcher::inputDeviceStateChangedCallback(InputGraphManager::InputDeviceStateChangeCallbackData* cbData)
+	{
+	/* Find the changed device in the list of dispatched devices: */
+	for(int i=0;i<numDispatchedInputDevices;++i)
+		if(dispatchedInputDevices[i]==cbData->inputDevice)
+			{
+			newInputDeviceEnableds[i]=cbData->newEnabled;
+			break;
+			}
+	}
+
 MultipipeDispatcher::MultipipeDispatcher(InputDeviceManager* sInputDeviceManager,Cluster::MulticastPipe* sPipe)
 	:InputDeviceAdapter(sInputDeviceManager),
-	 pipe(sPipe)
+	 inputGraphManager(inputDeviceManager->getInputGraphManager()),
+	 pipe(sPipe),
+	 inputDeviceEnableds(0),newInputDeviceEnableds(0),
+	 numDispatchedInputDevices(0),dispatchedInputDevices(0)
 	{
+	/*********************************************************************
+	Add this dispatcher as an input device adapter to the input device
+	manager. On the master node, it won't add any input devices and will
+	appear transparent, but its updateInputDevices method will be called
+	immediately after all other input device adapters have updated their
+	devices, meaning at exactly the right time. On the slave nodes, it
+	will act as a regular input device adapter. Win-win!
+	*********************************************************************/
+	
+	inputDeviceManager->addAdapter(this);
+		
 	if(pipe->isMaster())
 		{
 		/*******************************************************************
 		Distribute the input device configuration from the input device
-		manager to all slave nodes:
+		manager to all slave nodes. We will leave the input device adapter
+		input device states empty so that we can pretend to be a regular
+		input device adapter with no devices on the master node, simplifying
+		processing.
 		*******************************************************************/
 		
-		/* Send number of input devices: */
-		numInputDevices=inputDeviceManager->getNumInputDevices();
-		pipe->write<int>(numInputDevices);
-		inputDevices=new InputDevice*[numInputDevices];
+		/* Send the number of dispatched input devices: */
+		numDispatchedInputDevices=inputDeviceManager->getNumInputDevices();
+		pipe->write<int>(numDispatchedInputDevices);
+		dispatchedInputDevices=new InputDevice*[numDispatchedInputDevices];
+		
+		/* Allocate the input device state tracking arrays: */
+		inputDeviceEnableds=new bool[numDispatchedInputDevices];
+		newInputDeviceEnableds=new bool[numDispatchedInputDevices];
 		
 		/* Send configuration of all input devices: */
-		for(int deviceIndex=0;deviceIndex<numInputDevices;++deviceIndex)
+		for(int deviceIndex=0;deviceIndex<numDispatchedInputDevices;++deviceIndex)
 			{
 			/* Get pointer to input device: */
-			InputDevice* device=inputDevices[deviceIndex]=inputDeviceManager->getInputDevice(deviceIndex);
+			InputDevice* device=dispatchedInputDevices[deviceIndex]=inputDeviceManager->getInputDevice(deviceIndex);
 			
 			/* Send input device name: */
 			Misc::writeCString(device->getDeviceName(),*pipe);
@@ -74,11 +107,29 @@ MultipipeDispatcher::MultipipeDispatcher(InputDeviceManager* sInputDeviceManager
 			/* Send number of valuators: */
 			pipe->write<int>(device->getNumValuators());
 			
+			/* Check if the device has a handle transformation: */
+			const ONTransform& handleTransform=inputDeviceManager->getHandleTransform(device);
+			if(handleTransform!=ONTransform::identity)
+				{
+				/* Send the handle transform to the slaves: */
+				pipe->write(Misc::UInt8(1));
+				Misc::Marshaller<ONTransform>::write(handleTransform,*pipe);
+				}
+			else
+				{
+				/* Notify the slaves that the device does not have a handle transform: */
+				pipe->write(Misc::UInt8(0));
+				}
+			
 			/* Send device glyph: */
-			Glyph& glyph=inputDeviceManager->getInputGraphManager()->getInputDeviceGlyph(device);
+			Glyph& glyph=inputGraphManager->getInputDeviceGlyph(device);
 			pipe->write<char>(glyph.isEnabled()?1:0);
 			pipe->write<int>(glyph.getGlyphType());
 			Misc::write(glyph.getGlyphMaterial(),*pipe);
+			
+			/* Send and remember the device's enabled state: */
+			newInputDeviceEnableds[deviceIndex]=inputDeviceEnableds[deviceIndex]=inputGraphManager->isEnabled(device);
+			pipe->write(Misc::UInt8(inputDeviceEnableds[deviceIndex]?1:0));
 			
 			/* Send all button names: */
 			for(int buttonIndex=0;buttonIndex<device->getNumButtons();++buttonIndex)
@@ -90,12 +141,12 @@ MultipipeDispatcher::MultipipeDispatcher(InputDeviceManager* sInputDeviceManager
 			}
 		
 		pipe->flush();
+		
+		/* Register an input device state change callback with the input graph manager: */
+		inputGraphManager->getInputDeviceStateChangeCallbacks().add(this,&MultipipeDispatcher::inputDeviceStateChangedCallback);
 		}
 	else
 		{
-		/* Add the dispatcher as an input device adapter to the input device manager: */
-		inputDeviceManager->addAdapter(this);
-		
 		/*******************************************************************
 		Receive the input device configuration from the master node:
 		*******************************************************************/
@@ -103,6 +154,10 @@ MultipipeDispatcher::MultipipeDispatcher(InputDeviceManager* sInputDeviceManager
 		/* Read number of input devices: */
 		numInputDevices=pipe->read<int>();
 		inputDevices=new InputDevice*[numInputDevices];
+		
+		/* Allocate the input device state tracking arrays: */
+		inputDeviceEnableds=new bool[numInputDevices];
+		newInputDeviceEnableds=new bool[numInputDevices];
 		
 		/* Read configuration of all input devices: */
 		for(int deviceIndex=0;deviceIndex<numInputDevices;++deviceIndex)
@@ -119,6 +174,17 @@ MultipipeDispatcher::MultipipeDispatcher(InputDeviceManager* sInputDeviceManager
 			/* Read number of valuators: */
 			int numValuators=pipe->read<int>();
 			
+			/* Create the input device: */
+			InputDevice* device=inputDevices[deviceIndex]=inputDeviceManager->createInputDevice(name,trackType,numButtons,numValuators,true);
+			delete[] name;
+			
+			/* Check if the device has a handle transformation: */
+			if(pipe->read<Misc::UInt8>()!=0)
+				{
+				/* Read and set the device's handle transformation: */
+				inputDeviceManager->addHandleTransform(device,Misc::Marshaller<ONTransform>::read(*pipe));
+				}
+			
 			/* Read device glyph: */
 			Glyph deviceGlyph;
 			bool glyphEnabled=pipe->read<char>()!=0;
@@ -127,12 +193,12 @@ MultipipeDispatcher::MultipipeDispatcher(InputDeviceManager* sInputDeviceManager
 			if(glyphEnabled)
 				deviceGlyph.enable(glyphType,glyphMaterial);
 			
-			/* Create the input device: */
-			InputDevice* device=inputDevices[deviceIndex]=inputDeviceManager->createInputDevice(name,trackType,numButtons,numValuators,true);
-			delete[] name;
-			
 			/* Initialize the input device glyph: */
-			inputDeviceManager->getInputGraphManager()->getInputDeviceGlyph(device)=deviceGlyph;
+			inputGraphManager->getInputDeviceGlyph(device)=deviceGlyph;
+			
+			/* Read, remember, and set the device's enabled flag: */
+			newInputDeviceEnableds[deviceIndex]=inputDeviceEnableds[deviceIndex]=pipe->read<Misc::UInt8>()!=0;
+			inputGraphManager->setEnabled(device,inputDeviceEnableds[deviceIndex]);
 			
 			/* Receive all button names: */
 			for(int buttonIndex=0;buttonIndex<device->getNumButtons();++buttonIndex)
@@ -149,10 +215,14 @@ MultipipeDispatcher::~MultipipeDispatcher(void)
 	{
 	if(pipe->isMaster())
 		{
-		/* Do not destroy input devices on the master node, since they belong to input device adapters: */
-		for(int i=0;i<numInputDevices;++i)
-			inputDevices[i]=0;
+		/* Unregister the input device state change callback from the input graph manager: */
+		inputGraphManager->getInputDeviceStateChangeCallbacks().remove(this,&MultipipeDispatcher::inputDeviceStateChangedCallback);
 		}
+	
+	/* Delete the state tracking arrays: */
+	delete[] inputDeviceEnableds;
+	delete[] newInputDeviceEnableds;
+	delete[] dispatchedInputDevices;
 	}
 
 std::string MultipipeDispatcher::getFeatureName(const InputDeviceFeature& feature) const
@@ -228,17 +298,27 @@ void MultipipeDispatcher::updateInputDevices(void)
 	{
 	if(pipe->isMaster())
 		{
-		/* Write the change lists of all input devices to the pipe: */
-		for(int i=0;i<numInputDevices;++i)
-			if(inputDevices[i]->hasChanges())
+		/* Write the change lists of all dispatched input devices to the pipe: */
+		for(int i=0;i<numDispatchedInputDevices;++i)
+			if(inputDeviceEnableds[i]!=newInputDeviceEnableds[i]||dispatchedInputDevices[i]->hasChanges())
 				{
-				/* Write the input device's index followed by its change list: */
+				/* Write the input device's index and enabled state: */
 				pipe->write(Misc::UInt8(i));
-				inputDevices[i]->writeChanges(*pipe);
+				pipe->write(Misc::UInt8(newInputDeviceEnableds[i]));
+				
+				/* If the input device is enabled, write its change list: */
+				if(newInputDeviceEnableds[i])
+					dispatchedInputDevices[i]->writeChanges(*pipe);
+				
+				/* Mark the device's enabled state as up-to-date: */
+				inputDeviceEnableds[i]=newInputDeviceEnableds[i];
 				}
 		
 		/* Terminate the list of changes with an invalid input device index: */
 		pipe->write(Misc::UInt8(-1));
+		
+		/* Now is the perfect time to write the text event dispatcher's events to the pipe: */
+		inputDeviceManager->getTextEventDispatcher()->writeEventQueues(*pipe);
 		}
 	else
 		{
@@ -250,9 +330,19 @@ void MultipipeDispatcher::updateInputDevices(void)
 			if(index==Misc::UInt8(-1))
 				break;
 			
-			/* Read the input device's change list: */
-			inputDevices[index]->readChanges(*pipe);
+			/* Read the input device's enabled state and update the device's state if it changed: */
+			newInputDeviceEnableds[index]=pipe->read<Misc::UInt8>()!=0;
+			if(inputDeviceEnableds[index]!=newInputDeviceEnableds[index])
+				inputGraphManager->setEnabled(inputDevices[index],newInputDeviceEnableds[index]);
+			inputDeviceEnableds[index]=newInputDeviceEnableds[index];
+			
+			/* If the input device is enabled, read its change list: */
+			if(inputDeviceEnableds[index])
+				inputDevices[index]->readChanges(*pipe);
 			}
+		
+		/* Read the text event dispatcher's event queues: */
+		inputDeviceManager->getTextEventDispatcher()->readEventQueues(*pipe);
 		}
 	}
 

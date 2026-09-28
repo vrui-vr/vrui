@@ -89,7 +89,6 @@ class GLRenderState;
 namespace Vrui {
 class InputDeviceDataSaver;
 class InputDeviceAdapterPlayback;
-class MultipipeDispatcher;
 class Lightsource;
 class ScaleBar;
 class VisletManager;
@@ -231,7 +230,6 @@ struct VruiState
 	/* Input device management: */
 	TextEventDispatcher* textEventDispatcher;
 	InputDeviceManager* inputDeviceManager;
-	MultipipeDispatcher* multipipeDispatcher;
 	InputDeviceDataSaver* inputDeviceDataSaver;
 	
 	/* Definition of physical environment: */
