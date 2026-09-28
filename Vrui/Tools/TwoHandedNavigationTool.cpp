@@ -1,7 +1,7 @@
 /***********************************************************************
 TwoHandedNavigationTool - Class encapsulating the behaviour of the old
 famous Vrui two-handed navigation tool.
-Copyright (c) 2004-2025 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -130,8 +130,7 @@ void TwoHandedNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice::Bu
 					{
 					/* Initialize moving state: */
 					movingButtonSlotIndex=buttonSlotIndex;
-					movingTransform=Geometry::invert(getButtonDeviceTransformation(movingButtonSlotIndex));
-					movingTransform*=getNavigationTransformation();
+					previousFrameTransform=getButtonDeviceTransformation(movingButtonSlotIndex);
 					
 					/* Go from IDLE to MOVING mode: */
 					navigationMode=MOVING;
@@ -187,8 +186,7 @@ void TwoHandedNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice::Bu
 			case SCALING:
 				/* Initialize moving state: */
 				movingButtonSlotIndex=1-buttonSlotIndex;
-				movingTransform=Geometry::invert(getButtonDeviceTransformation(movingButtonSlotIndex));
-				movingTransform*=getNavigationTransformation();
+				previousFrameTransform=getButtonDeviceTransformation(movingButtonSlotIndex);
 				
 				/* Go from SCALING to MOVING mode: */
 				navigationMode=MOVING;
@@ -224,12 +222,31 @@ void TwoHandedNavigationTool::frame(void)
 		
 		case MOVING:
 			{
+			/* Calculate the incremental transformation from the previous frame to the current frame: */
+			TrackerState frameTransform=getButtonDeviceTransformation(movingButtonSlotIndex);
+			Point previousPos=previousFrameTransform.getOrigin();
+			Vector deltaT=frameTransform.getTranslation()-previousFrameTransform.getTranslation();
+			Rotation deltaR=frameTransform.getRotation()/previousFrameTransform.getRotation();
+			deltaR.renormalize();
+			
 			/* Compose the new navigation transformation: */
-			NavTrackerState navigation=getButtonDeviceTransformation(movingButtonSlotIndex);
-			navigation*=movingTransform;
+			NavTransform nav=getNavigationTransformation();
+			Vector navT=nav.getTranslation();
+			Rotation navR=nav.getRotation();
+			navT+=Point::origin-previousPos;
+			navR.leftMultiply(deltaR);
+			navR.renormalize();
+			navT=deltaR.transform(navT);
+			navT+=previousPos-Point::origin;
+			navT+=deltaT;
 			
 			/* Update Vrui's navigation transformation: */
-			setNavigationTransformation(navigation,getButtonDevicePosition(movingButtonSlotIndex));
+			nav=NavTransform(navT,navR,nav.getScaling());
+			setNavigationTransformation(nav,previousPos);
+			
+			/* Update the previous frame transformation for the next frame: */
+			previousFrameTransform=frameTransform;
+			
 			break;
 			}
 		

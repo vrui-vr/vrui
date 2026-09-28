@@ -1,7 +1,7 @@
 /***********************************************************************
 TwoHandedNavigationTool - Class encapsulating the behaviour of the old
 famous Vrui two-handed navigation tool.
-Copyright (c) 2004-2017 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -68,7 +68,7 @@ class TwoHandedNavigationTool:public NavigationTool
 	
 	/* Moving state: */
 	int movingButtonSlotIndex; // Index of the button slot whose device is responsible for moving
-	NavTrackerState movingTransform; // Transformation to apply to active device's transformation
+	TrackerState previousFrameTransform; // The moving device's physical-space transformation during the previous frame
 	
 	/* Scaling state: */
 	NavTrackerState postScaleTransform; // Transformation from previous navigational space to normalized scaling space

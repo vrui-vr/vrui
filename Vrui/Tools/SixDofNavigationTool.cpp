@@ -1,7 +1,7 @@
 /***********************************************************************
 SixDofNavigationTool - Class for 6-DOF navigation by grabbing space
 using a single input device.
-Copyright (c) 2004-2025 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -123,9 +123,8 @@ void SixDofNavigationTool::buttonCallback(int,InputDevice::ButtonCallbackData* c
 		/* Try activating this tool: */
 		if(activate())
 			{
-			/* Initialize the navigation transformations: */
-			preScale=Geometry::invert(getButtonDeviceTransformation(0));
-			preScale*=getNavigationTransformation();
+			/* Initialize the device's previous-frame transformation: */
+			previousFrameTransform=getButtonDeviceTransformation(0);
 			}
 		}
 	else // Button has just been released
@@ -140,12 +139,30 @@ void SixDofNavigationTool::frame(void)
 	/* Act depending on this tool's current state: */
 	if(isActive())
 		{
+		/* Calculate the incremental transformation from the previous frame to the current frame: */
+		TrackerState frameTransform=getButtonDeviceTransformation(0);
+		Point previousPos=previousFrameTransform.getOrigin();
+		Vector deltaT=frameTransform.getTranslation()-previousFrameTransform.getTranslation();
+		Rotation deltaR=frameTransform.getRotation()/previousFrameTransform.getRotation();
+		deltaR.renormalize();
+		
 		/* Compose the new navigation transformation: */
-		NavTrackerState navigation=getButtonDeviceTransformation(0);
-		navigation*=preScale;
+		NavTransform nav=getNavigationTransformation();
+		Vector navT=nav.getTranslation();
+		Rotation navR=nav.getRotation();
+		navT+=Point::origin-previousPos;
+		navR.leftMultiply(deltaR);
+		navR.renormalize();
+		navT=deltaR.transform(navT);
+		navT+=previousPos-Point::origin;
+		navT+=deltaT;
 		
 		/* Update Vrui's navigation transformation: */
-		setNavigationTransformation(navigation,getButtonDevicePosition(0));
+		nav=NavTransform(navT,navR,nav.getScaling());
+		setNavigationTransformation(nav,previousPos);
+		
+		/* Update the previous frame transformation for the next frame: */
+		previousFrameTransform=frameTransform;
 		}
 	}
 

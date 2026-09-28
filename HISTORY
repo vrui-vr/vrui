@@ -9145,3 +9145,7 @@ Vrui-15.0-001:
   the input device manager.
   - Bumped device save file format to major version 8 because it now has
     incremental updates, reducing file sizes by a significant factor.
+- Rewrote the math implementing the navigation scheme used by
+  Vrui::TwoHandedNavigationTool and others to avoid catastrophic
+  cancellation when operating more than about 10^11 units away from the
+  navigation coordinate system's origin, fixing resulting jumpiness.

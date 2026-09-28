@@ -1,7 +1,7 @@
 /***********************************************************************
 SixDofNavigationTool - Class for 6-DOF navigation by grabbing space
 using a single input device.
-Copyright (c) 2004-2010 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -56,7 +56,7 @@ class SixDofNavigationTool:public NavigationTool
 	static SixDofNavigationToolFactory* factory; // Pointer to the factory object for this class
 	
 	/* Transient navigation state: */
-	NavTrackerState preScale; // Transformation to be applied to the navigation transformation before scaling
+	TrackerState previousFrameTransform; // Physical-space transformation of the input device from the previous frame while navigating
 	
 	/* Constructors and destructors: */
 	public:
