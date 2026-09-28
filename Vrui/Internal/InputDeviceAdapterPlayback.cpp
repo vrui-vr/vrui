@@ -28,6 +28,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <unistd.h>
 #include <sys/types.h>
 #include <sys/wait.h>
+#include <Misc/SizedTypes.h>
 #include <Misc/PrintfTemplateTests.h>
 #include <Misc/StringPrintf.h>
 #include <Misc/StdError.h>
@@ -43,6 +44,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Math/Constants.h>
 #include <Geometry/OrthonormalTransformation.h>
 #include <Geometry/GeometryValueCoders.h>
+#include <Geometry/GeometryMarshallers.h>
 #include <Sound/SoundPlayer.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/EnvironmentDefinition.h>
@@ -198,7 +200,7 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 	
 	/* Read file header: */
 	inputDeviceDataFile->setEndianness(Misc::LittleEndian);
-	static const char* fileHeader="Vrui Input Device Data File v7.0\n";
+	static const char* fileHeader="Vrui Input Device Data File v8.0\n";
 	char header[34];
 	inputDeviceDataFile->read(header,34);
 	header[33]='\0';
@@ -241,6 +243,11 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 		/* File version with environment definition: */
 		fileVersion=7;
 		}
+	else if(strcmp(header+29,"8.0\n")==0)
+		{
+		/* File version with word-size safe header and incremental device updates: */
+		fileVersion=8;
+		}
 	else
 		{
 		header[32]='\0';
@@ -248,7 +255,7 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 		}
 	
 	/* Read random seed value: */
-	unsigned int randomSeed=inputDeviceDataFile->read<unsigned int>();
+	unsigned int randomSeed=fileVersion>=8?inputDeviceDataFile->read<Misc::UInt32>():inputDeviceDataFile->read<unsigned int>();
 	setRandomSeed(randomSeed);
 	
 	if(fileVersion>=7)
@@ -258,7 +265,7 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 		}
 	
 	/* Read number of saved input devices: */
-	numInputDevices=inputDeviceDataFile->read<int>();
+	numInputDevices=fileVersion>=8?inputDeviceDataFile->read<Misc::UInt8>():inputDeviceDataFile->read<int>();
 	inputDevices=new InputDevice*[numInputDevices];
 	deviceFeatureBaseIndices=new int[numInputDevices];
 	validFlags=new bool[numInputDevices];
@@ -277,9 +284,9 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 			inputDeviceDataFile->read(nameBuffer,sizeof(nameBuffer));
 			name=nameBuffer;
 			}
-		int trackType=inputDeviceDataFile->read<int>();
-		int numButtons=inputDeviceDataFile->read<int>();
-		int numValuators=inputDeviceDataFile->read<int>();
+		int trackType=fileVersion>=8?inputDeviceDataFile->read<Misc::UInt8>():inputDeviceDataFile->read<int>();
+		int numButtons=fileVersion>=8?inputDeviceDataFile->read<Misc::UInt16>():inputDeviceDataFile->read<int>();
+		int numValuators=fileVersion>=8?inputDeviceDataFile->read<Misc::UInt16>():inputDeviceDataFile->read<int>();
 		
 		/* Create new input device: */
 		InputDevice* newDevice=inputDeviceManager->createInputDevice(name.c_str(),trackType,numButtons,numValuators,true);
@@ -316,21 +323,16 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 		
 		if(fileVersion>=6)
 			{
-			/* Read the device's handle transformation: */
-			ONTransform::Vector t;
-			inputDeviceDataFile->read(t.getComponents(),3);
-			ONTransform::Rotation::Scalar q[4];
-			inputDeviceDataFile->read(q,4);
-			ONTransform handleTransform(t,ONTransform::Rotation(q));
-			if(handleTransform!=ONTransform::identity)
+			bool haveHandleTransformation=fileVersion<8||inputDeviceDataFile->read<Misc::UInt8>()!=0;
+			if(haveHandleTransformation)
 				{
-				/* Register the handle transformation with the input device manager: */
-				inputDeviceManager->addHandleTransform(newDevice,handleTransform);
+				/* Read and register the handle transformation with the input device manager: */
+				inputDeviceManager->addHandleTransform(newDevice,Misc::Marshaller<ONTransform>::read(*inputDeviceDataFile));
 				}
 			}
 		
-		/* Initialize the device as valid: */
-		validFlags[i]=true;
+		/* Initialize the device's valid state: */
+		validFlags[i]=fileVersion<8||inputDeviceDataFile->read<Misc::UInt8>()!=0;
 		}
 	
 	/* Check if the user wants to pre-transform stored device data: */
@@ -360,7 +362,7 @@ InputDeviceAdapterPlayback::InputDeviceAdapterPlayback(InputDeviceManager* sInpu
 	/* Read the initial application time stamp: */
 	try
 		{
-		nextTimeStamp=inputDeviceDataFile->read<double>();
+		nextTimeStamp=fileVersion>=8?inputDeviceDataFile->read<Misc::Float64>():inputDeviceDataFile->read<double>();
 		synchronize(this);
 		}
 	catch(const IO::File::ReadError&)
@@ -492,13 +494,40 @@ void InputDeviceAdapterPlayback::updateInputDevices(void)
 	
 	if(!done)
 		{
-		/* Read new device states: */
-		readDeviceStates();
+		if(fileVersion>=8)
+			{
+			/* Read a sequence of input device change lists from the pipe: */
+			while(true)
+				{
+				/* Read the index of the next input device and bail out if it's the end-of-list marker: */
+				Misc::UInt8 index=inputDeviceDataFile->read<Misc::UInt8>();
+				if(index==Misc::UInt8(-1))
+					break;
+				
+				/* Read the input device's enabled state and update the device's state if it changed: */
+				bool newValidFlag=inputDeviceDataFile->read<Misc::UInt8>()!=0;
+				if(validFlags[index]!=newValidFlag)
+					inputDeviceManager->getInputGraphManager()->setEnabled(inputDevices[index],newValidFlag);
+				validFlags[index]=newValidFlag;
+				
+				/* If the input device is enabled, read its change list: */
+				if(validFlags[index])
+					inputDevices[index]->readChanges(*inputDeviceDataFile);
+				}
+			
+			/* Read the text event dispatcher's event queues: */
+			inputDeviceManager->getTextEventDispatcher()->readEventQueues(*inputDeviceDataFile);
+			}
+		else
+			{
+			/* Read new device states: */
+			readDeviceStates();
+			}
 		
 		/* Read time stamp of next data frame: */
 		try
 			{
-			nextTimeStamp=inputDeviceDataFile->read<double>();
+			nextTimeStamp=fileVersion>=8?inputDeviceDataFile->read<Misc::Float64>():inputDeviceDataFile->read<double>();
 			}
 		catch(const IO::File::ReadError&)
 			{

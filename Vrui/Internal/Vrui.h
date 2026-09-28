@@ -87,7 +87,6 @@ namespace SceneGraph {
 class GLRenderState;
 }
 namespace Vrui {
-class InputDeviceDataSaver;
 class InputDeviceAdapterPlayback;
 class Lightsource;
 class ScaleBar;
@@ -230,7 +229,6 @@ struct VruiState
 	/* Input device management: */
 	TextEventDispatcher* textEventDispatcher;
 	InputDeviceManager* inputDeviceManager;
-	InputDeviceDataSaver* inputDeviceDataSaver;
 	
 	/* Definition of physical environment: */
 	EnvironmentDefinition environmentDefinition;

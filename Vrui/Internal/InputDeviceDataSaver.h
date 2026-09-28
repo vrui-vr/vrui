@@ -1,7 +1,9 @@
 /***********************************************************************
 InputDeviceDataSaver - Class to save input device data to a file for
-later playback.
-Copyright (c) 2004-2018 Oliver Kreylos
+later playback. The class is derived from Vrui::InputDeviceAdapter to
+be able to hook it into the input device manager and simplify processing
+in Vrui's main loop.
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -24,53 +26,43 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #ifndef VRUI_INTERNAL_INPUTDEVICEDATASAVER_INCLUDED
 #define VRUI_INTERNAL_INPUTDEVICEDATASAVER_INCLUDED
 
-#include <string>
 #include <IO/File.h>
 #include <Vrui/InputGraphManager.h>
+#include <Vrui/Internal/InputDeviceAdapter.h>
 
 /* Forward declarations: */
 namespace Misc {
 class ConfigurationFileSection;
 }
-namespace Sound {
-class SoundRecorder;
-}
 namespace Vrui {
 class InputDevice;
-class InputDeviceManager;
-class TextEventDispatcher;
-#ifdef VRUI_INPUTDEVICEDATASAVER_USE_KINECT
-class KinectRecorder;
-#endif
+class InputGraphManager;
 }
 
 namespace Vrui {
 
-class InputDeviceDataSaver
+class InputDeviceDataSaver:public InputDeviceAdapter
 	{
 	/* Elements: */
 	private:
-	IO::FilePtr inputDeviceDataFile; // File input device data is saved to
-	int numInputDevices; // Number of saved (physical) input devices
-	InputDevice** inputDevices; // Array of pointers to saved input devices
-	bool* validFlags; // Array of flags indicating whether a saved input device is enabled
-	TextEventDispatcher* textEventDispatcher; // Pointer to the dispatcher for GLMotif text and text control events
-	Sound::SoundRecorder* soundRecorder; // Pointer to sound recorder object to record commentary tracks
-	#ifdef VRUI_INPUTDEVICEDATASAVER_USE_KINECT
-	KinectRecorder* kinectRecorder; // Pointer to 3D video recorder object
-	#endif
+	InputGraphManager* inputGraphManager; // Pointer to the input graph manager
+	IO::FilePtr inputDeviceDataFile; // File to which input device data is saved
+	int numSavedInputDevices; // Number of input devices whose states will be saved to the file
+	InputDevice** savedInputDevices; // Array of pointers to input devices whose states will be dispatched to the slaves
+	bool* inputDeviceEnableds; // Array of enabled flags for all dispatched input devices as seen on the slaves
+	bool* newInputDeviceEnableds; // Array of new enabled flags not yet shared with the slaves
 	
 	/* Private methods: */
-	void inputDeviceStateChangeCallback(InputGraphManager::InputDeviceStateChangeCallbackData* cbData); // Callback called when an input device changes state
+	void inputDeviceStateChangedCallback(InputGraphManager::InputDeviceStateChangeCallbackData* cbData); // Callback called when a saved input device changes enabled state
 	
 	/* Constructors and destructors: */
 	public:
-	InputDeviceDataSaver(const Misc::ConfigurationFileSection& configFileSection,InputDeviceManager& inputDeviceManager,TextEventDispatcher* sTextEventDispatcher,unsigned int randomSeed); // Creates an object saving all devices currently in the manager
-	~InputDeviceDataSaver(void);
+	InputDeviceDataSaver(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection,unsigned int randomSeed); // Creates an object saving the states of all input devices managed by the given manager
+	virtual ~InputDeviceDataSaver(void);
 	
-	/* Methods: */
-	void prepareMainLoop(void); // Notifies input device data saver that Vrui main loop is about to start
-	void saveCurrentState(double currentTimeStamp); // Saves current state of input devices
+	/* Methods from class InputDeviceAdapter: */
+	virtual void prepareMainLoop(void);
+	virtual void updateInputDevices(void);
 	};
 
 }

@@ -608,7 +608,6 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 	 loadInputGraph(false),
 	 textEventDispatcher(0),
 	 inputDeviceManager(0),
-	 inputDeviceDataSaver(0),
 	 inchFactor(1),meterFactor(Scalar(1000)/Scalar(25.4)),
 	 glyphRenderer(0),
 	 newInputDevicePosition(0.0,0.0,0.0),
@@ -730,7 +729,6 @@ VruiState::~VruiState(void)
 	delete glyphRenderer;
 	
 	/* Delete input device management: */
-	delete inputDeviceDataSaver;
 	delete inputDeviceManager;
 	delete textEventDispatcher;
 	
@@ -816,46 +814,6 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 		new MultipipeDispatcher(inputDeviceManager,pipe);
 		}
 	
-	/*********************************************************************
-	Update all physical input devices to get initial positions and
-	orientations. This will automatically synchronize input device states
-	across a cluster, but we will have to flush the main cluster pipe to
-	send things on their way.
-	*********************************************************************/
-	
-	inputDeviceManager->updateInputDevices();
-	if(pipe!=0&&master)
-		pipe->flush();
-	
-	/* Update input devices in the scene graph: */
-	sceneGraphManager->updateInputDevices();
-	
-	if(master)
-		{
-		/* Check if the user wants to save input device data: */
-		std::string iddsSectionName=configFileSection.retrieveString("inputDeviceDataSaver","");
-		if(!iddsSectionName.empty())
-			{
-			/* Go to input device data saver's section: */
-			Misc::ConfigurationFileSection iddsSection=configFileSection.getSection(iddsSectionName.c_str());
-			
-			/* Initialize the input device data saver: */
-			inputDeviceDataSaver=new InputDeviceDataSaver(iddsSection,*inputDeviceManager,textEventDispatcher,randomSeed);
-			
-			/* Save initial input device state: */
-			inputDeviceDataSaver->saveCurrentState(applicationTime);
-			}
-		}
-	
-	/* Distribute the random seed and initial application time: */
-	if(pipe!=0)
-		{
-		pipe->broadcast(randomSeed);
-		pipe->broadcast(applicationTime);
-		}
-	srand(randomSeed);
-	lastFrameDuration=0.0;
-	
 	if(master)
 		{
 		/* Create a physical environment definition, or override one that was received from a VR device daemon during input device manager initialization: */
@@ -882,6 +840,43 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 		/* Receive the physical environment definition from the head node: */
 		environmentDefinition.read(*pipe);
 		}
+	
+	if(master)
+		{
+		/* Check if the user wants to save input device data: */
+		std::string iddsSectionName=configFileSection.retrieveString("inputDeviceDataSaver","");
+		if(!iddsSectionName.empty())
+			{
+			/* Go to input device data saver's section: */
+			Misc::ConfigurationFileSection iddsSection=configFileSection.getSection(iddsSectionName.c_str());
+			
+			/* Create an input device data saver, which will register itself with the input device manager, so we can immediately forget about it: */
+			new InputDeviceDataSaver(inputDeviceManager,iddsSection,randomSeed);
+			}
+		}
+	
+	/*********************************************************************
+	Update all physical input devices to get initial positions and
+	orientations. This will automatically synchronize input device states
+	across a cluster, but we will have to flush the main cluster pipe to
+	send things on their way.
+	*********************************************************************/
+	
+	inputDeviceManager->updateInputDevices();
+	if(pipe!=0&&master)
+		pipe->flush();
+	
+	/* Update input devices in the scene graph: */
+	sceneGraphManager->updateInputDevices();
+	
+	/* Distribute the random seed and initial application time: */
+	if(pipe!=0)
+		{
+		pipe->broadcast(randomSeed);
+		pipe->broadcast(applicationTime);
+		}
+	srand(randomSeed);
+	lastFrameDuration=0.0;
 	
 	/* Query the inch and meter factors: */
 	inchFactor=environmentDefinition.unit.getInchFactor();
@@ -1569,12 +1564,6 @@ void VruiState::prepareMainLoop(void)
 	/* Enable all vislets for the first time: */
 	visletManager->enable();
 	
-	if(inputDeviceDataSaver!=0)
-		{
-		/* Tell the input device data saver to get going: */
-		inputDeviceDataSaver->prepareMainLoop();
-		}
-	
 	/* Call main loop preparation function: */
 	application->prepareMainLoop();
 	
@@ -1852,10 +1841,6 @@ bool VruiState::startFrame(void)
 	
 	/* Update the input graph: */
 	inputGraphManager->update();
-	
-	/* Save input device states to data file if requested: */
-	if(master&&inputDeviceDataSaver!=0)
-		inputDeviceDataSaver->saveCurrentState(applicationTime);
 	
 	/* Update the tool manager: */
 	toolManager->update();

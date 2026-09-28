@@ -9139,3 +9139,9 @@ Vrui-15.0-001:
 - Rework Vrui::MultipipeDispatcher such that it can be added to the
   input device managers both master- and slave-side to simplify Vrui's
   main loop. Also integrate text event distribution.
+- Rewrote Vrui::InputDeviceDataSaver and
+  Vrui::InputDeviceAdapterPlayback in the same way as
+  Vrui::MultipipeDispatcher and moved management from the main loop into
+  the input device manager.
+  - Bumped device save file format to major version 8 because it now has
+    incremental updates, reducing file sizes by a significant factor.
