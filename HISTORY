@@ -9137,3 +9137,5 @@ Vrui-15.0-001:
   features.
   - Rewrote Vrui::MultipipeDispatcher to use new read/write methods,
     vastly simplifying code and improving performance.
+- In Vrui::InputDeviceAdapterDeviceDaemon, don't update disabled
+  devices' features. It would blow up those device's change lists.

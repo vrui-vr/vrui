@@ -453,13 +453,14 @@ void InputDeviceAdapterDeviceDaemon::updateInputDevices(void)
 					}
 				}
 			
-			/* Update button states: */
-			for(int i=0;i<device->getNumButtons();++i)
-				device->setButtonState(i,state.getButtonState(buttonIndexMapping[deviceIndex][i]));
-			
-			/* Update valuator states: */
-			for(int i=0;i<device->getNumValuators();++i)
-				device->setValuator(i,state.getValuatorState(valuatorIndexMapping[deviceIndex][i]));
+			/* Update the device's button and valuator states only if the device is enabled: */
+			if(trackerIndex<0||validFlags[trackerIndex])
+				{
+				for(int i=0;i<device->getNumButtons();++i)
+					device->setButtonState(i,state.getButtonState(buttonIndexMapping[deviceIndex][i]));
+				for(int i=0;i<device->getNumValuators();++i)
+					device->setValuator(i,state.getValuatorState(valuatorIndexMapping[deviceIndex][i]));
+				}
 			}
 		}
 	else
@@ -497,13 +498,14 @@ void InputDeviceAdapterDeviceDaemon::updateInputDevices(void)
 					}
 				}
 			
-			/* Update button states: */
-			for(int i=0;i<device->getNumButtons();++i)
-				device->setButtonState(i,state.getButtonState(buttonIndexMapping[deviceIndex][i]));
-			
-			/* Update valuator states: */
-			for(int i=0;i<device->getNumValuators();++i)
-				device->setValuator(i,state.getValuatorState(valuatorIndexMapping[deviceIndex][i]));
+			/* Update the device's button and valuator states only if the device is not tracked or enabled: */
+			if(trackerIndex<0||validFlags[trackerIndex])
+				{
+				for(int i=0;i<device->getNumButtons();++i)
+					device->setButtonState(i,state.getButtonState(buttonIndexMapping[deviceIndex][i]));
+				for(int i=0;i<device->getNumValuators();++i)
+					device->setValuator(i,state.getValuatorState(valuatorIndexMapping[deviceIndex][i]));
+				}
 			}
 		}
 		
