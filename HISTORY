@@ -9139,3 +9139,5 @@ Vrui-15.0-001:
 - Rework Vrui::MultipipeDispatcher such that it can be added to the
   input device managers both master- and slave-side to simplify Vrui's
   main loop. Also integrate text event distribution.
+- Updated Vrui::TouchpadScrollingTool to work with new input device
+  feature update mechanism.
