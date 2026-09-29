@@ -9141,3 +9141,4 @@ Vrui-15.0-001:
   main loop. Also integrate text event distribution.
 - Updated Vrui::TouchpadScrollingTool to work with new input device
   feature update mechanism.
+- Fixed error messages in SceneGraph::SceneGraphList.
