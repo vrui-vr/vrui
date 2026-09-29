@@ -27,6 +27,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Misc/CommandLineParser.icpp>
 #include <Threads/FunctionCalls.h>
 #include <IO/File.h>
+#include <IO/Directory.h>
 #include <IO/OpenFile.h>
 #include <Math/Math.h>
 #include <Geometry/ComponentArray.h>
@@ -262,6 +263,9 @@ SceneGraphViewer::SceneGraphViewer(int& argc,char**& argv)
 	// DEBUGGING
 	// Realtime::TimePointMonotonic loadTimer;
 	
+	/* Load all scene graphs passed on the command line relative to the current directory: */
+	IO::DirectoryPtr currentDir=IO::Directory::getCurrent();
+	
 	/* Keep track if any of the loaded scene graphs require an audio processing pass: */
 	bool requireAudio=false;
 	
@@ -271,7 +275,7 @@ SceneGraphViewer::SceneGraphViewer(int& argc,char**& argv)
 		/* Try loading the scene graph: */
 		try
 			{
-			SceneGraph::GraphNodePointer sceneGraph=currentList->addSceneGraph(*argPtr,enable);
+			SceneGraph::GraphNodePointer sceneGraph=currentList->addSceneGraph(*currentDir,*argPtr,enable);
 			
 			/* Check if the scene graph requires an audio pass: */
 			requireAudio=requireAudio||(sceneGraph->getPassMask()&SceneGraph::GraphNode::ALRenderPass)!=0x0U;
@@ -279,7 +283,7 @@ SceneGraphViewer::SceneGraphViewer(int& argc,char**& argv)
 		catch(const std::runtime_error& err)
 			{
 			/* Print an error message and keep going: */
-			Misc::formattedUserWarning("Scene Graph Viewer: Ignoring file %s due to exception %s",*argPtr,err.what());
+			Misc::formattedUserWarning("SceneGraphViewer: Ignoring file %s due to exception %s",*argPtr,err.what());
 			}
 		
 		++argPtr;

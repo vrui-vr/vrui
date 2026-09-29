@@ -9149,3 +9149,6 @@ Vrui-15.0-001:
   Vrui::TwoHandedNavigationTool and others to avoid catastrophic
   cancellation when operating more than about 10^11 units away from the
   navigation coordinate system's origin, fixing resulting jumpiness.
+- Updated Vrui::TouchpadScrollingTool to work with new input device
+  feature update mechanism.
+- Fixed error messages in SceneGraph::SceneGraphList.

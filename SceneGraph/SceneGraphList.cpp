@@ -128,7 +128,7 @@ void SceneGraphList::addSceneGraphOKCallback(GLMotif::FileSelectionDialog::OKCal
 	catch(const std::runtime_error& err)
 		{
 		/* Show an error message: */
-		Misc::formattedUserError(__PRETTY_FUNCTION__,"Cannot open a file selection dialog for directory %s due to exception %s",currentDirectory->getPath().c_str(),err.what());
+		Misc::formattedUserError("SceneGraphList: Cannot load scene graph file %s due to exception %s",cbData->getSelectedPath().c_str(),err.what());
 		}
 	
 	/* Close the file selection dialog: */
@@ -163,7 +163,7 @@ void SceneGraphList::addSceneGraphButtonSelectedCallback(Misc::CallbackData* cbD
 	catch(const std::runtime_error& err)
 		{
 		/* Show an error message: */
-		Misc::formattedUserError(__PRETTY_FUNCTION__,"Cannot open a file selection dialog for directory %s due to exception %s",currentDirectory->getPath().c_str(),err.what());
+		Misc::formattedUserError("SceneGraphList: Cannot open a file selection dialog for directory %s due to exception %s",currentDirectory->getPath().c_str(),err.what());
 		}
 	}
 
@@ -214,7 +214,7 @@ void SceneGraphList::reloadSceneGraphButtonSelectedCallback(Misc::CallbackData* 
 	catch(const std::runtime_error& err)
 		{
 		/* Show an error message: */
-		Misc::formattedUserError(__PRETTY_FUNCTION__,"Cannot reload the scene graph due to exception %s",err.what());
+		Misc::formattedUserError("SceneGraphList: Cannot reload the scene graph due to exception %s",err.what());
 		}
 	}
 

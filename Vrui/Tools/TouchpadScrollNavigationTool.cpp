@@ -1,7 +1,7 @@
 /***********************************************************************
 TouchpadScrollNavigationTool - Class to scroll using a linear touch pad
 device.
-Copyright (c) 2025 Oliver Kreylos
+Copyright (c) 2025-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -180,8 +180,8 @@ void TouchpadScrollNavigationTool::valuatorCallback(int valuatorSlotIndex,InputD
 				/* Try activating this tool: */
 				if(activate())
 					{
-					/* Initialize the scroll valuator value: */
-					lastScrollValue=getValuatorState(1);
+					/* Keep track of when this tool was activated: */
+					activationFrame=getFrameIndex();
 					}
 				}
 			else
@@ -197,12 +197,16 @@ void TouchpadScrollNavigationTool::frame(void)
 	{
 	if(isActive())
 		{
-		/* Apply this frame's scrolling transformation: */
+		/* If not on the first frame, apply this frame's scrolling transformation: */
 		double scrollValue=getValuatorState(1);
-		NavTransform nav=getNavigationTransformation();
-		nav.leftMultiply(NavTransform::translate(configuration.scrollDirection*((scrollValue-lastScrollValue)*configuration.scrollFactor)));
-		setNavigationTransformation(nav);
+		if(Vrui::getFrameIndex()!=activationFrame)
+			{
+			NavTransform nav=getNavigationTransformation();
+			nav.leftMultiply(NavTransform::translate(configuration.scrollDirection*((scrollValue-lastScrollValue)*configuration.scrollFactor)));
+			setNavigationTransformation(nav);
+			}
 		
+		/* Remember the current scroll value for the next frame: */
 		lastScrollValue=scrollValue;
 		}
 	}

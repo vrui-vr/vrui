@@ -1,7 +1,7 @@
 /***********************************************************************
 TouchpadScrollNavigationTool - Class to scroll using a linear touch pad
 device.
-Copyright (c) 2025 Oliver Kreylos
+Copyright (c) 2025-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -77,6 +77,7 @@ class TouchpadScrollNavigationTool:public NavigationTool
 	TouchpadScrollNavigationToolFactory::Configuration configuration; // Private configuration of this tool
 	
 	/* Transient navigation state: */
+	unsigned long activationFrame; // Vrui frame index in which this tool was activated
 	Scalar lastScrollValue; // Scroll valuator value on previous frame
 	
 	/* Constructors and destructors: */
