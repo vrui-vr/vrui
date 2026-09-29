@@ -2,7 +2,7 @@
 ScrollTool - Class for tools that can scroll inside certain GLMotif GUI
 widgets. ScrollTool objects are cascadable and prevent valuator events
 if they would fall into the area of interest of scrollable widgets.
-Copyright (c) 2011-2015 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -49,7 +49,7 @@ class ScrollToolFactory:public ToolFactory
 	
 	/* Methods from ToolFactory: */
 	virtual const char* getName(void) const;
-	virtual const char* getValuatorFunction(int valuatorSlotIndex) const;
+	virtual const char* getButtonFunction(int buttonSlotIndex) const;
 	virtual Tool* createTool(const ToolInputAssignment& inputAssignment) const;
 	virtual void destroyTool(Tool* tool) const;
 	};
@@ -61,8 +61,8 @@ class ScrollTool:public UserInterfaceTool,public GUIInteractor,public DeviceForw
 	/* Elements: */
 	private:
 	static ScrollToolFactory* factory; // Pointer to the factory object for this class
-	InputDevice* valuatorDevice; // Pointer to the input device representing the forwarded valuator
-	bool sendingEvents; // Flag if the tool is currently sending text control events
+	InputDevice* wheelDevice; // Pointer to the input device representing the forwarded mouse wheel
+	bool interceptedEvent; // Flag whether this tool intercepted the most recent button press event
 	
 	/* Constructors and destructors: */
 	public:
@@ -72,7 +72,7 @@ class ScrollTool:public UserInterfaceTool,public GUIInteractor,public DeviceForw
 	virtual void initialize(void);
 	virtual void deinitialize(void);
 	virtual const ToolFactory* getFactory(void) const;
-	virtual void valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData);
+	virtual void buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData);
 	virtual void frame(void);
 	virtual void display(GLContextData& contextData) const;
 	
