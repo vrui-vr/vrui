@@ -9157,3 +9157,13 @@ Vrui-15.0-001:
   - Adapt Vrui::ScrollTool tool.
   - Adapt Vrui::MouseNavigationTool tool.
   - Adapt default tool bindings in Vrui configuration files.
+- Several changes to SceneGraph::GLRenderState:
+  - Added pushEyeSpaceTransform method to let nodes render in OpenGL eye
+    space if desired, e.g., for geometry impostor rendering.
+  - Added getEnabledTextureLevel method to query the level of texture
+    that is currently enabled, with -1: no texture, 0: 1D texture, 1: 2D
+    texture, 2: 3D texture, 3: cube map.
+  - Disabled code in that disabled shaders when textures were enabled or
+    disabled. It turns out that texture state is independent of shader
+    state, and shaders will still be disabled transparently if nodes
+    request any OpenGL fixed-function capabilities such as materials.

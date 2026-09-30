@@ -1,7 +1,7 @@
 /***********************************************************************
 GLRenderState - Class encapsulating the traversal state of a scene graph
 during OpenGL rendering.
-Copyright (c) 2009-2023 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -109,6 +109,16 @@ class GLRenderState:public TraversalState
 	
 	/* Methods from class TraversalState: */
 	void startTraversal(const Point& newBaseEyePos,const Rect& newViewport,const DPTransform& newProjection,const DOGTransform& newCurrentTransform,const Point& newBaseViewerPos,const Vector& newBaseUpVector);
+	DOGTransform pushEyeSpaceTransform(void) // Pushes a transformation that corresponds to OpenGL eye space onto the transformation stack and returns the previous transformation
+		{
+		/* Mark OpenGL's modelview matrix as outdated and update the transformation: */
+		modelviewOutdated=true;
+		
+		/* Save, return, and replace the current transformation: */
+		DOGTransform result=currentTransform;
+		currentTransform=DOGTransform::identity;
+		return result;
+		}
 	DOGTransform pushTransform(const DOGTransform& deltaTransform)
 		{
 		/* Mark OpenGL's modelview matrix as outdated and update the transformation: */
@@ -212,6 +222,10 @@ class GLRenderState:public TraversalState
 			glBindTexture(GL_TEXTURE_CUBE_MAP_EXT,textureObjectId);
 			currentState.boundTextures[3]=textureObjectId;
 			}
+		}
+	int getEnabledTextureLevel(void) const // Returns the level of the currently enabled texture
+		{
+		return currentState.highestTexturePriority;
 		}
 	void disableTextures(void); // Disables OpenGL texture mapping
 	void blendFunc(GLenum newBlendSrcFactor,GLenum newBlendDstFactor); // Sets the blending function during the transparent rendering pass

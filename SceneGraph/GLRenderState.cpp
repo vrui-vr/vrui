@@ -1,7 +1,7 @@
 /***********************************************************************
 GLRenderState - Class encapsulating the traversal state of a scene graph
 during OpenGL rendering.
-Copyright (c) 2009-2025 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -562,10 +562,12 @@ void GLRenderState::setEmissiveColor(const Color& newEmissiveColor)
 
 void GLRenderState::enableTexture1D(void)
 	{
+	#if 0
 	/* Disable any active shader programs: */
 	if(currentState.shaderProgram!=0)
 		glUseProgramObjectARB(0);
 	currentState.shaderProgram=0;
+	#endif
 	
 	/* Enable 1D texture mapping: */
 	bool textureEnabled=currentState.highestTexturePriority>=0;
@@ -591,10 +593,12 @@ void GLRenderState::enableTexture1D(void)
 
 void GLRenderState::enableTexture2D(void)
 	{
+	#if 0
 	/* Disable any active shader programs: */
 	if(currentState.shaderProgram!=0)
 		glUseProgramObjectARB(0);
 	currentState.shaderProgram=0;
+	#endif
 	
 	/* Enable 2D texture mapping: */
 	bool textureEnabled=currentState.highestTexturePriority>=0;
@@ -618,10 +622,12 @@ void GLRenderState::enableTexture2D(void)
 
 void GLRenderState::enableTexture3D(void)
 	{
+	#if 0
 	/* Disable any active shader programs: */
 	if(currentState.shaderProgram!=0)
 		glUseProgramObjectARB(0);
 	currentState.shaderProgram=0;
+	#endif
 	
 	/* Enable 3D texture mapping: */
 	bool textureEnabled=currentState.highestTexturePriority>=0;
@@ -641,12 +647,39 @@ void GLRenderState::enableTexture3D(void)
 		}
 	}
 
-void GLRenderState::disableTextures(void)
+void GLRenderState::enableTextureCubeMap(void)
 	{
+	#if 0
 	/* Disable any active shader programs: */
 	if(currentState.shaderProgram!=0)
 		glUseProgramObjectARB(0);
 	currentState.shaderProgram=0;
+	#endif
+	
+	/* Enable cupe map texture mapping: */
+	bool textureEnabled=currentState.highestTexturePriority>=0;
+	if(currentState.highestTexturePriority<3)
+		glEnable(GL_TEXTURE_CUBE_MAP);
+	currentState.highestTexturePriority=3;
+	
+	/* Update texture lighting: */
+	if(!textureEnabled)
+		glTexEnvMode(GLTexEnvEnums::TEXTURE_ENV,currentState.lightingEnabled?GLTexEnvEnums::MODULATE:GLTexEnvEnums::REPLACE);
+	if(currentState.lightingEnabled&&currentState.lightModelColorControl!=GL_SEPARATE_SPECULAR_COLOR)
+		{
+		glLightModeli(GL_LIGHT_MODEL_COLOR_CONTROL,GL_SEPARATE_SPECULAR_COLOR);
+		currentState.lightModelColorControl=GL_SEPARATE_SPECULAR_COLOR;
+		}
+	}
+
+void GLRenderState::disableTextures(void)
+	{
+	#if 0
+	/* Disable any active shader programs: */
+	if(currentState.shaderProgram!=0)
+		glUseProgramObjectARB(0);
+	currentState.shaderProgram=0;
+	#endif
 	
 	/* Disable texture mapping: */
 	if(currentState.highestTexturePriority>=3)
