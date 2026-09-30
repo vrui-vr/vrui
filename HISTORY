@@ -9167,3 +9167,9 @@ Vrui-15.0-001:
     disabled. It turns out that texture state is independent of shader
     state, and shaders will still be disabled transparently if nodes
     request any OpenGL fixed-function capabilities such as materials.
+  - Implemented the previously missing enableTextureCubeMap method.
+- Added SceneGraph::ImageTextureCubeMapNode to represent cube map
+  textures; can be used in appearance nodes just like 2D textures, but
+  require special support from geometry nodes, which can now query what
+  type of texture is currently active using
+  SceneGraph::GLRenderState::getEnabledTextureLevel method.
