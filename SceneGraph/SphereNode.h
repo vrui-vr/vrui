@@ -1,6 +1,6 @@
 /***********************************************************************
 SphereNode - Class for spheres as renderable geometry.
-Copyright (c) 2013-2023 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -25,6 +25,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Geometry/ComponentArray.h>
 #include <Geometry/Point.h>
 #include <Geometry/Box.h>
+#include <GL/GLShaderManager.h>
 #include <GL/gl.h>
 #include <GL/GLObject.h>
 #include <SceneGraph/FieldTypes.h>
@@ -40,6 +41,7 @@ class SphereNode:public GeometryNode,public GLObject
 		{
 		/* Elements: */
 		public:
+		GLShaderManager::Namespace& shaderNamespace; // Namespace containing the GLSL shaders
 		GLuint vertexBufferObjectId; // ID of vertex buffer object containing the sphere's vertices, if supported
 		GLuint indexBufferObjectId; // ID of index buffer object containing the sphere's triangle vertex indices, if supported
 		size_t numVertices; // Number of vertices stored in the vertex buffer object
@@ -51,7 +53,7 @@ class SphereNode:public GeometryNode,public GLObject
 		unsigned int version; // Version of sphere stored in the buffer objects
 		
 		/* Constructors and destructors: */
-		DataItem(void);
+		DataItem(GLShaderManager::Namespace& sShaderNamespace);
 		virtual ~DataItem(void);
 		};
 	
@@ -62,6 +64,7 @@ class SphereNode:public GeometryNode,public GLObject
 	/* Fields: */
 	SFPoint center;
 	SFFloat radius;
+	SFBool useImpostor;
 	SFInt numSegments;
 	SFBool latLong;
 	SFBool ccw; // Flag whether to show the outside or inside of the sphere

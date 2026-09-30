@@ -9173,3 +9173,6 @@ Vrui-15.0-001:
   require special support from geometry nodes, which can now query what
   type of texture is currently active using
   SceneGraph::GLRenderState::getEnabledTextureLevel method.
+- Added experimental impostor renderer to SceneGraph::SphereNode that
+  supports 2D and cube map textures and works reasonably well when large
+  spheres are viewed from *very* up close.

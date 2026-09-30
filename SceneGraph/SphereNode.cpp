@@ -1,6 +1,6 @@
 /***********************************************************************
 SphereNode - Class for spheres as renderable geometry.
-Copyright (c) 2013-2023 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This file is part of the Simple Scene Graph Renderer (SceneGraph).
 
@@ -29,6 +29,11 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <GL/GLContextData.h>
 #include <GL/GLExtensionManager.h>
 #include <GL/Extensions/GLARBVertexBufferObject.h>
+#include <GL/Extensions/GLARBMultitexture.h>
+#include <GL/Extensions/GLARBShaderObjects.h>
+#include <GL/Extensions/GLARBVertexShader.h>
+#include <GL/Extensions/GLARBFragmentShader.h>
+#include <SceneGraph/Config.h>
 #include <SceneGraph/EventTypes.h>
 #include <SceneGraph/BaseAppearanceNode.h>
 #include <SceneGraph/VRMLFile.h>
@@ -37,14 +42,19 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <SceneGraph/SphereCollisionQuery.h>
 #include <SceneGraph/GLRenderState.h>
 
+// DEBUGGING
+#include <iostream>
+#include <Geometry/OutputOperators.h>
+
 namespace SceneGraph {
 
 /*************************************
 Methods of class SphereNode::DataItem:
 *************************************/
 
-SphereNode::DataItem::DataItem(void)
-	:vertexBufferObjectId(0),indexBufferObjectId(0),
+SphereNode::DataItem::DataItem(GLShaderManager::Namespace& sShaderNamespace)
+	:shaderNamespace(sShaderNamespace),
+	 vertexBufferObjectId(0),indexBufferObjectId(0),
 	 numVertices(0),
 	 version(0)
 	{
@@ -59,6 +69,12 @@ SphereNode::DataItem::DataItem(void)
 		/* Create the index buffer object: */
 		glGenBuffersARB(1,&indexBufferObjectId);
 		}
+	
+	/* Initialize the required OpenGL extensions for impostor rendering: */
+	GLARBMultitexture::initExtension();
+	GLARBShaderObjects::initExtension();
+	GLARBVertexShader::initExtension();
+	GLARBFragmentShader::initExtension();
 	}
 
 SphereNode::DataItem::~DataItem(void)
@@ -353,6 +369,7 @@ void SphereNode::updateArrays(SphereNode::DataItem* dataItem) const
 SphereNode::SphereNode(void)
 	:center(Point::origin),
 	 radius(1.0f),
+	 useImpostor(false),
 	 numSegments(12),
 	 latLong(true),
 	 ccw(true),
@@ -371,6 +388,8 @@ EventOut* SphereNode::getEventOut(const char* fieldName) const
 		return makeEventOut(this,center);
 	else if(strcmp(fieldName,"radius")==0)
 		return makeEventOut(this,radius);
+	else if(strcmp(fieldName,"useImpostor")==0)
+		return makeEventOut(this,useImpostor);
 	else if(strcmp(fieldName,"numSegments")==0)
 		return makeEventOut(this,numSegments);
 	else if(strcmp(fieldName,"latLong")==0)
@@ -387,6 +406,8 @@ EventIn* SphereNode::getEventIn(const char* fieldName)
 		return makeEventIn(this,center);
 	else if(strcmp(fieldName,"radius")==0)
 		return makeEventIn(this,radius);
+	else if(strcmp(fieldName,"useImpostor")==0)
+		return makeEventIn(this,useImpostor);
 	else if(strcmp(fieldName,"numSegments")==0)
 		return makeEventIn(this,numSegments);
 	else if(strcmp(fieldName,"latLong")==0)
@@ -403,6 +424,8 @@ void SphereNode::parseField(const char* fieldName,VRMLFile& vrmlFile)
 		vrmlFile.parseField(center);
 	else if(strcmp(fieldName,"radius")==0)
 		vrmlFile.parseField(radius);
+	else if(strcmp(fieldName,"useImpostor")==0)
+		vrmlFile.parseField(useImpostor);
 	else if(strcmp(fieldName,"numSegments")==0)
 		vrmlFile.parseField(numSegments);
 	else if(strcmp(fieldName,"latLong")==0)
@@ -427,6 +450,7 @@ void SphereNode::read(SceneGraphReader& reader)
 	/* Read all fields: */
 	reader.readField(center);
 	reader.readField(radius);
+	reader.readField(useImpostor);
 	reader.readField(numSegments);
 	reader.readField(latLong);
 	if(reader.getMinorVersion()<1U)
@@ -445,6 +469,7 @@ void SphereNode::write(SceneGraphWriter& writer) const
 	/* Write all fields: */
 	writer.writeField(center);
 	writer.writeField(radius);
+	writer.writeField(useImpostor);
 	writer.writeField(numSegments);
 	writer.writeField(latLong);
 	writer.writeField(ccw);
@@ -546,74 +571,226 @@ void SphereNode::testCollision(SphereCollisionQuery& collisionQuery) const
 
 void SphereNode::glRenderAction(int appearanceRequirementMask,GLRenderState& renderState) const
 	{
-	/* Set up OpenGL state: */
-	renderState.uploadModelview();
-	renderState.setFrontFace(ccw.getValue()?GL_CCW:GL_CW);
-	renderState.enableCulling(GL_BACK);
-	
 	/* Get the context data item: */
 	DataItem* dataItem=renderState.contextData.retrieveDataItem<DataItem>(this);
 	
-	if(dataItem->vertexBufferObjectId!=0&&dataItem->indexBufferObjectId!=0)
+	/* Check whether the sphere is rendered as explicit geometry or as an impostor: */
+	if(useImpostor.getValue())
 		{
-		/*******************************************************************
-		Render the sphere from the vertex and index buffers:
-		*******************************************************************/
+		typedef DOGTransform::Scalar DScalar;
+		typedef DOGTransform::Point DPoint;
+		typedef DOGTransform::Vector DVector;
 		
-		/* Bind the sphere's vertex and index buffer objects: */
-		renderState.bindVertexBuffer(dataItem->vertexBufferObjectId);
-		renderState.bindIndexBuffer(dataItem->indexBufferObjectId);
+		/* Go to eye coordinates: */
+		DOGTransform modelTransform=renderState.pushEyeSpaceTransform();
 		
-		/* Check if the buffer objects are up-to-date: */
-		if(dataItem->version!=version)
+		/* Get this sphere's center and radius in eye coordinates: */
+		DPoint eyeCenter=modelTransform.transform(center.getValue());
+		DScalar eyeRadius=radius.getValue()*modelTransform.getScaling();
+		DScalar eyeRadius2=Math::sqr(eyeRadius);
+		DVector eyeDir=eyeCenter-DPoint::origin;
+		DScalar eyeDist2=eyeDir.sqr();
+		if(eyeDist2>=eyeRadius2)
 			{
-			/* Update the buffers and mark them as up-to-date: */
-			updateArrays(dataItem);
-			dataItem->version=version;
+			DScalar eyeDist=Math::sqrt(eyeDist2);
+			DPoint eyeNadir=Geometry::affineCombination(eyeCenter,DPoint::origin,eyeRadius/eyeDist);
+			DScalar sinAlphaSquared=eyeRadius2/eyeDist2;
+			DPoint diskCenter=Geometry::affineCombination(eyeCenter,DPoint::origin,sinAlphaSquared);
+			DScalar diskRadius=Math::sqrt(DScalar(1)-sinAlphaSquared)*eyeRadius;
+			DVector x=Geometry::normal(eyeDir);
+			DVector y=x^eyeDir;
+			
+			renderState.uploadModelview();
+			
+			/* Bind and set up the impostor rendering shader: */
+			GLShaderManager::Namespace& sns=dataItem->shaderNamespace;
+			
+			/* Determine the appropriate shader based on the level of the currently enabled texture: */
+			unsigned int shaderIndex;
+			switch(renderState.getEnabledTextureLevel())
+				{
+				case 1:
+					shaderIndex=1;
+					break;
+				
+				case 3:
+					shaderIndex=2;
+					break;
+				
+				default:
+					shaderIndex=0;
+				}
+			GLhandleARB shader=sns.getShader(shaderIndex);
+			
+			/* Create the selected impostor rendering shader if it has not been created yet: */
+			if(shader==0)
+				{
+				/* Compile the appropriate vertex and fragment shaders: */
+				static const char* fragmentShaderNames[3]=
+					{
+					"SphereImpostorShader.fs","SphereImpostorShaderTexture2D.fs","SphereImpostorShaderTextureCubeMap.fs"
+					};
+				
+				/* Compile the common vertex shader: */
+				std::string vertexShaderName=SCENEGRAPH_CONFIG_SHADERDIR;
+				vertexShaderName.push_back('/');
+				vertexShaderName.append("SphereImpostorShader.vs");
+				GLhandleARB vertexShader=glCompileVertexShaderFromFile(vertexShaderName.c_str());
+				
+				/* Compile the fragment shader: */
+				std::string fragmentShaderName=SCENEGRAPH_CONFIG_SHADERDIR;
+				fragmentShaderName.push_back('/');
+				fragmentShaderName.append(fragmentShaderNames[shaderIndex]);
+				GLhandleARB fragmentShader=glCompileFragmentShaderFromFile(fragmentShaderName.c_str());
+				
+				/* Link the shader program: */
+				shader=glCreateProgramObjectARB();
+				glAttachObjectARB(shader,vertexShader);
+				glAttachObjectARB(shader,fragmentShader);
+				glLinkAndTestShader(shader);
+				
+				/* Release extra references for the vertex and fragment shaders: */
+				glDeleteObjectARB(vertexShader);
+				glDeleteObjectARB(fragmentShader);
+				
+				/* Store the shader program in the namespace: */
+				sns.setShader(shaderIndex,shader);
+				
+				/* Query the locations of the shader's uniform variables: */
+				sns.setUniformLocation(shaderIndex,0,"sphereCenter");
+				sns.setUniformLocation(shaderIndex,1,"nadir");
+				sns.setUniformLocation(shaderIndex,2,"bnd2");
+				sns.setUniformLocation(shaderIndex,3,"b2c2");
+				sns.setUniformLocation(shaderIndex,4,"sphereRadius");
+				if(shaderIndex>0)
+					{
+					sns.setUniformLocation(shaderIndex,5,"texture");
+					sns.setUniformLocation(shaderIndex,6,"textureMatrix");
+					}
+				}
+			
+			renderState.bindShader(shader);
+			
+			/* Set the shader's uniform variables: */
+			sns.uniform3fv(shaderIndex,0,1,Geometry::Vector<GLfloat,3>(eyeCenter).getComponents());
+			sns.uniform3fv(shaderIndex,1,1,Geometry::Vector<GLfloat,3>(eyeNadir).getComponents());
+			sns.uniform1f(shaderIndex,2,GLfloat(eyeDist/(eyeDist-eyeRadius)));
+			sns.uniform1f(shaderIndex,3,GLfloat(eyeDist2-eyeRadius2));
+			sns.uniform1f(shaderIndex,4,GLfloat(eyeRadius));
+			if(shaderIndex>0)
+				{
+				sns.uniform1i(shaderIndex,5,0);
+				
+				/* Upload the original model transformation's rotation as a texture matrix: */
+				Geometry::Matrix<GLfloat,3,3> modelRotation;
+				Geometry::invert(modelTransform.getRotation()).writeMatrix(modelRotation);
+				sns.uniformMatrix3fv(shaderIndex,6,1,GL_TRUE,modelRotation.getEntries());
+				}
+			
+			/* Draw a triangle fan from the sphere's nadir point to the horizon disk that includes the entire visible spherical cap: */
+			const int numVertices=8;
+			DScalar twoPi=DScalar(2)*Math::Constants<DScalar>::pi;
+			DScalar outerDiskRadius=diskRadius/Math::cos(Math::div2(twoPi/DScalar(numVertices)));
+			DScalar xs=outerDiskRadius/x.mag();
+			DScalar ys=outerDiskRadius/y.mag();
+			glBegin(GL_TRIANGLE_FAN);
+			glVertex3dv(eyeNadir.getComponents());
+			DPoint p0=diskCenter;
+			p0+=x*xs;
+			glVertex3dv(p0.getComponents());
+			for(int i=1;i<numVertices;++i)
+				{
+				DScalar angle=twoPi*DScalar(i)/DScalar(numVertices);
+				DScalar c=Math::cos(angle);
+				DScalar s=Math::sin(angle);
+				DPoint p=diskCenter;
+				p+=x*(c*xs);
+				p+=y*(s*ys);
+				glVertex3dv(p.getComponents());
+				}
+			glVertex3dv(p0.getComponents());
+			glEnd();
 			}
 		
-		/* Enable vertex buffer rendering: */
-		int vertexArrayPartsMask=GLVertexArrayParts::Position;
-		if(appearanceRequirementMask&NeedsTexCoords)
-			{
-			vertexArrayPartsMask|=GLVertexArrayParts::TexCoord;
-			glTexCoordPointer(2,GL_FLOAT,dataItem->vertexSize,static_cast<const GLubyte*>(0)+dataItem->texCoordOffset);
-			}
-		if(appearanceRequirementMask&NeedsNormals)
-			{
-			vertexArrayPartsMask|=GLVertexArrayParts::Normal;
-			glNormalPointer(GL_FLOAT,dataItem->vertexSize,static_cast<const GLubyte*>(0)+dataItem->normalOffset);
-			}
-		glVertexPointer(3,GL_FLOAT,dataItem->vertexSize,static_cast<const GLubyte*>(0)+dataItem->positionOffset);
-		renderState.enableVertexArrays(vertexArrayPartsMask);
+		/* Return to model coordinates: */
+		renderState.popTransform(modelTransform);
+		}
+	else
+		{
+		/* Set up OpenGL state: */
+		renderState.uploadModelview();
+		renderState.setFrontFace(ccw.getValue()?GL_CCW:GL_CW);
+		renderState.enableCulling(GL_BACK);
 		
-		/* Draw the vertex array: */
-		bool drawLatLon=numNeedsTexCoords!=0||latLong.getValue();
-		unsigned int numSegs=numSegments.getValue();
-		unsigned int numStrips=drawLatLon?numSegs:5*numSegs;
-		unsigned int stripLength=(numSegs*2+1)*2;
-		GLenum stripType=drawLatLon?GL_QUAD_STRIP:GL_TRIANGLE_STRIP;
-		
-		/* Draw the sphere as numSegs quad strips: */
-		if(dataItem->numVertices<=size_t(65536U))
+		if(dataItem->vertexBufferObjectId!=0&&dataItem->indexBufferObjectId!=0)
 			{
-			GLushort* indexPtr(0);
-			for(unsigned int strip=0;strip<numStrips;++strip,indexPtr+=stripLength)
-				glDrawElements(stripType,stripLength,GL_UNSIGNED_SHORT,indexPtr);
-			}
-		else
-			{
-			GLuint* indexPtr(0);
-			for(unsigned int strip=0;strip<numStrips;++strip,indexPtr+=stripLength)
-				glDrawElements(stripType,stripLength,GL_UNSIGNED_INT,indexPtr);
+			/*******************************************************************
+			Render the sphere from the vertex and index buffers:
+			*******************************************************************/
+			
+			/* Bind the sphere's vertex and index buffer objects: */
+			renderState.bindVertexBuffer(dataItem->vertexBufferObjectId);
+			renderState.bindIndexBuffer(dataItem->indexBufferObjectId);
+			
+			/* Check if the buffer objects are up-to-date: */
+			if(dataItem->version!=version)
+				{
+				/* Update the buffers and mark them as up-to-date: */
+				updateArrays(dataItem);
+				dataItem->version=version;
+				}
+			
+			/* Enable vertex buffer rendering: */
+			int vertexArrayPartsMask=GLVertexArrayParts::Position;
+			if(appearanceRequirementMask&NeedsTexCoords)
+				{
+				vertexArrayPartsMask|=GLVertexArrayParts::TexCoord;
+				glTexCoordPointer(2,GL_FLOAT,dataItem->vertexSize,static_cast<const GLubyte*>(0)+dataItem->texCoordOffset);
+				}
+			if(appearanceRequirementMask&NeedsNormals)
+				{
+				vertexArrayPartsMask|=GLVertexArrayParts::Normal;
+				glNormalPointer(GL_FLOAT,dataItem->vertexSize,static_cast<const GLubyte*>(0)+dataItem->normalOffset);
+				}
+			glVertexPointer(3,GL_FLOAT,dataItem->vertexSize,static_cast<const GLubyte*>(0)+dataItem->positionOffset);
+			renderState.enableVertexArrays(vertexArrayPartsMask);
+			
+			/* Draw the vertex array: */
+			bool drawLatLon=numNeedsTexCoords!=0||latLong.getValue();
+			unsigned int numSegs=numSegments.getValue();
+			unsigned int numStrips=drawLatLon?numSegs:5*numSegs;
+			unsigned int stripLength=(numSegs*2+1)*2;
+			GLenum stripType=drawLatLon?GL_QUAD_STRIP:GL_TRIANGLE_STRIP;
+			
+			/* Draw the sphere as numSegs quad strips: */
+			if(dataItem->numVertices<=size_t(65536U))
+				{
+				GLushort* indexPtr(0);
+				for(unsigned int strip=0;strip<numStrips;++strip,indexPtr+=stripLength)
+					glDrawElements(stripType,stripLength,GL_UNSIGNED_SHORT,indexPtr);
+				}
+			else
+				{
+				GLuint* indexPtr(0);
+				for(unsigned int strip=0;strip<numStrips;++strip,indexPtr+=stripLength)
+					glDrawElements(stripType,stripLength,GL_UNSIGNED_INT,indexPtr);
+				}
 			}
 		}
 	}
 
 void SphereNode::initContext(GLContextData& contextData) const
 	{
-	/* Create a data item and store it in the context: */
-	DataItem* dataItem=new DataItem;
+	/* Create a namespace to hold the GLSL shaders: */
+	static const unsigned int numShaderUniforms[3]=
+		{
+		5,7,7
+		};
+	std::pair<GLShaderManager::Namespace&,bool> nscr=contextData.getShaderManager()->createNamespace("SceneGraph/SphereNode",3,numShaderUniforms);
+	GLShaderManager::Namespace& sns=nscr.first;
+	
+	/* Create a new data item and store it in the OpenGL context: */
+	DataItem* dataItem=new DataItem(sns);
 	contextData.addDataItem(this,dataItem);
 	}
 
