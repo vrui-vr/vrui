@@ -25,6 +25,8 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Tools/ScrollTool.h>
 
 #include <Misc/StdError.h>
+#include <Misc/StandardValueCoders.h>
+#include <Misc/ConfigurationFile.h>
 #include <Math/Math.h>
 #include <GLMotif/TextControlEvent.h>
 #include <Vrui/Vrui.h>
@@ -39,7 +41,8 @@ Methods of class ScrollToolFactory:
 **********************************/
 
 ScrollToolFactory::ScrollToolFactory(ToolManager& toolManager)
-	:ToolFactory("ScrollTool",toolManager)
+	:ToolFactory("ScrollTool",toolManager),
+	 scrollEventsPerTick(3)
 	{
 	/* Initialize tool layout: */
 	layout.setNumButtons(2);
@@ -48,6 +51,12 @@ ScrollToolFactory::ScrollToolFactory(ToolManager& toolManager)
 	ToolFactory* toolFactory=toolManager.loadClass("UserInterfaceTool");
 	toolFactory->addChildClass(this);
 	addParentClass(toolFactory);
+	
+	/* Load class settings: */
+	Misc::ConfigurationFileSection cfs=toolManager.getToolClassSection(getClassName());
+	cfs.updateValue("./scrollEventsPerTick",scrollEventsPerTick);
+	if(scrollEventsPerTick<1)
+		scrollEventsPerTick=1;
 	
 	/* Set tool class' factory pointer: */
 	ScrollTool::factory=this;
@@ -172,7 +181,9 @@ void ScrollTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackD
 		/* Check if the GUI interactor accepts the event: */
 		GUIInteractor::updateRay();
 		GLMotif::TextControlEvent tce(buttonSlotIndex==0?GLMotif::TextControlEvent::CURSOR_UP:GLMotif::TextControlEvent::CURSOR_DOWN);
-		interceptedEvent=GUIInteractor::textControl(tce);
+		interceptedEvent=true;
+		for(int i=0;interceptedEvent&&i<factory->scrollEventsPerTick;++i)
+			interceptedEvent=GUIInteractor::textControl(tce);
 		
 		/* If the event was not accepted, forward the button press to the wheel device: */
 		if(!interceptedEvent)
@@ -237,12 +248,13 @@ InputDevice* ScrollTool::getSourceDevice(const InputDevice* forwardedDevice)
 InputDeviceFeatureSet ScrollTool::getForwardedFeatures(const InputDeviceFeature& sourceFeature)
 	{
 	/* Paranoia: Check if the source feature belongs to this tool: */
-	if(input.findFeature(sourceFeature)!=0)
+	int slotIndex=input.findFeature(sourceFeature);
+	if(slotIndex<0)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Source feature is not part of tool's input assignment");
 	
 	/* Return the forwarded feature: */
 	InputDeviceFeatureSet result;
-	result.push_back(InputDeviceFeature(wheelDevice,InputDevice::BUTTON,sourceFeature.getFeatureIndex()));
+	result.push_back(InputDeviceFeature(wheelDevice,InputDevice::BUTTON,slotIndex));
 	return result;
 	}
 

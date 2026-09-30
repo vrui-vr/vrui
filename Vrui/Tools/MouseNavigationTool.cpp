@@ -1,7 +1,7 @@
 /***********************************************************************
 MouseNavigationTool - Class encapsulating the navigation behaviour of a
 mouse in the OpenInventor SoXtExaminerViewer.
-Copyright (c) 2004-2025 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -55,8 +55,8 @@ MouseNavigationToolFactory::Configuration::Configuration(void)
 	 scalingDirection(-getUpDirection()),
 	 dollyFactor(Scalar(1)),
 	 scaleFactor(getDisplaySize()/Scalar(4)),
-	 wheelDollyFactor(-getDisplaySize()),
-	 wheelScaleFactor(Scalar(0.5)),
+	 wheelDollyFactor(-getDisplaySize()*Scalar(0.5)),
+	 wheelScaleFactor(Math::pow(Scalar(0.5),Scalar(0.25))),
 	 spinThreshold(getUiSize()*Scalar(1)),
 	 showScreenCenter(true)
 	{
@@ -104,8 +104,7 @@ MouseNavigationToolFactory::MouseNavigationToolFactory(ToolManager& toolManager)
 	:ToolFactory("MouseNavigationTool",toolManager)
 	{
 	/* Initialize tool layout: */
-	layout.setNumButtons(3);
-	layout.setNumValuators(1);
+	layout.setNumButtons(5);
 	
 	/* Insert class into class hierarchy: */
 	ToolFactory* navigationToolFactory=toolManager.loadClass("NavigationTool");
@@ -143,18 +142,12 @@ const char* MouseNavigationToolFactory::getButtonFunction(int buttonSlotIndex) c
 		
 		case 2:
 			return "Zoom/Dolly Switch";
-		}
-	
-	/* Never reached; just to make compiler happy: */
-	return 0;
-	}
-
-const char* MouseNavigationToolFactory::getValuatorFunction(int valuatorSlotIndex) const
-	{
-	switch(valuatorSlotIndex)
-		{
-		case 0:
-			return "Quick Zoom/Dolly";
+		
+		case 3:
+			return "Quick Zoom/Dolly In";
+		
+		case 4:
+			return "Quick Zoom/Dolly Out";
 		}
 	
 	/* Never reached; just to make compiler happy: */
@@ -318,9 +311,10 @@ void MouseNavigationTool::startScaling(void)
 
 MouseNavigationTool::MouseNavigationTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
 	:NavigationTool(factory,inputAssignment),
-	 configuration(MouseNavigationTool::factory->configuration),mouseAdapter(0),
-	 currentPos(Point::origin),currentValue(0),
-	 dolly(configuration.invertDolly),navigationMode(IDLE)
+	 configuration(MouseNavigationTool::factory->configuration),
+	 mouseAdapter(0),
+	 currentPos(Point::origin),
+	 dolly(configuration.invertDolly),navigationMode(IDLE),wheelTickSum(0)
 	{
 	}
 
@@ -363,7 +357,7 @@ void MouseNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice::Button
 	/* Process based on which button was pressed: */
 	switch(buttonSlotIndex)
 		{
-		case 0:
+		case 0: // Rotate button
 			if(cbData->newButtonState) // Button has just been pressed
 				{
 				/* Act depending on this tool's current state: */
@@ -371,8 +365,10 @@ void MouseNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice::Button
 					{
 					case IDLE:
 					case SPINNING:
+					case DOLLYING_WHEEL:
+					case SCALING_WHEEL:
 						/* Try activating this tool: */
-						if(navigationMode==SPINNING||activate())
+						if(navigationMode!=IDLE||activate())
 							startRotating();
 						break;
 					
@@ -432,7 +428,7 @@ void MouseNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice::Button
 				}
 			break;
 		
-		case 1:
+		case 1: // Pan button
 			if(cbData->newButtonState) // Button has just been pressed
 				{
 				/* Act depending on this tool's current state: */
@@ -440,8 +436,10 @@ void MouseNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice::Button
 					{
 					case IDLE:
 					case SPINNING:
+					case DOLLYING_WHEEL:
+					case SCALING_WHEEL:
 						/* Try activating this tool: */
-						if(navigationMode==SPINNING||activate())
+						if(navigationMode!=IDLE||activate())
 							startPanning();
 						break;
 					
@@ -482,7 +480,7 @@ void MouseNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice::Button
 				}
 			break;
 		
-		case 2:
+		case 2: // Dolly switch button
 			/* Set the dolly flag: */
 			dolly=cbData->newButtonState;
 			if(configuration.invertDolly)
@@ -516,71 +514,56 @@ void MouseNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice::Button
 					}
 				}
 			break;
-		}
-	}
-
-void MouseNavigationTool::valuatorCallback(int,InputDevice::ValuatorCallbackData* cbData)
-	{
-	currentValue=Scalar(cbData->newValuatorValue);
-	if(currentValue!=Scalar(0))
-		{
-		/* Act depending on this tool's current state: */
-		switch(navigationMode)
-			{
-			case IDLE:
-			case SPINNING:
-				/* Try activating this tool: */
-				if(navigationMode==SPINNING||activate())
-					{
-					if(dolly)
+		
+		case 3: // Zoom/dolly in button
+		case 4: // Zoom/dolly out button
+			/* Act depending on this tool's current state: */
+			switch(navigationMode)
+				{
+				case IDLE:
+				case SPINNING:
+					/* Try activating this tool: */
+					if(navigationMode==SPINNING||activate())
 						{
-						/* Start normal dollying: */
-						startDollying();
-						
-						/* Change to wheel dollying mode: */
-						currentWheelScale=Scalar(1);
-						navigationMode=DOLLYING_WHEEL;
+						if(dolly)
+							{
+							/* Start normal dollying: */
+							startDollying();
+							
+							/* Change to wheel dollying mode: */
+							wheelTickSum=0;
+							navigationMode=DOLLYING_WHEEL;
+							}
+						else
+							{
+							/* Start normal scaling: */
+							startScaling();
+							
+							/* Change to wheel scaling mode: */
+							wheelTickSum=0;
+							navigationMode=SCALING_WHEEL;
+							}
 						}
-					else
-						{
-						/* Start normal scaling: */
-						startScaling();
-						
-						/* Change to wheel scaling mode: */
-						currentWheelScale=Scalar(1);
-						navigationMode=SCALING_WHEEL;
-						}
-					
-					/* Set an end time for the wheel operation: */
-					wheelNavEndTime=getApplicationTime()+0.25;
-					}
-				break;
-			
-			default:
-				/* This can definitely happen; just ignore the event */
-				break;
-			}
-		}
-	else
-		{
-		/* Act depending on this tool's current state: */
-		switch(navigationMode)
-			{
-			case DOLLYING_WHEEL:
-			case SCALING_WHEEL:
-				#if 0 // Don't do this yet!
-				/* Deactivate this tool: */
-				deactivate();
+					break;
 				
-				/* Go to idle mode: */
-				navigationMode=IDLE;
-				#endif
-				break;
+				default:
+					/* Nothing to do */
+					break;
+				}
 			
-			default:
-				/* This can definitely happen; just ignore the event */
-				break;
-			}
+			if(navigationMode==DOLLYING_WHEEL||navigationMode==SCALING_WHEEL)
+				{
+				/* Add another wheel click: */
+				if(buttonSlotIndex==3)
+					++wheelTickSum;
+				else
+					--wheelTickSum;
+				
+				/* Set an end time for the wheel operation: */
+				wheelNavEndTime=getApplicationTime()+0.5;
+				}
+			
+			break;
 		}
 	}
 
@@ -685,9 +668,7 @@ void MouseNavigationTool::frame(void)
 		case DOLLYING_WHEEL:
 			{
 			/* Update the navigation transformation: */
-			Scalar scale=currentValue;
-			currentWheelScale+=configuration.wheelDollyFactor*scale;
-			NavTrackerState t=NavTrackerState::translate(dollyDirection*currentWheelScale);
+			NavTrackerState t=NavTrackerState::translate(dollyDirection*(configuration.wheelDollyFactor*Scalar(wheelTickSum)));
 			t*=preScale;
 			setNavigationTransformation(t,screenCenter);
 			break;
@@ -696,10 +677,8 @@ void MouseNavigationTool::frame(void)
 		case SCALING_WHEEL:
 			{
 			/* Update the navigation transformation: */
-			Scalar scale=currentValue;
-			currentWheelScale*=Math::pow(configuration.wheelScaleFactor,scale);
 			NavTrackerState t=preScale;
-			t*=NavTrackerState::scale(currentWheelScale);
+			t*=NavTrackerState::scale(Math::pow(configuration.wheelScaleFactor,Scalar(wheelTickSum)));
 			t*=postScale;
 			setNavigationTransformation(t,screenCenter);
 			break;

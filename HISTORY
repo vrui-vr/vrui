@@ -9145,4 +9145,5 @@ Vrui-15.0-001:
 - Change mouse wheel representation in Vrui::InputDeviceAdapterMouse
   from a valuator to a pair of buttons.
   - Adapt Vrui::ScrollTool tool.
+  - Adapt Vrui::MouseNavigationTool tool.
   - Adapt default tool bindings in Vrui configuration files.

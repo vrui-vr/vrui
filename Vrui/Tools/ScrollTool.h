@@ -42,6 +42,10 @@ class ScrollToolFactory:public ToolFactory
 	{
 	friend class ScrollTool;
 	
+	/* Elements: */
+	private:
+	int scrollEventsPerTick; // How many lines to scroll up/down per tick of the scroll wheel
+	
 	/* Constructors and destructors: */
 	public:
 	ScrollToolFactory(ToolManager& toolManager);
