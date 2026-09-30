@@ -68,7 +68,6 @@ class InputDeviceAdapterMouse:public InputDeviceAdapter
 	bool* buttonStates; // Array of current button states
 	int numPressedButtons; // Number of currently pressed buttons, to keep track of mouse pointer grabs
 	bool keyboardMode; // Flag whether the keyboard is in key mode
-	int* numMouseWheelTicks; // Number of mouse wheel ticks for each modifier key mask accumulated during frame processing
 	VRWindow* window; // VR window containing the last reported mouse position
 	Scalar mousePos[2]; // Current mouse position in window (pixel) coordinates of window containing the last known mouse position
 	int numMousePosChanges; // Counts how many times the mouse position has changed since the last update(), to estimate mouse velocity
@@ -133,8 +132,8 @@ class InputDeviceAdapterMouse:public InputDeviceAdapter
 	bool keyReleased(int keysym); // Notifies adapter that a key has been released; returns true if adapter's state changed
 	void resetKeys(VRWindow* newWindow,const XKeymapEvent& event); // Resets pressed keys and the modifier key mask when the mouse cursor re-enters a window
 	bool setButtonState(int buttonIndex,bool newButtonState); // Sets current button state; returns true if adapter's state changed
-	void incMouseWheelTicks(void); // Increases the number of mouse wheel ticks
-	void decMouseWheelTicks(void); // Decreases the number of mouse wheel ticks
+	void mouseWheelUp(void); // Registers a "click" of the mouse wheel in the up direction
+	void mouseWheelDown(void); // Registers a "click" of the mouse wheel in the down direction
 	void lockMouse(void); // Locks the mouse pointer to the center of the current window; future device updates only report velocities
 	void unlockMouse(void); // Unlocks the mouse pointer
 	};

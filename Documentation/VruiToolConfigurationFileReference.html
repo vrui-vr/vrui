@@ -1013,15 +1013,12 @@ The following lists all core Vrui tool classes, in the same hierarchical order i
 <TR><TH>Input</TH><TH>Number</TH><TH>Function Description</TH></TR>
 
 <TR>
-<TD>Required Buttons</TD><TD>3</TD>
+<TD>Required Buttons</TD><TD>5</TD>
 <TD>1: Rotate around screen center. Optional: Interact with 3D GUI widgets.<BR>
     2: If 1 not pressed: Pan in screen plane. Otherwise: Scale around display center, or dolly in or out of screen plane.<BR>
-    3: Switch between scaling and dollying.</TD>
-</TR>
-
-<TR>
-<TD>Required Valuators</TD><TD>1</TD>
-<TD>Scale around display center, or dolly in or out of screen plane.</TD>
+    3: Switch between scaling and dollying.<BR>
+    4: Zoom or dolly in.</BR>
+    5: Zoom or dolly out.</TD>
 </TR>
 </TABLE><P>
 
@@ -1074,12 +1071,12 @@ The following lists all core Vrui tool classes, in the same hierarchical order i
 </TR>
 
 <TR>
-<TD>wheelDollyFactor</TD><TD><A HREF="#number">number</A></TD><TD>-<A HREF="VruiConfigurationFileReference.html#displaySize">displaySize</A></TD>
+<TD>wheelDollyFactor</TD><TD><A HREF="#number">number</A></TD><TD>-<A HREF="VruiConfigurationFileReference.html#displaySize">displaySize/2.0</A></TD>
 <TD>Dollying distance in physical coordinate units to apply for each tick of the mouse wheel.</TD>
 </TR>
 
 <TR>
-<TD>wheelScaleFactor</TD><TD><A HREF="#number">number</A></TD><TD>0.5</TD>
+<TD>wheelScaleFactor</TD><TD><A HREF="#number">number</A></TD><TD>0.5^0.25</TD>
 <TD>Scale factor to apply for each tick of the mouse wheel.</TD>
 </TR>
 
@@ -2531,10 +2528,17 @@ If the specified or selected file name has extension &quot;.views&quot;, the too
 <TABLE BORDER=1 CELLPADDING=4 CELLSPACING=1>
 <TR><TH>Input</TH><TH>Number</TH><TH>Function Description</TH></TR>
 <TR>
-<TD>Required Valuators</TD><TD>1</TD>
-<TD>Scroll in GUI widgets.</TD>
+<TD>Required Buttons</TD><TD>2</TD>
+<TD>1: Scroll up in GUI widgets.<BR>2: Scroll down in GUI widgets.</TD>
 </TR>
 </TABLE><P>
+
+<TABLE BORDER=1 CELLPADDING=4 CELLSPACING=1>
+<TR><TH>Setting Tag</TH><TH>Setting Value Type</TH><TH>Default Value</TH><TH>Setting Description</TH></TR>
+<TR>
+<TD>scrollEventsPerTick</TD><TD><A HREF="VruiCFGTypes.html#integer">integer</A></TD><TD>Number of scroll up/down events to generate per tick of the scroll wheel; must be at least 1.</TD>
+</TR>
+</TABLE>
 
 <A NAME="DaisyWheelTool"><H3>DaisyWheelTool</H3></A>
 

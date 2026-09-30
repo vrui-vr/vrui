@@ -1331,12 +1331,12 @@ bool VRWindow::processEvent(const XEvent& event)
 				else if(event.xbutton.button==4)
 					{
 					if(newState)
-						mouseAdapter->incMouseWheelTicks();
+						mouseAdapter->mouseWheelUp();
 					}
 				else if(event.xbutton.button==5)
 					{
 					if(newState)
-						mouseAdapter->decMouseWheelTicks();
+						mouseAdapter->mouseWheelDown();
 					}
 				else if(event.xbutton.button>5)
 					stopProcessing=mouseAdapter->setButtonState(event.xbutton.button-3,newState);

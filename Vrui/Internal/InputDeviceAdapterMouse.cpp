@@ -244,7 +244,6 @@ InputDeviceAdapterMouse::InputDeviceAdapterMouse(InputDeviceManager* sInputDevic
 	 keyboardModeToggleKey(0,0),controlKeyMap(101),
 	 modifierKeyMask(0x0),buttonStates(0),numPressedButtons(0),
 	 keyboardMode(false),
-	 numMouseWheelTicks(0),
 	 window(0),
 	 numMousePosChanges(0),mousePosChangedLastFrame(false),
 	 grabPointer(true),grabWindow(0),
@@ -262,6 +261,9 @@ InputDeviceAdapterMouse::InputDeviceAdapterMouse(InputDeviceManager* sInputDevic
 	
 	/* Retrieve the number of mouse buttons: */
 	configFileSection.updateValue("./numButtons",numButtons);
+	
+	/* Add two mouse buttons to represent the mouse wheel: */
+	numButtons+=2;
 	
 	/* Retrieve button key list: */
 	StringList buttonKeyNames;
@@ -292,14 +294,13 @@ InputDeviceAdapterMouse::InputDeviceAdapterMouse(InputDeviceManager* sInputDevic
 	configFileSection.updateValue("./stickyButtons",stickyButtons);
 	configFileSection.updateValue("./modifiersAsButtons",modifiersAsButtons);
 	
-	/* Calculate number of buttons and valuators: */
+	/* Calculate number of buttons: */
 	numButtonStates=(numButtons+numButtonKeys)*(1<<numModifierKeys);
 	if(modifiersAsButtons)
 		numButtonStates+=numModifierKeys;
-	int numValuators=1<<numModifierKeys;
 	
 	/* Create the mouse input device: */
-	inputDevices[0]=inputDeviceManager->createInputDevice("Mouse",InputDevice::TRACK_POS|InputDevice::TRACK_DIR,numButtonStates,numValuators,true);
+	inputDevices[0]=inputDeviceManager->createInputDevice("Mouse",InputDevice::TRACK_POS|InputDevice::TRACK_DIR,numButtonStates,0,true);
 	
 	/* Retrieve the keyboard toggle key symbol: */
 	keyboardModeToggleKey=KeyMapper::getQualifiedKey(configFileSection.retrieveValue<std::string>("./keyboardModeToggleKey","F1"));
@@ -309,13 +310,10 @@ InputDeviceAdapterMouse::InputDeviceAdapterMouse(InputDeviceManager* sInputDevic
 	for(int i=0;i<controlKeyMapSize;++i)
 		controlKeyMap.setEntry(ControlKeyMap::Entry(rawControlKeyMap[i].qk,rawControlKeyMap[i].tce));
 	
-	/* Initialize button and valuator states: */
+	/* Initialize button states: */
 	buttonStates=new bool[numButtonStates];
 	for(int i=0;i<numButtonStates;++i)
 		buttonStates[i]=false;
-	numMouseWheelTicks=new int[numValuators];
-	for(int i=0;i<numValuators;++i)
-		numMouseWheelTicks[i]=0;
 	
 	/* Initialize the mouse position: */
 	mousePos[0]=mousePos[1]=Scalar(0.5);
@@ -348,7 +346,6 @@ InputDeviceAdapterMouse::~InputDeviceAdapterMouse(void)
 	delete[] buttonKeysyms;
 	delete[] modifierKeysyms;
 	delete[] buttonStates;
-	delete[] numMouseWheelTicks;
 	}
 
 std::string InputDeviceAdapterMouse::getFeatureName(const InputDeviceFeature& feature) const
@@ -366,8 +363,6 @@ std::string InputDeviceAdapterMouse::getFeatureName(const InputDeviceFeature& fe
 	int featureModifierMask=0x0;
 	if(feature.isButton())
 		featureModifierMask=feature.getIndex()/(numButtons+numButtonKeys);
-	if(feature.isValuator())
-		featureModifierMask=feature.getIndex();
 	
 	/* Create the feature's modifier prefix: */
 	for(int i=0;i<numModifierKeys;++i)
@@ -387,7 +382,12 @@ std::string InputDeviceAdapterMouse::getFeatureName(const InputDeviceFeature& fe
 		if(buttonIndex<numButtons)
 			{
 			/* Append a mouse button name: */
-			result.append(Misc::stringPrintf("Mouse%d",buttonIndex+1));
+			if(buttonIndex==numButtons-2)
+				result.append("MouseWheelUp");
+			else if(buttonIndex==numButtons-1)
+				result.append("MouseWheelDown");
+			else
+				result.append(Misc::stringPrintf("Mouse%d",buttonIndex+1));
 			}
 		else
 			{
@@ -395,8 +395,6 @@ std::string InputDeviceAdapterMouse::getFeatureName(const InputDeviceFeature& fe
 			result.append(KeyMapper::getName(buttonKeysyms[buttonIndex-numButtons]));
 			}
 		}
-	if(feature.isValuator())
-		result.append("MouseWheel");
 	
 	return result;
 	}
@@ -445,10 +443,15 @@ int InputDeviceAdapterMouse::getFeatureIndex(InputDevice* device,const char* fea
 		fPtr+=5;
 		
 		/* Check if the feature is the mouse wheel or a mouse button: */
-		if(strcasecmp(fPtr,"Wheel")==0)
+		if(strcasecmp(fPtr,"WheelUp")==0)
 			{
-			/* Return the mouse wheel feature: */
-			return device->getValuatorFeatureIndex(featureModifierKeyMask);
+			/* Return the mouse wheel up button feature: */
+			return device->getButtonFeatureIndex((numButtons+numButtonKeys)*featureModifierKeyMask+numButtons-2);
+			}
+		else if(strcasecmp(fPtr,"WheelDown")==0)
+			{
+			/* Return the mouse wheel down button feature: */
+			return device->getButtonFeatureIndex((numButtons+numButtonKeys)*featureModifierKeyMask+numButtons-1);
 			}
 		else
 			{
@@ -531,24 +534,14 @@ void InputDeviceAdapterMouse::updateInputDevices(void)
 			mousePosChangedLastFrame=false;
 			}
 		
-		/* Set mouse device valuator states: */
-		int numValuators=1<<numModifierKeys;
-		for(int i=0;i<numValuators;++i)
-			{
-			/* Convert the mouse wheel tick count into a valuator value (ugh): */
-			inputDevices[0]->setValuator(i,Math::clamp(double(numMouseWheelTicks[i])/3.0,-1.0,1.0));
-			
-			/* If there were mouse ticks, request another Vrui frame in a short while because there will be no "no mouse ticks" message: */
-			if(numMouseWheelTicks[i]!=0)
-				scheduleUpdate(getNextAnimationTime());
-			numMouseWheelTicks[i]=0;
-			}
-		
 		#if 0
+		
+		/* Set mouse device valuator states: */
 		inputDevices[0]->setValuator(numValuators+0,Scalar(2)*mousePos[0]/window->getVRScreen()->getWidth()-Scalar(1));
 		inputDevices[0]->setValuator(numValuators+1,Scalar(2)*mousePos[1]/window->getVRScreen()->getHeight()-Scalar(1));
 		inputDevices[0]->setValuator(numValuators+2,0.0);
 		inputDevices[0]->setValuator(numValuators+3,0.0);
+		
 		#endif
 		
 		/* Check if we are supposed to grab the mouse pointer while buttons/keys are pressed: */
@@ -618,8 +611,6 @@ void InputDeviceAdapterMouse::setMousePosition(VRWindow* newWindow,const GLWindo
 		/* Remember event time for idle time-out processing: */
 		lastMouseEventTime=getApplicationTime();
 		}
-	
-	// requestUpdate();
 	}
 
 void InputDeviceAdapterMouse::setKeyboardMode(bool newKeyboardMode)
@@ -710,8 +701,6 @@ bool InputDeviceAdapterMouse::keyPressed(int keysym,int modifierMask,const char*
 			}
 		}
 	
-	// requestUpdate();
-	
 	/* Remember event time for idle time-out processing: */
 	// lastMouseEventTime=getApplicationTime();
 	
@@ -741,8 +730,6 @@ bool InputDeviceAdapterMouse::keyReleased(int keysym)
 			changeModifierKeyMask(modifierKeyMask&~(0x1<<modifierIndex));
 			stateChanged=true;
 			}
-		
-		// requestUpdate();
 		}
 	
 	/* Remember event time for idle time-out processing: */
@@ -807,8 +794,6 @@ void InputDeviceAdapterMouse::resetKeys(VRWindow* newWindow,const XKeymapEvent& 
 				changeButtonState(stateIndex,true);
 				}
 			}
-	
-	// requestUpdate();
 	}
 
 bool InputDeviceAdapterMouse::setButtonState(int buttonIndex,bool newButtonState)
@@ -821,8 +806,6 @@ bool InputDeviceAdapterMouse::setButtonState(int buttonIndex,bool newButtonState
 		/* Set current button state: */
 		int stateIndex=(numButtons+numButtonKeys)*modifierKeyMask+buttonIndex;
 		stateChanged=changeButtonState(stateIndex,newButtonState);
-		
-		// requestUpdate();
 		}
 	
 	/* Remember event time for idle time-out processing: */
@@ -831,24 +814,26 @@ bool InputDeviceAdapterMouse::setButtonState(int buttonIndex,bool newButtonState
 	return stateChanged;
 	}
 
-void InputDeviceAdapterMouse::incMouseWheelTicks(void)
+void InputDeviceAdapterMouse::mouseWheelUp(void)
 	{
-	++numMouseWheelTicks[modifierKeyMask];
+	/* Send a button press immediately followed by a button release for the "wheel up" button to the mouse input device: */
+	int stateIndex=(numButtons+numButtonKeys)*modifierKeyMask+numButtons-2;
+	inputDevices[0]->setButtonState(stateIndex,true);
+	inputDevices[0]->setButtonState(stateIndex,false);
 	
 	/* Remember event time for idle time-out processing: */
 	lastMouseEventTime=getApplicationTime();
-	
-	// requestUpdate();
 	}
 
-void InputDeviceAdapterMouse::decMouseWheelTicks(void)
+void InputDeviceAdapterMouse::mouseWheelDown(void)
 	{
-	--numMouseWheelTicks[modifierKeyMask];
+	/* Send a button press immediately followed by a button release for the "wheel down" button to the mouse input device: */
+	int stateIndex=(numButtons+numButtonKeys)*modifierKeyMask+numButtons-1;
+	inputDevices[0]->setButtonState(stateIndex,true);
+	inputDevices[0]->setButtonState(stateIndex,false);
 	
 	/* Remember event time for idle time-out processing: */
 	lastMouseEventTime=getApplicationTime();
-	
-	// requestUpdate();
 	}
 
 void InputDeviceAdapterMouse::lockMouse(void)

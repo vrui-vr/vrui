@@ -9152,3 +9152,8 @@ Vrui-15.0-001:
 - Updated Vrui::TouchpadScrollingTool to work with new input device
   feature update mechanism.
 - Fixed error messages in SceneGraph::SceneGraphList.
+- Change mouse wheel representation in Vrui::InputDeviceAdapterMouse
+  from a valuator to a pair of buttons.
+  - Adapt Vrui::ScrollTool tool.
+  - Adapt Vrui::MouseNavigationTool tool.
+  - Adapt default tool bindings in Vrui configuration files.

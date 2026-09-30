@@ -2,7 +2,7 @@
 ScrollTool - Class for tools that can scroll inside certain GLMotif GUI
 widgets. ScrollTool objects are cascadable and prevent valuator events
 if they would fall into the area of interest of scrollable widgets.
-Copyright (c) 2011-2024 Oliver Kreylos
+Copyright (c) 2011-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -25,6 +25,8 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Tools/ScrollTool.h>
 
 #include <Misc/StdError.h>
+#include <Misc/StandardValueCoders.h>
+#include <Misc/ConfigurationFile.h>
 #include <Math/Math.h>
 #include <GLMotif/TextControlEvent.h>
 #include <Vrui/Vrui.h>
@@ -39,15 +41,22 @@ Methods of class ScrollToolFactory:
 **********************************/
 
 ScrollToolFactory::ScrollToolFactory(ToolManager& toolManager)
-	:ToolFactory("ScrollTool",toolManager)
+	:ToolFactory("ScrollTool",toolManager),
+	 scrollEventsPerTick(3)
 	{
 	/* Initialize tool layout: */
-	layout.setNumValuators(1);
+	layout.setNumButtons(2);
 	
 	/* Insert class into class hierarchy: */
 	ToolFactory* toolFactory=toolManager.loadClass("UserInterfaceTool");
 	toolFactory->addChildClass(this);
 	addParentClass(toolFactory);
+	
+	/* Load class settings: */
+	Misc::ConfigurationFileSection cfs=toolManager.getToolClassSection(getClassName());
+	cfs.updateValue("./scrollEventsPerTick",scrollEventsPerTick);
+	if(scrollEventsPerTick<1)
+		scrollEventsPerTick=1;
 	
 	/* Set tool class' factory pointer: */
 	ScrollTool::factory=this;
@@ -64,9 +73,19 @@ const char* ScrollToolFactory::getName(void) const
 	return "GUI Scrolling";
 	}
 
-const char* ScrollToolFactory::getValuatorFunction(int) const
+const char* ScrollToolFactory::getButtonFunction(int buttonSlotIndex) const
 	{
-	return "Scroll";
+	switch(buttonSlotIndex)
+		{
+		case 0:
+			return "Scroll Up";
+		
+		case 1:
+			return "Scroll Down";
+		
+		default:
+			return 0;
+		}
 	}
 
 Tool* ScrollToolFactory::createTool(const ToolInputAssignment& inputAssignment) const
@@ -114,38 +133,40 @@ Methods of class ScrollTool:
 
 ScrollTool::ScrollTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
 	:UserInterfaceTool(factory,inputAssignment),
-	 GUIInteractor(false,0,getValuatorDevice(0)),
-	 valuatorDevice(0),
-	 sendingEvents(false)
+	 GUIInteractor(false,0,getButtonDevice(0)),
+	 wheelDevice(0),interceptedEvent(false)
 	{
 	}
 
 void ScrollTool::initialize(void)
 	{
-	/* Create a virtual input device to shadow the valuator: */
-	valuatorDevice=addVirtualInputDevice("ScrollToolValuatorDevice",0,1);
+	/* Create a virtual input device to shadow the wheel buttons: */
+	InputDevice* sourceDevice=getButtonDevice(0);
+	std::string wheelDeviceName=sourceDevice->getDeviceName();
+	wheelDeviceName.append("-ForwardedWheel");
+	wheelDevice=addVirtualInputDevice(wheelDeviceName.c_str(),2,0);
 	
 	/* Copy the source device's tracking type: */
-	valuatorDevice->setTrackType(getValuatorDevice(0)->getTrackType());
+	wheelDevice->setTrackType(sourceDevice->getTrackType());
 	
 	/* Disable the virtual device's glyph: */
-	getInputGraphManager()->getInputDeviceGlyph(valuatorDevice).disable();
+	getInputGraphManager()->getInputDeviceGlyph(wheelDevice).disable();
 	
 	/* Permanently grab the virtual input device: */
-	getInputGraphManager()->grabInputDevice(valuatorDevice,this);
+	getInputGraphManager()->grabInputDevice(wheelDevice,this);
 	
 	/* Initialize the virtual input device's position: */
-	valuatorDevice->copyTrackingState(getValuatorDevice(0));
+	wheelDevice->copyTrackingState(sourceDevice);
 	}
 
 void ScrollTool::deinitialize(void)
 	{
 	/* Release the virtual input device: */
-	getInputGraphManager()->releaseInputDevice(valuatorDevice,this);
+	getInputGraphManager()->releaseInputDevice(wheelDevice,this);
 	
 	/* Destroy the virtual input device: */
-	getInputDeviceManager()->destroyInputDevice(valuatorDevice);
-	valuatorDevice=0;
+	getInputDeviceManager()->destroyInputDevice(wheelDevice);
+	wheelDevice=0;
 	}
 
 const ToolFactory* ScrollTool::getFactory(void) const
@@ -153,37 +174,26 @@ const ToolFactory* ScrollTool::getFactory(void) const
 	return factory;
 	}
 
-void ScrollTool::valuatorCallback(int,InputDevice::ValuatorCallbackData* cbData)
+void ScrollTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData)
 	{
-	if(cbData->newValuatorValue!=0.0) // Valuator is pushed
+	if(cbData->newButtonState) // Button has just been pushed
 		{
 		/* Check if the GUI interactor accepts the event: */
 		GUIInteractor::updateRay();
-		GLMotif::TextControlEvent tce(cbData->newValuatorValue>0.0?GLMotif::TextControlEvent::CURSOR_UP:GLMotif::TextControlEvent::CURSOR_DOWN);
-		int numEvents=int(Math::ceil(Math::abs(cbData->newValuatorValue)*10.0));
-		sendingEvents=false;
-		for(int i=0;i<numEvents;++i)
-			sendingEvents=GUIInteractor::textControl(tce)||sendingEvents;
-		if(sendingEvents)
-			{
-			/* Request another frame: */
-			scheduleUpdate(getNextAnimationTime());
-			}
-		else
-			{
-			/* Pass the valuator event to the virtual input device: */
-			valuatorDevice->setValuator(0,cbData->newValuatorValue);
-			}
+		GLMotif::TextControlEvent tce(buttonSlotIndex==0?GLMotif::TextControlEvent::CURSOR_UP:GLMotif::TextControlEvent::CURSOR_DOWN);
+		interceptedEvent=true;
+		for(int i=0;interceptedEvent&&i<factory->scrollEventsPerTick;++i)
+			interceptedEvent=GUIInteractor::textControl(tce);
+		
+		/* If the event was not accepted, forward the button press to the wheel device: */
+		if(!interceptedEvent)
+			wheelDevice->setButtonState(buttonSlotIndex,true);
 		}
-	else // Valuator has just been released
+	else // Button has just been released
 		{
-		/* Check if the tool has been sending text control events: */
-		if(!sendingEvents)
-			{
-			/* Pass the button event to the virtual input device: */
-			valuatorDevice->setValuator(0,cbData->newValuatorValue);
-			}
-		sendingEvents=false;
+		/* If the previous button press event was forwarded to the wheel device, forward this release event as well: */
+		if(!interceptedEvent)
+			wheelDevice->setButtonState(buttonSlotIndex,false);
 		}
 	}
 
@@ -194,7 +204,7 @@ void ScrollTool::frame(void)
 	GUIInteractor::move();
 	
 	/* Update the virtual input device: */
-	valuatorDevice->copyTrackingState(getValuatorDevice(0));
+	wheelDevice->copyTrackingState(getButtonDevice(0));
 	}
 
 void ScrollTool::display(GLContextData& contextData) const
@@ -209,41 +219,42 @@ void ScrollTool::display(GLContextData& contextData) const
 std::vector<InputDevice*> ScrollTool::getForwardedDevices(void)
 	{
 	std::vector<InputDevice*> result;
-	result.push_back(valuatorDevice);
+	result.push_back(wheelDevice);
 	return result;
 	}
 
 InputDeviceFeatureSet ScrollTool::getSourceFeatures(const InputDeviceFeature& forwardedFeature)
 	{
-	/* Paranoia: Check if the forwarded feature is on the transformed device: */
-	if(forwardedFeature.getDevice()!=valuatorDevice)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Forwarded feature is not on transformed device");
+	/* Paranoia: Check if the forwarded feature is on the wheel device: */
+	if(forwardedFeature.getDevice()!=wheelDevice)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Forwarded feature is not on forwarded device");
 	
 	/* Return the source feature: */
 	InputDeviceFeatureSet result;
-	result.push_back(input.getValuatorSlotFeature(0));
+	result.push_back(input.getButtonSlotFeature(forwardedFeature.getFeatureIndex()));
 	return result;
 	}
 
 InputDevice* ScrollTool::getSourceDevice(const InputDevice* forwardedDevice)
 	{
-	/* Paranoia: Check if the forwarded device is the same as the transformed device: */
-	if(forwardedDevice!=valuatorDevice)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Given forwarded device is not transformed device");
+	/* Paranoia: Check if the forwarded device is the same as the wheel device: */
+	if(forwardedDevice!=wheelDevice)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Given forwarded device is not forwarded device");
 	
 	/* Return the designated source device: */
-	return getValuatorDevice(0);
+	return getButtonDevice(0);
 	}
 
 InputDeviceFeatureSet ScrollTool::getForwardedFeatures(const InputDeviceFeature& sourceFeature)
 	{
 	/* Paranoia: Check if the source feature belongs to this tool: */
-	if(input.findFeature(sourceFeature)!=0)
+	int slotIndex=input.findFeature(sourceFeature);
+	if(slotIndex<0)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Source feature is not part of tool's input assignment");
 	
 	/* Return the forwarded feature: */
 	InputDeviceFeatureSet result;
-	result.push_back(InputDeviceFeature(valuatorDevice,InputDevice::VALUATOR,0));
+	result.push_back(InputDeviceFeature(wheelDevice,InputDevice::BUTTON,slotIndex));
 	return result;
 	}
 

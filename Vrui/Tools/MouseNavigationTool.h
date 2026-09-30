@@ -1,7 +1,7 @@
 /***********************************************************************
 MouseNavigationTool - Class encapsulating the navigation behaviour of a
 mouse in the OpenInventor SoXtExaminerViewer.
-Copyright (c) 2004-2023 Oliver Kreylos
+Copyright (c) 2004-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -59,8 +59,8 @@ class MouseNavigationToolFactory:public ToolFactory
 		Vector scalingDirection; // Direction of scaling line in physical coordinates
 		Scalar dollyFactor; // Distance the device has to be moved along the scaling line to dolly by one physical unit
 		Scalar scaleFactor; // Distance the device has to be moved along the scaling line to scale by factor of e
-		Scalar wheelDollyFactor; // Physical unit dolly amount for one wheel click
-		Scalar wheelScaleFactor; // Scaling factor for one wheel click
+		Scalar wheelDollyFactor; // Physical unit dolly amount for one wheel tick
+		Scalar wheelScaleFactor; // Scaling factor for one wheel tick
 		Scalar spinThreshold; // Distance the device has to be moved on the last step of rotation to activate spinning
 		bool showScreenCenter; // Flag whether to draw the center of the screen during navigation
 		
@@ -83,7 +83,6 @@ class MouseNavigationToolFactory:public ToolFactory
 	/* Methods from ToolFactory: */
 	virtual const char* getName(void) const;
 	virtual const char* getButtonFunction(int buttonSlotIndex) const;
-	virtual const char* getValuatorFunction(int valuatorSlotIndex) const;
 	virtual Tool* createTool(const ToolInputAssignment& inputAssignment) const;
 	virtual void destroyTool(Tool* tool) const;
 	};
@@ -109,9 +108,9 @@ class MouseNavigationTool:public NavigationTool
 	Scalar interactionPlaneSize; // Size of interaction plane
 	Point currentPos; // Current projected position of mouse input device on screen
 	double lastMoveTime; // Application time at which the projected position last changed
-	Scalar currentValue; // Value of the associated valuator
 	bool dolly; // Flag whether to dolly instead of scale
 	NavigationMode navigationMode; // The tool's current navigation mode
+	int wheelTickSum; // Sum of wheel ticks in the current wheel navigation operation
 	double wheelNavEndTime; // Application time at which to end the current wheel scaling or dollying operation
 	Point screenCenter; // Center of screen; center of rotation and scaling operations
 	Vector dollyDirection; // Transformation direction of dollying
@@ -119,7 +118,6 @@ class MouseNavigationTool:public NavigationTool
 	Vector rotateOffset; // Offset vector applied to device position during rotations
 	Point lastRotationPos; // Last mouse position during rotation
 	Vector spinAngularVelocity; // Angular velocity when spinning
-	Scalar currentWheelScale; // Current scale factor during mouse wheel scaling
 	NavTrackerState preScale; // Transformation to be applied to the navigation transformation before scaling
 	NavTrackerState rotation; // Current accumulated rotation transformation
 	NavTrackerState postScale; // Transformation to be applied to the navigation transformation after scaling
@@ -142,7 +140,6 @@ class MouseNavigationTool:public NavigationTool
 	virtual void initialize(void);
 	virtual const ToolFactory* getFactory(void) const;
 	virtual void buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData);
-	virtual void valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData);
 	virtual void frame(void);
 	virtual void display(GLContextData& contextData) const;
 	};
