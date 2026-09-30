@@ -1,0 +1,159 @@
+<html>
+	<head>
+		<title>The Anatomy of a Vrui Frame</title>
+	</head>
+	
+	<body>
+		<h1>The Anatomy of a Vrui Frame</h1>
+		
+		<p>Every Vrui application runs as a sequence of frames, from start to shutdown. This document provides detailed look at the sequence of events that happen within a Vrui frame, and describes how Vrui applications work in the context of these frames.</p>
+		
+		<p>The overall lifetime of a Vrui application falls into three stages: Initialization, followed by the main loop, followed by shutdown. We will look at the second stage, main loop, in most detail.</p>
+		
+		<h2>Initialization</h2>
+		
+		<p>In this stage, the application, and the Vrui toolkit itself, are initialized. This entails the following steps, in this order:</p>
+		
+		<h3>Process Start</h3>
+		
+		<p>A Vrui application process is started by the operating system, which then calls the application's main() function. This function, in turn, calls the constructor of the Vrui::Application object representing the application.</p>
+		
+		<h3>Vrui Initialization</h3>
+		
+		<p>The application object's constructor calls its base class constructor, which in turn runs phase&nbsp;1 of Vrui initialization. This is where Vrui parses the command line arguments given to the application, reads its configuration files, decides whether to run in single-system or cluster mode (and launches the application process on all cluster nodes if so), and initializes its sub-systems and managers, such as the input device manager, scene graph manager, and UI&nbsp;manager.</p>
+		
+		<h3>Application Initialization</h3>
+		
+		<p>The application object's constructor's body initializes the application itself. At this point, all Vrui sub-systems are initialized and can be used, e.g., application UI can be created using Vrui's GLMotif widget manager, but sub-system state might not be fully initialized yet. For example, input devices may not yet have real device state such as tracking data.</p>
+		
+		<p>Importantly, at this point, neither the graphics nor the sound sub-systems are running yet, meaning that the application can not query windows or sound contexts. Instead, the application can request special window properties such as stencil buffers, or whether it requires sound processing at all.</p>
+		
+		<p>After the application object's constructor returns, the main() function calls the application object's run() method. This is where Vrui takes over again and starts phase&nbsp;2 of its initialization.</p>
+		
+		<h3>Graphics Initialization</h3>
+		
+		<p>In this phase, Vrui initializes its graphics sub-system, i.e., it creates all windows and initializes OpenGL. On each cluster node, or on the only node in single-system mode, Vrui creates zero or more window groups, which each contain one or more windows sharing the same X11 display connection and OpenGL context. If a node has more than one window group, and parallel rendering was requested and is supported, Vrui will kick off one rendering thread per window group.</p>
+		
+		<p>After all windows have been created, Vrui will initialize OpenGL state, which in turn will call the initContext() methods of all objects derived from class GLObject. In this method, such objects can allocate and initialize resources such as texture objects, shaders, and/or vertex arrays and store them in objects derived from GLObject::DataItem, which will be associated with each OpenGL context separately. In other words, any single object derived from GLObject will have any number of associated OpenGL data items, for each OpenGL context used by Vrui. For each of these objects, the initContext method will be called once for each window group on each cluster node, possibly from multiple threads at the same time if parallel rendering is enabled. This means that initContext methods must not change the state of their objects, unless, in very special cases, those objects make sure that any changes are made in a thread-safe manner.</p>
+		
+		<h3>Sound Initialization</h3>
+		
+		<p>If sound processing was requested at some point during phase&nbsp;1 of Vrui initialization, Vrui will now initialize its sound subsystem and create any number of sound contexts, which are the analog of display windows and are associated with OpenAL contexts for spatial sound rendering.</p>
+		
+		<p>Just as during graphics initialization, objects derived from ALObject will have their initContext methods called, where they can allocate and initialize OpenAL resources such as sound buffers or sound sources. The same caveats about multithreading apply to this initContext method as to the one for objects derived from GLObject.</p>
+		
+		<h3>Main Loop Preparation</h3>
+		
+		<p>After all initialization is complete, Vrui prepares for running its main loop by calling the application object's prepareMainLoop() method. This method is where applications can perform some last-second initialization immediately before the main loop starts. At this point, Vrui is fully initialized, including its graphics and sound sub-systems. The point of this method is to contain code that would normally be executed only once during the first frame of a Vrui application, and would thus clutter up main loop code with &quot;if(Vrui::getFrameIndex()==0)&quot; statements. When the prepareMainLoop method is called, Vrui::getFrameIndex() will return 0, and Vrui::getApplicationTime() will return exactly 0.0.</p>
+		
+		<h2>Main Loop</h2>
+		
+		<p>Vrui's main loop proceeds as a linear sequence of frames, where each frame represents the state of an application at one specific point in time. Vrui does not generally enforce a fixed frame rate, meaning that frames do not have a fixed duration. Vrui applications must therefore be prepared to deal with arbitrary and dynamically changing intervals between frames. In other words, simulations or animations must not have a pre-set rate at which they progress. To support applications in this, the Vrui kernel offers the Vrui::getFrameTime() function, which returns the duration of the previous frame in seconds as a double-precision floating-point number. In other words, Vrui::getFrameTime() is exactly the difference between the values of Vrui::getApplicationTime() in this frame and the previous frame. During the main loop's first frame, Vrui::getFrameTime() returns exactly 0.0. In summary, Vrui::getFrameTime() is the time step value that Vrui applications must use to advance simulations or animations.</p>
+		
+		<p>Each individual Vrui frame proceeds according to the following sequence:</p>
+		
+		<h3>Frame Start</h3>
+		
+		<p>Immediately at the beginning of a frame, Vrui increases its internal frame counter (which can be queried via Vrui::getFrameIndex()), and samples its internal high-resolution clock and updates the central application time. Application time, which can be queried via Vrui::getApplicationTime(), is a double-precision floating-point number measuring the number of seconds since Vrui's main loop started. This number does not change during a frame, and during the first frame (Vrui::getFrameIndex()==0), it is guaranteed to be exactly 0.0.</p>
+		
+		<p>If Vrui is running in cluster mode, it will synchronize between all nodes immediately after updating the frame counter and sampling the application time, so that all nodes see the exact same application time for the new frame.</p>
+		
+		<h3>Dispatching of Run Loop Events</h3>
+		
+		<p>Vrui's main loop is organized by a central run loop, an object of class Threads::RunLoop that can be accessed via Vrui::getRunLoop(). The run loop is responsible for collecting and dispatching events, such as I/O events, timers, OS signals, or user signals, to listeners who have registered for said events. It is thus the basis for event-driven I/O, and also a convenient point for synchronization between background threads and the main thread via the use of run loop user signals.</p>
+		
+		<p>There is no guaranteed order in which the run loop dispatches events. While any callback functions called from the run loop can assume that Vrui's frame index and application time have already been updated, they can not assume anything about the state of other Vrui sub-systems. Specifically, input devices may update their states and tracking data at any time during event dispatching, so depending on circumstances outside of an application's control, callbacks may see old or new device states, or a mix between the two. In other words, run loop callbacks are not the place to do work that relies on input device states.</p>
+		
+		<p>This is also the time when Vrui executes console commands. Meaning that the aforementioned caveats about Vrui state also apply to callbacks registered via Misc::CommandDispatcher.</p>
+		
+		<h3>Input Graph Processing</h3>
+		
+		<p>After the run loop is done dispatching events, Vrui will update the state of all physical input devices, and then process the input graph level-by-level from the bottom up, cascading input device changes upwards along the way. Meaning that, unlike during event dispatching, input callbacks and frame methods of any Vrui tools, including custom ones registered by an application, will be called in a well-defined order.</p>
+		
+		<p>First, all input devices on graph level&nbsp;0, meaning all physical input devices, will dispatch state change callbacks to tools bound to them. These individual callbacks will be delivered to tools in per-device temporal order, but in no particular order between input devices.</p>
+		
+		<p>After all events from level&nbsp;0 devices have been delivered, the frame() methods of all tools on graph level&nbsp;0, i.e., those tools that are only bound to level&nbsp;0 devices, will be called.</p>
+		
+		<p>After that, processing moves to the next level of the input graph. In other words, if any tools on level&nbsp;n made changes to input devices grabbed by them, which will exist on graph level&nbsp;n+1, those changes will now be dispatched to tools on graph level&nbsp;n+1, and so forth.</p>
+		
+		<p>At the end of input graph processing, all tools' input callbacks and frame methods will have been called, and all input devices in the graph, including virtual ones on levels 1 and up, will have their final states for the duration of the current frame.</p>
+		
+		<h3>Scene Graph Action Pass</h3>
+		
+		<p>Next, Vrui will start its central scene graph's action pass traversal. The act() methods of all scene graph nodes participating in this pass will be called in depth-first traversal order.</p>
+		
+		<h3>Vislet Processing</h3>
+		
+		<p>The frame() methods of all active vislets will be called, in unspecified order.</p>
+		
+		<h3>Application Processing</h3>
+		
+		<p>The application object's frame() method will be called.</p>
+		
+		<h3> Graphics and/or Sound Rendering</h3>
+		
+		<p>All processing in Vrui's main loop up to this point happened synchronously, meaning from inside Vrui's main thread, and any executed code was free to make any Vrui calls or change any application state. Graphics and sound rendering, on the other hand, is potentially asynchronous. As described during the graphics and sound initialization phases, any node in a Vrui cluster (or the single node in single-system mode) can have any number of windows sorted into any number of window groups, and any number of sound contexts. In addition, some window types, such as stereo windows, may require multiple rendering sequences, one for each rendered viewpoint. Therefore, an application must not assume that any of its graphics or sound rendering code will be executed exactly once, or from inside Vrui's main thread. It may be executed any number of times, including <em>zero</em> times if a node is &quot;headless,&quot; i.e., has no assocated windows or sound contexts. As a result, no rendering code must change Vrui state, and can change application state only if done so in a thread-safe manner.</p>
+		
+		<p>That said, while graphics and audio rendering <em>as a whole</em> can happen any number of times in each frame, and potentially from multiple threads at the same time, each one of those rendering sequences follows a defined order of steps, described in the following sections.</p>
+		
+		<h4>Pre-Rendering Callbacks</h4>
+		
+		<p>All registered pre-rendering callbacks will be called immediately after each window group's OpenGL context is made current, but before any rendering setup is performed on that context. In other words, these callbacks are called once per window group per frame. This would be a place to load per-context resources, clean up per-context caches, etc. As other code executed during the rendering step, these callbacks must not change Vrui or application state.</p>
+		
+		<h4>Rendering Setup</h4>
+		
+		<p>At the beginning of each rendering sequence in any frame, Vrui re-initializes each OpenGL context's state back to the default, and clears the frame buffer of the sequence's associated window.</p>
+		
+		<h4>Device Rendering</h4>
+		
+		<p>The input graph manager renders the device glyphs of all active input devices in the input graph.</p>
+		
+		<h4>UI Rendering</h4>
+		
+		<p>The UI and widget manager renders the current states of all popped-up UI widgets, such as GLMotif menus or dialog boxes.</p>
+		
+		<h4>Tool Rendering</h4>
+		
+		<p>The input graph manager calls the display() methods of all active tools in order of input graph level, but with no specified order inside each level. As tools are assumed to be attached to input devices and associated with a user, and thus assumed to &quot;live&quot; in physical space, OpenGL's modelview matrix is set to Vrui's physical space at this time. If a tool wants to render in navigational space, it has to explicity push the the navigational-space modelview matrix onto OpenGL's matrix stack. It is recommended, however, that tools do navigational-space rendering by inserting custom nodes into the navigational-space group of Vrui's central scene graph.</p>
+		
+		<h4>Vislet Rendering</h4>
+		
+		<p>Next, the vislet manager calls the display() methods of all enabled vislets. For lack of a better approach, vislets are also rendered in physical space, and the notes about navigational-space rendering for tools apply to vislets as well.</p>
+		
+		<h4>Scene Graph Rendering Pass</h4>
+		
+		<p>The bulk of Vrui's rendering is handled by traversing its central scene graph. First, the scene graph is traversed in opaque rendering mode, with the glRenderAction() methods of all nodes participating in this pass being called in depth-first order. Afterwards, the scene graph is traversed again in transparent rendering mode, with OpenGL set up for alpha blending, and the glRenderAction() methods of all nodes participating in this pass are called in depth-first order. Vrui's scene graph does not enforce z-ordering during its transparent rendering pass.</p>
+		
+		<p>For application convenience, Vrui's central scene graph contains sub-graphs aligned with Vrui's various pre-defined coordinate spaces. There is a sub-graph for physical-space rendering, a sub-graph for navigational-space rendering, and sub-graphs for each active input device that render relative to each input device's coordinate frames. Nodes can be inserted/removed from these sub-graphs using the methods of Vrui::SceneGraphManager.</p>
+		
+		<h4>Transparent Object Rendering</h4>
+		
+		<p>After the scene graph has been rendered, the glRenderActionTransparent() methods of all objects derived from Vrui::TransparentObject are called in unspecified order. During these calls, OpenGL's modelview matrix is again set to Vrui's physical space. Vrui::TransparentObject is deprecated; application code should instead insert custom nodes into Vrui's central scene graph and let them participate in the transparent rendering pass.</p>
+		
+		<h4>Application Rendering</h4>
+		
+		<p>There is no separate step for application rendering. Instead, the application object is represented as a node inside Vrui's navigational-space sub-scene graph, and the application object's display() method will be called at the appropriate time during the scene graph's opaque rendering pass, and, if the application requested transparent rendering via calling the base application class's setTransparentPass() method, the application object's displayTransparent() method will be called at the appropriate time during the scene graph's transparent rendering pass.</p>
+		
+		<h4>Sound Rendering</h4>
+		
+		<p>Sound rendering follows the same sequence of steps as graphics rendering, albeit using sound contexts and OpenAL contexts instead of windows and OpenGL contexts. If an application requested sound processing during phase&nbsp;1 of Vrui initialization, its sound() method will be called from the navigational-space sub-graph of Vrui's central scene graph during that scene graph's sound traversal. Sound rendering may happen from a separate thread, parallel to graphics rendering.</p>
+		
+		<h3>Post-Rendering Callbacks</h3>
+		
+		<p>All registered post-rendering callbacks will be called immediately after all rendering is done for all window groups. Unlike pre-rendering callbacks, these will be called synchronously from the main loop, i.e., exactly once per frame on every frame, from within Vrui's main thread. As a result, these callbacks can not make OpenGL or OpenAL calls, but are instead allowed to change Vrui state or application state. This would be a place to change application state in response to what just happened during the rendering step, in preparation for the next frame. For example, an application's frame() method may set up a maximum rendering time tracker, which is updated atomically from within the display() method, and then evaluated in the post-rendering callback to adjust rendering quality to achieve a desired target frame rate.</p>
+		
+		<h3>Frame End</h3>
+		
+		<p>To close out the current frame, Vrui's main run loop will block until any events happen. If at any time during frame processing the Vrui::scheduleUpdate() method was called, the run loop will only block until the earliest time point that was thus requested. If Vrui is running in continuous mode, the main loop will not block at all and only poll for I/O events. If any background thread has triggered a user signal on Vrui's main run loop or called Vrui::requestUpdate() at any point during the current frame, the run loop will wake up immediately.</p>
+		
+		<p><b>Note:</b> Vrui::requestUpdate() only works when called from outside Vrui's main thread, i.e., from a background thread. It is a no-op when called by code running inside Vrui's main thread. If such code wants to request a new frame, say to run an animation, it must instead call Vrui::scheduleUpdate(). Typically, an application that wants to run an animation or simulation calls Vrui::scheduleUpdate(Vrui::getNextAnimationTime()) to run at the recommended frame rate for the environment. If an application needs to schedule the next frame <em>immediately,</em> it can call Vrui::scheduleUpdate(Vrui::getApplicationTime()), but this is strongly advised against because it will cause excessive CPU and GPU usage.</p>
+		
+		<p>The moment the run loop wakes up from blocking, or returns from polling, the next frame starts and the entire frame sequence repeats.</p>
+		
+		<h2>Shutdown</h2>
+		
+		<p>After Vrui's main loop terminates, due to the user selecting &quot;Quit&quot; in Vrui's system menu, or pressing the Esc key, or closing any of the application's windows, Vrui and the application de-initialize themselves.</p>
+		
+		<p><b>Note:</b> Vrui applications are expected to perform proper de-initialization by releasing all resources that they allocated, including un-registering all callbacks, run loop timers, user signals, etc., and not rely on the operating system cleaning up after them when their processes terminate. This is because in a future Vrui version, applications may be loaded and unloaded dynamically as plug-ins, and run inside a Vrui shell's persistent process; in other words, as part of some kind of a VR &quot;desktop environment.&quot;</p>
+	</body>
+</html>
