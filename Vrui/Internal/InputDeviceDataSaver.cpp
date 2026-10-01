@@ -26,6 +26,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Internal/InputDeviceDataSaver.h>
 
 #include <Misc/SizedTypes.h>
+#include <Misc/FileNameExtensions.h>
 #include <Misc/StringMarshaller.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/StandardValueCoders.h>
@@ -38,7 +39,9 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Geometry/OrthonormalTransformation.h>
 #include <Geometry/GeometryMarshallers.h>
 #include <Sound/SoundDataFormat.h>
-#include <Sound/SoundRecorder.h>
+#include <Sound/WAVFile.h>
+#include <Sound/OpusEncoder.h>
+#include <Sound/OggOpusSink.h>
 #include <Vrui/Types.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/EnvironmentDefinition.h>
@@ -65,13 +68,30 @@ void InputDeviceDataSaver::inputDeviceStateChangedCallback(InputGraphManager::In
 			}
 	}
 
+void InputDeviceDataSaver::soundRecordingCallback(const Vrui::SoundContext::RecordingCallbackData& cbData)
+	{
+	switch(soundFileFormat)
+		{
+		case 0:
+			/* Hand the received packet of PCM data to the WAV file sink: */
+			wavFile->writeAudioFrames(cbData.frames,cbData.numFrames);
+			break;
+		
+		case 1:
+			/* Hand the received packet of PCM data to the Opus file sink: */
+			oggOpusSink->encodeChunk(static_cast<const Misc::SInt16*>(cbData.frames),cbData.numFrames);
+			break;
+		}
+	}
+
 InputDeviceDataSaver::InputDeviceDataSaver(InputDeviceManager* sInputDeviceManager,const Misc::ConfigurationFileSection& configFileSection,unsigned int randomSeed)
 	:InputDeviceAdapter(sInputDeviceManager),
 	 inputGraphManager(inputDeviceManager->getInputGraphManager()),
 	 numSavedInputDevices(inputDeviceManager->getNumInputDevices()),
 	 savedInputDevices(new InputDevice*[numSavedInputDevices]),
 	 inputDeviceEnableds(new bool[numSavedInputDevices]),
-	 newInputDeviceEnableds(new bool[numSavedInputDevices])
+	 newInputDeviceEnableds(new bool[numSavedInputDevices]),
+	 soundFileFormat(-1),wavFile(0),opusBitrate(16000),opusEncoder(0),oggOpusSink(0)
 	{
 	/*********************************************************************
 	Add this input device data saver as an input device adapter to the
@@ -87,7 +107,9 @@ InputDeviceDataSaver::InputDeviceDataSaver(InputDeviceManager* sInputDeviceManag
 	IO::DirectoryPtr baseDirectory=IO::openDirectory(configFileSection.retrieveString("./baseDirectory",".").c_str());
 	
 	/* Open the input device data file relative to the base directory: */
-	inputDeviceDataFile=baseDirectory->openFile(baseDirectory->createNumberedFileName(configFileSection.retrieveString("./inputDeviceDataFileName").c_str(),4).c_str(),IO::File::WriteOnly);
+	std::string inputDeviceDataFileName=baseDirectory->createNumberedFileName(configFileSection.retrieveString("./inputDeviceDataFileName").c_str(),4);
+	Misc::formattedLogNote("Vrui::InputDeviceDataSaver: Saving input device data to %s",(baseDirectory->getPath()+"/"+inputDeviceDataFileName).c_str());
+	inputDeviceDataFile=baseDirectory->openFile(inputDeviceDataFileName.c_str(),IO::File::WriteOnly);
 	
 	/* Write a file identification header: */
 	inputDeviceDataFile->setEndianness(Misc::LittleEndian);
@@ -140,29 +162,30 @@ InputDeviceDataSaver::InputDeviceDataSaver(InputDeviceManager* sInputDeviceManag
 	/* Register a callback with the input graph manager: */
 	inputGraphManager->getInputDeviceStateChangeCallbacks().add(this,&InputDeviceDataSaver::inputDeviceStateChangedCallback);
 	
-	/* Check if the user wants to record a commentary track: */
+	/* Check if the user wants to record sound: */
 	std::string soundFileName=configFileSection.retrieveString("./soundFileName","");
 	if(!soundFileName.empty())
 		{
-		try
+		/* Determine the requested format of the sound file: */
+		if(Misc::hasCaseExtension(soundFileName.c_str(),".wav"))
+			soundFileFormat=0;
+		else if(Misc::hasCaseExtension(soundFileName.c_str(),".opus"))
 			{
-			#if 0
-			/* Create a sound data format for recording: */
-			Sound::SoundDataFormat soundFormat;
-			configFileSection.updateValue("./sampleResolution",soundFormat.bitsPerSample);
-			configFileSection.updateValue("./numChannels",soundFormat.samplesPerFrame);
-			configFileSection.updateValue("./sampleRate",soundFormat.framesPerSecond);
-			
-			/* Create a sound recorder for the given sound file name: */
-			std::string soundDeviceName=configFileSection.retrieveValue<std::string>("./soundDeviceName","default");
-			soundFileName=baseDirectory->getPath(baseDirectory->createNumberedFileName(soundFileName.c_str(),4).c_str());
-			soundRecorder=new Sound::SoundRecorder(soundDeviceName.c_str(),soundFormat,soundFileName.c_str());
-			#endif
+			configFileSection.updateValue("./opusBitrate",opusBitrate);
+			soundFileFormat=1;
 			}
-		catch(const std::runtime_error& err)
+		else
+			Misc::sourcedConsoleWarning(__PRETTY_FUNCTION__,"Sound file %s has unknown extension; sound recording disabled",soundFileName.c_str());
+		
+		if(soundFileFormat>=0)
 			{
-			/* Print a message, but carry on: */
-			Misc::sourcedConsoleWarning(__PRETTY_FUNCTION__,"Disabling sound recording due to exception %s",err.what());
+			/* Open the sound file: */
+			std::string fullSoundFileName=baseDirectory->createNumberedFileName(soundFileName.c_str(),4);
+			soundFile=baseDirectory->openFile(fullSoundFileName.c_str(),IO::File::WriteOnly);
+			Misc::formattedLogNote("Vrui::InputDeviceDataSaver: Saving sound data to %s",(baseDirectory->getPath()+"/"+fullSoundFileName).c_str());
+			
+			/* Request sound processing in Vrui if the sound file format is valid: */
+			requestSound();
 			}
 		}
 	}
@@ -175,6 +198,13 @@ InputDeviceDataSaver::~InputDeviceDataSaver(void)
 	/* Unregister the input device state change callback from the input graph manager: */
 	inputGraphManager->getInputDeviceStateChangeCallbacks().remove(this,&InputDeviceDataSaver::inputDeviceStateChangedCallback);
 	
+	/* Delete the sound recorders: */
+	delete wavFile;
+	if(oggOpusSink!=0)
+		oggOpusSink->flush();
+	delete oggOpusSink;
+	delete opusEncoder;
+	
 	/* Delete the state tracking arrays: */
 	delete[] inputDeviceEnableds;
 	delete[] newInputDeviceEnableds;
@@ -183,20 +213,63 @@ InputDeviceDataSaver::~InputDeviceDataSaver(void)
 
 void InputDeviceDataSaver::prepareMainLoop(void)
 	{
-	#if 0
-	try
+	if(soundFileFormat>=0)
 		{
-		/* Start recording sound now, if requested: */
-		if(soundRecorder!=0)
-			soundRecorder->start();
+		try
+			{
+			/* Query Vrui's sound recording format: */
+			Vrui::SoundContext* soundContext=Vrui::getRecordingSoundContext();
+			if(soundContext!=0)
+				{
+				const Sound::SoundDataFormat& sdf=soundContext->getRecordingFormat();
+				switch(soundFileFormat)
+					{
+					case 0:
+						/* Create a WAV file sink: */
+						wavFile=new Sound::WAVFile(*soundFile,sdf);
+						
+						/* Start recording from Vrui's recording device: */
+						soundContext->addRecordingCallback(*Threads::createFunctionCall(this,&InputDeviceDataSaver::soundRecordingCallback));
+						
+						break;
+					
+					case 1:
+						/* Check if Vrui's recording format is compatible with Opus: */
+						if(sdf.bitsPerSample==16&&sdf.signedSamples)
+							{
+							/* Create an Opus encoder: */
+							opusEncoder=new Sound::OpusEncoder(sdf.framesPerSecond,sdf.samplesPerFrame,Sound::OpusEncoder::VoIP);
+							opusEncoder->setBitrate(opusBitrate);
+							
+							/* Create an Opus sink: */
+							Sound::OggOpusSink::Initializer init(*opusEncoder);
+							init.addComment("creator=Vrui::InputDeviceDataSaver");
+							oggOpusSink=new Sound::OggOpusSink(*opusEncoder,*soundFile,init);
+							
+							/* Start recording from Vrui's recording device: */
+							soundContext->addRecordingCallback(*Threads::createFunctionCall(this,&InputDeviceDataSaver::soundRecordingCallback));
+							}
+						else
+							{
+							Misc::sourcedConsoleWarning(__PRETTY_FUNCTION__,"Sound recording disabled because Vrui's recording format is incompatible with Ogg/Opus format.");
+							soundFileFormat=-1;
+							}
+						
+						break;
+					}
+				}
+			else
+				{
+				Misc::sourcedConsoleWarning(__PRETTY_FUNCTION__,"Sound recording disabled because there is no Vrui recording context.");
+				soundFileFormat=-1;
+				}
+			}
+		catch(const std::runtime_error& err)
+			{
+			Misc::sourcedConsoleWarning(__PRETTY_FUNCTION__,"Sound recording disabled due to exception %s",err.what());
+			soundFileFormat=-1;
+			}
 		}
-	catch(const std::runtime_error& err)
-		{
-		Misc::sourcedConsoleWarning(__PRETTY_FUNCTION__,"Disabling sound recording due to exception %s",err.what());
-		delete soundRecorder;
-		soundRecorder=0;
-		}
-	#endif
 	}
 
 void InputDeviceDataSaver::updateInputDevices(void)

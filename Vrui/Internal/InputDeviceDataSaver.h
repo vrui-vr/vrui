@@ -28,11 +28,17 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <IO/File.h>
 #include <Vrui/InputGraphManager.h>
+#include <Vrui/SoundContext.h>
 #include <Vrui/Internal/InputDeviceAdapter.h>
 
 /* Forward declarations: */
 namespace Misc {
 class ConfigurationFileSection;
+}
+namespace Sound {
+class WAVFile;
+class OpusEncoder;
+class OggOpusSink;
 }
 namespace Vrui {
 class InputDevice;
@@ -51,9 +57,16 @@ class InputDeviceDataSaver:public InputDeviceAdapter
 	InputDevice** savedInputDevices; // Array of pointers to input devices whose states will be dispatched to the slaves
 	bool* inputDeviceEnableds; // Array of enabled flags for all dispatched input devices as seen on the slaves
 	bool* newInputDeviceEnableds; // Array of new enabled flags not yet shared with the slaves
+	IO::FilePtr soundFile; // File into which to record sound
+	int soundFileFormat; // Indicator of the sound file's requested format, -1: no sound, 0: WAV, 1: Ogg/Opus
+	Sound::WAVFile* wavFile; // Pointer to a helper object to save recorded sound in WAV format
+	int opusBitrate; // Selected encoding bit rate for Opus encoder
+	Sound::OpusEncoder* opusEncoder; // Pointer to an Opus encoder for recorded sound
+	Sound::OggOpusSink* oggOpusSink; // Pointer to helper object to save recorded sound in Ogg/Opus format
 	
 	/* Private methods: */
 	void inputDeviceStateChangedCallback(InputGraphManager::InputDeviceStateChangeCallbackData* cbData); // Callback called when a saved input device changes enabled state
+	void soundRecordingCallback(const SoundContext::RecordingCallbackData& cbData); // Callback called when a packet of audio data has been read from the recording source
 	
 	/* Constructors and destructors: */
 	public:

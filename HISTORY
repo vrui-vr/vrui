@@ -9179,3 +9179,8 @@ Vrui-15.0-001:
 - Wrote Documentation/VruiFrameAnatomy.html, documenting the sequence of
   operations during a Vrui frame and throughout the lifetime of a Vrui
   application.
+- Added sound recording capability back into Vrui::InputDeviceDataSaver,
+  receiving sound data from Vrui's recording sound context instead of a
+  raw ALSA device.
+  - Also created option to write sound directly to an Opus-encoded Ogg
+    file.
