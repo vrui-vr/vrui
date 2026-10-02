@@ -53,7 +53,7 @@ When the aforementioned tool is assigned to a button, it will open a dialog wind
 
 <H2><A NAME="MenuInteraction">Menu Interaction</A></H2>
 
-Most Vrui applications contain a main menu that can be opened by pressing and holding the right mouse button. Although the menus (and all other widgets) are represented as 3D objects, they behave almost exactly like regular 2D menus in desktop mode. To select a menu entry, press and hold the right mouse button, move the mouse to the desired menu option (until the menu option becomes highlighted), and then release the right mouse button to select the option.
+Most Vrui applications contain a main menu that can be opened by pressing and holding the right mouse button. Although the menus (and all other widgets) are represented as 3D objects, when in desktop mode, they behave almost exactly like standard 2D windowing system menus. To select a menu entry, press and hold the right mouse button, move the mouse to the desired menu option (until the menu option becomes highlighted), and then release the right mouse button to select the option.
 
 <H3><A NAME="VruiSystemMenu">The Vrui System Menu</A></H3>
 
@@ -65,20 +65,61 @@ The Vrui system menu has the following entries:
 <DD>This submenu lists all currently opened (but potentially minimized) stand-alone <A HREF="#DialogWindowInteraction">dialog windows</A>. By selecting a minimized dialog window, the window will be re-opened at its last position. By selecting a non-minimized dialog window, it will be moved to the mouse cursor position.</DD>
 
 <DT>View</DT>
-<DD>This submenu contains entries to store and retrieve viewing setups in an environment-independent format. In other words, if an application is run on a desktop, and one particular 3D object is centered on the screen, then saving the current view and loading it in the same or a different environment will have the same 3D object approximately centered in the environment.
+<DD>This submenu contains entries manipulate the current view, i.e., the translations, rotations, and scale at which 3D objects show up in the display window.
 <DL>
 <DT>Reset View</DT>
 <DD>This menu entry restores the viewing setup to the application-defined default, which usually positions all 3D objects such that they are centered in, and fill, the environment.</DD>
+
+<DT>Align View</DT>
+<DD>This submenu contains entries to align the current view relative to the primary coordinate axes.
+<DL>
+<DT>X-Y</DT>
+<DD>This menu entry will align the view such that the navigational X&nbsp;axis points to the right, and the navigational Y&nbsp;axis points up.</DD>
+
+<DT>X-Z</DT>
+<DD>This menu entry will align the view such that the navigational X&nbsp;axis points to the right, and the navigational Z&nbsp;axis points up.</DD>
+
+<DT>Y-Z</DT>
+<DD>To the surprise of exactly no-one, this menu entry will align the view such that the navigational Y&nbsp;axis points to the right, and the navigational Z&nbsp;axis points up.</DD>
+
+<DT>X Up/Down</DT>
+<DD>This menu entry will align the navigational X&nbsp;axis either up or down, whichever is closer, while leaving the other axes alone.</DD>
+
+<DT>Y Up/Down</DT>
+<DD>This menu entry will align the navigational Y&nbsp;axis either up or down, whichever is closer, while leaving the other axes alone.</DD>
+
+<DT>Z Up/Down</DT>
+<DD>This menu entry will align the navigational Z&nbsp;axis either up or down, whichever is closer, while leaving the other axes alone.</DD>
+
+<DT>Flip H</DT>
+<DD>This menu entry will flip the current view horizontally, i.e., will rotate the view 180&deg; around the vertical axis.</DD>
+
+<DT>Flip V</DT>
+<DD>This menu entry will flip the current view vertically, i.e., will rotate the view 180&deg; around the horizontal axis.</DD>
+
+<DT>Rotate CCW</DT>
+<DD>This menu entry will rotate the current view in the screen plane by 90&deg; counter-clockwise.</DD>
+
+<DT>Rotate CW</DT>
+<DD>This menu entry will rotate the current view in the screen plane by 90&deg; clockwise.</DD></DL></DD>
+
+<DT>Fix Orientation</DT>
+<DD>This toggle button, when enabled, will fix the orientation of Vrui's navigation transformation during navigation. In other words, while 3D objects can be translated, they can not be rotated.</DD>
+
+<DT>Fix Vertical</DT>
+<DD>This toggle button, when enabled, will fix the vertical direction of Vrui's navigation transformation during navigation. In other words, 3D objects can only be translated or rotated around the vertical axis.</DD>
+
+<DT>Undo View</DT>
+<DD>This menu entry undoes the most recent navigation operation. A &quot;navigation operation&quot; is a sequence that begins when any navigation tool becomes active, and ends when that navigation tool becomes inactive again. Using the mouse navigation tool, this corresponds exactly to the navigation crosshairs appearing and disappearing. Meaning, any combination of rotating, panning, dollying, and/or scaling is undone all at once as long as the crosshairs never turn off in the middle.</DD>
+
+<DT>Redo View</DT>
+<DD>This menu entry re-does the most recently undone navigation operation.</DD>
 
 <DT>Load View</DT>
 <DD>This menu entry opens a file selection dialog box (see below), from which users can select a viewing setup file to load.</DD>
 
 <DT>Save View</DT>
-<DD>This menu entry saves the current viewing setup to a file called SavedViewpointXXXX.view, where the XXXX are a four-digit number making the file name unique.</DD>
-
-<DT>Restore View</DT>
-<DD>This menu entry restores the viewing setup to the one that was most recently saved during the current invocation of the Vrui application. Vrui retains an unspecified number of previously saved viewing setups in a stack.</DD>
-</DL></DD>
+<DD>This menu entry opens a file selection dialog box (see below), from which users can select a file name for a viewing setup file to save. If a file is selected, Vrui will store the current viewing setup in an environment-independent format. In other words, if an application is run on a desktop, and one particular 3D object is centered on the screen, then saving the current view and loading it in the same or a different environment will have the same 3D object approximately centered in the environment.</DD></DL></DD>
 
 <DT>Devices</DT>
 <DD>This submenu contains entries to create and destroy <A HREF="#VirtualInputDevices">virtual input devices</A>, and to load and save the current state of all <A HREF="#ToolManagement">tools</A> bound to input devices.
@@ -97,10 +138,18 @@ The Vrui system menu has the following entries:
 
 <DT>Save Input Graph</DT>
 <DD>This menu entry saves the current input graph, i.e., all currently existing virtual input devices, and the complete graph of tools bound to any physical or virtual input devices. Currently, the input graph is saved to a file &quot;InputGraph.cfg&quot; in the current directory at the time the menu entry is selected.</DD>
-</DL></DD>
+
+<DT>Tool Kill Zone Active</DT>
+<DD>This toggle button, when enabled, activates the tool kill zone (the red rectangle in some corner of the window), meaning that tools can be deleted by pressing and releasing an input device button while the input device is hovering over that rectangle. In other words, while this toggle button is disabled, tools cannot be deleted, accidentally or on purpose.</DD>
+
+<DT>Show Tool Kill Zone</DT>
+<DD>This toggle button, when enabled, shows the tool kill zone (the red rectangle in some corner of the window). But this only affects the tool kill zone's visibility; unless it is also inactivated using the &quot;Tool Kill Zone Active&quot; toggle, tools can still be deleted.</DD></DL></DD>
 
 <DT>Show Scale Bar</DT>
 <DD>This menu entry shows or hides a <A HREF="#ScaleBar">scale bar</A>, which can indicate the real-world sizes of 3D&nbsp;objects in the scene, and can also be used to adjust the scale of Vrui's display to any from a set of fixed ratios.</DD>
+
+<DT>Show Vrui Settings</DT>
+<DD>This menu entry shows <A HREF="#SettingsDialog">Vrui's settings dialog</A> when selected.</DD>
 
 <DT>Quit Program</DT>
 <DD>Selecting this menu entry will quit from the Vrui application immediately, just as pressing the Escape key or closing the application's main window would. Vrui will not ask for confirmation.</DD>
@@ -119,6 +168,57 @@ The scale bar is a special dialog window with a non-standard appearance. It is u
 The top label shows the current zoom ratio, as &lt;physical space length&gt;:&lt;navigational space length&gt;. A ratio of 1:1 means that one inch, meter, etc. in physical space, i.e., on the screen, corresponds to exactly one inch, meter, etc. in navigational space, i.e., in the virtual 3D&nbsp;objects. If the ratio's first number is larger, it means that a physical space unit is shorter than the same navigational space unit, which means the display is &quot;zoomed in,&quot; whereas a larger second number means a physical space unit is  longer than the same navigational space unit, meaning the display is &quot;zoomed out.&quot; For example, a ratio of 1:100 means that one centimeter on the screen corresponds to one meter in the displayed 3D&nbsp;world, and a ration of 10000:1 means that one micrometer in the 3D&nbsp;world corresponds to one centimeter on the screen.<P>
 
 The scale bar can be used to quickly change zoom ratios by clicking the left mouse button on the left or right thirds of the horizontal line. Clicking on the left third will zoom out to the next smaller &quot;standard&quot; ratio (..., 10:1, 5:1, 2:1, 1:1, 1:2, 1:5, 1:10, ...), and clicking on the right third will zoom in to the next larger standard ratio. The entire scale bar can be dragged to different positions on the screen by clicking and holding the left mouse button over the central third of the horizontal line.
+
+<H3><A NAME="SettingsDialog">Vrui's Settings Dialog</A></H3>
+
+Vrui's settings dialog is used to view or change several of Vrui's internal settings. It has three pages for different related options:
+
+<DL>
+<DT>Environment</DT>
+<DD>This page contains settings related to Vrui's physical and navigational environment.
+<DL>
+<DT>Nav. Space Unit</DT>
+<DD>This setting defines the linear unit of Vrui's navigational space. While this setting is typically set by applications, some generic applications might not know what their model spaces settings should be, and therefore need user input. This setting can also be provided on the command line of Vrui applications.
+<DL>
+<DT>Scale Factor</DT>
+<DD>This number field defines how many of the selected units correspond to 1 unit of navigational space. For example, if the unit name is set to &quot;meter,&quot; and the scale factor is set to 0.001, then 1 unit of navigational space corresponds to 1/1000ths of a meter, or one millimeter. The difference between this and selecting &quot;millimeter&quot; as the unit name is that in the former case, measurements are made in millimeters, but displayed in meters.</DD>
+
+<DT>Unit Name</DT>
+<DD>This drop-down selects the primary unit of Vrui's navigational space.</DD>
+</DL></DD>
+</DL></DD>
+
+<DT>Lights</DT>
+<DD>This page contains settings related to light sources and illumination.
+<DL>
+<DT>Ambient Intensity</DT>
+<DD>This number field/slider combo defines the environment's overall ambient intensity, i.e., how much directionless, scattered light there is in the environment.</DD>
+
+<DT>Headlights</DT>
+<DD>This row of toggle buttons dynamically turns on or off the headlights of any viewer defined in the environment.</DD>
+
+<DT>Sun</DT>
+<DD>This section defines an optional fixed light source in the environment (the &quot;Sun&quot;). It can be turned on or off via the toggle button, its position is defined via azimuth (around the vertical) and elevation (above the horizontal) angles relative to the physical environment, and can be assigned an intensity.</DD>
+</DL></DD>
+
+<DT>Graphics</DT>
+<DD>This page contains graphics-related settings.
+<DL>
+<DT>Background</DT>
+<DD>A color selector to set the environment's background color.</DD>
+
+<DT>Foreground</DT>
+<DD>A color selector to set the environment's foreground color.</DD>
+
+<DT>Backplane</DT>
+<DD>The distance from the viewer to the OpenGL backplane (the farthest away that any 3D objects can be visible) in physical coordinate units, i.e., in inches in the default desktop configuration.</DD>
+
+<DT>Frontplane</DT>
+<DD>The distance from the viewer to the OpenGL frontplane (the closest that any 3D objects can be visible) in physical coordinate units, i.e., in inches in the default desktop configuration.</DD>
+</DL></DD>
+</DL>
+
+The settings dialog may show additional pages, which may have been inserted by other optional Vrui components.
 
 <H2><A NAME="ToolManagement">Tool Management</A></H2>
 

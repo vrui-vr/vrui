@@ -9193,3 +9193,6 @@ Vrui-15.0-001:
 - Added viewerName setting to Vrui::MouseNavigationTool to make mouse
   navigation work as expected when the viewer controlling the mouse view
   is not the main viewer.
+- Updated some Vrui documentation:
+  Documentation/index.html
+  Documentation/UsingVruiApplications.html
