@@ -2,7 +2,7 @@
 MouseCameraTool - Tool class to change a window's view into a 3D
 environment by manipulating the positions, orientations, and sizes of a
 viewer/screen pair instead of manipulating the navigation transformation.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -58,8 +58,8 @@ MouseCameraToolFactory::Configuration::Configuration(void)
 	 scalingDirection(Vector(0,-1,0)),
 	 dollyFactor(1),
 	 scaleFactor(4),
-	 wheelDollyFactor(Scalar(0.5)),
-	 wheelScaleFactor(Scalar(0.5)),
+	 wheelDollyFactor(Scalar(0.25)),
+	 wheelScaleFactor(Math::pow(Scalar(0.5),Scalar(0.25))),
 	 spinThreshold(getUiSize()/getDisplaySize()),
 	 keepScreenLevel(true),
 	 fovScale(2),
@@ -117,8 +117,7 @@ MouseCameraToolFactory::MouseCameraToolFactory(ToolManager& toolManager)
 	:ToolFactory("MouseCameraTool",toolManager)
 	{
 	/* Initialize tool layout: */
-	layout.setNumButtons(6);
-	layout.setNumValuators(1);
+	layout.setNumButtons(8);
 	
 	/* Insert class into class hierarchy: */
 	ToolFactory* toolFactory=toolManager.loadClass("UtilityTool");
@@ -158,25 +157,19 @@ const char* MouseCameraToolFactory::getButtonFunction(int buttonSlotIndex) const
 			return "Zoom/Dolly Switch";
 		
 		case 3:
-			return "Main Viewer View";
+			return "Quick Zoom/Dolly In";
 		
 		case 4:
-			return "Show Frustum";
+			return "Quick Zoom/Dolly Out";
 		
 		case 5:
+			return "Main Viewer View";
+		
+		case 6:
+			return "Show Frustum";
+		
+		case 7:
 			return "Reset Camera";
-		}
-	
-	/* Never reached; just to make compiler happy: */
-	return 0;
-	}
-
-const char* MouseCameraToolFactory::getValuatorFunction(int valuatorSlotIndex) const
-	{
-	switch(valuatorSlotIndex)
-		{
-		case 0:
-			return "Quick Zoom/Dolly";
 		}
 	
 	/* Never reached; just to make compiler happy: */
@@ -345,7 +338,8 @@ MouseCameraTool::MouseCameraTool(const ToolFactory* factory,const ToolInputAssig
 	 viewer(0),viewerDevice(0),
 	 showFrustum(false),
 	 lockToMainViewer(false),
-	 dolly(configuration.invertDolly),cameraMode(IDLE)
+	 dolly(configuration.invertDolly),cameraMode(IDLE),
+	 wheelTickSum(0)
 	{
 	}
 
@@ -412,7 +406,7 @@ void MouseCameraTool::initialize(void)
 	showFrustum=configuration.showFrustum;
 	
 	lockToMainViewer=false;
-	dolly=false;
+	dolly=configuration.invertDolly;
 	cameraMode=IDLE;
 	}
 
@@ -452,6 +446,8 @@ void MouseCameraTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCall
 					{
 					case IDLE:
 					case SPINNING:
+					case DOLLYING_WHEEL:
+					case SCALING_WHEEL:
 						startRotating();
 						break;
 					
@@ -496,6 +492,8 @@ void MouseCameraTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCall
 					{
 					case IDLE:
 					case SPINNING:
+					case DOLLYING_WHEEL:
+					case SCALING_WHEEL:
 						startPanning();
 						break;
 					
@@ -578,7 +576,55 @@ void MouseCameraTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCall
 				}
 			break;
 		
-		case 3: // Attach to main viewer
+		case 3: // Quick zoom/dolly in
+		case 4: // Quick zoom/dolly out
+			if(cbData->newButtonState)
+				{
+				/* Act depending on this tool's current state: */
+				switch(cameraMode)
+					{
+					case IDLE:
+					case SPINNING:
+						if(dolly)
+							{
+							/* Start normal dollying: */
+							startDollying();
+							
+							/* Change to wheel dollying mode: */
+							cameraMode=DOLLYING_WHEEL;
+							}
+						else
+							{
+							/* Start normal scaling: */
+							startScaling();
+							
+							/* Change to wheel scaling mode: */
+							cameraMode=SCALING_WHEEL;
+							}
+						
+						wheelTickSum=0;
+						break;
+					
+					default:
+						/* This can definitely happen; just ignore the event */
+						break;
+					}
+				
+				if(cameraMode==DOLLYING_WHEEL||cameraMode==SCALING_WHEEL)
+					{
+					/* Add another wheel click: */
+					if(buttonSlotIndex==3)
+						++wheelTickSum;
+					else
+						--wheelTickSum;
+					
+					/* Set an end time for the wheel operation: */
+					wheelEndTime=getApplicationTime()+1.0/3.0;
+					}
+				}
+			break;
+		
+		case 5: // Attach to main viewer
 			if(cbData->newButtonState)
 				{
 				/* Toggle the main viewer tracking state: */
@@ -592,12 +638,12 @@ void MouseCameraTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCall
 				}
 			break;
 		
-		case 4: // Show frustum
+		case 6: // Show frustum
 			if(cbData->newButtonState)
 				showFrustum=!showFrustum;
 			break;
 		
-		case 5: // Reset camera
+		case 7: // Reset camera
 			if(cbData->newButtonState)
 				{
 				/* Reset the camera transform to identity: */
@@ -607,57 +653,6 @@ void MouseCameraTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCall
 				applyCameraState();
 				}
 			break;
-		}
-	}
-
-void MouseCameraTool::valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData)
-	{
-	currentValue=Scalar(cbData->newValuatorValue);
-	if(currentValue!=Scalar(0))
-		{
-		/* Act depending on this tool's current state: */
-		switch(cameraMode)
-			{
-			case IDLE:
-			case SPINNING:
-				if(dolly)
-					{
-					/* Start normal dollying: */
-					startDollying();
-					
-					/* Change to wheel dollying mode: */
-					cameraMode=DOLLYING_WHEEL;
-					}
-				else
-					{
-					/* Start normal scaling: */
-					startScaling();
-					
-					/* Change to wheel scaling mode: */
-					cameraMode=SCALING_WHEEL;
-					}
-				break;
-			
-			default:
-				/* This can definitely happen; just ignore the event */
-				break;
-			}
-		}
-	else
-		{
-		/* Act depending on this tool's current state: */
-		switch(cameraMode)
-			{
-			case DOLLYING_WHEEL:
-			case SCALING_WHEEL:
-				/* Go to idle mode: */
-				cameraMode=IDLE;
-				break;
-			
-			default:
-				/* This can definitely happen; just ignore the event */
-				break;
-			}
 		}
 	}
 
@@ -682,21 +677,35 @@ void MouseCameraTool::frame(void)
 		return;
 		}
 	
-	if(cameraMode==DOLLYING_WHEEL)
+	if(cameraMode==DOLLYING_WHEEL||cameraMode==SCALING_WHEEL)
 		{
-		/* Calculate an incremental translation vector: */
-		Vector trans=viewer->getHeadPosition()-focus;
-		trans*=configuration.wheelDollyFactor*currentValue;
+		if(getApplicationTime()>=wheelEndTime)
+			{
+			/* Go back to idle mode: */
+			cameraMode=IDLE;
+			}
+		else if(cameraMode==DOLLYING_WHEEL)
+			{
+			/* Calculate an incremental translation vector: */
+			Vector trans=viewer->getHeadPosition()-focus;
+			trans*=configuration.wheelDollyFactor*Scalar(wheelTickSum);
+			
+			/* Update the screen center: */
+			focus+=trans;
+			applyCameraState();
+			}
+		else
+			{
+			/* Calculate an incremental scale factor: */
+			scale*=Math::pow(configuration.wheelScaleFactor,-Scalar(wheelTickSum));
+			applyCameraState();
+			}
 		
-		/* Update the screen center: */
-		focus+=trans;
-		applyCameraState();
-		}
-	else if(cameraMode==SCALING_WHEEL)
-		{
-		/* Calculate an incremental scale factor: */
-		scale*=Math::pow(configuration.wheelScaleFactor,-currentValue);
-		applyCameraState();
+		/* Reset the wheel tick counter for the next frame: */
+		wheelTickSum=0;
+		
+		/* Schedule another update for when the wheel operation times out: */
+		Vrui::scheduleUpdate(wheelEndTime);
 		}
 	else
 		{

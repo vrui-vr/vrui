@@ -9185,6 +9185,8 @@ Vrui-15.0-001:
   - Also created option to write sound directly to an Opus-encoded Ogg
     file.
 - Improved the sphere intersection code in the impostor shader for
-  SceneGraph::Sphere.
+  SceneGraph::Sphere; went from working reasonably well to working very
+  well to the point that geometry-based spheres may be obsolete.
 - Added support for clipping planes and multiple light sources for
   SceneGraph::SphereNode impostor rendering.
+- Updated Vrui::MouseCameraTool to changed mouse wheel representation.

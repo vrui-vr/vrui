@@ -2,7 +2,7 @@
 MouseCameraTool - Tool class to change a window's view into a 3D
 environment by manipulating the positions, orientations, and sizes of a
 viewer/screen pair instead of manipulating the navigation transformation.
-Copyright (c) 2018-2022 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -91,7 +91,6 @@ class MouseCameraToolFactory:public ToolFactory
 	/* Methods from ToolFactory: */
 	virtual const char* getName(void) const;
 	virtual const char* getButtonFunction(int buttonSlotIndex) const;
-	virtual const char* getValuatorFunction(int valuatorSlotIndex) const;
 	virtual Tool* createTool(const ToolInputAssignment& inputAssignment) const;
 	virtual void destroyTool(Tool* tool) const;
 	};
@@ -147,7 +146,8 @@ class MouseCameraTool:public UtilityTool
 	bool dolly; // Flag whether to dolly instead of scale
 	CameraMode cameraMode; // The tool's current camera mode
 	std::pair<bool,Point> lastInteractionPos; // Validity and position of interaction position during previous frame
-	Scalar currentValue; // Value of the associated valuator
+	int wheelTickSum; // Sum of wheel ticks that were received in the current frame
+	double wheelEndTime; // Time at which the current wheel operation will end
 	
 	/* Private methods: */
 	std::pair<bool,Point> calcInteractionPos(void) const; // Intersects the input device's pointing ray with the controlled screen; boolean is false if intersection is invalid
@@ -168,7 +168,6 @@ class MouseCameraTool:public UtilityTool
 	virtual void deinitialize(void); // Called right before a tool is destroyed during runtime
 	virtual const ToolFactory* getFactory(void) const;
 	virtual void buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData);
-	virtual void valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData);
 	virtual void frame(void);
 	virtual void display(GLContextData& contextData) const;
 	};
