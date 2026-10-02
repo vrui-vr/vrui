@@ -21,9 +21,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ***********************************************************************/
 
 uniform vec3 sphereCenter; // Vector from eye position to sphere center in eye coordinates
-uniform vec3 nadir; // Vector from eye position to point on sphere along the vector from eye position to sphere center
-uniform float bnd2,b2c2;
 uniform float sphereRadius; // Sphere radius in eye coordinate units
+uniform float c; // Constant coefficient of the sphere intersection formula; does not depend on varying rayDirection
 uniform samplerCube texture; // Sampler for the cube map texture
 uniform mat3 textureMatrix; // Matrix to fix texture coordinates in model space
 
@@ -130,14 +129,13 @@ void accumulateSpotLight(in int lightIndex,in vec4 vertexEc,in vec3 normalEc,ino
 void main()
 	{
 	/* Intersect the ray from the eye position to the pixel position with the sphere: */
-	float rdm=sqrt(dot(rayDirection,rayDirection));
-	float rdn=dot(rayDirection,nadir);
-	float bcosa=rdn*bnd2/rdm;
-	float d2=bcosa*bcosa-b2c2;
-	if(d2<0.0)
+	float a=dot(rayDirection,rayDirection);
+	float b=-2.0*dot(sphereCenter,rayDirection);
+	float disc=b*b-4.0*a*c;
+	if(disc<0.0)
 		discard;
-	float a=bcosa-sqrt(d2);
-	vec3 position=rayDirection*(a/rdm);
+	float lambda=(2.0*c)/(sqrt(disc)-b);
+	vec3 position=rayDirection*lambda;
 	vec3 normal=(position-sphereCenter)/sphereRadius;
 	vec4 vertexEc=vec4(position,1.0);
 	

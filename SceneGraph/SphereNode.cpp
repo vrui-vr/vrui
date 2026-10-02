@@ -658,14 +658,12 @@ void SphereNode::glRenderAction(int appearanceRequirementMask,GLRenderState& ren
 				
 				/* Query the locations of the shader's uniform variables: */
 				sns.setUniformLocation(shaderIndex,0,"sphereCenter");
-				sns.setUniformLocation(shaderIndex,1,"nadir");
-				sns.setUniformLocation(shaderIndex,2,"bnd2");
-				sns.setUniformLocation(shaderIndex,3,"b2c2");
-				sns.setUniformLocation(shaderIndex,4,"sphereRadius");
+				sns.setUniformLocation(shaderIndex,1,"sphereRadius");
+				sns.setUniformLocation(shaderIndex,2,"c");
 				if(shaderIndex>0)
 					{
-					sns.setUniformLocation(shaderIndex,5,"texture");
-					sns.setUniformLocation(shaderIndex,6,"textureMatrix");
+					sns.setUniformLocation(shaderIndex,3,"texture");
+					sns.setUniformLocation(shaderIndex,4,"textureMatrix");
 					}
 				}
 			
@@ -673,18 +671,16 @@ void SphereNode::glRenderAction(int appearanceRequirementMask,GLRenderState& ren
 			
 			/* Set the shader's uniform variables: */
 			sns.uniform3fv(shaderIndex,0,1,Geometry::Vector<GLfloat,3>(eyeCenter).getComponents());
-			sns.uniform3fv(shaderIndex,1,1,Geometry::Vector<GLfloat,3>(eyeNadir).getComponents());
-			sns.uniform1f(shaderIndex,2,GLfloat(eyeDist/(eyeDist-eyeRadius)));
-			sns.uniform1f(shaderIndex,3,GLfloat(eyeDist2-eyeRadius2));
-			sns.uniform1f(shaderIndex,4,GLfloat(eyeRadius));
+			sns.uniform1f(shaderIndex,1,GLfloat(eyeRadius));
+			sns.uniform1f(shaderIndex,2,GLfloat(eyeDist2-eyeRadius2));
 			if(shaderIndex>0)
 				{
-				sns.uniform1i(shaderIndex,5,0);
+				sns.uniform1i(shaderIndex,3,0);
 				
 				/* Upload the original model transformation's rotation as a texture matrix: */
 				Geometry::Matrix<GLfloat,3,3> modelRotation;
 				Geometry::invert(modelTransform.getRotation()).writeMatrix(modelRotation);
-				sns.uniformMatrix3fv(shaderIndex,6,1,GL_TRUE,modelRotation.getEntries());
+				sns.uniformMatrix3fv(shaderIndex,4,1,GL_TRUE,modelRotation.getEntries());
 				}
 			
 			/* Draw a triangle fan from the sphere's nadir point to the horizon disk that includes the entire visible spherical cap: */
@@ -784,7 +780,7 @@ void SphereNode::initContext(GLContextData& contextData) const
 	/* Create a namespace to hold the GLSL shaders: */
 	static const unsigned int numShaderUniforms[3]=
 		{
-		5,7,7
+		3,5,5
 		};
 	std::pair<GLShaderManager::Namespace&,bool> nscr=contextData.getShaderManager()->createNamespace("SceneGraph/SphereNode",3,numShaderUniforms);
 	GLShaderManager::Namespace& sns=nscr.first;

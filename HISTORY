@@ -9184,3 +9184,5 @@ Vrui-15.0-001:
   raw ALSA device.
   - Also created option to write sound directly to an Opus-encoded Ogg
     file.
+- Improved the sphere intersection code in the impostor shader for
+  SceneGraph::Sphere.
