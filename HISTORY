@@ -9186,3 +9186,5 @@ Vrui-15.0-001:
     file.
 - Improved the sphere intersection code in the impostor shader for
   SceneGraph::Sphere.
+- Added support for clipping planes and multiple light sources for
+  SceneGraph::SphereNode impostor rendering.

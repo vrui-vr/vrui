@@ -22,12 +22,20 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 
 #version 130
 
+uniform bool clipPlaneEnableds[gl_MaxClipPlanes];
+
 varying vec3 rayDirection;
+varying float gl_ClipDistance[gl_MaxClipDistances];
 
 void main()
 	{
 	/* Pass through the vector from the eye position, which is at the origin, to the pixel position in eye coordinates: */
 	rayDirection=gl_Vertex.xyz;
+	
+	/* Calculate clipping plane distances for all enabled clipping planes: */
+	for(int clipPlaneIndex=0;clipPlaneIndex<gl_MaxClipPlanes;++clipPlaneIndex)
+		if(clipPlaneEnableds[clipPlaneIndex])
+			gl_ClipDistance[clipPlaneIndex]=dot(gl_ClipPlane[clipPlaneIndex],gl_Vertex);
 	
 	/* Use standard vertex position: */
 	gl_Position=ftransform();

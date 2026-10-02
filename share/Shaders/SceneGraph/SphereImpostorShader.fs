@@ -20,6 +20,7 @@ with the Simple Scene Graph Renderer; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 ***********************************************************************/
 
+uniform bool lightEnableds[gl_MaxLights];
 uniform vec3 sphereCenter; // Vector from eye position to sphere center in eye coordinates
 uniform float sphereRadius; // Sphere radius in eye coordinate units
 uniform float c; // Constant coefficient of the sphere intersection formula; does not depend on varying rayDirection
@@ -146,9 +147,8 @@ void main()
 	vec4 specularColor=vec4(0.0,0.0,0.0,1.0);
 	
 	/* Accumulate per-lightsource contributions: */
-	// for(int lightIndex=0;lightIndex<gl_MaxLights;++lightIndex)
-	for(int lightIndex=0;lightIndex<1;++lightIndex)
-		// if(lightEnableds[lightIndex])
+	for(int lightIndex=0;lightIndex<gl_MaxLights;++lightIndex)
+		if(lightEnableds[lightIndex])
 			{
 			if(gl_LightSource[lightIndex].position.w==0.0)
 				accumulateDirectionalLight(lightIndex,vertexEc,normal,ambientDiffuseColor,specularColor);

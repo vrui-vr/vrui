@@ -26,6 +26,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Math/Math.h>
 #include <GL/gl.h>
 #include <GL/GLVertexArrayParts.h>
+#include <GL/GLClipPlaneTracker.h>
+#include <GL/GLLightTracker.h>
 #include <GL/GLContextData.h>
 #include <GL/GLExtensionManager.h>
 #include <GL/Extensions/GLARBVertexBufferObject.h>
@@ -657,30 +659,37 @@ void SphereNode::glRenderAction(int appearanceRequirementMask,GLRenderState& ren
 				sns.setShader(shaderIndex,shader);
 				
 				/* Query the locations of the shader's uniform variables: */
-				sns.setUniformLocation(shaderIndex,0,"sphereCenter");
-				sns.setUniformLocation(shaderIndex,1,"sphereRadius");
-				sns.setUniformLocation(shaderIndex,2,"c");
+				sns.setUniformLocation(shaderIndex,0,"clipPlaneEnableds");
+				sns.setUniformLocation(shaderIndex,1,"lightEnableds");
+				sns.setUniformLocation(shaderIndex,2,"sphereCenter");
+				sns.setUniformLocation(shaderIndex,3,"sphereRadius");
+				sns.setUniformLocation(shaderIndex,4,"c");
 				if(shaderIndex>0)
 					{
-					sns.setUniformLocation(shaderIndex,3,"texture");
-					sns.setUniformLocation(shaderIndex,4,"textureMatrix");
+					sns.setUniformLocation(shaderIndex,5,"texture");
+					sns.setUniformLocation(shaderIndex,6,"textureMatrix");
 					}
 				}
 			
+			/* Bind the shader program: */
 			renderState.bindShader(shader);
 			
+			/* Upload the arrays of enabled clipping planes and light sources: */
+			renderState.contextData.getClipPlaneTracker()->uploadClipPlaneEnableds(sns.getUniformLocation(shaderIndex,0));
+			renderState.contextData.getLightTracker()->uploadLightEnableds(sns.getUniformLocation(shaderIndex,1));
+			
 			/* Set the shader's uniform variables: */
-			sns.uniform3fv(shaderIndex,0,1,Geometry::Vector<GLfloat,3>(eyeCenter).getComponents());
-			sns.uniform1f(shaderIndex,1,GLfloat(eyeRadius));
-			sns.uniform1f(shaderIndex,2,GLfloat(eyeDist2-eyeRadius2));
+			sns.uniform3fv(shaderIndex,2,1,Geometry::Vector<GLfloat,3>(eyeCenter).getComponents());
+			sns.uniform1f(shaderIndex,3,GLfloat(eyeRadius));
+			sns.uniform1f(shaderIndex,4,GLfloat(eyeDist2-eyeRadius2));
 			if(shaderIndex>0)
 				{
-				sns.uniform1i(shaderIndex,3,0);
+				sns.uniform1i(shaderIndex,5,0);
 				
 				/* Upload the original model transformation's rotation as a texture matrix: */
 				Geometry::Matrix<GLfloat,3,3> modelRotation;
 				Geometry::invert(modelTransform.getRotation()).writeMatrix(modelRotation);
-				sns.uniformMatrix3fv(shaderIndex,4,1,GL_TRUE,modelRotation.getEntries());
+				sns.uniformMatrix3fv(shaderIndex,6,1,GL_TRUE,modelRotation.getEntries());
 				}
 			
 			/* Draw a triangle fan from the sphere's nadir point to the horizon disk that includes the entire visible spherical cap: */
@@ -780,7 +789,7 @@ void SphereNode::initContext(GLContextData& contextData) const
 	/* Create a namespace to hold the GLSL shaders: */
 	static const unsigned int numShaderUniforms[3]=
 		{
-		3,5,5
+		5,7,7
 		};
 	std::pair<GLShaderManager::Namespace&,bool> nscr=contextData.getShaderManager()->createNamespace("SceneGraph/SphereNode",3,numShaderUniforms);
 	GLShaderManager::Namespace& sns=nscr.first;
