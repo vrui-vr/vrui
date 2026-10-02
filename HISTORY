@@ -9190,3 +9190,6 @@ Vrui-15.0-001:
 - Added support for clipping planes and multiple light sources for
   SceneGraph::SphereNode impostor rendering.
 - Updated Vrui::MouseCameraTool to changed mouse wheel representation.
+- Added viewerName setting to Vrui::MouseNavigationTool to make mouse
+  navigation work as expected when the viewer controlling the mouse view
+  is not the main viewer.

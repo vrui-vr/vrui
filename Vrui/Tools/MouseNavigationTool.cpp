@@ -23,6 +23,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Vrui/Tools/MouseNavigationTool.h>
 
+#include <Misc/MessageLogger.h>
 #include <Misc/StandardValueCoders.h>
 #include <Misc/ConfigurationFile.h>
 #include <Math/Math.h>
@@ -55,7 +56,7 @@ MouseNavigationToolFactory::Configuration::Configuration(void)
 	 scalingDirection(-getUpDirection()),
 	 dollyFactor(Scalar(1)),
 	 scaleFactor(getDisplaySize()/Scalar(4)),
-	 wheelDollyFactor(-getDisplaySize()*Scalar(0.5)),
+	 wheelDollyFactor(-getDisplaySize()*Scalar(0.25)),
 	 wheelScaleFactor(Math::pow(Scalar(0.5),Scalar(0.25))),
 	 spinThreshold(getUiSize()*Scalar(1)),
 	 showScreenCenter(true)
@@ -77,6 +78,7 @@ void MouseNavigationToolFactory::Configuration::read(const Misc::ConfigurationFi
 	cfs.updateValue("./wheelScaleFactor",wheelScaleFactor);
 	cfs.updateValue("./spinThreshold",spinThreshold);
 	cfs.updateValue("./showScreenCenter",showScreenCenter);
+	cfs.updateValue("./viewerName",viewerName);
 	}
 
 void MouseNavigationToolFactory::Configuration::write(Misc::ConfigurationFileSection& cfs) const
@@ -94,6 +96,7 @@ void MouseNavigationToolFactory::Configuration::write(Misc::ConfigurationFileSec
 	cfs.storeValue("./wheelScaleFactor",wheelScaleFactor);
 	cfs.storeValue("./spinThreshold",spinThreshold);
 	cfs.storeValue("./showScreenCenter",showScreenCenter);
+	cfs.storeValue("./viewerName",viewerName);
 	}
 
 /*******************************************
@@ -273,7 +276,7 @@ void MouseNavigationTool::startDollying(void)
 	
 	/* Calculate the dollying direction: */
 	if(configuration.dollyCenter)
-		dollyDirection=Geometry::normalize(getMainViewer()->getHeadPosition()-getDisplayCenter());
+		dollyDirection=Geometry::normalize(viewer->getHeadPosition()-getDisplayCenter());
 	else
 		dollyDirection=-getButtonDeviceRayDirection(0);
 	
@@ -312,7 +315,7 @@ void MouseNavigationTool::startScaling(void)
 MouseNavigationTool::MouseNavigationTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
 	:NavigationTool(factory,inputAssignment),
 	 configuration(MouseNavigationTool::factory->configuration),
-	 mouseAdapter(0),
+	 viewer(getMainViewer()),mouseAdapter(0),
 	 currentPos(Point::origin),
 	 dolly(configuration.invertDolly),navigationMode(IDLE),wheelTickSum(0)
 	{
@@ -332,6 +335,19 @@ void MouseNavigationTool::storeState(Misc::ConfigurationFileSection& configFileS
 
 void MouseNavigationTool::initialize(void)
 	{
+	/* Find the viewer with which this tool will be associated: */
+	if(!configuration.viewerName.empty())
+		{
+		viewer=findViewer(configuration.viewerName.c_str());
+		if(viewer==0)
+			{
+			Misc::sourcedConsoleWarning(__PRETTY_FUNCTION__,"Viewer %s not found; falling back to main viewer",configuration.viewerName.c_str());
+			viewer=getMainViewer();
+			}
+		}
+	else
+		viewer=getMainViewer();
+	
 	/* Check if any of the tool's input devices are mouse input devices: */
 	for(int buttonIndex=0;buttonIndex<layout.getNumButtons()&&mouseAdapter==0;++buttonIndex)
 		{
@@ -531,7 +547,6 @@ void MouseNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice::Button
 							startDollying();
 							
 							/* Change to wheel dollying mode: */
-							wheelTickSum=0;
 							navigationMode=DOLLYING_WHEEL;
 							}
 						else
@@ -540,9 +555,9 @@ void MouseNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice::Button
 							startScaling();
 							
 							/* Change to wheel scaling mode: */
-							wheelTickSum=0;
 							navigationMode=SCALING_WHEEL;
 							}
+						wheelTickSum=0;
 						}
 					break;
 				
@@ -560,7 +575,7 @@ void MouseNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice::Button
 					--wheelTickSum;
 				
 				/* Set an end time for the wheel operation: */
-				wheelNavEndTime=getApplicationTime()+0.5;
+				wheelNavEndTime=getApplicationTime()+1.0/3.0;
 				}
 			
 			break;

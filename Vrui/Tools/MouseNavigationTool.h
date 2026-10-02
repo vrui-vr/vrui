@@ -33,6 +33,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 /* Forward declarations: */
 class GLContextData;
 namespace Vrui {
+class Viewer;
 class InputDeviceAdapterMouse;
 }
 
@@ -63,6 +64,7 @@ class MouseNavigationToolFactory:public ToolFactory
 		Scalar wheelScaleFactor; // Scaling factor for one wheel tick
 		Scalar spinThreshold; // Distance the device has to be moved on the last step of rotation to activate spinning
 		bool showScreenCenter; // Flag whether to draw the center of the screen during navigation
+		std::string viewerName; // Name of the viewer with which tools will be associated; if empty, use main viewer
 		
 		/* Constructors and destructors: */
 		Configuration(void); // Creates default configuration
@@ -101,6 +103,7 @@ class MouseNavigationTool:public NavigationTool
 	/* Elements: */
 	static MouseNavigationToolFactory* factory; // Pointer to the factory object for this class
 	MouseNavigationToolFactory::Configuration configuration; // Private configuration of this tool
+	Viewer* viewer; // Viewer with which this tool is associated
 	InputDeviceAdapterMouse* mouseAdapter; // Pointer to mouse input device adapter (partially) controlling this tool, or null
 	
 	/* Transient navigation state: */

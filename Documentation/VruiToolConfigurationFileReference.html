@@ -1026,6 +1026,11 @@ The following lists all core Vrui tool classes, in the same hierarchical order i
 <TR><TH>Setting Tag</TH><TH>Setting Value Type</TH><TH>Default Value</TH><TH>Setting Description</TH></TR>
 
 <TR>
+<TD>viewerName</TD><TD><A HREF="#string">string</A></TD><TD>&quot;&quot;</TD>
+<TD>The name of the viewer that will control the mouse navigation tool's operation. If set to an empty string, will use the environment's main viewer.</TD>
+</TR>
+
+<TR>
 <TD>rotatePlaneOffset</TD><TD><A HREF="#number">number</A></TD><TD><A HREF="VruiConfigurationFileReference.html#displaySize">displaySize</A>/4.0</TD>
 <TD>The mouse navigation tool uses an offset plane formula to calculate the rotation axis based on the mouse position and mouse motion in screen coordinates. If the plane offset is zero, any mouse movement will rotate around the screen's z axis (roll); a large plane offset will favor rotation around the screen's x and y axes (yaw and pitch, respectively).</TD>
 </TR>
