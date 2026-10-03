@@ -9196,3 +9196,10 @@ Vrui-15.0-001:
 - Updated some Vrui documentation:
   Documentation/index.html
   Documentation/UsingVruiApplications.html
+- Moved a bunch of obsolete configurations from Vrui.cfg into separate
+  configuration files for archaeological purposes:
+  - KeckCAVES.cfg
+  - IdavDisplayWall.cfg
+  - LowCostVR.cfg
+  - RiftDK2.cfg (replacing whatever else was in there before)
+  - Removed RiftDK2 section from ControlWindow.cfg.
