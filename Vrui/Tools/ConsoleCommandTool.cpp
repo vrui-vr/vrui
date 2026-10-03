@@ -165,7 +165,7 @@ const ToolFactory* ConsoleCommandTool::getFactory(void) const
 
 void ConsoleCommandTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData)
 	{
-	if(cbData->newButtonState)
+	if(cbData->newButtonState&&!configuration.command.empty())
 		{
 		try
 			{
