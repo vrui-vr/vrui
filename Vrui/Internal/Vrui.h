@@ -411,6 +411,8 @@ struct VruiState
 	/* Pipe command callback methods: */
 	static void showMessageCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
 	static void resetViewCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
+	static void undoViewCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
+	static void redoViewCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
 	static void loadViewCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
 	static void saveViewCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);
 	static void loadInputGraphCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData);

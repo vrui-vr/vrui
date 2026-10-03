@@ -757,6 +757,8 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 	/* Install pipe command callbacks: */
 	commandDispatcher.addCommandCallback("showMessage",&VruiState::showMessageCommandCallback,this,"<message text>","Shows a text message to the user");
 	commandDispatcher.addCommandCallback("resetView",&VruiState::resetViewCommandCallback,this,0,"Resets the view");
+	commandDispatcher.addCommandCallback("undoView",&VruiState::undoViewCommandCallback,this,0,"Undoes the most recent navigation sequence");
+	commandDispatcher.addCommandCallback("redoView",&VruiState::redoViewCommandCallback,this,0,"Re-does the most recently undone navigation sequence");
 	commandDispatcher.addCommandCallback("loadView",&VruiState::loadViewCommandCallback,this,"<viewpoint file name>","Loads a viewpoint file");
 	commandDispatcher.addCommandCallback("saveView",&VruiState::saveViewCommandCallback,this,"<viewpoint file name>","Saves a viewpoint file");
 	commandDispatcher.addCommandCallback("loadInputGraph",&VruiState::loadInputGraphCommandCallback,this,"<input graph file name>","Loads an input graph file");
@@ -2094,6 +2096,74 @@ void VruiState::resetViewCommandCallback(const char* argumentBegin,const char* a
 		{
 		/* Print an error message: */
 		std::cout<<"resetView: Cannot reset view because navigation transformation is locked"<<std::endl;
+		}
+	}
+
+void VruiState::undoViewCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData)
+	{
+	VruiState* thisPtr=static_cast<VruiState*>(userData);
+	
+	/* Don't undo navigation if there is an active navigation tool: */
+	if(thisPtr->activeNavigationTool==0)
+		{
+		/* Check if there is an undoable navigation sequence in the undo buffer: */
+		if(thisPtr->undoViewButton->isEnabled())
+			{
+			/* Move the current undo buffer slot to the previous navigation transformation: */
+			--thisPtr->navigationUndoCurrent;
+			
+			/* Set the navigation transformation: */
+			setNavigationTransformation(*thisPtr->navigationUndoCurrent);
+			
+			/* Disable the undo button if there are no more undos and enable the redo button: */
+			thisPtr->undoViewButton->setEnabled(thisPtr->navigationUndoCurrent!=thisPtr->navigationUndoBuffer.begin());
+			thisPtr->redoViewButton->setEnabled(true);
+			}
+		else
+			{
+			/* Print an error message: */
+			std::cout<<"undoView: Cannot undo view because undo buffer is empty"<<std::endl;
+			}
+		}
+	else
+		{
+		/* Print an error message: */
+		std::cout<<"undoView: Cannot undo view because navigation transformation is locked"<<std::endl;
+		}
+	}
+
+void VruiState::redoViewCommandCallback(const char* argumentBegin,const char* argumentEnd,void* userData)
+	{
+	VruiState* thisPtr=static_cast<VruiState*>(userData);
+	
+	/* Don't redo navigation if there is an active navigation tool: */
+	if(thisPtr->activeNavigationTool==0)
+		{
+		/* Check if there is a redoable navigation sequence in the undo buffer: */
+		if(thisPtr->redoViewButton->isEnabled())
+			{
+			/* Move the current undo buffer slot to the next navigation transformation: */
+			++thisPtr->navigationUndoCurrent;
+			
+			/* Set the navigation transformation: */
+			setNavigationTransformation(*thisPtr->navigationUndoCurrent);
+			
+			/* Enable the undo button and disable the redo button if there are no more redos: */
+			Misc::RingBuffer<NavTransform>::iterator lastIt=thisPtr->navigationUndoBuffer.end();
+			--lastIt;
+			thisPtr->undoViewButton->setEnabled(true);
+			thisPtr->redoViewButton->setEnabled(thisPtr->navigationUndoCurrent!=lastIt);
+			}
+		else
+			{
+			/* Print an error message: */
+			std::cout<<"redoView: Cannot redo view because redo buffer is empty"<<std::endl;
+			}
+		}
+	else
+		{
+		/* Print an error message: */
+		std::cout<<"redoView: Cannot redo view because navigation transformation is locked"<<std::endl;
 		}
 	}
 

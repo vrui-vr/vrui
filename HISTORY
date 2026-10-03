@@ -9203,3 +9203,9 @@ Vrui-15.0-001:
   - LowCostVR.cfg
   - RiftDK2.cfg (replacing whatever else was in there before)
   - Removed RiftDK2 section from ControlWindow.cfg.
+- Added Vrui::ConsoleCommandTool class to send text commands to Vrui's
+  command dispatcher when an input device button is pressed.
+- Added undoView and redoView console commands to Vrui::VruiState.
+- Added tools to undo and redo view via console commands to default
+  tools in Desktop section in Vrui.cfg and to OpenVR section in
+  ControlWindow.cfg.
