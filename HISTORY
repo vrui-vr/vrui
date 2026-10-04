@@ -9209,3 +9209,8 @@ Vrui-15.0-001:
 - Added tools to undo and redo view via console commands to default
   tools in Desktop section in Vrui.cfg and to OpenVR section in
   ControlWindow.cfg.
+- Added timers to VideoViewer example program to save video frames
+  precisely at a specified frame rate, no matter how fast or with what
+  jitter the video source provides them.
+  - Also added ability to save audio that is precisely synchronized with
+    the saved video frames.

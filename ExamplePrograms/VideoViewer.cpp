@@ -26,13 +26,17 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <iostream>
 #include <iomanip>
 #include <Misc/StringPrintf.h>
-#include <Misc/Timer.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/CommandLineParser.h>
 #include <Threads/FunctionCalls.h>
+#include <Threads/Timer.h>
+#include <Threads/WorkerPool.h>
+#include <IO/OpenFile.h>
 #include <Math/Math.h>
 #include <Geometry/Point.h>
 #include <Geometry/Vector.h>
+#include <Sound/SoundDataFormat.h>
+#include <Sound/WAVFile.h>
 #include <GL/gl.h>
 #include <GL/GLMaterial.h>
 #include <Images/BaseImage.h>
@@ -49,6 +53,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Video/ViewerComponent.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/Application.h>
+#include <Vrui/SoundContext.h>
 
 #if SYSTEM_HAVE_VIBE
 #include <libvibe++/ViBe.h>
@@ -79,8 +84,25 @@ class VideoViewer:public Vrui::Application
 		public:
 		SaveFrameRequest(const Images::BaseImage& sImage,GLMotif::FileSelectionHelper& saveVideoFrameHelper);
 		~SaveFrameRequest(void);
+		};
+	
+	class SaveFrameJob:public Threads::FunctionCall<int> // Class to submit continuous frame saving jobs to the worker pool
+		{
+		/* Elements: */
+		private:
+		Images::BaseImage frame; // The video frame to save
+		const char* frameNameTemplate; // String to the name template for saved frames
+		unsigned int frameIndex; // Index of this video frame
 		
-		/* Methods: */
+		/* Constructors and destructors: */
+		public:
+		SaveFrameJob(const Images::BaseImage& sFrame,const char* sFrameNameTemplate,unsigned int sFrameIndex) // Elementwise constructor
+			:frame(sFrame),frameNameTemplate(sFrameNameTemplate),frameIndex(sFrameIndex)
+			{
+			}
+		
+		/* Methods from class Threads::FunctionCall<int>: */
+		virtual void operator()(int);
 		};
 	
 	/* Elements: */
@@ -92,10 +114,14 @@ class VideoViewer:public Vrui::Application
 	bool smoothPixels; // Flag to enable bilinear interpolation
 	bool mirror[2]; // Flag whether to mirror video frames horizontally or vertically, respectively
 	GLMotif::FileSelectionHelper saveVideoFrameHelper; // Helper object to select file names to save video frames
-	volatile bool saveVideoFrames; // Flag to save video frames to disk as they arrive
-	Misc::Timer saveVideoTimer; // A free-running timer to time-stamp saved video frames
+	bool saveVideoFrames; // Flag to save video frames to disk as they arrive
 	std::string saveVideoFrameNameTemplate; // Printf-style template to save video frames
+	double saveVideoFrameRate; // Frame rate to save video frames in frames/second
+	Threads::TimerOwner saveVideoFrameTimer; // Timer to save video frames at highly regular intervals for sound synchronization
 	unsigned int saveVideoNextFrameIndex; // Index for the next video frame to be saved
+	std::string soundFileName; // Name of a sound file to which to record sound while saving video frames
+	Vrui::SoundContext::RecordingCallbackPtr recordingCallback; // A callback function receiving audio data from Vrui's recording context
+	Sound::WAVFile* wavFile; // A WAV file to record audio while saving video frames
 	bool paused; // Flag to disable updates to the viewer's current image
 	GLMotif::PopupMenu* mainMenu; // The program's main menu
 	
@@ -103,6 +129,8 @@ class VideoViewer:public Vrui::Application
 	void videoFrameCallback(const Images::BaseImage& image); // Callback receiving incoming video frames
 	void videoFormatChangedCallback(const Video::VideoDataFormat& format); // Callback called when the streamed video format changes
 	void videoFormatSizeChangedCallback(const Video::VideoDataFormat& format); // Callback called when the streamed video format's frame size changes
+	void saveVideoFrameTimerCallback(Threads::TimerEvent& event); // Callback called when it's time so save the current video frame
+	void soundRecordingCallback(const Vrui::SoundContext::RecordingCallbackData& cbData); // Callback called when new audio data has been recorded
 	void showVideoDevicesDialogCallback(Misc::CallbackData* cbData); // Method to pop up the video device selection dialog
 	void showControlPanelCallback(Misc::CallbackData* cbData); // Method to pop up the video device's control panel
 	GLMotif::PopupMenu* createMainMenu(void); // Creates the program's main menu
@@ -166,17 +194,33 @@ VideoViewer::SaveFrameRequest::~SaveFrameRequest(void)
 		fileSelectionDialog->close();
 	}
 
+/******************************************
+Methods of class VideoViewer::SaveFrameJob:
+******************************************/
+
+void VideoViewer::SaveFrameJob::operator()(int)
+	{
+	/* Generate the file name for this video frame: */
+	std::string frameFileName=Misc::stringPrintf(frameNameTemplate,frameIndex);
+	
+	try
+		{
+		/* Convert the frame to RGB and save it: */
+		Images::writeImageFile(Images::RGBImage(frame.dropAlpha().toRgb().toUInt8()),frameFileName.c_str());
+		}
+	catch(const std::runtime_error& err)
+		{
+		/* Show an error message and carry on: */
+		Misc::formattedConsoleError("VideoViewer: Cannot save video frame to file %s due to exception %s",frameFileName.c_str(),err.what());
+		}
+	}
+
 /****************************
 Methods of class VideoViewer:
 ****************************/
 
 void VideoViewer::videoFrameCallback(const Images::BaseImage& image)
 	{
-	double timeStamp=saveVideoTimer.peekTime();
-	
-	/* Wake up the main loop: */
-	Vrui::requestUpdate();
-	
 	#if SYSTEM_HAVE_VIBE
 	
 	/* Check if the video stream changed format: */
@@ -214,28 +258,8 @@ void VideoViewer::videoFrameCallback(const Images::BaseImage& image)
 	
 	#endif
 	
-	if(saveVideoFrames)
-		{
-		/* Create a filename for the new video frame: */
-		std::string videoFrameFileName=Misc::stringPrintf(saveVideoFrameNameTemplate.c_str(),saveVideoNextFrameIndex);
-		
-		try
-			{
-			/* Save the new video frame: */
-			Images::RGBImage saveImage(image);
-			std::cout<<"Saving frame "<<videoFrameFileName<<" at "<<timeStamp*1000.0<<" ms..."<<std::flush;
-			Images::writeImageFile(saveImage,videoFrameFileName.c_str());
-			std::cout<<" done"<<std::endl;
-			
-			/* Increment the frame counter: */
-			++saveVideoNextFrameIndex;
-			}
-		catch(const std::runtime_error& err)
-			{
-			/* Show an error message and carry on: */
-			Misc::formattedUserError("VideoViewer: Unable to save frame to file %s due to exception %s",videoFrameFileName.c_str(),err.what());
-			}
-		}
+	/* Wake up the main loop: */
+	Vrui::requestUpdate();
 	}
 
 void VideoViewer::videoFormatChangedCallback(const Video::VideoDataFormat& format)
@@ -248,6 +272,34 @@ void VideoViewer::videoFormatSizeChangedCallback(const Video::VideoDataFormat& f
 	{
 	/* Recenter the view on the new video stream: */
 	resetNavigation();
+	}
+
+void VideoViewer::saveVideoFrameTimerCallback(Threads::TimerEvent& event)
+	{
+	std::cout<<"Saving video frame "<<saveVideoNextFrameIndex<<std::endl;
+	
+	/* Call the viewer component's frame() method early to get access to the most recently received video frame: */
+	/* (this is idempotent when later called from the actual frame() method, so it's okay) */
+	viewer->frame();
+	
+	/* Submit a job to the worker pool to save the viewer component's most recent video frame: */
+	Threads::WorkerPool::submitJob(*new SaveFrameJob(viewer->getCurrentFrame(),saveVideoFrameNameTemplate.c_str(),saveVideoNextFrameIndex));
+	
+	/* Increment the frame counter: */
+	++saveVideoNextFrameIndex;
+	}
+
+void VideoViewer::soundRecordingCallback(const Vrui::SoundContext::RecordingCallbackData& cbData)
+	{
+	/* Hand the received packet of PCM data to the WAV file sink: */
+	wavFile->writeAudioFrames(cbData.frames,cbData.numFrames);
+	
+	/* If the frame saving timer hasn't been started yet, do it now: */
+	if(saveVideoFrameTimer==0)
+		{
+		/* Create a timer that will trigger immediately, and then exactly at the requested frame rate: */
+		saveVideoFrameTimer=new Threads::Timer(Vrui::getRunLoop(),Threads::EventTime(),Threads::EventInterval(1.0/saveVideoFrameRate),true,*Threads::createFunctionCall(this,&VideoViewer::saveVideoFrameTimerCallback));
+		}
 	}
 
 void VideoViewer::showVideoDevicesDialogCallback(Misc::CallbackData* cbData)
@@ -331,7 +383,8 @@ VideoViewer::VideoViewer(int& argc,char**& argv)
 	 #endif
 	 smoothPixels(true),
 	 saveVideoFrameHelper(Vrui::getWidgetManager(),"VideoFrame.jpg",createImageFormatList().c_str()),
-	 saveVideoFrames(false),saveVideoFrameNameTemplate("Frame%06u.ppm"),saveVideoNextFrameIndex(0),
+	 saveVideoFrames(false),saveVideoFrameNameTemplate("Frame%06u.ppm"),saveVideoFrameRate(30.0),saveVideoNextFrameIndex(0),
+	 soundFileName("VideoViewerSound.wav"),wavFile(0),
 	 paused(false),
 	 mainMenu(0)
 	{
@@ -342,6 +395,8 @@ VideoViewer::VideoViewer(int& argc,char**& argv)
 	Video::VideoDataFormatSelector vdfs;
 	vdfs.addToParser(cmdLine);
 	cmdLine.addValueOption("saveName","sn",saveVideoFrameNameTemplate,"<file name template>","Sets a template for frame image file names when saving video frames; template must contain exactly one %u conversion specifier.");
+	cmdLine.addValueOption("saveFrameRate","sr",saveVideoFrameRate,"<floating-point number>","Sets the frame rate at which to save video frames in frames/second.");
+	cmdLine.addValueOption("soundSaveName","ssn",soundFileName,"<file name>","Sets the name of a file to which to save sound in WAV format while saving video frames.");
 	const char* videoDeviceName=0;
 	unsigned int videoDeviceNameIndex=0;
 	bool haveVideoDeviceNameIndex=false;
@@ -398,10 +453,16 @@ VideoViewer::VideoViewer(int& argc,char**& argv)
 	addEventTool("Pause Video",0,0);
 	addEventTool("Save Still Image",0,1);
 	addEventTool("Save Video Frames",0,2);
+	
+	/* Request sound processing in case we want to record audio: */
+	Vrui::requestSound();
 	}
 
 VideoViewer::~VideoViewer(void)
 	{
+	/* Deleta a potentially open audio file: */
+	delete wavFile;
+	
 	/* Delete the viewer component: */
 	delete viewer;
 	
@@ -523,7 +584,50 @@ void VideoViewer::eventCallback(Vrui::Application::EventID eventId,Vrui::InputDe
 			#else
 			/* Toggle the save video frames flag: */
 			if(cbData->newButtonState)
+				{
 				saveVideoFrames=!saveVideoFrames;
+			
+				if(saveVideoFrames)
+					{
+					/* Reset the frame counter: */
+					saveVideoFrameTimer=0;
+					
+					/* Query Vrui's recording sound context: */
+					Vrui::SoundContext* soundContext=Vrui::getRecordingSoundContext();
+					if(soundContext!=0)
+						{
+						/* Query the context's sound recording format: */
+						const Sound::SoundDataFormat& sdf=soundContext->getRecordingFormat();
+						
+						/* Create a WAV file sink: */
+						wavFile=new Sound::WAVFile(*IO::openFile(soundFileName.c_str(),IO::File::WriteOnly),sdf);
+						
+						/* Start recording from Vrui's recording device; this will start frame saving once the first audio chunk arrives: */
+						recordingCallback=Threads::createFunctionCall(this,&VideoViewer::soundRecordingCallback);
+						soundContext->addRecordingCallback(*recordingCallback);
+						}
+					else
+						{
+						/* Start the frame saving timer immediately: */
+						saveVideoFrameTimer=new Threads::Timer(Vrui::getRunLoop(),Threads::EventTime(),Threads::EventInterval(1.0/saveVideoFrameRate),true,*Threads::createFunctionCall(this,&VideoViewer::saveVideoFrameTimerCallback));
+						}
+					}
+				else
+					{
+					/* Stop recording sound if it was enabled: */
+					if(wavFile!=0)
+						{
+						Vrui::getRecordingSoundContext()->removeRecordingCallback(*recordingCallback);
+						
+						/* Close the WAV file sink: */
+						delete wavFile;
+						wavFile=0;
+						}
+					
+					/* Stop the frame saving timer: */
+					saveVideoFrameTimer=0;
+					}
+				}
 			#endif
 			break;
 		}
