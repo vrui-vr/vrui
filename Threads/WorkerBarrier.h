@@ -24,7 +24,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #ifndef THREADS_WORKERBARRIER_INCLUDED
 #define THREADS_WORKERBARRIER_INCLUDED
 
-#include <Threads/MutexCond.h>
+#include <Threads/Mutex.h>
+#include <Threads/Cond.h>
 
 namespace Threads {
 
@@ -32,41 +33,42 @@ class WorkerBarrier
 	{
 	/* Elements: */
 	private:
-	volatile unsigned int numStartedJobs; // The total number of started jobs
-	volatile unsigned int numCompletedJobs; // The total number of completed jobs
-	MutexCond completionCond; // Condition variable that signals when all started jobs have been completed
+	Mutex mutex; // A mutex protecting the number of pending jobs and the completion condition variable
+	unsigned int numPendingJobs; // The number of started jobs that have not finished yet
+	Cond completionCond; // Condition variable that signals when all started jobs have been completed
 	
 	/* Constructors and destructors: */
 	public:
 	WorkerBarrier(void) // Creates an idle worker barrier
-		:numStartedJobs(0),numCompletedJobs(0)
+		:numPendingJobs(0)
 		{
 		}
 	
 	/* Methods: */
 	void startJobs(unsigned int numJobs) // Starts the given number of jobs; must be called before any workers actually start working
 		{
-		/* Atomically increment the number of started jobs: */
-		__atomic_add_fetch(&numStartedJobs,numJobs,__ATOMIC_ACQ_REL);
+		/* Atomically add to the number of pending jobs: */
+		Mutex::Lock lock(mutex);
+		numPendingJobs+=numJobs;
 		}
-	void completeJob(void) // Completes a job; must be called after the worker actually finishes its work, and after the worker starts any additional jobs
+	void completeJob(void) // Completes a job; must be called after the worker actually finishes its work, and after the worker starts any continuation jobs
 		{
-		/* Atomically receive the number of started jobs and increment the number of completed jobs: */
-		unsigned int nsj=__atomic_fetch_n(&numStartedJobs,__ATOMIC_ACQ);
-		unsigned int ncj=__atomic_add_fetch(&numCompletedJobs,1,__ATOMIC_ACQ_REL);
+		/* Lock this object's state: */
+		Mutex::Lock lock(mutex);
 		
-		/* Check if all started jobs have been completed: */
-		if(ncj==nsj)
+		/* Atomically decrement the number of pending jobs and check if all have been completed: */
+		if(--numPendingJobs==0)
 			{
-			/* Signal completion of all jobs to a blocked supervisor: */
+			/* Signal completion of all jobs to a potentially blocked supervisor: */
 			completionCond.signal();
 			}
 		}
 	void wait(void) // Blocks the calling supervisor until all started jobs have been completed
 		{
-		MutexCond::Lock completionLock(completionCond)
-		while(numCompletedJobs!=numStartedJobs)
-			completionCond.wait(completionLock);
+		/* Lock this object's state and keep blocking until all started jobs have been completed: */
+		Mutex::Lock lock(mutex);
+		while(numPendingJobs!=0)
+			completionCond.wait(mutex);
 		}
 	};
 

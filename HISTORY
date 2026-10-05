@@ -9214,3 +9214,6 @@ Vrui-15.0-001:
   jitter the video source provides them.
   - Also added ability to save audio that is precisely synchronized with
     the saved video frames.
+- Finished Threads::WorkerBarrier class.
+  - Added worker barrier to VideoViewer example program when saving
+    video frame sequences.

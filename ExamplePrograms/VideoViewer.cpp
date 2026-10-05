@@ -28,6 +28,7 @@ with this program; if not, write to the Free Software Foundation, Inc.,
 #include <Misc/StringPrintf.h>
 #include <Misc/MessageLogger.h>
 #include <Misc/CommandLineParser.h>
+#include <Threads/WorkerBarrier.h>
 #include <Threads/FunctionCalls.h>
 #include <Threads/Timer.h>
 #include <Threads/WorkerPool.h>
@@ -93,11 +94,14 @@ class VideoViewer:public Vrui::Application
 		Images::BaseImage frame; // The video frame to save
 		const char* frameNameTemplate; // String to the name template for saved frames
 		unsigned int frameIndex; // Index of this video frame
+		Threads::WorkerBarrier& barrier; // Reference for a barrier object to let the application wait for job completion
 		
 		/* Constructors and destructors: */
 		public:
-		SaveFrameJob(const Images::BaseImage& sFrame,const char* sFrameNameTemplate,unsigned int sFrameIndex) // Elementwise constructor
-			:frame(sFrame),frameNameTemplate(sFrameNameTemplate),frameIndex(sFrameIndex)
+		SaveFrameJob(const Images::BaseImage& sFrame,const char* sFrameNameTemplate,unsigned int sFrameIndex,Threads::WorkerBarrier& sBarrier) // Elementwise constructor
+			:frame(sFrame),
+			 frameNameTemplate(sFrameNameTemplate),frameIndex(sFrameIndex),
+			 barrier(sBarrier)
 			{
 			}
 		
@@ -119,6 +123,7 @@ class VideoViewer:public Vrui::Application
 	double saveVideoFrameRate; // Frame rate to save video frames in frames/second
 	Threads::TimerOwner saveVideoFrameTimer; // Timer to save video frames at highly regular intervals for sound synchronization
 	unsigned int saveVideoNextFrameIndex; // Index for the next video frame to be saved
+	Threads::WorkerBarrier saveVideoBarrier; // Barrier to let the application wait until all video frames have been saved
 	std::string soundFileName; // Name of a sound file to which to record sound while saving video frames
 	Vrui::SoundContext::RecordingCallbackPtr recordingCallback; // A callback function receiving audio data from Vrui's recording context
 	Sound::WAVFile* wavFile; // A WAV file to record audio while saving video frames
@@ -213,6 +218,9 @@ void VideoViewer::SaveFrameJob::operator()(int)
 		/* Show an error message and carry on: */
 		Misc::formattedConsoleError("VideoViewer: Cannot save video frame to file %s due to exception %s",frameFileName.c_str(),err.what());
 		}
+	
+	/* Signal completion of this job: */
+	barrier.completeJob();
 	}
 
 /****************************
@@ -276,14 +284,15 @@ void VideoViewer::videoFormatSizeChangedCallback(const Video::VideoDataFormat& f
 
 void VideoViewer::saveVideoFrameTimerCallback(Threads::TimerEvent& event)
 	{
-	std::cout<<"Saving video frame "<<saveVideoNextFrameIndex<<std::endl;
+	std::cout<<"\rSaving video frame "<<std::setw(6)<<saveVideoNextFrameIndex<<std::flush;
 	
 	/* Call the viewer component's frame() method early to get access to the most recently received video frame: */
 	/* (this is idempotent when later called from the actual frame() method, so it's okay) */
 	viewer->frame();
 	
 	/* Submit a job to the worker pool to save the viewer component's most recent video frame: */
-	Threads::WorkerPool::submitJob(*new SaveFrameJob(viewer->getCurrentFrame(),saveVideoFrameNameTemplate.c_str(),saveVideoNextFrameIndex));
+	saveVideoBarrier.startJobs(1);
+	Threads::WorkerPool::submitJob(*new SaveFrameJob(viewer->getCurrentFrame(),saveVideoFrameNameTemplate.c_str(),saveVideoNextFrameIndex,saveVideoBarrier));
 	
 	/* Increment the frame counter: */
 	++saveVideoNextFrameIndex;
@@ -473,6 +482,9 @@ VideoViewer::~VideoViewer(void)
 	
 	/* Delete UI components: */
 	delete mainMenu;
+	
+	/* Wait until all pending frame save jobs have completed: */
+	saveVideoBarrier.wait();
 	}
 
 void VideoViewer::frame(void)
@@ -589,8 +601,8 @@ void VideoViewer::eventCallback(Vrui::Application::EventID eventId,Vrui::InputDe
 			
 				if(saveVideoFrames)
 					{
-					/* Reset the frame counter: */
-					saveVideoFrameTimer=0;
+					/* Reset the save frame index; most video editing software can't deal with frame sequences starting on anything but zero: */
+					saveVideoNextFrameIndex=0;
 					
 					/* Query Vrui's recording sound context: */
 					Vrui::SoundContext* soundContext=Vrui::getRecordingSoundContext();
@@ -614,6 +626,9 @@ void VideoViewer::eventCallback(Vrui::Application::EventID eventId,Vrui::InputDe
 					}
 				else
 					{
+					/* Stop printing save file names: */
+					std::cout<<std::endl;
+					
 					/* Stop recording sound if it was enabled: */
 					if(wavFile!=0)
 						{
