@@ -351,7 +351,7 @@ void TriangleSetNode::addQuad(TriangleSetNode::VertexIndex v0,TriangleSetNode::V
 	numTriangles+=2;
 	}
 
-void TriangleSet::addPolygon(TriangleSetNode::VertexIndex begin,TriangleSetNode::VertexIndex end)
+void TriangleSetNode::addPolygon(TriangleSetNode::VertexIndex begin,TriangleSetNode::VertexIndex end)
 	{
 	unsigned int numVertices=end-begin;
 	if(numVertices>=3)
@@ -378,7 +378,7 @@ void TriangleSet::addPolygon(TriangleSetNode::VertexIndex begin,TriangleSetNode:
 		}
 	}
 
-void TriangleSet::addTriangleFan(TriangleSetNode::VertexIndex begin,TriangleSetNode::VertexIndex end)
+void TriangleSetNode::addTriangleFan(TriangleSetNode::VertexIndex begin,TriangleSetNode::VertexIndex end)
 	{
 	unsigned int numVertices=end-begin;
 	if(numVertices>=3)
@@ -391,7 +391,7 @@ void TriangleSet::addTriangleFan(TriangleSetNode::VertexIndex begin,TriangleSetN
 		}
 	}
 
-void TriangleSet::addTriangleStrip(TriangleSetNode::VertexIndex begin,TriangleSetNode::VertexIndex end)
+void TriangleSetNode::addTriangleStrip(TriangleSetNode::VertexIndex begin,TriangleSetNode::VertexIndex end)
 	{
 	unsigned int numVertices=end-begin;
 	if(numVertices>=3)

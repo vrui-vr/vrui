@@ -98,6 +98,7 @@ class TriangleSetNode:public GeometryNode,public GLObject
 	void addTriangle(VertexIndex v0,VertexIndex v1,VertexIndex v2); // Adds a new triangle using the vertices of the given indices
 	void addTriangle(const Point& p0,const Point& p1,const Point& p2); // Adds a new triangle using the given vertices and the current color and normal vector
 	void addQuad(VertexIndex v0,VertexIndex v1,VertexIndex v2,VertexIndex v3); // Adds a new quad defined by a loop of four vertices in counter-clockwise order
+	void addPolygon(VertexIndex begin,VertexIndex end); // Adds a new polygon using all vertices in the half-open index range [begin, end)
 	void addTriangleFan(VertexIndex begin,VertexIndex end); // Adds a new triangle fan using all vertices in the half-open index range [begin, end)
 	void addTriangleStrip(VertexIndex begin,VertexIndex end); // Adds a new triangle strip using all vertices in the half-open index range [begin, end)
 	static unsigned int calcCircleTessellation(Scalar radius,Scalar tolerance); // Returns the minimum number of vertices required to render a disk of the given radius within the given tolerance
