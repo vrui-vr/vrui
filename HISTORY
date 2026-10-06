@@ -9224,3 +9224,5 @@ Vrui-15.0-001:
   index range.
 - Created SceneGraph::TriangleSetNode class to create surface geometry
   programmatically using an immediate-mode OpenGL-like interface.
+- Added missing #include <unistd.h> to Threads/SignalHandler.cpp.
+  Pointed out by Thomas Wischgoll.
