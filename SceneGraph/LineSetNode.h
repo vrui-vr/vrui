@@ -94,8 +94,10 @@ class LineSetNode:public GeometryNode,public GLObject
 	VertexIndex addVertex(const Point& position); // Adds a new vertex with the current color and the given position; returns vertex's index
 	void addLine(VertexIndex v0,VertexIndex v1); // Adds a new line using the vertices of the given indices
 	void addLine(const Point& p0,const Point& p1); // Adds a new line using the given vertices and the current color
+	void addLineStrip(VertexIndex begin,VertexIndex end); // Adds an open polyline using all vertices in the half-open index range [begin, end)
+	void addLineLoop(VertexIndex begin,VertexIndex end); // Adds a closed polyline using all vertices in the half-open index range [begin, end)
 	static unsigned int calcCircleTessellation(Scalar radius,Scalar tolerance); // Returns the minimum number of vertices required to render a circle of the given radius within the given tolerance
-	static double calcCircleAdjustedRadius(Scalar radius,unsigned int numVertices); // Returns an adjusted radius to render a circle of the given radius and number of vertices with optimal approximation
+	static double calcCircleAdjustedRadius(Scalar radius,unsigned int tessellation); // Returns an adjusted radius to render a circle of the given radius and number of vertices with optimal approximation
 	void addTessellatedCircle(const Point& center,const Rotation& frame,double adjustedRadius,unsigned int tessellation); // Adds a circle with the given tessellation and adjusted radius
 	void addCircle(const Point& center,const Rotation& frame,Scalar radius,Scalar tolerance) // Adds a circle with the given radius and approximation tolerance
 		{

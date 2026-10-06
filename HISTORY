@@ -9217,3 +9217,10 @@ Vrui-15.0-001:
 - Finished Threads::WorkerBarrier class.
   - Added worker barrier to VideoViewer example program when saving
     video frame sequences.
+- Fixed parameter misnaming in
+  SceneGraph::LineSetNode::calcCircleAdjustedRadius.
+- Added addLineStrip and addLineLoop methods to SceneGraph::LineSetNode
+  to create open or closed polylines from vertices inside a half-open
+  index range.
+- Created SceneGraph::TriangleSetNode class to create surface geometry
+  programmatically using an immediate-mode OpenGL-like interface.

@@ -327,6 +327,35 @@ void LineSetNode::addLine(const Point& p0,const Point& p1)
 	++numLines;
 	}
 
+void LineSetNode::addLineStrip(LineSetNode::VertexIndex begin,LineSetNode::VertexIndex end)
+	{
+	/* Add line segments between all vertices in the range: */
+	while(begin+1<end)
+		{
+		lines.push_back(Line(begin,begin+1));
+		++numLines;
+		++begin;
+		}
+	}
+
+void LineSetNode::addLineLoop(LineSetNode::VertexIndex begin,LineSetNode::VertexIndex end)
+	{
+	/* Add a line segment between the last and the first vertices in the range: */
+	if(begin<end-1)
+		{
+		lines.push_back(Line(end-1,begin));
+		++numLines;
+		}
+		
+	/* Add line segments between all vertices in the range: */
+	while(begin+1<end)
+		{
+		lines.push_back(Line(begin,begin+1));
+		++numLines;
+		++begin;
+		}
+	}
+
 unsigned int LineSetNode::calcCircleTessellation(Scalar radius,Scalar tolerance)
 	{
 	/* Do all calculations in double precision: */

@@ -50,6 +50,8 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <SceneGraph/ImageProjectionNode.h>
 #include <SceneGraph/BoxNode.h>
 #include <SceneGraph/SphereNode.h>
+#include <SceneGraph/LineSetNode.h>
+#include <SceneGraph/TriangleSetNode.h>
 #include <SceneGraph/ConeNode.h>
 #include <SceneGraph/CylinderNode.h>
 #include <SceneGraph/TextureCoordinateNode.h>
@@ -146,6 +148,8 @@ NodeCreator::NodeCreator(void)
 	registerNodeType(new GenericNodeFactory<SphereNode>());
 	registerNodeType(new GenericNodeFactory<ConeNode>());
 	registerNodeType(new GenericNodeFactory<CylinderNode>());
+	registerNodeType(new GenericNodeFactory<LineSetNode>());
+	registerNodeType(new GenericNodeFactory<TriangleSetNode>());
 	registerNodeType(new GenericNodeFactory<TextureCoordinateNode>());
 	registerNodeType(new GenericNodeFactory<ColorNode>());
 	registerNodeType(new GenericNodeFactory<NormalNode>());
