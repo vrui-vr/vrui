@@ -9226,3 +9226,6 @@ Vrui-15.0-001:
   programmatically using an immediate-mode OpenGL-like interface.
 - Added missing #include <unistd.h> to Threads/SignalHandler.cpp.
   Pointed out by Thomas Wischgoll.
+- Flush the multicast pipe after broadcasting random seed and
+  application time during Vrui initialization so that all nodes can
+  proceed.
