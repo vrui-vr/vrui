@@ -51,6 +51,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Realtime/Time.h>
 #include <Threads/Thread.h>
 #include <Threads/Barrier.h>
+#include <IO/OpenFile.h>
 #include <Cluster/Multiplexer.h>
 #include <Cluster/MulticastPipe.h>
 #include <Cluster/ThreadSynchronizer.h>
@@ -561,6 +562,9 @@ Call-in functions for user program:
 void init(int& argc,char**& argv,char**&)
 	{
 	typedef std::vector<std::string> StringList;
+	
+	/* Initialize the current directory of the IO library: */
+	IO::Directory::setCurrent(IO::openDirectory("."));
 	
 	/* Determine whether this node is the master or a slave: */
 	if(argc==8&&strcmp(argv[1],"-vruiMultipipeSlave")==0)

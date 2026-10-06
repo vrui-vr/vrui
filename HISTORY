@@ -9245,3 +9245,6 @@ Vrui-15.0-001:
     Cluster::ThreadSynchronizer.
   - Added explicit synchronization state switching around graphics and
     sound rendering sequences in Vrui.Workbench.cpp.
+- Moved initialization of IO library's current directory out of
+  Vrui::VruiState constructor and early into Vrui::init to avoid cluster
+  mode problems.

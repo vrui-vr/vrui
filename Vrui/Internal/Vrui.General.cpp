@@ -663,9 +663,6 @@ VruiState::VruiState(Cluster::Multiplexer* sMultiplexer,Cluster::MulticastPipe* 
 		FrameTiming& ft=frameTimings[i];
 		ft.totalDuration=ft.postRenderEnd=ft.present=ft.renderEnd=ft.renderStart=0;
 		}
-	
-	/* Set the current directory of the IO sub-library: */
-	IO::Directory::setCurrent(IO::openDirectory("."));
 	}
 
 VruiState::~VruiState(void)
@@ -745,9 +742,6 @@ VruiState::~VruiState(void)
 	
 	/* Uninhibit the screen saver: */
 	delete screenSaverInhibitor;
-	
-	/* Reset the current directory of the IO sub-library: */
-	IO::Directory::setCurrent(0);
 	}
 
 void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSection)
