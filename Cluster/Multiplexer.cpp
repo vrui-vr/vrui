@@ -388,6 +388,10 @@ void* Multiplexer::packetHandlingThreadMaster(void)
 				unsigned int slaveIndex=(msg->nodeIndex&0x7fffffffU)-1;
 				if(msg->messageId==Message::CONNECTION&&slaveIndex<numSlaves&&!slaveConnecteds[slaveIndex])
 					{
+					#if CLUSTER_CONFIG_DEBUG_MULTIPLEXER
+					std::cerr<<"Node "<<nodeIndex<<": received CONNECTION message from node "<<slaveIndex+1<<std::endl;
+					#endif
+					
 					/* Mark the slave as connected: */
 					slaveConnecteds[slaveIndex]=true;
 					++numConnectedSlaves;
@@ -398,6 +402,9 @@ void* Multiplexer::packetHandlingThreadMaster(void)
 	delete[] slaveConnecteds;
 	
 	/* Send connection message to slaves: */
+	#if CLUSTER_CONFIG_DEBUG_MULTIPLEXER
+	std::cerr<<"Node "<<nodeIndex<<": sending CONNECTION acknowledgment message to all nodes"<<std::endl;
+	#endif
 	Message msg(0,Message::CONNECTION);
 	{
 	// SocketMutex::Lock socketLock(socketMutex);
@@ -429,6 +436,10 @@ void* Multiplexer::packetHandlingThreadMaster(void)
 					{
 					case Message::CONNECTION:
 						{
+						#if CLUSTER_CONFIG_DEBUG_MULTIPLEXER
+						std::cerr<<"Node "<<nodeIndex<<": received duplicate CONNECTION message from node "<<msgNodeIndex<<"; resending CONNECTION acknowledgment message"<<std::endl;
+						#endif
+						
 						/* One slave must have missed the connection establishment packet; send another one: */
 						Message msg(0,Message::CONNECTION);
 						{
@@ -802,6 +813,10 @@ void* Multiplexer::packetHandlingThreadSlave(void)
 			sendto(socketFd,&msg,sizeof(Message),0,(const sockaddr*)otherAddress,sizeof(struct sockaddr_in));
 		}
 		
+		#if CLUSTER_CONFIG_DEBUG_MULTIPLEXER
+		std::cerr<<"Node "<<nodeIndex<<": sent CONNECTION message to master; waiting for reply"<<std::endl;
+		#endif
+		
 		/* Wait for a connection packet from the master (but don't wait for too long): */
 		fd_set readFdSet;
 		FD_ZERO(&readFdSet);
@@ -810,6 +825,10 @@ void* Multiplexer::packetHandlingThreadSlave(void)
 		if(select(socketFd+1,&readFdSet,0,0,&timeout)>=0&&FD_ISSET(socketFd,&readFdSet))
 			break;
 		}
+	
+	#if CLUSTER_CONFIG_DEBUG_MULTIPLEXER
+	std::cerr<<"Node "<<nodeIndex<<": received CONNECTION message from master"<<std::endl;
+	#endif
 	
 	unsigned int sendAckIn=nodeIndex-1;
 	
@@ -1272,14 +1291,12 @@ void Multiplexer::setSendBufferSize(unsigned int newSendBufferSize)
 
 void Multiplexer::waitForConnection(void)
 	{
-	{
 	Threads::MutexCond::Lock connectionCondLock(connectionCond);
 	while(!connected)
 		{
 		/* Sleep until connection is established: */
 		connectionCond.wait(connectionCondLock);
 		}
-	}
 	}
 
 unsigned int Multiplexer::openPipe(void)
