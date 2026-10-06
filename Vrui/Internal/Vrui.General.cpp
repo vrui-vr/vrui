@@ -876,6 +876,7 @@ void VruiState::initialize(const Misc::ConfigurationFileSection& configFileSecti
 		{
 		pipe->broadcast(randomSeed);
 		pipe->broadcast(applicationTime);
+		pipe->flush();
 		}
 	srand(randomSeed);
 	lastFrameDuration=0.0;

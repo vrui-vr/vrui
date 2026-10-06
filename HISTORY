@@ -9226,6 +9226,9 @@ Vrui-15.0-001:
   programmatically using an immediate-mode OpenGL-like interface.
 - Added missing #include <unistd.h> to Threads/SignalHandler.cpp.
   Pointed out by Thomas Wischgoll.
+- Flush the multicast pipe after broadcasting random seed and
+  application time during Vrui initialization so that all nodes can
+  proceed.
 - Added mechanisms to switch individual threads in a cluster multiplexer
   between synchronized state, where all cluster nodes make the exact
   sequence of calls, and non-synchronized state, where cluster node have
