@@ -1,7 +1,7 @@
 /***********************************************************************
 Opener - Class derived from Comm::Opener to forward files from a
 cluster's master to all slaves via multicast pipes.
-Copyright (c) 2018-2024 Oliver Kreylos
+Copyright (c) 2018-2026 Oliver Kreylos
 
 This file is part of the Cluster Abstraction Library (Cluster).
 
@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <stdexcept>
 #include <Misc/StdError.h>
 #include <Misc/FileNameExtensions.h>
+#include <IO/StandardFile.h>
 #include <IO/GzipFilter.h>
 #include <Comm/HttpFile.h>
 #include <Cluster/StandardFile.h>
@@ -77,8 +78,8 @@ Opener::~Opener(void)
 
 IO::FilePtr Opener::openFile(const char* fileName,IO::File::AccessMode accessMode)
 	{
-	/* Check if there is an active multiplexer: */
-	if(multiplexer!=0)
+	/* Check if there is an active multiplexer and the calling thread is in synchronized state: */
+	if(multiplexer!=0&&Multiplexer::getSynchState())
 		{
 		// DEBUGGING
 		// std::cout<<"Opening file "<<fileName<<" in "<<(multiplexer->isMaster()?"master":"slave")<<" mode"<<std::endl;
@@ -140,8 +141,8 @@ IO::FilePtr Opener::openFile(const char* fileName,IO::File::AccessMode accessMod
 
 IO::DirectoryPtr Opener::openDirectory(const char* directoryName)
 	{
-	/* Check if there is an active multiplexer: */
-	if(multiplexer!=0)
+	/* Check if there is an active multiplexer and the calling thread is in synchronized state: */
+	if(multiplexer!=0&&Multiplexer::getSynchState())
 		{
 		/* Check for supported file system protocols: */
 		const char* httpPrefixEnd;
@@ -183,8 +184,8 @@ IO::DirectoryPtr Opener::openDirectory(const char* directoryName)
 
 IO::DirectoryPtr Opener::openDirectory(const char* directoryNameBegin,const char* directoryNameEnd)
 	{
-	/* Check if there is an active multiplexer: */
-	if(multiplexer!=0)
+	/* Check if there is an active multiplexer and the calling thread is in synchronized state: */
+	if(multiplexer!=0&&Multiplexer::getSynchState())
 		{
 		/* Check for supported file system protocols: */
 		const char* httpPrefixEnd;
@@ -217,8 +218,8 @@ IO::DirectoryPtr Opener::openDirectory(const char* directoryNameBegin,const char
 
 IO::DirectoryPtr Opener::openFileDirectory(const char* fileName)
 	{
-	/* Check if there is an active multiplexer: */
-	if(multiplexer!=0)
+	/* Check if there is an active multiplexer and the calling thread is in synchronized state: */
+	if(multiplexer!=0&&Multiplexer::getSynchState())
 		{
 		/* Check for supported file system protocols: */
 		const char* httpPrefixEnd;
@@ -254,8 +255,8 @@ IO::DirectoryPtr Opener::openFileDirectory(const char* fileName)
 
 Comm::NetPipePtr Opener::openTCPPipe(const char* hostName,int portId)
 	{
-	/* Check if there is an active multiplexer: */
-	if(multiplexer!=0)
+	/* Check if there is an active multiplexer and the calling thread is in synchronized state: */
+	if(multiplexer!=0&&Multiplexer::getSynchState())
 		{
 		if(multiplexer->isMaster())
 			{
@@ -277,8 +278,8 @@ Comm::NetPipePtr Opener::openTCPPipe(const char* hostName,int portId)
 
 Comm::NetPipePtr Opener::openTLSPipe(const char* hostName,int portId)
 	{
-	/* Check if there is an active multiplexer: */
-	if(multiplexer!=0)
+	/* Check if there is an active multiplexer and the calling thread is in synchronized state: */
+	if(multiplexer!=0&&Multiplexer::getSynchState())
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"TLS connections not supported on clusters");
 	else
 		{
@@ -323,16 +324,26 @@ IO::FilePtr Opener::openFile(Multiplexer* multiplexer,const char* fileName,IO::F
 	{
 	IO::FilePtr result;
 	
-	if(multiplexer->isMaster())
+	/* Check if the multiplexer is valid and the calling thread is in synchronized state: */
+	if(multiplexer!=0&&Multiplexer::getSynchState())
 		{
-		/* Open a master-side shared standard file: */
-		result=new StandardFileMaster(multiplexer,fileName,accessMode);
+		if(multiplexer->isMaster())
+			{
+			/* Open a master-side shared standard file: */
+			result=new StandardFileMaster(multiplexer,fileName,accessMode);
+			}
+		else
+			{
+			/* Open a slave-side shared standard file: */
+			result=new StandardFileSlave(multiplexer,fileName,accessMode);
+			}
 		}
 	else
 		{
-		/* Open a slave-side shared standard file: */
-		result=new StandardFileSlave(multiplexer,fileName,accessMode);
+		/* Open a regular standard file: */
+		result=new IO::StandardFile(fileName,accessMode);
 		}
+	
 	
 	/* Check if the file name has the .gz extension: */
 	if(Misc::hasCaseExtension(fileName,".gz"))

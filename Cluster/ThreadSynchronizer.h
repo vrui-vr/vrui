@@ -2,7 +2,7 @@
 ClusterSynchronizer - Helper class to synchronize the number of created
 child threads of the current thread across a cluster, in order to ensure
 multi-threaded pipe creation consistency.
-Copyright (c) 2012-2013 Oliver Kreylos
+Copyright (c) 2012-2026 Oliver Kreylos
 
 This file is part of the Cluster Abstraction Library (Cluster).
 
@@ -37,6 +37,7 @@ class ThreadSynchronizer
 	private:
 	MulticastPipe* pipe; // Multicast pipe used to synchronize the number of created threads
 	unsigned int startChildThreadIndex; // Next child thread index of current thread when object is created
+	bool savedSynchState; // Calling thread's multiplexer synchronization state when this object was constructed
 	
 	/* Constructors and destructors: */
 	public:

@@ -1,7 +1,7 @@
 /***********************************************************************
 Multiplexer - Class to share several intra-cluster multicast pipes
 across a single UDP socket connection.
-Copyright (c) 2005-2024 Oliver Kreylos
+Copyright (c) 2005-2026 Oliver Kreylos
 
 This file is part of the Cluster Abstraction Library (Cluster).
 
@@ -269,6 +269,16 @@ struct GatherMessage:public BarrierMessage
 	};
 
 }
+
+/************************************
+Static elements of class Multiplexer:
+************************************/
+
+#if THREADS_CONFIG_HAVE_BUILTIN_TLS
+__thread bool Multiplexer::synchState=true; // We are starting in synchronized state for every thread by default
+#else
+Threads::Local<bool> Multiplexer::synchState=true; // We are starting in synchronized state for every thread by default
+#endif
 
 /****************************
 Methods of class Multiplexer:
@@ -1206,6 +1216,17 @@ Multiplexer::~Multiplexer(void)
 		}
 	}
 
+bool Multiplexer::setSynchState(bool newSynchState)
+	{
+	/* Retrieve the current synchronization state: */
+	bool result=synchState;
+	
+	/* Set the synchronization state: */
+	synchState=newSynchState;
+	
+	return result;
+	}
+
 int Multiplexer::getLocalPortNumber(void) const
 	{
 	/* Query the communication socket's bound address: */
@@ -1263,6 +1284,10 @@ void Multiplexer::waitForConnection(void)
 
 unsigned int Multiplexer::openPipe(void)
 	{
+	/* Throw an exception if the calling thread is not synchronized: */
+	if(!synchState)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Cannot open cluster pipe outside of synchronized state.");
+	
 	/* Get the current thread's global ID: */
 	const Threads::Thread::ID& threadId=Threads::Thread::getThreadObject()->getId();
 	

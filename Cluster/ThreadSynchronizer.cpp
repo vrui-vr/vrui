@@ -2,7 +2,7 @@
 ClusterSynchronizer - Helper class to synchronize the number of created
 child threads of the current thread across a cluster, in order to ensure
 multi-threaded pipe creation consistency.
-Copyright (c) 2012-2013 Oliver Kreylos
+Copyright (c) 2012-2026 Oliver Kreylos
 
 This file is part of the Cluster Abstraction Library (Cluster).
 
@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <Cluster/ThreadSynchronizer.h>
 
 #include <Threads/Thread.h>
+#include <Cluster/Multiplexer.h>
 #include <Cluster/MulticastPipe.h>
 
 namespace Cluster {
@@ -33,7 +34,8 @@ Methods of class ThreadSynchronizer:
 ***********************************/
 
 ThreadSynchronizer::ThreadSynchronizer(MulticastPipe* sPipe)
-	:pipe(sPipe),startChildThreadIndex(0)
+	:pipe(sPipe),startChildThreadIndex(0),
+	 savedSynchState(Multiplexer::setSynchState(false))
 	{
 	if(pipe!=0)
 		{
@@ -55,6 +57,9 @@ ThreadSynchronizer::~ThreadSynchronizer(void)
 		/* Synchronize the next child thread index: */
 		Threads::Thread::getThreadObject()->advanceNextChildIndex(maxNumChildThreads-numChildThreads);
 		}
+	
+	/* Reset the multiplexer's synchronization state: */
+	Multiplexer::setSynchState(savedSynchState);
 	}
 
 void ThreadSynchronizer::sync(void)

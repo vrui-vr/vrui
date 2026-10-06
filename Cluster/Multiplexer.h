@@ -1,7 +1,7 @@
 /***********************************************************************
 Multiplexer - Class to share several intra-cluster multicast pipes
 across a single UDP socket connection.
-Copyright (c) 2005-2012 Oliver Kreylos
+Copyright (c) 2005-2026 Oliver Kreylos
 
 This file is part of the Cluster Abstraction Library (Cluster).
 
@@ -26,11 +26,15 @@ Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #include <string>
 #include <Misc/HashTable.h>
 #include <Misc/Time.h>
+#include <Threads/Config.h>
 #include <Threads/Thread.h>
 #include <Threads/Mutex.h>
 #include <Threads/Cond.h>
 #include <Threads/MutexCond.h>
 #include <Threads/Spinlock.h>
+#if !THREADS_CONFIG_HAVE_BUILTIN_TLS
+#include <Threads/Local.h>
+#endif
 #include <Cluster/Config.h>
 #include <Cluster/Packet.h>
 #include <Cluster/GatherOperation.h>
@@ -177,6 +181,11 @@ class Multiplexer
 	
 	/* Elements: */
 	private:
+	#if THREADS_CONFIG_HAVE_BUILTIN_TLS
+	static __thread bool synchState; // Per-thread flag whether the respective thread is in synchronized mode, where all code across a cluster makes exactly the same sequence of calls
+	#else
+	static Threads::Local<bool> synchState; // Per-thread flag whether the respective thread is in synchronized mode, where all code across a cluster makes exactly the same sequence of calls
+	#endif
 	unsigned int numSlaves; // Number of slaves in the multicast group
 	unsigned int nodeIndex; // Index of this node; master node == 0
 	struct sockaddr_in* masterAddress; // Pointer to socket address of master
@@ -234,6 +243,11 @@ class Multiplexer
 		packet->succ=packetPoolHead;
 		packetPoolHead=packet;
 		}
+	static bool getSynchState(void) // Returns the calling thread's synchronization state
+		{
+		return synchState;
+		}
+	static bool setSynchState(bool newSynchState); // Sets the calling thread's synchronization state and returns the previous value
 	bool isMaster(void) const // Returns true if the local multiplexer is the master node
 		{
 		return nodeIndex==0;

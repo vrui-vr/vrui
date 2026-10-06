@@ -9226,3 +9226,19 @@ Vrui-15.0-001:
   programmatically using an immediate-mode OpenGL-like interface.
 - Added missing #include <unistd.h> to Threads/SignalHandler.cpp.
   Pointed out by Thomas Wischgoll.
+- Added mechanisms to switch individual threads in a cluster multiplexer
+  between synchronized state, where all cluster nodes make the exact
+  sequence of calls, and non-synchronized state, where cluster node have
+  different code sequences. In synchronized state, files and pipes will
+  automatically be opened in cluster mode, while in non-synchronized
+  state, files and pipes will be opened locally, and attempts to open a
+  cluster pipe will throw an exception.
+  - Added thread-local synchState flag to Cluster::Multiplexer.
+  - Added getSynchState and setSynchState methods to
+    Cluster::Multiplexer.
+  - Added code to Cluster::Opener that decides whether to open files
+    locally or in cluster mode depending on synchronization state.
+  - Added synchronization state switching to
+    Cluster::ThreadSynchronizer.
+  - Added explicit synchronization state switching around graphics and
+    sound rendering sequences in Vrui.Workbench.cpp.

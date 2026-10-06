@@ -452,6 +452,9 @@ void* vruiRenderingThreadFunction(int windowGroupIndex)
 	if(vruiVerbose)
 		std::cout<<"Vrui: Started rendering thread for window group "<<windowGroupIndex<<std::endl;
 	
+	/* Permanently set this thread to non-synchronized state: */
+	Cluster::Multiplexer::setSynchState(false);
+	
 	/* Keep track of how many rendering barriers this thread still has to pass, in order to clean up properly should an exception occur: */
 	int numBarriers=0;
 	
@@ -1544,17 +1547,19 @@ void vruiInnerLoopMultiWindow(void)
 		/* Main loop instrumentation: */
 		vruiState->renderStart.set();
 		
-		/* Reset the AL thing manager: */
+		/* Reset the GL and AL thing managers: */
+		GLContextData::resetThingManager();
 		ALContextData::resetThingManager();
 		
+		/* Set this thread to non-synchronized mode, because the number of sound contexts and/or windows will vary across a cluster: */
+		bool savedSynchState=Cluster::Multiplexer::setSynchState(false);
+		
 		#if ALSUPPORT_CONFIG_HAVE_OPENAL
+		
 		/* Update all sound contexts: */
 		for(int i=0;i<vruiNumSoundContexts;++i)
 			vruiSoundContexts[i]->draw();
 		#endif
-		
-		/* Reset the GL thing manager: */
-		GLContextData::resetThingManager();
 		
 		if(vruiNumWindowGroups>1)
 			{
@@ -1655,6 +1660,9 @@ void vruiInnerLoopMultiWindow(void)
 				}
 			}
 		
+		/* Reset this thread's synchronization state: */
+		Cluster::Multiplexer::setSynchState(savedSynchState);
+		
 		/* Call all post-rendering callbacks: */
 		{
 		Misc::CallbackData cbData;
@@ -1684,17 +1692,18 @@ void vruiInnerLoopSingleWindow(void)
 		/* Main loop instrumentation: */
 		vruiState->renderStart.set();
 		
-		/* Reset the AL thing manager: */
+		/* Reset the GL and AL thing managers: */
+		GLContextData::resetThingManager();
 		ALContextData::resetThingManager();
+		
+		/* Set this thread to non-synchronized mode, because the number of sound contexts and/or windows will vary across a cluster: */
+		bool savedSynchState=Cluster::Multiplexer::setSynchState(false);
 		
 		#if ALSUPPORT_CONFIG_HAVE_OPENAL
 		/* Update all sound contexts: */
 		for(int i=0;i<vruiNumSoundContexts;++i)
 			vruiSoundContexts[i]->draw();
 		#endif
-		
-		/* Reset the GL thing manager: */
-		GLContextData::resetThingManager();
 		
 		/* Draw the only window group: */
 		vruiWindowGroups[0].draw();
@@ -1711,6 +1720,9 @@ void vruiInnerLoopSingleWindow(void)
 		
 		/* Present the rendering results of the only window: */
 		vruiWindowGroups[0].present();
+		
+		/* Reset this thread's synchronization state: */
+		Cluster::Multiplexer::setSynchState(savedSynchState);
 		
 		/* Main loop instrumentation: */
 		vruiState->present.set();
