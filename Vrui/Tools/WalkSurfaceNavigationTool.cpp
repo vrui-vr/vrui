@@ -28,7 +28,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/ConfigurationFile.h>
 #include <Math/Math.h>
 #include <Math/Constants.h>
-#include <Geometry/Rotation.h>
 #include <Geometry/OrthonormalTransformation.h>
 #include <Geometry/GeometryValueCoders.h>
 #include <GL/GLColorTemplates.h>

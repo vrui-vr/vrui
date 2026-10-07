@@ -2,7 +2,7 @@
 ValuatorWalkSurfaceNavigationTool - Version of the
 WalkSurfaceNavigationTool that uses a pair of valuators to move instead
 of head position.
-Copyright (c) 2013-2023 Oliver Kreylos
+Copyright (c) 2013-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -27,12 +27,11 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 
 #include <Geometry/Point.h>
 #include <Geometry/Vector.h>
+#include <Geometry/Rotation.h>
 #include <Geometry/OrthogonalTransformation.h>
-#include <Geometry/Plane.h>
 #include <GL/gl.h>
 #include <GL/GLColor.h>
-#include <GL/GLObject.h>
-#include <GL/GLNumberRenderer.h>
+#include <SceneGraph/ONTransformNode.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/DeviceForwarder.h>
 #include <Vrui/SurfaceNavigationTool.h>
@@ -41,7 +40,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 namespace Misc {
 class ConfigurationFileSection;
 }
-class GLContextData;
 
 namespace Vrui {
 
@@ -60,10 +58,10 @@ class ValuatorWalkSurfaceNavigationToolFactory:public ToolFactory
 		bool activationToggle; // Flag whether the activation button acts as a toggle
 		bool centerOnActivation; // Flag if to center navigation on the head position when the tool is activated
 		Point centerPoint; // Center point of movement circles on floor
-		Scalar moveSpeed; // Maximum movement speed
+		Scalar moveSpeed; // Maximum movement speed in physical coordinate units per second
 		Scalar innerRadius; // Radius of circle of no motion around center point
 		Scalar outerRadius; // Radius where maximum movement speed is reached
-		Scalar valuatorMoveSpeeds[2]; // Maximum movement speeds in X and Y when using valuators
+		Scalar valuatorMoveSpeeds[2]; // Maximum movement speeds in X and Y when using valuators in physical coordinate units per second
 		bool valuatorMoveFollowsDevice; // Flag whether the valuator moving directions follow the valuator device instead of the center view direction
 		Scalar valuatorViewFollowFactor; // Blending factor for valuator move direction between 0 (move along forward direction) to 1 (move along view direction)
 		Vector centerViewDirection; // Central view direction
@@ -80,8 +78,8 @@ class ValuatorWalkSurfaceNavigationToolFactory:public ToolFactory
 		bool drawMovementCircles; // Flag whether to draw the movement circles
 		Color movementCircleColor; // Color for drawing movement circles
 		bool drawHud; // Flag whether to draw a heads-up display
-		float hudRadius; // Radius of heads-up display in Vrui physical units
-		float hudFontSize; // Font size for heads-up display
+		Scalar hudRadius; // Radius of heads-up display in physical coordinate units
+		Scalar hudFontSize; // Font size for heads-up display in physical coordinate units
 		
 		/* Constructors and destructors: */
 		Configuration(void); // Creates default configuration
@@ -107,7 +105,7 @@ class ValuatorWalkSurfaceNavigationToolFactory:public ToolFactory
 	virtual void destroyTool(Tool* tool) const;
 	};
 
-class ValuatorWalkSurfaceNavigationTool:public SurfaceNavigationTool,public DeviceForwarder,public GLObject
+class ValuatorWalkSurfaceNavigationTool:public SurfaceNavigationTool,public DeviceForwarder
 	{
 	friend class ValuatorWalkSurfaceNavigationToolFactory;
 	
@@ -129,29 +127,21 @@ class ValuatorWalkSurfaceNavigationTool:public SurfaceNavigationTool,public Devi
 		int valuatorIndex; // Index of valuator feature on forwarded device
 		};
 	
-	struct DataItem:public GLObject::DataItem
-		{
-		/* Elements: */
-		public:
-		GLuint movementCircleListId; // Display list ID to render movement circles
-		GLuint hudListId; // Display list ID to render the hud
-		
-		/* Constructors and destructors: */
-		DataItem(void);
-		virtual ~DataItem(void);
-		};
-	
 	/* Elements: */
 	private:
 	static ValuatorWalkSurfaceNavigationToolFactory* factory; // Pointer to the factory object for this class
 	ValuatorWalkSurfaceNavigationToolFactory::Configuration configuration; // Private configuration of this tool
-	GLNumberRenderer numberRenderer; // Helper class to render numbers using a HUD-style font
 	int numValuatorDevices; // Number of forwarded valuator devices
 	ForwardedDevice* valuatorDevices; // Array of pointers to the input devices representing the forwarded movement valuators
 	ForwardedValuator* forwardedValuators; // Array of structures associating input valuator slots with forwarded valuators
 	
+	Rotation hudFrame; // Coordinate frame for the tool's movement circles and heads-up display
+	SceneGraph::ONTransformNodePointer circleRoot; // Pointer to the root transform node for the tool's movement circles
+	SceneGraph::ONTransformNodePointer hudRoot; // Pointer to the root transform node for the tool's heads-up display
+	
 	/* Transient navigation state: */
 	Point centerPoint; // Center point of movement circle while the navigation tool is active
+	Vector centerViewDirection; // Central view direction while the navigation tool is active
 	Point footPos; // Position of the main viewer's foot on the last frame
 	Scalar headHeight; // Height of viewer's head above the foot point
 	NavTransform surfaceFrame; // Current local coordinate frame aligned to the surface in navigation coordinates
@@ -164,6 +154,7 @@ class ValuatorWalkSurfaceNavigationTool:public SurfaceNavigationTool,public Devi
 	bool moving; // Flag whether the tool is artifically moving during the current frame
 	
 	/* Private methods: */
+	void showMovementCircles(void);
 	void applyNavState(void) const; // Sets the navigation transformation based on the tool's current navigation state
 	void initNavState(void); // Initializes the tool's navigation state when it is activated
 	
@@ -172,7 +163,7 @@ class ValuatorWalkSurfaceNavigationTool:public SurfaceNavigationTool,public Devi
 	ValuatorWalkSurfaceNavigationTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment);
 	virtual ~ValuatorWalkSurfaceNavigationTool(void);
 	
-	/* Methods from Tool: */
+	/* Methods from class Tool: */
 	virtual void configure(const Misc::ConfigurationFileSection& configFileSection);
 	virtual void storeState(Misc::ConfigurationFileSection& configFileSection) const;
 	virtual void initialize(void);
@@ -181,16 +172,12 @@ class ValuatorWalkSurfaceNavigationTool:public SurfaceNavigationTool,public Devi
 	virtual void buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData);
 	virtual void valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData);
 	virtual void frame(void);
-	virtual void display(GLContextData& contextData) const;
 	
-	/* Methods from DeviceForwarder: */
+	/* Methods from class DeviceForwarder: */
 	virtual std::vector<InputDevice*> getForwardedDevices(void);
 	virtual InputDeviceFeatureSet getSourceFeatures(const InputDeviceFeature& forwardedFeature);
 	virtual InputDevice* getSourceDevice(const InputDevice* forwardedDevice);
 	virtual InputDeviceFeatureSet getForwardedFeatures(const InputDeviceFeature& sourceFeature);
-	
-	/* Methods from GLObject: */
-	virtual void initContext(GLContextData& contextData) const;
 	};
 
 }

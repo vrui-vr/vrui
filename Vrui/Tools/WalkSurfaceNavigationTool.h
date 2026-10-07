@@ -1,7 +1,7 @@
 /***********************************************************************
 WalkSurfaceNavigationTool - Version of the WalkNavigationTool that lets
 a user navigate along an application-defined surface.
-Copyright (c) 2009-2025 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -34,9 +34,6 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Vrui/Vrui.h>
 #include <Vrui/SurfaceNavigationTool.h>
 
-/* Forward declarations: */
-class GLContextData;
-
 namespace Vrui {
 
 class WalkSurfaceNavigationTool;
@@ -53,7 +50,7 @@ class WalkSurfaceNavigationToolFactory:public ToolFactory
 		public:
 		bool centerOnActivation; // Flag if to center navigation on the head position when the tool is activated
 		Point centerPoint; // Center point of movement circles on floor
-		Scalar moveSpeed; // Maximum movement speed
+		Scalar moveSpeed; // Maximum movement speed in physical coordinate units per second
 		Scalar innerRadius; // Radius of circle of no motion around center point
 		Scalar outerRadius; // Radius where maximum movement speed is reached
 		Vector centerViewDirection; // Central view direction
@@ -68,8 +65,8 @@ class WalkSurfaceNavigationToolFactory:public ToolFactory
 		bool drawMovementCircles; // Flag whether to draw the movement circles
 		Color movementCircleColor; // Color for drawing movement circles
 		bool drawHud; // Flag whether to draw a heads-up display
-		Scalar hudRadius; // Radius of heads-up display
-		Scalar hudFontSize; // Font size for heads-up display
+		Scalar hudRadius; // Radius of heads-up display in physical coordinate units
+		Scalar hudFontSize; // Font size for heads-up display in physical coordinate units
 		
 		/* Constructors and destructors: */
 		Configuration(void); // Creates default configuration

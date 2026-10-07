@@ -9251,3 +9251,6 @@ Vrui-15.0-001:
 - Fixed mouse wheel behavior in Vrui::MouseNavigationTool.
 - Adapted Vrui::MouseSurfaceNavigationTool to changed mouse wheel
   representation.
+- Fixed small issues in Vrui::WalkSurfaceNavigationTool.
+- Moved HUD rendering in Vrui::ValuatorWalkSurfaceNavigationTool to
+  scene graph.
