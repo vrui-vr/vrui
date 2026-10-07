@@ -803,7 +803,8 @@ void* Multiplexer::packetHandlingThreadSlave(void)
 	unsigned int sendNodeIndex=nodeIndex|0x80000000U;
 	
 	/* Keep sending connection initiation packets to the master until connection is established: */
-	while(true)
+	bool receivedConnectionReply=false;
+	for(int attempt=0;attempt<20&&!receivedConnectionReply;++attempt)
 		{
 		/* Send connection initiation packet to master: */
 		Message msg(sendNodeIndex,Message::CONNECTION);
@@ -823,8 +824,12 @@ void* Multiplexer::packetHandlingThreadSlave(void)
 		FD_SET(socketFd,&readFdSet);
 		struct timeval timeout=connectionWaitTimeout;
 		if(select(socketFd+1,&readFdSet,0,0,&timeout)>=0&&FD_ISSET(socketFd,&readFdSet))
-			break;
+			receivedConnectionReply;
 		}
+	
+	/* Throw an exception if we weren't able to connect to the master: */
+	if(!receivedConnectionReply)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Node %u: Could not establish connection with master",nodeIndex);
 	
 	#if CLUSTER_CONFIG_DEBUG_MULTIPLEXER
 	std::cerr<<"Node "<<nodeIndex<<": received CONNECTION message from master"<<std::endl;

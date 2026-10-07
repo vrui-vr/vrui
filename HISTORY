@@ -9248,6 +9248,9 @@ Vrui-15.0-001:
 - Moved initialization of IO library's current directory out of
   Vrui::VruiState constructor and early into Vrui::init to avoid cluster
   mode problems.
+- Added time-out to connection attempts in Cluster::Multiplexer such
+  that slave node processes will shut down after a while instead of
+  lingering as zombies.
 - Fixed mouse wheel behavior in Vrui::MouseNavigationTool.
 - Adapted Vrui::MouseSurfaceNavigationTool to changed mouse wheel
   representation.
