@@ -651,9 +651,9 @@ void ValuatorWalkSurfaceNavigationTool::frame(void)
 			}
 		
 		/* Calculate the new head and foot positions: */
-		Point newHeadPos=getMainViewer()->getHeadPosition();
-		Point newFootPos=calcFloorPoint(newHeadPos);
-		headHeight=Geometry::dist(newHeadPos,newFootPos);
+		Point headPos=getMainViewer()->getHeadPosition();
+		Point newFootPos=calcFloorPoint(headPos);
+		headHeight=Geometry::dist(headPos,newFootPos);
 		
 		/* Create a physical navigation frame around the new foot position: */
 		calcPhysicalFrame(newFootPos);
@@ -755,6 +755,15 @@ void ValuatorWalkSurfaceNavigationTool::frame(void)
 		/* Apply the newly aligned surface frame: */
 		surfaceFrame=newSurfaceFrame;
 		applyNavState();
+		
+		/* Update the heads-up display: */
+		if(configuration.drawHud)
+			{
+			/* Update the heads-up display's transformation: */
+			Rotation frame=hudFrame;
+			frame*=Rotation::rotateZ(azimuth);
+			hudRoot->setTransform(ONTransform(headPos-Point::origin,frame));
+			}
 		
 		moving=newMoving;
 		if(moving)
