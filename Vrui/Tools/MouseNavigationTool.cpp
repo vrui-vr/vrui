@@ -56,8 +56,8 @@ MouseNavigationToolFactory::Configuration::Configuration(void)
 	 scalingDirection(-getUpDirection()),
 	 dollyFactor(Scalar(1)),
 	 scaleFactor(getDisplaySize()/Scalar(4)),
-	 wheelDollyFactor(-getDisplaySize()*Scalar(0.25)),
-	 wheelScaleFactor(Math::pow(Scalar(0.5),Scalar(0.25))),
+	 wheelDollyFactor(-getDisplaySize()*Scalar(0.5)),
+	 wheelScaleFactor(Math::pow(Scalar(0.5),Scalar(0.5))),
 	 spinThreshold(getUiSize()*Scalar(1)),
 	 showScreenCenter(true)
 	{
@@ -533,51 +533,53 @@ void MouseNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice::Button
 		
 		case 3: // Zoom/dolly in button
 		case 4: // Zoom/dolly out button
-			/* Act depending on this tool's current state: */
-			switch(navigationMode)
+			if(cbData->newButtonState)
 				{
-				case IDLE:
-				case SPINNING:
-					/* Try activating this tool: */
-					if(navigationMode==SPINNING||activate())
-						{
-						if(dolly)
+				/* Act depending on this tool's current state: */
+				switch(navigationMode)
+					{
+					case IDLE:
+					case SPINNING:
+						/* Try activating this tool: */
+						if(navigationMode!=IDLE||activate())
 							{
-							/* Start normal dollying: */
-							startDollying();
-							
-							/* Change to wheel dollying mode: */
-							navigationMode=DOLLYING_WHEEL;
+							if(dolly)
+								{
+								/* Start normal dollying: */
+								startDollying();
+								
+								/* Change to wheel dollying mode: */
+								navigationMode=DOLLYING_WHEEL;
+								}
+							else
+								{
+								/* Start normal scaling: */
+								startScaling();
+								
+								/* Change to wheel scaling mode: */
+								navigationMode=SCALING_WHEEL;
+								}
+							wheelTickSum=0;
 							}
-						else
-							{
-							/* Start normal scaling: */
-							startScaling();
-							
-							/* Change to wheel scaling mode: */
-							navigationMode=SCALING_WHEEL;
-							}
-						wheelTickSum=0;
-						}
-					break;
+						break;
+					
+					default:
+						/* Nothing to do */
+						break;
+					}
 				
-				default:
-					/* Nothing to do */
-					break;
+				if(navigationMode==DOLLYING_WHEEL||navigationMode==SCALING_WHEEL)
+					{
+					/* Add another wheel click: */
+					if(buttonSlotIndex==3)
+						++wheelTickSum;
+					else
+						--wheelTickSum;
+					
+					/* Set an end time for the wheel operation: */
+					wheelNavEndTime=getApplicationTime()+1.0/3.0;
+					}
 				}
-			
-			if(navigationMode==DOLLYING_WHEEL||navigationMode==SCALING_WHEEL)
-				{
-				/* Add another wheel click: */
-				if(buttonSlotIndex==3)
-					++wheelTickSum;
-				else
-					--wheelTickSum;
-				
-				/* Set an end time for the wheel operation: */
-				wheelNavEndTime=getApplicationTime()+1.0/3.0;
-				}
-			
 			break;
 		}
 	}

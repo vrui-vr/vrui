@@ -1,7 +1,7 @@
 /***********************************************************************
 MouseSurfaceNavigationTool - Class for navigation tools that use the
 mouse to move along an application-defined surface.
-Copyright (c) 2009-2015 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -85,7 +85,6 @@ class MouseSurfaceNavigationToolFactory:public ToolFactory
 	/* Methods from ToolFactory: */
 	virtual const char* getName(void) const;
 	virtual const char* getButtonFunction(int buttonSlotIndex) const;
-	virtual const char* getValuatorFunction(int valuatorSlotIndex) const;
 	virtual Tool* createTool(const ToolInputAssignment& inputAssignment) const;
 	virtual void destroyTool(Tool* tool) const;
 	};
@@ -122,8 +121,9 @@ class MouseSurfaceNavigationTool:public SurfaceNavigationTool,public GLObject
 	Point screenCenter; // Center of screen; center of rotation and scaling operations
 	Point currentPos; // Current projected position of mouse input device on screen
 	double lastMoveTime; // Application time at which the projected position last changed
-	Scalar currentValue; // Value of the associated valuator
 	NavigationMode navigationMode; // The tool's current navigation mode
+	int wheelTickSum; // Sum of wheel ticks in the current wheel navigation operation
+	double wheelNavEndTime; // Application time at which to end the current wheel scaling operation
 	Vector throwVelocity; // Velocity when throwing
 	NavTransform surfaceFrame; // Current local coordinate frame aligned to the surface in navigation coordinates
 	Scalar azimuth; // Current azimuth of viewer position relative to local coordinate frame
@@ -148,7 +148,6 @@ class MouseSurfaceNavigationTool:public SurfaceNavigationTool,public GLObject
 	virtual void initialize(void);
 	virtual const ToolFactory* getFactory(void) const;
 	virtual void buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData);
-	virtual void valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData);
 	virtual void frame(void);
 	virtual void display(GLContextData& contextData) const;
 	

@@ -1,7 +1,7 @@
 /***********************************************************************
 MouseSurfaceNavigationTool - Class for navigation tools that use the
 mouse to move along an application-defined surface.
-Copyright (c) 2009-2021 Oliver Kreylos
+Copyright (c) 2009-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -52,7 +52,7 @@ MouseSurfaceNavigationToolFactory::Configuration::Configuration(void)
 	:rotateFactor(getDisplaySize()/Scalar(4)),
 	 scalingDirection(-getUpDirection()),
 	 scaleFactor(getDisplaySize()/Scalar(4)),
-	 wheelScaleFactor(Scalar(0.5)),
+	 wheelScaleFactor(Math::pow(Scalar(0.5),Scalar(0.5))),
 	 throwThreshold(getUiSize()*Scalar(2)),
 	 probeSize(getUiSize()),
 	 maxClimb(getDisplaySize()),
@@ -106,8 +106,7 @@ MouseSurfaceNavigationToolFactory::MouseSurfaceNavigationToolFactory(ToolManager
 	:ToolFactory("MouseSurfaceNavigationTool",toolManager)
 	{
 	/* Initialize tool layout: */
-	layout.setNumButtons(2);
-	layout.setNumValuators(1);
+	layout.setNumButtons(4);
 	
 	/* Insert class into class hierarchy: */
 	ToolFactory* navigationToolFactory=toolManager.loadClass("SurfaceNavigationTool");
@@ -142,15 +141,16 @@ const char* MouseSurfaceNavigationToolFactory::getButtonFunction(int buttonSlotI
 		
 		case 1:
 			return "Pan";
+		
+		case 2:
+			return "Quick Zoom In";
+		
+		case 3:
+			return "Quick Zoom Out";
 		}
 	
 	/* Never reached; just to make compiler happy: */
 	return 0;
-	}
-
-const char* MouseSurfaceNavigationToolFactory::getValuatorFunction(int) const
-	{
-	return "Quick Zoom";
 	}
 
 Tool* MouseSurfaceNavigationToolFactory::createTool(const ToolInputAssignment& inputAssignment) const
@@ -301,8 +301,8 @@ void MouseSurfaceNavigationTool::navigationTransformationChangedCallback(Misc::C
 MouseSurfaceNavigationTool::MouseSurfaceNavigationTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
 	:SurfaceNavigationTool(factory,inputAssignment),
 	 configuration(MouseSurfaceNavigationTool::factory->configuration),
-	 currentPos(Point::origin),currentValue(0),
-	 navigationMode(IDLE),
+	 currentPos(Point::origin),
+	 navigationMode(IDLE),wheelTickSum(0),wheelNavEndTime(0.0),
 	 showCompass(false)
 	{
 	/* Register a callback when the navigation transformation changes: */
@@ -360,8 +360,9 @@ void MouseSurfaceNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice:
 					{
 					case IDLE:
 					case THROWING:
+					case SCALING_WHEEL:
 						/* Try activating this tool: */
-						if(navigationMode==THROWING||activate())
+						if(navigationMode!=IDLE||activate())
 							{
 							initNavState();
 							currentPos=calcInteractionPos();
@@ -412,8 +413,9 @@ void MouseSurfaceNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice:
 					{
 					case IDLE:
 					case THROWING:
+					case SCALING_WHEEL:
 						/* Try activating this tool: */
-						if(navigationMode==THROWING||activate())
+						if(navigationMode!=IDLE||activate())
 							{
 							initNavState();
 							currentPos=calcInteractionPos();
@@ -471,50 +473,44 @@ void MouseSurfaceNavigationTool::buttonCallback(int buttonSlotIndex,InputDevice:
 					}
 				}
 			break;
-		}
-	}
-
-void MouseSurfaceNavigationTool::valuatorCallback(int,InputDevice::ValuatorCallbackData* cbData)
-	{
-	currentValue=Scalar(cbData->newValuatorValue);
-	if(currentValue!=Scalar(0))
-		{
-		/* Act depending on this tool's current state: */
-		switch(navigationMode)
-			{
-			case IDLE:
-			case THROWING:
-				/* Try activating this tool: */
-				if(navigationMode==THROWING||activate())
+		
+		case 2:
+		case 3:
+			if(cbData->newButtonState) // Button has just been pressed
+				{
+				/* Act depending on this tool's current state: */
+				switch(navigationMode)
 					{
-					/* Go to wheel scaling mode: */
-					initNavState();
-					navigationMode=SCALING_WHEEL;
+					case IDLE:
+					case THROWING:
+						/* Try activating this tool: */
+						if(navigationMode!=IDLE||activate())
+							{
+							/* Go to wheel scaling mode: */
+							initNavState();
+							navigationMode=SCALING_WHEEL;
+							wheelTickSum=0;
+							}
+						break;
+					
+					default:
+						/* This can definitely happen; just ignore the event */
+						break;
 					}
-				break;
-			
-			default:
-				/* This can definitely happen; just ignore the event */
-				break;
-			}
-		}
-	else
-		{
-		/* Act depending on this tool's current state: */
-		switch(navigationMode)
-			{
-			case SCALING_WHEEL:
-				/* Deactivate this tool: */
-				deactivate();
 				
-				/* Go to idle mode: */
-				navigationMode=IDLE;
-				break;
-			
-			default:
-				/* This can definitely happen; just ignore the event */
-				break;
-			}
+				if(navigationMode==SCALING_WHEEL)
+					{
+					/* Add another wheel click: */
+					if(buttonSlotIndex==2)
+						++wheelTickSum;
+					else
+						--wheelTickSum;
+					
+					/* Set an end time for the wheel operation: */
+					wheelNavEndTime=getApplicationTime()+1.0/3.0;
+					}
+				}
+			break;
 		}
 	}
 
@@ -522,6 +518,22 @@ void MouseSurfaceNavigationTool::frame(void)
 	{
 	/* Calculate the new mouse position: */
 	Point newCurrentPos=calcInteractionPos();
+	
+	/* Check if a wheel navigation operation timed out: */
+	if(navigationMode==SCALING_WHEEL)
+		{
+		if(Vrui::getApplicationTime()>=wheelNavEndTime)
+			{
+			/* Deactivate the tool and go back to idle mode: */
+			deactivate();
+			navigationMode=IDLE;
+			}
+		else
+			{
+			/* Schedule another update for the same time-out: */
+			Vrui::scheduleUpdate(wheelNavEndTime);
+			}
+		}
 	
 	/* Act depending on this tool's current state: */
 	switch(navigationMode)
@@ -597,7 +609,8 @@ void MouseSurfaceNavigationTool::frame(void)
 			NavTransform newSurfaceFrame=surfaceFrame;
 			
 			/* Scale the surface frame: */
-			newSurfaceFrame*=NavTrackerState::scale(Math::pow(configuration.wheelScaleFactor,-currentValue));
+			newSurfaceFrame*=NavTrackerState::scale(Math::pow(configuration.wheelScaleFactor,Scalar(wheelTickSum)));
+			wheelTickSum=0;
 			
 			/* Re-align the surface frame with the surface: */
 			realignSurfaceFrame(newSurfaceFrame);

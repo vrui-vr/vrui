@@ -9248,3 +9248,6 @@ Vrui-15.0-001:
 - Moved initialization of IO library's current directory out of
   Vrui::VruiState constructor and early into Vrui::init to avoid cluster
   mode problems.
+- Fixed mouse wheel behavior in Vrui::MouseNavigationTool.
+- Adapted Vrui::MouseSurfaceNavigationTool to changed mouse wheel
+  representation.
