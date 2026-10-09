@@ -1,7 +1,7 @@
 /***********************************************************************
 ColorMap - Templatized class to map scalar values within a defined range
 to colors.
-Copyright (c) 2023-2025 Oliver Kreylos
+Copyright (c) 2023-2026 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -29,6 +29,14 @@ Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/StdError.h>
 
 namespace Misc {
+
+template <class ColorParam>
+inline
+ColorMap<ColorParam>::ColorMap(
+	void)
+	:numEntries(0),entries(0)
+	{
+	}
 
 template <class ColorParam>
 inline

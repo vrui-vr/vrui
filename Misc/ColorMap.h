@@ -1,7 +1,7 @@
 /***********************************************************************
 ColorMap - Templatized class to map scalar values within a defined range
 to colors.
-Copyright (c) 2023-2025 Oliver Kreylos
+Copyright (c) 2023-2026 Oliver Kreylos
 
 This file is part of the Miscellaneous Support Library (Misc).
 
@@ -59,6 +59,7 @@ class ColorMap
 	
 	/* Constructors and destructors: */
 	public:
+	ColorMap(void); // Creates an invalid color map that must be initialized by inserting entries one-by-one
 	ColorMap(unsigned int sNumEntries,const double* sKeys,const Color* sColors); // Creates a color map for the given number of entries and source arrays
 	ColorMap(const std::vector<Entry>& sEntries); // Creates a color map from the given vector of entries
 	ColorMap(const ColorMap& source); // Copy constructor

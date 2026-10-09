@@ -9257,3 +9257,5 @@ Vrui-15.0-001:
 - Fixed small issues in Vrui::WalkSurfaceNavigationTool.
 - Moved HUD rendering in Vrui::ValuatorWalkSurfaceNavigationTool to
   scene graph.
+- Added default constructor to Misc::ColorMap to support incremental
+  creation via sequence of insertEntry() calls.
