@@ -24,6 +24,9 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #ifndef VRUI_THUMBSTICKBUTTONSTOOL_INCLUDED
 #define VRUI_THUMBSTICKBUTTONSTOOL_INCLUDED
 
+#include <Geometry/OrthonormalTransformation.h>
+#include <SceneGraph/ShapeNode.h>
+#include <Vrui/Types.h>
 #include <Vrui/TransformTool.h>
 
 namespace Vrui {
@@ -42,6 +45,10 @@ class ThumbstickButtonsToolFactory:public ToolFactory
 		public:
 		int numButtons; // Number of buttons to arrange around the circumference of the thumbstick
 		double activationThresholds[2]; // Thresholds to deactivate and activate a button
+		bool drawOnTouch; // Flag whether to show a visual representation of the button set when the thumbstick is touched
+		ONTransform thumbstickTransform; // Transformation from coordinate system of device to thumbstick's visual representation
+		Scalar thumbstickRadius; // Radius of thumbstick's visual representation in physical coordinate units
+		Color thumbstickColor; // Color to draw the thumbstick's visual representation
 		
 		/* Constructors and destructors: */
 		Configuration(void); // Creates default configuration
@@ -61,6 +68,7 @@ class ThumbstickButtonsToolFactory:public ToolFactory
 	
 	/* Methods from class ToolFactory: */
 	virtual const char* getName(void) const;
+	virtual const char* getButtonFunction(int buttonSlotIndex) const;
 	virtual const char* getValuatorFunction(int valuatorSlotIndex) const;
 	virtual Tool* createTool(const ToolInputAssignment& inputAssignment) const;
 	virtual void destroyTool(Tool* tool) const;
@@ -74,6 +82,7 @@ class ThumbstickButtonsTool:public TransformTool
 	static ThumbstickButtonsToolFactory* factory; // Pointer to the factory object for this class
 	ThumbstickButtonsToolFactory::Configuration configuration; // Private configuration of this tool
 	double anglePerButton; // Angle allocated for each perimeter button in radians
+	SceneGraph::ShapeNodePointer visualization; // The thumbstick visualization scene graph
 	int pressedButton; // Index of currently pressed button, or -1
 	double pos[2]; // The current thumbstick (x, y) position in [-1, 1]
 	
@@ -89,7 +98,9 @@ class ThumbstickButtonsTool:public TransformTool
 	virtual void configure(const Misc::ConfigurationFileSection& configFileSection);
 	virtual void storeState(Misc::ConfigurationFileSection& configFileSection) const;
 	virtual void initialize(void);
+	virtual void deinitialize(void);
 	virtual const ToolFactory* getFactory(void) const;
+	virtual void buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData);
 	virtual void valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData);
 	
 	/* Methods from class DeviceForwarder: */

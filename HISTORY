@@ -9259,3 +9259,11 @@ Vrui-15.0-001:
   scene graph.
 - Added default constructor to Misc::ColorMap to support incremental
   creation via sequence of insertEntry() calls.
+- Added virtual device forwarding touch states of controller buttons to
+  Vrui::IndexHandTool.
+  - Edited etc/Vrui-Valve Index Controllers.cfg to hook thumbstick tools
+    into new Index hand tool touch features.
+- Added thumbstick state visualization akin to Vrui::TouchpadButtonsTool
+  to Vrui::ThumbstickTool.
+- Fixed HUD visualization management in
+  Vrui::ValuatorWalkSurfaceNavigationTool.

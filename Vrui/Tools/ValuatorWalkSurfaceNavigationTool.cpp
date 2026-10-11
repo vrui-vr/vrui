@@ -476,6 +476,12 @@ void ValuatorWalkSurfaceNavigationTool::initialize(void)
 
 void ValuatorWalkSurfaceNavigationTool::deinitialize(void)
 	{
+	/* Remove the movement circles and HUD from Vrui's physical-space scene graph just in case: */
+	if(configuration.drawMovementCircles)
+		getSceneGraphManager()->removePhysicalNode(*circleRoot);
+	if(configuration.drawHud)
+		getSceneGraphManager()->removePhysicalNode(*hudRoot);
+	
 	/* Release and destroy all virtual input devices: */
 	for(int i=0;i<numValuatorDevices;++i)
 		{

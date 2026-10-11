@@ -31,9 +31,14 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Misc/ConfigurationFile.h>
 #include <Math/Math.h>
 #include <Math/Constants.h>
+#include <Geometry/GeometryValueCoders.h>
+#include <GL/GLValueCoders.h>
+#include <SceneGraph/ShapeNode.h>
+#include <SceneGraph/LineSetNode.h>
 #include <Vrui/Vrui.h>
-#include <Vrui/ToolManager.h>
 #include <Vrui/InputGraphManager.h>
+#include <Vrui/SceneGraphManager.h>
+#include <Vrui/ToolManager.h>
 
 namespace Vrui {
 
@@ -42,7 +47,7 @@ Methods of class ThumbstickButtonsToolFactory::Configuration:
 ************************************************************/
 
 ThumbstickButtonsToolFactory::Configuration::Configuration(void)
-	:numButtons(4)
+	:numButtons(4),drawOnTouch(false),thumbstickRadius(1),thumbstickColor(0.0f,1.0f,0.0f,1.0f)
 	{
 	activationThresholds[0]=0.25;
 	activationThresholds[1]=0.75;
@@ -54,12 +59,26 @@ void ThumbstickButtonsToolFactory::Configuration::read(const Misc::Configuration
 	Misc::FixedArray<double,2> ats(activationThresholds);
 	cfs.updateValue("./activationThresholds",ats);
 	ats.writeElements(activationThresholds);
+	cfs.updateValue("./drawOnTouch",drawOnTouch);
+	if(drawOnTouch)
+		{
+		cfs.updateValue("./thumbstickTransform",thumbstickTransform);
+		cfs.updateValue("./thumbstickRadius",thumbstickRadius);
+		cfs.updateValue("./thumbstickColor",thumbstickColor);
+		}
 	}
 
 void ThumbstickButtonsToolFactory::Configuration::write(Misc::ConfigurationFileSection& cfs) const
 	{
 	cfs.storeValue("./numButtons",numButtons);
 	cfs.storeValue("./activationThresholds",Misc::FixedArray<double,2>(activationThresholds));
+	cfs.storeValue("./drawOnTouch",drawOnTouch);
+	if(drawOnTouch)
+		{
+		cfs.storeValue("./thumbstickTransform",thumbstickTransform);
+		cfs.storeValue("./thumbstickRadius",thumbstickRadius);
+		cfs.storeValue("./thumbstickColor",thumbstickColor);
+		}
 	}
 
 /*********************************************
@@ -70,6 +89,7 @@ ThumbstickButtonsToolFactory::ThumbstickButtonsToolFactory(ToolManager& toolMana
 	:ToolFactory("ThumbstickButtonsTool",toolManager)
 	{
 	/* Initialize tool layout: */
+	layout.setNumButtons(0,true);
 	layout.setNumValuators(2);
 	
 	/* Insert class into class hierarchy: */
@@ -94,6 +114,18 @@ ThumbstickButtonsToolFactory::~ThumbstickButtonsToolFactory(void)
 const char* ThumbstickButtonsToolFactory::getName(void) const
 	{
 	return "Thumbstick -> Buttons";
+	}
+
+const char* ThumbstickButtonsToolFactory::getButtonFunction(int buttonSlotIndex) const
+	{
+	switch(buttonSlotIndex)
+		{
+		case 0:
+			return "Thumbstick Touch";
+		
+		default:
+			return "Unused";
+		}
 	}
 
 const char* ThumbstickButtonsToolFactory::getValuatorFunction(int valuatorSlotIndex) const
@@ -208,11 +240,71 @@ void ThumbstickButtonsTool::initialize(void)
 	
 	/* Calculate the angle per button: */
 	anglePerButton=2.0*Math::Constants<double>::pi/double(configuration.numButtons);
+	
+	if(configuration.drawOnTouch)
+		{
+		visualization=new SceneGraph::ShapeNode;
+		
+		SceneGraph::LineSetNodePointer lineSet=new SceneGraph::LineSetNode;
+		lineSet->setColor(configuration.thumbstickColor);
+		
+		ONTransform thumbstickTransform=configuration.thumbstickTransform;
+		thumbstickTransform*=ONTransform::rotate(ONTransform::Rotation::rotateZ(Math::div2(Math::Constants<Scalar>::pi-anglePerButton)));
+		thumbstickTransform.renormalize();
+		
+		/* Calculate a tessellation for the visualization's outer circle and ensure it is a multiple of the number of buttons: */
+		unsigned int tessellation=lineSet->calcCircleTessellation(configuration.thumbstickRadius,configuration.thumbstickRadius*Scalar(0.005));
+		tessellation+=configuration.numButtons-1;
+		tessellation-=tessellation%configuration.numButtons;
+		double outerRadius=lineSet->calcCircleAdjustedRadius(configuration.thumbstickRadius,tessellation);
+		double innerRadius=lineSet->calcCircleAdjustedRadius(Math::div2(configuration.thumbstickRadius),tessellation);
+		
+		/* Add the inner and outer circles: */
+		lineSet->addTessellatedCircle(thumbstickTransform.getOrigin(),thumbstickTransform.getRotation(),innerRadius,tessellation);
+		lineSet->addTessellatedCircle(thumbstickTransform.getOrigin(),thumbstickTransform.getRotation(),outerRadius,tessellation);
+		
+		/* Add separators between the button areas: */
+		for(int i=0;i<configuration.numButtons;++i)
+			{
+			unsigned int vertexIndex=i*tessellation/configuration.numButtons;
+			lineSet->addLine(vertexIndex,tessellation+vertexIndex);
+			}
+		
+		lineSet->update();
+		visualization->geometry.setValue(lineSet);
+		visualization->update();
+		
+		/* If the tool does not have a "touch" binding, add the visualization permanently to the source device's scene graph: */
+		if(getNumButtons()==0)
+			getSceneGraphManager()->addDeviceNode(getValuatorDevice(0),*visualization);
+		}
+	}
+
+void ThumbstickButtonsTool::deinitialize(void)
+	{
+	/* Call the base class method: */
+	TransformTool::deinitialize();
+	
+	/* If the tool draws the thumbstick but does not have a "touch" binding, remove the visualization from the source device's scene graph: */
+	if(configuration.drawOnTouch&&getNumButtons()==0)
+		getSceneGraphManager()->removeDeviceNode(getValuatorDevice(0),*visualization);
 	}
 
 const ToolFactory* ThumbstickButtonsTool::getFactory(void) const
 	{
 	return factory;
+	}
+
+void ThumbstickButtonsTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallbackData* cbData)
+	{
+	if(buttonSlotIndex==0)
+		{
+		/* Show or hide the thumbstick visualization: */
+		if(cbData->newButtonState)
+			getSceneGraphManager()->addDeviceNode(getButtonDevice(0),*visualization);
+		else
+			getSceneGraphManager()->removeDeviceNode(getButtonDevice(0),*visualization);
+		}
 	}
 
 void ThumbstickButtonsTool::valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData)

@@ -1922,6 +1922,7 @@ $(call VRTOOLNAMES,ValuatorWalkSurfaceNavigationTool): PACKAGES += MYSCENEGRAPH
 $(call VRTOOLNAMES,IndexHandTool): PACKAGES += MYSCENEGRAPH MYIO
 $(call VRTOOLNAMES,MouseDialogNavigationTool): PACKAGES += MYGLMOTIF
 $(call VRTOOLNAMES,ViewpointFileNavigationTool): PACKAGES += MYGLMOTIF MYIO
+$(call VRTOOLNAMES,ThumbstickButtonsTool): PACKAGES += MYSCENEGRAPH
 $(call VRTOOLNAMES,PanelButtonTool): PACKAGES += MYGLMOTIF
 $(call VRTOOLNAMES,TouchWidgetTool): PACKAGES += MYGLMOTIF
 $(call VRTOOLNAMES,RayMenuTool): PACKAGES += MYGLMOTIF

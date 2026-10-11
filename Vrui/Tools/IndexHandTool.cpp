@@ -349,7 +349,7 @@ IndexHandTool::IndexHandTool(const ToolFactory* factory,const ToolInputAssignmen
 	:TransformTool(factory,inputAssignment),
 	 configuration(IndexHandTool::factory->configuration),
 	 thumbButtonMask(0x0),thumbButton(5),gestureMask(0x0U),
-	 palmDevice(0)
+	 touchDevice(0),palmDevice(0)
 	{
 	}
 
@@ -502,7 +502,7 @@ void IndexHandTool::storeState(Misc::ConfigurationFileSection& configFileSection
 
 void IndexHandTool::initialize(void)
 	{
-	/* Create a virtual input device to shadow the source input device: */
+	/* Create a virtual input device to represent the user's index finger: */
 	std::string indexFingerDeviceName=sourceDevice->getDeviceName();
 	indexFingerDeviceName.append("IndexFinger");
 	transformedDevice=addVirtualInputDevice(indexFingerDeviceName.c_str(),1,0);
@@ -518,6 +518,15 @@ void IndexHandTool::initialize(void)
 	
 	/* Permanently grab the virtual input device: */
 	getInputGraphManager()->grabInputDevice(transformedDevice,this);
+	
+	/* Create a virtual input device to forward the touch aspects of the controller's buttons: */
+	std::string touchDeviceName=sourceDevice->getDeviceName();
+	touchDeviceName.append("Touch");
+	touchDevice=addVirtualInputDevice(touchDeviceName.c_str(),5,0);
+	touchDevice->setTrackType(sourceDevice->getTrackType());
+	touchDevice->setDeviceRay(Vector(0,1,0),0);
+	getInputGraphManager()->getInputDeviceGlyph(touchDevice).disable();
+	getInputGraphManager()->grabInputDevice(touchDevice,this);
 	
 	/* Create a virtual input device for the palm: */
 	std::string palmDeviceName=sourceDevice->getDeviceName();
@@ -542,10 +551,13 @@ void IndexHandTool::initialize(void)
 
 void IndexHandTool::deinitialize(void)
 	{
-	/* Release and delete the palm device: */
+	/* Release and delete the touch and palm devices: */
 	getInputGraphManager()->releaseInputDevice(palmDevice,this);
 	getInputDeviceManager()->destroyInputDevice(palmDevice);
 	palmDevice=0;
+	getInputGraphManager()->releaseInputDevice(touchDevice,this);
+	getInputDeviceManager()->destroyInputDevice(touchDevice);
+	touchDevice=0;
 	
 	/* Remove the hand model from the controller's scene graph: */
 	Vrui::getSceneGraphManager()->removeDeviceNode(sourceDevice,*hand);
@@ -569,6 +581,9 @@ void IndexHandTool::buttonCallback(int buttonSlotIndex,InputDevice::ButtonCallba
 	
 	/* Update the thumb position: */
 	updateThumb();
+	
+	/* Forward touch button states to the touch device: */
+	touchDevice->setButtonState(buttonSlotIndex,cbData->newButtonState);
 	}
 
 void IndexHandTool::valuatorCallback(int valuatorSlotIndex,InputDevice::ValuatorCallbackData* cbData)
@@ -593,6 +608,9 @@ void IndexHandTool::frame(void)
 	/* Update the transformed device: */
 	transformedDevice->setTrackingState(indexT,indexLv,indexAv);
 	
+	/* Update the touch device: */
+	touchDevice->copyTrackingState(sourceDevice);
+	
 	/* Update the palm device: */
 	TrackerState palmT=t;
 	palmT*=configuration.palmTransform;
@@ -606,19 +624,20 @@ std::vector<InputDevice*> IndexHandTool::getForwardedDevices(void)
 	{
 	std::vector<InputDevice*> result;
 	result.push_back(transformedDevice);
+	result.push_back(touchDevice);
 	result.push_back(palmDevice);
 	return result;
 	}
 
 InputDeviceFeatureSet IndexHandTool::getSourceFeatures(const InputDeviceFeature& forwardedFeature)
 	{
-	/* Paranoia: Check if the forwarded feature is on the transformed devices: */
-	if(forwardedFeature.getDevice()!=transformedDevice&&forwardedFeature.getDevice()!=palmDevice)
-		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Forwarded feature is not on transformed devices");
-	
-	/* Return all input feature slots: */
 	InputDeviceFeatureSet result;
-	result.push_back(input.getValuatorSlotFeature(0));
+	if(forwardedFeature.getDevice()==transformedDevice)
+		result.push_back(input.getValuatorSlotFeature(0));
+	else if(forwardedFeature.getDevice()==touchDevice)
+		result.push_back(input.getButtonSlotFeature(forwardedFeature.getFeatureIndex()));
+	else if(forwardedFeature.getDevice()!=palmDevice)
+		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Forwarded feature is not on transformed devices");
 	
 	return result;
 	}
@@ -626,7 +645,7 @@ InputDeviceFeatureSet IndexHandTool::getSourceFeatures(const InputDeviceFeature&
 InputDevice* IndexHandTool::getSourceDevice(const InputDevice* forwardedDevice)
 	{
 	/* Paranoia: Check if the forwarded device is the same as the transformed device: */
-	if(forwardedDevice!=transformedDevice&&forwardedDevice!=palmDevice)
+	if(forwardedDevice!=transformedDevice&&forwardedDevice!=touchDevice&&forwardedDevice!=palmDevice)
 		throw Misc::makeStdErr(__PRETTY_FUNCTION__,"Forwarded device is not transformed devices");
 	
 	/* Return the designated source device: */
@@ -638,9 +657,16 @@ InputDeviceFeatureSet IndexHandTool::getForwardedFeatures(const InputDeviceFeatu
 	InputDeviceFeatureSet result;
 	
 	/* Check if the source feature is being forwarded: */
-	if(sourceFeature.isValuator()&&input.findFeature(sourceFeature)==0)
+	if(sourceFeature.isButton())
 		{
-		result.push_back(InputDeviceFeature(transformedDevice,InputDevice::BUTTON,0));
+		int buttonSlotIndex=input.findFeature(sourceFeature);
+		if(buttonSlotIndex>=0)
+			result.push_back(InputDeviceFeature(touchDevice,InputDevice::BUTTON,buttonSlotIndex));
+		}
+	else
+		{
+		if(input.findFeature(sourceFeature)==0)
+			result.push_back(InputDeviceFeature(transformedDevice,InputDevice::BUTTON,0));
 		result.push_back(InputDeviceFeature(palmDevice,InputDevice::BUTTON,0));
 		}
 	

@@ -1,7 +1,7 @@
 /***********************************************************************
 IndexHandTool - Tool to attach an animated hand model to a Valve Index
 controller and create a virtual input device following the index finger.
-Copyright (c) 2021-2023 Oliver Kreylos
+Copyright (c) 2021-2026 Oliver Kreylos
 
 This file is part of the Virtual Reality User Interface Library (Vrui).
 
@@ -108,6 +108,7 @@ class IndexHandTool:public TransformTool
 	int thumbButton; // Index of the controller button currently touched by the thumb, or 5 if no button is touched
 	unsigned int gestureMask; // Bit mask of fingers currently in the "grabbed" or "touched" state
 	TrackerState deviceT; // Current relative transformation from source device to index finger device
+	InputDevice* touchDevice; // Input device to forward touch aspects of controller buttons
 	InputDevice* palmDevice; // The palm device
 	
 	/* Private methods: */
