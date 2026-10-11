@@ -40,8 +40,10 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Geometry/GeometryMarshallers.h>
 #include <Sound/SoundDataFormat.h>
 #include <Sound/WAVFile.h>
+#if SOUND_CONFIG_HAVE_OGG && SOUND_CONFIG_HAVE_OPUS
 #include <Sound/OpusEncoder.h>
 #include <Sound/OggOpusSink.h>
+#endif
 #include <Vrui/Types.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/EnvironmentDefinition.h>
@@ -77,10 +79,12 @@ void InputDeviceDataSaver::soundRecordingCallback(const Vrui::SoundContext::Reco
 			wavFile->writeAudioFrames(cbData.frames,cbData.numFrames);
 			break;
 		
+		#if SOUND_CONFIG_HAVE_OGG && SOUND_CONFIG_HAVE_OPUS
 		case 1:
 			/* Hand the received packet of PCM data to the Opus file sink: */
 			oggOpusSink->encodeChunk(static_cast<const Misc::SInt16*>(cbData.frames),cbData.numFrames);
 			break;
+		#endif
 		}
 	}
 
@@ -91,7 +95,10 @@ InputDeviceDataSaver::InputDeviceDataSaver(InputDeviceManager* sInputDeviceManag
 	 savedInputDevices(new InputDevice*[numSavedInputDevices]),
 	 inputDeviceEnableds(new bool[numSavedInputDevices]),
 	 newInputDeviceEnableds(new bool[numSavedInputDevices]),
-	 soundFileFormat(-1),wavFile(0),opusBitrate(16000),opusEncoder(0),oggOpusSink(0)
+	 soundFileFormat(-1),wavFile(0),
+	 #if SOUND_CONFIG_HAVE_OGG && SOUND_CONFIG_HAVE_OPUS
+	 opusBitrate(16000),opusEncoder(0),oggOpusSink(0)
+	 #endif
 	{
 	/*********************************************************************
 	Add this input device data saver as an input device adapter to the
@@ -171,8 +178,12 @@ InputDeviceDataSaver::InputDeviceDataSaver(InputDeviceManager* sInputDeviceManag
 			soundFileFormat=0;
 		else if(Misc::hasCaseExtension(soundFileName.c_str(),".opus"))
 			{
+			#if SOUND_CONFIG_HAVE_OGG && SOUND_CONFIG_HAVE_OPUS
 			configFileSection.updateValue("./opusBitrate",opusBitrate);
 			soundFileFormat=1;
+			#else
+			Misc::sourcedConsoleWarning(__PRETTY_FUNCTION__,"Recording to Ogg/Opus not supported because Ogg and/or Opus libraries are missing; sound recording disabled");
+			#endif
 			}
 		else
 			Misc::sourcedConsoleWarning(__PRETTY_FUNCTION__,"Sound file %s has unknown extension; sound recording disabled",soundFileName.c_str());
@@ -200,10 +211,12 @@ InputDeviceDataSaver::~InputDeviceDataSaver(void)
 	
 	/* Delete the sound recorders: */
 	delete wavFile;
+	#if SOUND_CONFIG_HAVE_OGG && SOUND_CONFIG_HAVE_OPUS
 	if(oggOpusSink!=0)
 		oggOpusSink->flush();
 	delete oggOpusSink;
 	delete opusEncoder;
+	#endif
 	
 	/* Delete the state tracking arrays: */
 	delete[] inputDeviceEnableds;
@@ -233,6 +246,7 @@ void InputDeviceDataSaver::prepareMainLoop(void)
 						
 						break;
 					
+					#if SOUND_CONFIG_HAVE_OGG && SOUND_CONFIG_HAVE_OPUS
 					case 1:
 						/* Check if Vrui's recording format is compatible with Opus: */
 						if(sdf.bitsPerSample==16&&sdf.signedSamples)
@@ -256,6 +270,7 @@ void InputDeviceDataSaver::prepareMainLoop(void)
 							}
 						
 						break;
+					#endif
 					}
 				}
 			else

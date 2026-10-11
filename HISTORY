@@ -9267,3 +9267,5 @@ Vrui-15.0-001:
   to Vrui::ThumbstickTool.
 - Fixed HUD visualization management in
   Vrui::ValuatorWalkSurfaceNavigationTool.
+- Bracketed use of Opus and Ogg classes in Vrui::InputDeviceDataSaver;
+  pointed out by Thomas Wischgoll.

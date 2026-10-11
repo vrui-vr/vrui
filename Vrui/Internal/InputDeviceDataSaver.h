@@ -27,6 +27,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #define VRUI_INTERNAL_INPUTDEVICEDATASAVER_INCLUDED
 
 #include <IO/File.h>
+#include <Sound/Config.h>
 #include <Vrui/InputGraphManager.h>
 #include <Vrui/SoundContext.h>
 #include <Vrui/Internal/InputDeviceAdapter.h>
@@ -37,8 +38,10 @@ class ConfigurationFileSection;
 }
 namespace Sound {
 class WAVFile;
+#if SOUND_CONFIG_HAVE_OGG && SOUND_CONFIG_HAVE_OPUS
 class OpusEncoder;
 class OggOpusSink;
+#endif
 }
 namespace Vrui {
 class InputDevice;
@@ -60,9 +63,11 @@ class InputDeviceDataSaver:public InputDeviceAdapter
 	IO::FilePtr soundFile; // File into which to record sound
 	int soundFileFormat; // Indicator of the sound file's requested format, -1: no sound, 0: WAV, 1: Ogg/Opus
 	Sound::WAVFile* wavFile; // Pointer to a helper object to save recorded sound in WAV format
+	#if SOUND_CONFIG_HAVE_OGG && SOUND_CONFIG_HAVE_OPUS
 	int opusBitrate; // Selected encoding bit rate for Opus encoder
 	Sound::OpusEncoder* opusEncoder; // Pointer to an Opus encoder for recorded sound
 	Sound::OggOpusSink* oggOpusSink; // Pointer to helper object to save recorded sound in Ogg/Opus format
+	#endif
 	
 	/* Private methods: */
 	void inputDeviceStateChangedCallback(InputGraphManager::InputDeviceStateChangeCallbackData* cbData); // Callback called when a saved input device changes enabled state
