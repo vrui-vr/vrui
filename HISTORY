@@ -9269,3 +9269,7 @@ Vrui-15.0-001:
   Vrui::ValuatorWalkSurfaceNavigationTool.
 - Bracketed use of Opus and Ogg classes in Vrui::InputDeviceDataSaver;
   pointed out by Thomas Wischgoll.
+- Changed Vrui-Valve Index Controllers.cfg so that the virtual button
+  tools bound to the controller's thumbsticks can be toggled on/off by
+  pressing the system button on the respective controller, which will
+  expose the original analog axes.
