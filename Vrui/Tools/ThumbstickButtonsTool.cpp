@@ -241,6 +241,7 @@ void ThumbstickButtonsTool::initialize(void)
 	/* Calculate the angle per button: */
 	anglePerButton=2.0*Math::Constants<double>::pi/double(configuration.numButtons);
 	
+	/* Check if the tool is supposed to draw the virtual button ring: */
 	if(configuration.drawOnTouch)
 		{
 		visualization=new SceneGraph::ShapeNode;
@@ -252,8 +253,8 @@ void ThumbstickButtonsTool::initialize(void)
 		thumbstickTransform*=ONTransform::rotate(ONTransform::Rotation::rotateZ(Math::div2(Math::Constants<Scalar>::pi-anglePerButton)));
 		thumbstickTransform.renormalize();
 		
-		/* Calculate a tessellation for the visualization's outer circle and ensure it is a multiple of the number of buttons: */
-		unsigned int tessellation=lineSet->calcCircleTessellation(configuration.thumbstickRadius,configuration.thumbstickRadius*Scalar(0.005));
+		/* Calculate a tessellation for the visualization's outer circle that is a multiple of the number of buttons: */
+		unsigned int tessellation=24;
 		tessellation+=configuration.numButtons-1;
 		tessellation-=tessellation%configuration.numButtons;
 		double outerRadius=lineSet->calcCircleAdjustedRadius(configuration.thumbstickRadius,tessellation);
@@ -285,8 +286,8 @@ void ThumbstickButtonsTool::deinitialize(void)
 	/* Call the base class method: */
 	TransformTool::deinitialize();
 	
-	/* If the tool draws the thumbstick but does not have a "touch" binding, remove the visualization from the source device's scene graph: */
-	if(configuration.drawOnTouch&&getNumButtons()==0)
+	/* If the tool draws the virtual button ring, remove the visualization from the source device's scene graph just in case: */
+	if(configuration.drawOnTouch)
 		getSceneGraphManager()->removeDeviceNode(getValuatorDevice(0),*visualization);
 	}
 
