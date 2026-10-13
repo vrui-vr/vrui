@@ -95,9 +95,9 @@ InputDeviceDataSaver::InputDeviceDataSaver(InputDeviceManager* sInputDeviceManag
 	 savedInputDevices(new InputDevice*[numSavedInputDevices]),
 	 inputDeviceEnableds(new bool[numSavedInputDevices]),
 	 newInputDeviceEnableds(new bool[numSavedInputDevices]),
-	 soundFileFormat(-1),wavFile(0),
+	 soundFileFormat(-1),wavFile(0)
 	 #if SOUND_CONFIG_HAVE_OGG && SOUND_CONFIG_HAVE_OPUS
-	 opusBitrate(16000),opusEncoder(0),oggOpusSink(0)
+	 ,opusBitrate(16000),opusEncoder(0),oggOpusSink(0)
 	 #endif
 	{
 	/*********************************************************************
