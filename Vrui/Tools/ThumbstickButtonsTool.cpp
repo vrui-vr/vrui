@@ -33,8 +33,11 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #include <Math/Constants.h>
 #include <Geometry/GeometryValueCoders.h>
 #include <GL/GLValueCoders.h>
-#include <SceneGraph/ShapeNode.h>
+#include <SceneGraph/MaterialNode.h>
+#include <SceneGraph/AppearanceNode.h>
 #include <SceneGraph/LineSetNode.h>
+#include <SceneGraph/TriangleSetNode.h>
+#include <SceneGraph/ShapeNode.h>
 #include <Vrui/Vrui.h>
 #include <Vrui/InputGraphManager.h>
 #include <Vrui/SceneGraphManager.h>
@@ -47,7 +50,7 @@ Methods of class ThumbstickButtonsToolFactory::Configuration:
 ************************************************************/
 
 ThumbstickButtonsToolFactory::Configuration::Configuration(void)
-	:numButtons(4),drawOnTouch(false),thumbstickRadius(1),thumbstickColor(0.0f,1.0f,0.0f,1.0f)
+	:numButtons(4),drawOnTouch(false),thumbstickRadius(1),thumbstickColor(0.0f,1.0f,0.0f,0.333f)
 	{
 	activationThresholds[0]=0.25;
 	activationThresholds[1]=0.75;
@@ -198,7 +201,7 @@ int ThumbstickButtonsTool::calcButtonIndex(double x,double y,double threshold) c
 ThumbstickButtonsTool::ThumbstickButtonsTool(const ToolFactory* factory,const ToolInputAssignment& inputAssignment)
 	:TransformTool(factory,inputAssignment),
 	 configuration(ThumbstickButtonsTool::factory->configuration),
-	 anglePerButton(0),pressedButton(-1)
+	 anglePerButton(0),pressedButton(-1),buttonActive(false)
 	{
 	pos[1]=pos[0]=0.0;
 	}
@@ -244,14 +247,29 @@ void ThumbstickButtonsTool::initialize(void)
 	/* Check if the tool is supposed to draw the virtual button ring: */
 	if(configuration.drawOnTouch)
 		{
-		visualization=new SceneGraph::ShapeNode;
-		
-		SceneGraph::LineSetNodePointer lineSet=new SceneGraph::LineSetNode;
-		lineSet->setColor(configuration.thumbstickColor);
-		
+		/* Create the visualization root node: */
+		buttonRingRoot=new SceneGraph::ONTransformNode;
 		ONTransform thumbstickTransform=configuration.thumbstickTransform;
 		thumbstickTransform*=ONTransform::rotate(ONTransform::Rotation::rotateZ(Math::div2(Math::Constants<Scalar>::pi-anglePerButton)));
 		thumbstickTransform.renormalize();
+		buttonRingRoot->setTransform(thumbstickTransform);
+		
+		/* Create the active button visualization using a material with transparency to force it into the transparent rendering pass (this is a bit ugly): */
+		SceneGraph::MaterialNodePointer material=new SceneGraph::MaterialNode;
+		material->diffuseColor.setValue(SceneGraph::Color(0.0f,0.0f,0.0f));
+		material->specularColor.setValue(SceneGraph::Color(0.0f,0.0f,0.0f));
+		material->shininess.setValue(0.0f);
+		material->emissiveColor.setValue(SceneGraph::Color(configuration.thumbstickColor.getRgba()));
+		material->transparency.setValue(1.0f-configuration.thumbstickColor[3]);
+		material->update();
+		
+		SceneGraph::AppearanceNodePointer appearance=new SceneGraph::AppearanceNode;
+		appearance->material.setValue(material);
+		appearance->update();
+		
+		/* Create the button ring visualization: */
+		SceneGraph::LineSetNodePointer lineSet=new SceneGraph::LineSetNode;
+		lineSet->setColor(SceneGraph::LineSetNode::VertexColor(configuration.thumbstickColor));
 		
 		/* Calculate a tessellation for the visualization's outer circle that is a multiple of the number of buttons: */
 		unsigned int tessellation=24;
@@ -261,8 +279,8 @@ void ThumbstickButtonsTool::initialize(void)
 		double innerRadius=lineSet->calcCircleAdjustedRadius(Math::div2(configuration.thumbstickRadius),tessellation);
 		
 		/* Add the inner and outer circles: */
-		lineSet->addTessellatedCircle(thumbstickTransform.getOrigin(),thumbstickTransform.getRotation(),innerRadius,tessellation);
-		lineSet->addTessellatedCircle(thumbstickTransform.getOrigin(),thumbstickTransform.getRotation(),outerRadius,tessellation);
+		lineSet->addTessellatedCircle(SceneGraph::Point::origin,SceneGraph::Rotation::identity,innerRadius,tessellation);
+		lineSet->addTessellatedCircle(SceneGraph::Point::origin,SceneGraph::Rotation::identity,outerRadius,tessellation);
 		
 		/* Add separators between the button areas: */
 		for(int i=0;i<configuration.numButtons;++i)
@@ -272,12 +290,38 @@ void ThumbstickButtonsTool::initialize(void)
 			}
 		
 		lineSet->update();
-		visualization->geometry.setValue(lineSet);
-		visualization->update();
+		
+		SceneGraph::ShapeNodePointer buttonRing=new SceneGraph::ShapeNode;
+		buttonRing->appearance.setValue(appearance);
+		buttonRing->geometry.setValue(lineSet);
+		buttonRing->update();
+		
+		buttonRingRoot->addChild(*buttonRing);
+		
+		/* Create the active button ring segment: */
+		SceneGraph::TriangleSetNodePointer activeButton=new SceneGraph::TriangleSetNode;
+		activeButton->setColor(SceneGraph::TriangleSetNode::VertexColor(configuration.thumbstickColor));
+		activeButton->setNormal(SceneGraph::Vector(0,0,1));
+		for(unsigned int i=0;i<=tessellation/configuration.numButtons;++i)
+			{
+			double angle=2.0*Math::Constants<double>::pi*double(i)/double(tessellation);
+			activeButton->addVertex(SceneGraph::Point(Math::cos(angle)*innerRadius,Math::sin(angle)*innerRadius,0));
+			activeButton->addVertex(SceneGraph::Point(Math::cos(angle)*outerRadius,Math::sin(angle)*outerRadius,0));
+			}
+		activeButton->addTriangleStrip(0,activeButton->getNextVertexIndex());
+		activeButton->update();
+		
+		SceneGraph::ShapeNodePointer activeButtonShape=new SceneGraph::ShapeNode;
+		activeButtonShape->appearance.setValue(appearance);
+		activeButtonShape->geometry.setValue(activeButton);
+		activeButtonShape->update();
+		
+		activeButtonRoot=new SceneGraph::ONTransformNode;
+		activeButtonRoot->addChild(*activeButtonShape);
 		
 		/* If the tool does not have a "touch" binding, add the visualization permanently to the source device's scene graph: */
 		if(getNumButtons()==0)
-			getSceneGraphManager()->addDeviceNode(getValuatorDevice(0),*visualization);
+			getSceneGraphManager()->addDeviceNode(getValuatorDevice(0),*buttonRingRoot);
 		}
 	}
 
@@ -288,7 +332,7 @@ void ThumbstickButtonsTool::deinitialize(void)
 	
 	/* If the tool draws the virtual button ring, remove the visualization from the source device's scene graph just in case: */
 	if(configuration.drawOnTouch)
-		getSceneGraphManager()->removeDeviceNode(getValuatorDevice(0),*visualization);
+		getSceneGraphManager()->removeDeviceNode(getValuatorDevice(0),*buttonRingRoot);
 	}
 
 const ToolFactory* ThumbstickButtonsTool::getFactory(void) const
@@ -302,9 +346,9 @@ void ThumbstickButtonsTool::buttonCallback(int buttonSlotIndex,InputDevice::Butt
 		{
 		/* Show or hide the thumbstick visualization: */
 		if(cbData->newButtonState)
-			getSceneGraphManager()->addDeviceNode(getButtonDevice(0),*visualization);
+			getSceneGraphManager()->addDeviceNode(getButtonDevice(0),*buttonRingRoot);
 		else
-			getSceneGraphManager()->removeDeviceNode(getButtonDevice(0),*visualization);
+			getSceneGraphManager()->removeDeviceNode(getButtonDevice(0),*buttonRingRoot);
 		}
 	}
 
@@ -321,6 +365,9 @@ void ThumbstickButtonsTool::valuatorCallback(int valuatorSlotIndex,InputDevice::
 			{
 			transformedDevice->setButtonState(pressedButton,false);
 			pressedButton=-1;
+			if(buttonActive)
+				buttonRingRoot->removeChild(*activeButtonRoot);
+			buttonActive=false;
 			}
 		}
 	else
@@ -330,7 +377,32 @@ void ThumbstickButtonsTool::valuatorCallback(int valuatorSlotIndex,InputDevice::
 		
 		/* Press the button if it is valid: */
 		if(pressedButton>=0)
+			{
 			transformedDevice->setButtonState(pressedButton,true);
+			activeButtonRoot->setTransform(ONTransform::rotate(ONTransform::Rotation::rotateZ(double(pressedButton)*anglePerButton)));
+			if(!buttonActive)
+				buttonRingRoot->addChild(*activeButtonRoot);
+			buttonActive=true;
+			}
+		#if 0 // Show which button would be pressed if the stick were fully pushed
+		else
+			{
+			/* Calculate the index of the button that might be pressed: */
+			int touchedButton=calcButtonIndex(pos[0],pos[1],configuration.activationThresholds[0]);
+			if(touchedButton>=0)
+				{
+				activeButtonRoot->setTransform(ONTransform::rotate(ONTransform::Rotation::rotateZ(double(touchedButton)*anglePerButton)));
+				if(!buttonActive)
+					buttonRingRoot->addChild(*activeButtonRoot);
+				buttonActive=true;
+				}
+			else if(buttonActive)
+				{
+				buttonRingRoot->removeChild(*activeButtonRoot);
+				buttonActive=false;
+				}
+			}
+		#endif
 		}
 	}
 

@@ -25,6 +25,7 @@ Free Software Foundation, Inc., 59 Temple Place, Suite 330, Boston, MA
 #define VRUI_THUMBSTICKBUTTONSTOOL_INCLUDED
 
 #include <Geometry/OrthonormalTransformation.h>
+#include <SceneGraph/ONTransformNode.h>
 #include <SceneGraph/ShapeNode.h>
 #include <Vrui/Types.h>
 #include <Vrui/TransformTool.h>
@@ -82,8 +83,10 @@ class ThumbstickButtonsTool:public TransformTool
 	static ThumbstickButtonsToolFactory* factory; // Pointer to the factory object for this class
 	ThumbstickButtonsToolFactory::Configuration configuration; // Private configuration of this tool
 	double anglePerButton; // Angle allocated for each perimeter button in radians
-	SceneGraph::ShapeNodePointer visualization; // The thumbstick visualization scene graph
+	SceneGraph::ONTransformNodePointer buttonRingRoot; // The root node of the entire button ring visualization scene graph
+	SceneGraph::ONTransformNodePointer activeButtonRoot; // The root node of the active button visualization scene graph
 	int pressedButton; // Index of currently pressed button, or -1
+	bool buttonActive; // Flag if the active button visualization is being shown
 	double pos[2]; // The current thumbstick (x, y) position in [-1, 1]
 	
 	/* Private methods: */
